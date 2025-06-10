@@ -83,16 +83,93 @@ public:
 	/// Assignment operator Overloading
 	SubtitleParser& operator=(const SubtitleParser&) = delete;
 
+	/**
+	 * @brief Initializes the subtitle parser.
+	 * 
+	 * @param startPosSeconds Start position in seconds.
+	 * @param basePTS Base presentation timestamp in milliseconds.
+	 * @return true if initialization is successful, false otherwise.
+	 */
 	virtual bool init(double startPosSeconds, unsigned long long basePTS) { return false; }
+
+	/**
+	 * @brief Processes subtitle data.
+	 * 
+	 * @param buffer Pointer to the subtitle data buffer.
+	 * @param bufferLen Length of the buffer.
+	 * @param position Current playback position in seconds.
+	 * @param duration Duration of the subtitle in seconds.
+	 * @return true if processing is successful.
+	 */
 	virtual bool processData(const char* buffer, size_t bufferLen, double position, double duration) = 0;
+
+	/**
+	 * @brief Closes the subtitle parser and releases any allocated resources.
+	 * 
+	 * @return true if closed successfully.
+	 */
 	virtual bool close() = 0;
+
+	/**
+	 * @brief Resets the subtitle parser to its initial state.
+	 */
 	virtual void reset() = 0;
+
+	/**
+	 * @brief Sets the offset for progress events.
+	 * 
+	 * @param offset Offset in seconds.
+	 */
 	virtual void setProgressEventOffset(double offset) = 0;
+
+	/**
+	 * @brief Updates the current playback timestamp.
+	 * 
+	 * @param positionMs Current playback position in milliseconds.
+	 */
 	virtual void updateTimestamp(unsigned long long positionMs) = 0;
+
+	/**
+	 * @brief Pauses or resumes subtitle rendering.
+	 * 
+	 * @param pause true to pause, false to resume.
+	 */
 	virtual void pause(bool pause) {}
+
+	/**
+	 * @brief Mutes or unmutes subtitle rendering.
+	 * 
+	 * @param mute true to mute, false to unmute.
+	 */
 	virtual void mute(bool mute) {}
+
+	/**
+	 * @brief Sets whether the playback is linear.
+	 * 
+	 * @param isLinear true if playback is linear, false otherwise.
+	 */
 	virtual void isLinear(bool isLinear) {}
-	virtual void setTextStyle(const std::string &options){}
+
+	/**
+	 * @brief Sets text style attributes for subtitle rendering.
+	 * 
+	 * @param options A string containing style options.
+	 */
+	virtual void setTextStyle(const std::string &options) {}
+
+	
+	/**
+	 * @brief Registers callback functions for player-subtitle interaction.
+	 * 
+	 * This method stores function pointers provided via the PlayerCallbacks structure.
+	 * These callbacks are used to interact with the player for operations such as:
+	 * - Resuming track downloads
+	 * - Getting current playback positions
+	 * - Stopping track downloads
+	 * - Sending VTT cue data
+	 * 
+	 * @param playerCallBack A structure containing the callback functions to register.
+	 */
 	void RegisterCallback(const PlayerCallbacks& playerCallBack)
 	{
 		playerResumeTrackDownloads_CB = playerCallBack.resumeTrackDownloads_CB;
@@ -100,6 +177,13 @@ public:
 		playerStopTrackDownloads_CB = playerCallBack.stopTrackDownloads_CB;
 		playerSendVTTCueData_CB = playerCallBack.sendVTTCueData_CB;
 	}
+
+	/**
+	 * @brief Unregisters all previously registered player callbacks.
+	 * 
+	 * This method clears all stored callback function pointers, effectively disabling
+	 * player-subtitle interactions.
+	 */
 	void UnRegisterCallback( )
 	{
 		playerResumeTrackDownloads_CB = NULL;
@@ -109,13 +193,45 @@ public:
 	}
 protected:
 
+	/**
+	 * @brief MIME type of the subtitle stream (e.g., WebVTT, TTML).
+	 */
 	SubtitleMimeType mType;
+
+	/**
+	 * @brief Height of the subtitle rendering area in pixels.
+	 */
 	int mHeight;
+
+	/**
+	 * @brief Width of the subtitle rendering area in pixels.
+	 */
 	int mWidth;
+
+	/**
+	 * @brief Callback to resume subtitle track downloads.
+	 */
 	std::function<void()> playerResumeTrackDownloads_CB;
+
+	/**
+	 * @brief Callback to stop subtitle track downloads.
+	 */
 	std::function<void()> playerStopTrackDownloads_CB;
+
+	/**
+	 * @brief Callback to retrieve the current playback position.
+	 * 
+	 * The callback provides a reference to a timestamp (in milliseconds) and a playback rate (as a double).
+	 */
 	std::function<void(long long&, double&)> playerGetPositions_CB;
+
+	/**
+	 * @brief Callback to send parsed VTT cue data to the player.
+	 * 
+	 * @note The VTTCue pointer should point to a valid cue object to be rendered.
+	 */
 	std::function<void(VTTCue*)> playerSendVTTCueData_CB;
+
 };
 
 #endif /* __SUBTITLE_PARSER_H__ */

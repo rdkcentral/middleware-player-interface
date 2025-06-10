@@ -25,9 +25,14 @@
 #include "_base64.h"
 
 /**
- * @brief Check if string start with a prefix
+ * @brief Checks whether a given string starts with a specified prefix.
  *
- * @retval TRUE if substring is found in bigstring
+ * This function compares the beginning of the input string with the prefix
+ * and returns true if the input string starts with the prefix.
+ *
+ * @param inputStr The input string to be checked.
+ * @param prefix The prefix to compare against the start of inputStr.
+ * @return true if inputStr starts with prefix, false otherwise.
  */
 bool player_StartsWith( const char *inputStr, const char *prefix )
 {
@@ -118,21 +123,45 @@ unsigned char *base64_URL_Decode(const char *src, size_t *len, size_t srcLen)
 	return rc;
 }
 
+/// @brief Hash function object used to generate unique thread IDs from std::thread::id.
 static std::hash<std::thread::id> std_thread_hasher;
 
+
+/**
+ * @brief Retrieves a unique identifier for the current thread.
+ *
+ * Uses a hash function to convert the current thread's ID into a size_t value.
+ *
+ * @return A hashed thread ID as a size_t.
+ */
 std::size_t GetThreadID( const std::thread &t )
 {
 	return std_thread_hasher( t.get_id() );
 }
 
+
+/**
+ * @brief Retrieves a unique identifier for a given std::thread object.
+ *
+ * Uses a hash function to convert the thread's ID into a size_t value.
+ *
+ * @param t The std::thread object whose ID is to be retrieved.
+ * @return A hashed thread ID as a size_t.
+ */
 std::size_t GetThreadID( void )
 {
 	return std_thread_hasher( std::this_thread::get_id() );
 }
 
+
 /**
- * @brief support for POSIX threads
+ * @brief Retrieves a unique identifier for the current thread.
+ *
+ * Uses a hash function to convert the current thread's ID into a size_t value.
+ *
+ * @return A hashed thread ID as a size_t.
  */
+
 std::size_t GetThreadID( const pthread_t &t )
 {
 	static std::hash<pthread_t> pthread_hasher;
@@ -184,8 +213,20 @@ static const char * ParseUriProtocol(const char *uri)
 	}
 	return NULL;
 }
+
 /**
- * @brief Resolve file URL from the base and file path
+ * @brief Resolves a relative URI against a base URL.
+ *
+ * If the URI is absolute (i.e., contains a protocol), it is returned as-is.
+ * Otherwise, it is resolved relative to the provided base URL. Optionally,
+ * query parameters from the base URL can be propagated to the resolved URI
+ * if the input URI does not already contain them.
+ *
+ * @param dst Output string where the resolved URL will be stored.
+ * @param base The base URL to resolve against if the URI is relative.
+ * @param uri The URI to resolve. Can be relative or absolute.
+ * @param bPropagateUriParams If true, query parameters from the base URL
+ *        will be appended to the resolved URI if the URI does not already contain them.
  */
 void ResolveURL(std::string& dst, std::string base, const char *uri , bool bPropagateUriParams)
 {

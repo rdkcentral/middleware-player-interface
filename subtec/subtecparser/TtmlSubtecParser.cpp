@@ -22,6 +22,19 @@
 
 // #define TTML_DEBUG
 
+/**
+ * @brief Constructs a TtmlSubtecParser instance for TTML subtitle parsing.
+ *
+ * Initializes the parser with the specified subtitle type and screen dimensions.
+ * It sets up the communication channel with the Subtec subtitle engine, sends
+ * initialization packets, and optionally resumes track downloads if a callback is set.
+ *
+ * @param type The MIME type of the subtitle (e.g., TTML).
+ * @param width The width of the video screen. Defaults to 1920 if 0.
+ * @param height The height of the video screen. Defaults to 1080 if 0.
+ *
+ * @throws std::runtime_error if the subtitle communication channel fails to initialize.
+ */
 TtmlSubtecParser::TtmlSubtecParser(SubtitleMimeType type, int width, int height) : SubtitleParser(type, width, height), m_channel(nullptr)
 {
 #ifdef TTML_DEBUG
@@ -49,6 +62,18 @@ TtmlSubtecParser::TtmlSubtecParser(SubtitleMimeType type, int width, int height)
  	}
 }
 
+
+/**
+ * @brief Initializes the TTML subtitle parser with a starting position and base PTS.
+ *
+ * Sends a timestamp packet to the subtitle channel based on the provided start position
+ * in seconds. Also resets internal state flags and optionally resumes track downloads
+ * if a callback is registered.
+ *
+ * @param startPosSeconds The starting playback position in seconds.
+ * @param basePTS The base presentation timestamp (PTS) in microseconds.
+ * @return true Always returns true upon successful initialization.
+ */
 bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 {
 #ifdef TTML_DEBUG
@@ -68,6 +93,14 @@ bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 	return true;
 }
 
+/**
+ * @brief Updates the subtitle parser with the current playback timestamp.
+ *
+ * Sends a timestamp packet to the subtitle channel to synchronize subtitle rendering
+ * with the current playback position.
+ *
+ * @param positionMs The current playback position in milliseconds.
+ */
 void TtmlSubtecParser::updateTimestamp(unsigned long long positionMs)
 {
 #ifdef TTML_DEBUG
@@ -76,6 +109,12 @@ void TtmlSubtecParser::updateTimestamp(unsigned long long positionMs)
 	m_channel->SendTimestampPacket(positionMs);
 }
 
+/**
+ * @brief Resets the subtitle parser's internal channel state.
+ *
+ * Sends a reset packet to the subtitle channel to clear any existing subtitle data
+ * and prepare for fresh input. Typically used when restarting or reinitializing playback.
+ */
 void TtmlSubtecParser::reset()
 {
 #ifdef TTML_DEBUG
@@ -84,6 +123,17 @@ void TtmlSubtecParser::reset()
 	m_channel->SendResetChannelPacket();
 }
 
+
+/**
+ * @brief Parses the first "begin" timestamp from a TTML-formatted input stream.
+ *
+ * This function scans through the input stream line by line, searching for a `begin="HH:MM:SS.mmm"` pattern
+ * using a regular expression. If a match is found, it extracts the hours, minutes, seconds, and optional
+ * milliseconds, and converts the timestamp into a total number of milliseconds.
+ *
+ * @param ss A reference to a std::stringstream containing TTML subtitle data.
+ * @return The first "begin" timestamp found, in milliseconds. If no match is found, returns the maximum value of int64_t.
+ */
 static std::int64_t parseFirstBegin(std::stringstream &ss)
 {
 	std::int64_t firstBegin = std::numeric_limits<std::int64_t>::max();
@@ -118,6 +168,20 @@ static std::int64_t parseFirstBegin(std::stringstream &ss)
 	return firstBegin;
 }
 
+/**
+ * @brief Processes subtitle data from a TTML stream and sends it to the subtitle rendering channel.
+ *
+ * This function parses the input buffer as an ISO BMFF (MP4) stream. If the buffer is not an
+ * initialization segment, it extracts the `mdat` box, parses the TTML data, and sends it to
+ * the subtitle rendering channel. For linear content, it also calculates and sends a time offset
+ * based on the first `begin` timestamp found in the TTML data.
+ *
+ * @param buffer Pointer to the input data buffer.
+ * @param bufferLen Length of the input buffer in bytes.
+ * @param position Current playback position in seconds.
+ * @param duration Duration of the current segment in seconds.
+ * @return true Always returns true after processing.
+ */
 bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double position, double duration)
 {
 #ifdef TTML_DEBUG
@@ -193,6 +257,15 @@ bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double 
 	return true;
 }
 
+
+/**
+ * @brief Mutes or unmutes subtitle rendering.
+ *
+ * Sends a mute or unmute packet to the subtitle rendering channel based on the input flag.
+ * This is typically used to control subtitle visibility during playback.
+ *
+ * @param mute If true, subtitles are muted (hidden); if false, subtitles are unmuted (shown).
+ */
 void TtmlSubtecParser::mute(bool mute)
 {
 #ifdef TTML_DEBUG
@@ -208,6 +281,14 @@ void TtmlSubtecParser::mute(bool mute)
 	}
 }
 
+/**
+ * @brief Pauses or resumes subtitle rendering.
+ *
+ * Sends a pause or resume packet to the subtitle rendering channel based on the input flag.
+ * This is typically used to synchronize subtitle behavior with media playback state.
+ *
+ * @param pause If true, subtitles are paused; if false, subtitles are resumed.
+ */
 void TtmlSubtecParser::pause(bool pause)
 {
 #ifdef TTML_DEBUG

@@ -83,6 +83,14 @@ public:
         COLOR_CYAN = 0x0000FFFF
     } SupportedColors;
 
+    
+    /**
+     * @brief A mapping between color names and their corresponding SupportedColors enum values.
+     *
+     * This map is used to convert human-readable color names (as strings) into their
+     * corresponding enum values defined in SupportedColors. It includes standard colors
+     * and a special "auto" value for embedded/default behavior.
+     */
     const std::map< std::string, SupportedColors> ColorMapTable {
         { "black", COLOR_BLACK},
         { "white", COLOR_WHITE},
@@ -159,22 +167,27 @@ public:
     int getAttributes(std::string options, attributesType &attributesValues, uint32_t &attributesMask);
 
 private:
+    
     /**
      * @struct Attributes
-     * @brief  Attributes
+     * @brief Defines the visual styling attributes for text rendering.
+     *
+     * This structure encapsulates various properties related to font and background
+     * styling, including colors, opacity, font characteristics, and edge effects.
      */
     struct Attributes {
-        SupportedColors fontColor;
-        SupportedColors backgroundColor;
-        Opacity fontOpacity;
-        Opacity backgroundOpacity;
-        FontStyle fontStyle;
-        FontSize fontSize;
-        Opacity windowOpacity;
-        SupportedColors windowColor;
-        EdgeType edgeType;
-        SupportedColors edgeColor;
+        SupportedColors fontColor;           /**< Color of the font text. */
+        SupportedColors backgroundColor;     /**< Background color behind the text. */
+        Opacity fontOpacity;                 /**< Opacity level of the font text. */
+        Opacity backgroundOpacity;           /**< Opacity level of the background. */
+        FontStyle fontStyle;                 /**< Style of the font (e.g., italic, bold). */
+        FontSize fontSize;                   /**< Size of the font. */
+        Opacity windowOpacity;               /**< Opacity of the window or bounding box. */
+        SupportedColors windowColor;         /**< Color of the window or bounding box. */
+        EdgeType edgeType;                   /**< Type of edge or outline applied to the text. */
+        SupportedColors edgeColor;           /**< Color of the text edge or outline. */
     };
+
 
     /**
      * @fn getFontSize

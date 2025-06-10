@@ -27,6 +27,19 @@
 
 using DataBuffer = std::vector<uint8_t>;
 
+/**
+ * @brief Server thread that listens for incoming datagram messages on a UNIX domain socket.
+ * 
+ * This function creates a UNIX domain socket (SOCK_DGRAM), binds it to the specified path,
+ * and uses epoll to wait for incoming messages. When a message is received, it reads the
+ * first three 32-bit integers from the message as `type`, `counter`, and `size`, and logs them.
+ * 
+ * @param socket_path Path to the UNIX domain socket. If null, a default path (SOCKET_PATH) is used.
+ * 
+ * @note This function runs an infinite loop and is intended to be run in a separate thread.
+ * 
+ * @warning The function does not handle socket cleanup or thread termination.
+ */
 void serverThread(const char *socket_path)
 {
     int epoll = ::epoll_create(10);
@@ -71,7 +84,24 @@ void serverThread(const char *socket_path)
         }
     }
 }
-
+/**
+ * @brief Entry point for the WebVTT subtitle test application.
+ * 
+ * This function parses command-line arguments to configure the test environment. It can:
+ * - Start a server thread to listen for incoming subtitle packets.
+ * - Initialize a WebVTT subtitle channel.
+ * - Send subtitle data from a file or default data.
+ * 
+ * Command-line options:
+ * - `-t` : Start the server thread.
+ * - `-f <file>` : Path to a WebVTT subtitle file to send.
+ * - `-s <socket>` : Path to the UNIX domain socket.
+ * - `-r` : Only send a reset-all packet without sending subtitle data.
+ * 
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @return int Exit status.
+ */
 int main(int argc, char *argv[])
 {    
     int opt;

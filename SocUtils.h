@@ -17,97 +17,80 @@
  * limitations under the License.
  */
 
+
 /**
  * @file SocUtils.h
- * @brief public apis for core code to access vendor capabilities at runtime
+ * @brief Public APIs for core code to access vendor capabilities at runtime.
+ *
+ * This header defines the SocUtils namespace, which provides a set of utility functions
+ * to query and interact with platform-specific (SoC) features. These functions abstract
+ * hardware-level capabilities such as audio codec support, playback configuration,
+ * latency correction, and rendering options, allowing the core application to adapt
+ * dynamically to the underlying hardware.
  */
 #ifndef SOC_UTILS_H
 #define SOC_UTILS_H
 
+/**
+ * @namespace SocUtils
+ * @brief Contains utility functions related to SoC (System on Chip) capabilities and configurations.
+ */
 namespace SocUtils
 {
-	/**
-	 * @brief Checks if AppSrc should be used for progressive playback.
-	 * 
-	 * This function queries the SOC interface to determine whether AppSrc
-	 * should be used for handling progressive playback.
-	 * 
-	 * @return true if AppSrc is used, false otherwise.
-	 */
-	bool UseAppSrcForProgressivePlayback( void );
+    /**
+     * @brief Determines whether AppSrc should be used for progressive playback.
+     * @return True if AppSrc is to be used, false otherwise.
+     */
+    bool UseAppSrcForProgressivePlayback(void);
 
-	/**
-	 * @brief Determines if AC-4 audio format is supported.
-	 *
-	 * This function checks the SOC interface for AC-4 support and also verifies
-	 * if the codec is supported at the InterfacePlayerRDK level.
-	 *
-	 * @return true if AC-4 is supported, false otherwise.
-	 */
-	bool IsSupportedAC4( void );
+    /**
+     * @brief Checks if AC-4 audio format is supported by the system.
+     * @return True if AC-4 is supported, false otherwise.
+     */
+    bool IsSupportedAC4(void);
 
-	/**
-	 * @brief Checks if Westeros sink is used.
-	 *
-	 * This function queries the SOC interface to determine whether the Westeros sink
-	 * is enabled for rendering video.
-	 *
-	 * @return true if Westeros sink is used, false otherwise.
-	 */
-	bool UseWesterosSink( void );
+    /**
+     * @brief Determines whether the Westeros sink should be used for rendering.
+     * @return True if Westeros sink is to be used, false otherwise.
+     */
+    bool UseWesterosSink(void);
 
-	/**
-	 * @brief Determines if audio fragment synchronization is supported.
-	 *
-	 * Queries the SOC interface to check if audio fragment sync is supported.
-	 *
-	 * @return true if audio fragment sync is supported, false otherwise.
-	 */
-	bool IsAudioFragmentSyncSupported( void );
+    /**
+     * @brief Checks if audio fragment synchronization is supported.
+     * @return True if audio fragment sync is supported, false otherwise.
+     */
+    bool IsAudioFragmentSyncSupported(void);
 
-	/**
-	 * @brief Checks if live latency correction is enabled.
-	 *
-	 * This function queries the SOC interface to determine whether live latency
-	 * correction is enabled.
-	 *
-	 * @return true if live latency correction is enabled, false otherwise.
-	 */
-	bool EnableLiveLatencyCorrection( void );
+    /**
+     * @brief Enables or disables live latency correction.
+     * @return True if live latency correction is enabled, false otherwise.
+     */
+    bool EnableLiveLatencyCorrection(void);
 
-	/**
-	 * @brief Determines if AC-3 audio format is supported.
-	 *
-	 * This function checks whether the AC-3 codec is supported by InterfacePlayerRDK.
-	 *
-	 * @return true if AC-3 is supported, false otherwise.
-	 */
-	bool IsSupportedAC3( void );
+    /**
+     * @brief Checks if AC-3 audio format is supported by the system.
+     * @return True if AC-3 is supported, false otherwise.
+     */
+    bool IsSupportedAC3(void);
 
-	/**
-	 * @brief Retrieves the number of required queued frames.
-	 *
-	 * Queries the SOC interface to get the required number of frames
-	 * that should be queued for smooth playback.
-	 *
-	 * @return The required number of queued frames.
-	 */
-	int RequiredQueuedFrames( void );
+    /**
+     * @brief Gets the number of frames required to be queued for smooth playback.
+     * @return The number of required queued frames.
+     */
+    int RequiredQueuedFrames(void);
 
-	/**
-	 * @brief Checks if PTS (Presentation Timestamp) re-stamping is enabled.
-	 *
-	 * This function queries the SOC interface to determine whether
-	 * PTS re-stamping is enabled.
-	 *
-	 * @return true if PTS re-stamping is enabled, false otherwise.
-	 */
-	bool EnablePTSRestamp(void);
-	/**
-	 * @brief Resets segment event flags during trickplay transitions.
-	 *
-	 * Manages segment event tracking for trickplay scenarios without disrupting seekplay or advertisements.
-	 */
-	bool ResetNewSegmentEvent();
+    /**
+     * @brief Enables or disables PTS (Presentation Time Stamp) restamping.
+     * @return True if PTS restamping is enabled, false otherwise.
+     */
+    bool EnablePTSRestamp(void);
+
+    /**
+     * @brief Resets the new segment event state.
+     * @return True if the reset was successful, false otherwise.
+     */
+    bool ResetNewSegmentEvent(void);
 }
+
 #endif // SOC_UTILS_H
+
