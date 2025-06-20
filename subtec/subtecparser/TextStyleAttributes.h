@@ -83,6 +83,14 @@ public:
         COLOR_CYAN = 0x0000FFFF
     } SupportedColors;
 
+    
+    /**
+     * @brief A mapping between color names and their corresponding SupportedColors enum values.
+     *
+     * This map is used to convert human-readable color names (as strings) into their
+     * corresponding enum values defined in SupportedColors. It includes standard colors
+     * and a special "auto" value for embedded/default behavior.
+     */
     const std::map< std::string, SupportedColors> ColorMapTable {
         { "black", COLOR_BLACK},
         { "white", COLOR_WHITE},
@@ -149,72 +157,170 @@ public:
     TextStyleAttributes(const TextStyleAttributes&)  = delete;
     TextStyleAttributes& operator=(const TextStyleAttributes&);
 
-    /**
-     * @fn getAttributes
-     * @param[in] options - Json string containing the attributes
-     * @param[out] attributesValues - Extracted Attribute values (for now they are font size and position)
-     * @param[out] attributesMask - Mask corresponding to extracted attribute values
-     * @return int - 0 for success, -1 for failure
-     */
-    int getAttributes(std::string options, attributesType &attributesValues, uint32_t &attributesMask);
+	/**
+	 * @fn getAttributes
+	 *
+	 * @param[in] options            A JSON string specifying text style attributes. Recognized keys (case-insensitive) and their expected values:
+	 *
+	 *                               - "penSize":
+	 *                                 - "small", "standard", "medium", "large", "extra_large", "auto"
+	 *
+	 *                               - "fontStyle":
+	 *                                 - "default", "monospaced_serif"/"monospaced serif", "proportional_serif"/"proportional serif",
+	 *                                   "monospaced_sanserif"/"monospaced sans serif", "proportional_sanserif"/"proportional sans serif",
+	 *                                   "casual", "cursive", "smallcaps"/"small capital", "auto"
+	 *
+	 *                               - "textForegroundColor", "textBackgroundColor", "textEdgeColor"`, "windowFillColor":
+	 *                                 - "black", "white", "red", "green", "blue", "yellow", "magenta", "cyan", "auto"
+	 *
+	 *                               - "textEdgeStyle":
+	 *                                 - "none", "raised", "depressed", "uniform", "drop_shadow_left"/"left drop shadow",
+	 *                                   "drop_shadow_right"/"right drop shadow", "auto"
+	 *
+	 *                               - "textForegroundOpacity", "textBackgroundOpacity", "windowFillOpacity":
+	 *                                 - "solid", "flash", "translucent", "transparent", "auto"
+	 *
+	 * @param[out] attributesValues  A reference to a fixed array of 14 `uint32_t` values, where each index corresponds to a specific attribute.
+	 *                               Array index mapping (via AttribPosInArray):
+	 *                               - [0] FONT_COLOR_ARR_POSITION           
+	 *                               - [1] BACKGROUND_COLOR_ARR_POSITION     
+	 *                               - [2] FONT_OPACITY_ARR_POSITION          
+	 *                               - [3] BACKGROUND_OPACITY_ARR_POSITION    
+	 *                               - [4] FONT_STYLE_ARR_POSITION            
+	 *                               - [5] FONT_SIZE_ARR_POSITION             
+	 *                               - [6] FONT_ITALIC_ARR_POSITION           
+	 *                               - [7] FONT_UNDERLINE_ARR_POSITION        
+	 *                               - [8] BORDER_TYPE_ARR_POSITION           
+	 *                               - [9] BORDER_COLOR_ARR_POSITION          
+	 *                               - [10] WIN_COLOR_ARR_POSITION           
+	 *                               - [11] WIN_OPACITY_ARR_POSITION          
+	 *                               - [12] EDGE_TYPE_ARR_POSITION            
+	 *                               - [13] EDGE_COLOR_ARR_POSITION           
+	 *
+	 * @param[out] attributesMask    A 32-bit bitmask indicating which attributes were successfully parsed.
+	 *                               Each bit i corresponds to index i in attributesValues. If (1 << i) is set,
+	 *                               then the value at attributesValues[i] is valid.
+	 *
+	 * @return int                   Returns 0 if at least one attribute is successfully parsed, or -1 if input is empty,
+	 *                               if none of the known attributes could be parsed.
+	 */
+	int getAttributes(std::string options, attributesType &attributesValues, uint32_t &attributesMask);
 
 private:
+    
     /**
      * @struct Attributes
-     * @brief  Attributes
+     * @brief Defines the visual styling attributes for text rendering.
+     *
+     * This structure encapsulates various properties related to font and background
+     * styling, including colors, opacity, font characteristics, and edge effects.
      */
     struct Attributes {
-        SupportedColors fontColor;
-        SupportedColors backgroundColor;
-        Opacity fontOpacity;
-        Opacity backgroundOpacity;
-        FontStyle fontStyle;
-        FontSize fontSize;
-        Opacity windowOpacity;
-        SupportedColors windowColor;
-        EdgeType edgeType;
-        SupportedColors edgeColor;
+        SupportedColors fontColor;           /**< Color of the font text. */
+        SupportedColors backgroundColor;     /**< Background color behind the text. */
+        Opacity fontOpacity;                 /**< Opacity level of the font text. */
+        Opacity backgroundOpacity;           /**< Opacity level of the background. */
+        FontStyle fontStyle;                 /**< Style of the font (e.g., italic, bold). */
+        FontSize fontSize;                   /**< Size of the font. */
+        Opacity windowOpacity;               /**< Opacity of the window or bounding box. */
+        SupportedColors windowColor;         /**< Color of the window or bounding box. */
+        EdgeType edgeType;                   /**< Type of edge or outline applied to the text. */
+        SupportedColors edgeColor;           /**< Color of the text edge or outline. */
     };
 
-    /**
-     * @fn getFontSize
-     * @param[in] input - input font size value
-     * @param[out] fontSizeOut - font size option for the input value
-     * @return int - 0 for success, -1 for failure
-     */
-    int getFontSize(std::string input, FontSize *fontSizeOut);
 
-    /**
-     * @fn getFontStyle
-     * @param[in] input - input font style value
-     * @param[out] fontStyleOut - font style option for the input value
-     * @return int - 0 for success, -1 for failure
-     */
-    int getFontStyle(std::string input, FontStyle *fontStyleOut);
+	/**
+	 * @fn getFontSize
+	 *
+	 * @param[in] input   -   String representing the font size. Expected values are:
+	 *                        - "small"
+	 *                        - "standard" or "medium"
+	 *                        - "large"
+	 *                        - "extra_large"
+	 *                        - "auto"
+	 *                        The comparison is case-insensitive.
+	 *
+	 * @param[out] fontSizeOut - font size option for the input value
+	 *
+	 * @return int Returns 0 on success, -1 on failure
+	 */
+	int getFontSize(std::string input, FontSize *fontSizeOut);
 
-    /**
-     * @fn getColor
-     * @param[in] input - input color value
-     * @patam[out] colorOut - color option for the input value
-     * @return int - 0 for success, -1 for failure
-     */
-    int getColor(std::string input, SupportedColors *colorOut);
+	/**
+	 * @fn getFontStyle
+	 *
+	 * @param[in] input     -   String representing the font style. Expected values are:
+	 *                          - "default"
+	 *                          - "monospaced_serif" or "monospaced serif"
+	 *                          - "proportional_serif" or "proportional serif"
+	 *                          - "monospaced_sanserif" or "monospaced sans serif"
+	 *                          - "proportional_sanserif" or "proportional sans serif"
+	 *                          - "casual"
+	 *                          - "cursive"
+	 *                          - "smallcaps" or "small capital"
+	 *                          - "auto"
+	 *
+	 * @param[out] fontStyleOut - font style option for the input value.
+	 *
+	 * @return int              - Returns 0 on successful parsing, -1 on failure 
+	 */
+	int getFontStyle(std::string input, FontStyle *fontStyleOut);
 
-    /**
-     * @fn getEdgeType
-     * @param[in] input - input edge type value
-     * @patam[out] edgeTypeOut - edge type option for the input value
-     * @return int - 0 for success, -1 for failure
-     */
-    int getEdgeType(std::string input, EdgeType *edgeTypeOut);
+	/**
+	 * @fn getColor
+	 *
+	 * @param[in] input       input color value. Expected values are: 
+	 *                        - "black"
+	 *                        - "white"
+	 *                        - "red"
+	 *                        - "green"
+	 *                        - "blue"
+	 *                        - "yellow"
+	 *                        - "magenta"
+	 *                        - "cyan"
+	 *                        - "auto"
+	 *
+	 * @param[out] colorOut   - color option for the input value.
+	 *
+	 * @return int            Returns 0 on success, -1 on failure 
+	 */
+	int getColor(std::string input, SupportedColors *colorOut);
 
-    /**
-     * @fn getOpacity
-     * @param[in] input - input opacity value
-     * @patam[out] edgeTypeOut - opacity option for the input value
-     * @return int - 0 for success, -1 for failure
-     */
-    int getOpacity(std::string input, Opacity *opacityOut);
+	/**
+	 * @brief Converts an input string representing an edge type to the corresponding EdgeType enum value.
+	 *
+	 * @fn getEdgeType
+	 *
+	 * @param[in] input         - input edge type value. Expected values are: 
+	 *                          - "none"
+	 *                          - "raised"
+	 *                          - "depressed"
+	 *                          - "uniform"
+	 *                          - "drop_shadow_left" or "left drop shadow"
+	 *                          - "drop_shadow_right" or "right drop shadow"
+	 *                          - "auto"
+	 *
+	 * @param[out] edgeTypeOut  - edge type option for the input value
+	 *
+	 * @return int              Returns 0 on success, -1 on failure
+	 */
+	int getEdgeType(std::string input, EdgeType *edgeTypeOut);
+
+	/**
+	 * @fn getOpacity
+	 *
+	 * @param[in] input         input opacity value. Expected values are:
+	 *                          - "solid"
+	 *                          - "flash"
+	 *                          - "translucent"
+	 *                          - "transparent"
+	 *                          - "auto"
+	 *
+	 * @param[out] opacityOut   - opacity option for the input value.
+	 *
+	 * @return int              Returns 0 on success, -1 on failure 
+	 */
+	int getOpacity(std::string input, Opacity *opacityOut);
 };
 
 #endif // __TEXT_STYLE_ATTRIBUTES_H__
