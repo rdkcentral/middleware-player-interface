@@ -30,7 +30,7 @@
 #include <string>
 #include "TextStyleAttributes.h"
 #include "PlayerJsonObject.h"                     // For JSON parsing
-
+#include "PlayerLogManager.h"
 
 /**
  * @brief Default constructor for the TextStyleAttributes class.
@@ -51,6 +51,7 @@ TextStyleAttributes::TextStyleAttributes()
 int TextStyleAttributes::getFontSize(std::string input, FontSize *fontSizeOut)
 {
 	int retVal = 0;
+	MW_LOG_WARN("{TRACE}");
 
 	if (!input.empty() && fontSizeOut)
 	{
@@ -309,7 +310,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 	int retVal = 0;
 	attributesMask = 0;
 
-	MW_LOG_WARN("TextStyleAttributes::getAttributes");
+	MW_LOG_WARN("TextStyleAttributes::getAttributes opt[%s]",options.c_str());
 
 	if (!options.empty())
 	{
@@ -318,14 +319,16 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 		try
 		{
 			PlayerJsonObject inputOptions(options);
-
+			
+			MW_LOG_WARN("<<TRACE>>");
 			if (inputOptions.get("penSize", optionValue))
 			{
+				MW_LOG_WARN("<<pensize conditions>>");
 				if(!getFontSize(optionValue, &(attribute.fontSize)))
 				{
 					attributesMask |= (1 << FONT_SIZE_ARR_POSITION);
 					attributesValues[FONT_SIZE_ARR_POSITION] = attribute.fontSize;
-					MW_LOG_INFO("The font size is %d", attributesValues[FONT_SIZE_ARR_POSITION]);
+					MW_LOG_WARN("The font size is %d", attributesValues[FONT_SIZE_ARR_POSITION]);
 				}
 				else
 				{
@@ -338,7 +341,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << FONT_STYLE_ARR_POSITION);
 					attributesValues[FONT_STYLE_ARR_POSITION] = attribute.fontStyle;
-					MW_LOG_INFO("The font style is %d", attributesValues[FONT_STYLE_ARR_POSITION]);
+					MW_LOG_WARN("The font style is %d", attributesValues[FONT_STYLE_ARR_POSITION]);
 				}
 				else
 				{
@@ -351,7 +354,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << FONT_COLOR_ARR_POSITION);
 					attributesValues[FONT_COLOR_ARR_POSITION] = attribute.fontColor;
-					MW_LOG_INFO("The font color is %d", attributesValues[FONT_COLOR_ARR_POSITION]);
+					MW_LOG_WARN("The font color is %d", attributesValues[FONT_COLOR_ARR_POSITION]);
 				}
 				else
 				{
@@ -377,7 +380,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << EDGE_TYPE_ARR_POSITION);
 					attributesValues[EDGE_TYPE_ARR_POSITION] = attribute.edgeType;
-					MW_LOG_INFO("The edge type is %d", attributesValues[EDGE_TYPE_ARR_POSITION]);
+					MW_LOG_WARN("The edge type is %d", attributesValues[EDGE_TYPE_ARR_POSITION]);
 				}
 			}
 			if (inputOptions.get("textEdgeColor", optionValue))
@@ -386,7 +389,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << EDGE_COLOR_ARR_POSITION);
 					attributesValues[EDGE_COLOR_ARR_POSITION] = attribute.edgeColor;
-					MW_LOG_INFO("The edge color is %d", attributesValues[EDGE_COLOR_ARR_POSITION]);
+					MW_LOG_WARN("The edge color is %d", attributesValues[EDGE_COLOR_ARR_POSITION]);
 				}
 				else
 				{
@@ -399,7 +402,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << BACKGROUND_OPACITY_ARR_POSITION);
 					attributesValues[BACKGROUND_OPACITY_ARR_POSITION] = attribute.backgroundOpacity;
-					MW_LOG_INFO("The background opacity is %d", attributesValues[BACKGROUND_OPACITY_ARR_POSITION]);
+					MW_LOG_WARN("The background opacity is %d", attributesValues[BACKGROUND_OPACITY_ARR_POSITION]);
 				}
 				else
 				{
@@ -412,7 +415,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << FONT_OPACITY_ARR_POSITION);
 					attributesValues[FONT_OPACITY_ARR_POSITION] = attribute.fontOpacity;
-					MW_LOG_INFO("The font opacity is %d", attributesValues[FONT_OPACITY_ARR_POSITION]);
+					MW_LOG_WARN("The font opacity is %d", attributesValues[FONT_OPACITY_ARR_POSITION]);
 				}
 				else
 				{
@@ -425,7 +428,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << WIN_COLOR_ARR_POSITION);
 					attributesValues[WIN_COLOR_ARR_POSITION] = attribute.windowColor;
-					MW_LOG_INFO("The window color is %d", attributesValues[WIN_COLOR_ARR_POSITION]);
+					MW_LOG_WARN("The window color is %d", attributesValues[WIN_COLOR_ARR_POSITION]);
 				}
 				else
 				{
@@ -438,7 +441,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 				{
 					attributesMask |= (1 << WIN_OPACITY_ARR_POSITION);
 					attributesValues[WIN_OPACITY_ARR_POSITION] = attribute.windowOpacity;
-					MW_LOG_INFO("The window opacity is %d", attributesValues[WIN_OPACITY_ARR_POSITION]);
+					MW_LOG_WARN("The window opacity is %d", attributesValues[WIN_OPACITY_ARR_POSITION]);
 				}
 				else
 				{
@@ -448,7 +451,7 @@ int TextStyleAttributes::getAttributes(std::string options, attributesType &attr
 		}
 		catch(const PlayerJsonParseException& e)
 		{
-			MW_LOG_ERR("TextStyleAttributes: PlayerJsonParseException - %s", e.what());
+			MW_LOG_WARN("TextStyleAttributes: PlayerJsonParseException - %s", e.what());
 			return -1;
 		}
 	}

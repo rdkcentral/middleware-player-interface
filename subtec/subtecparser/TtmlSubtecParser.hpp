@@ -46,13 +46,14 @@ public:
      * It sets up the communication channel with the Subtec subtitle engine, sends
      * initialization packets, and optionally resumes track downloads if a callback is set.
      *
-     * @param type The MIME type of the subtitle (e.g., TTML).
-     * @param width The width of the video screen. Defaults to 1920 if 0.
-     * @param height The height of the video screen. Defaults to 1080 if 0.
+     * @param[in] type   The MIME type of the subtitle (e.g., TTML). Expected values are enum values of SubtitleMimeType.
+     * @param[in] width  The width of the video screen. Expected value: positive integer, defaults to 1920 if 0.
+     * @param[in] height The height of the video screen. Expected value: positive integer, defaults to 1080 if 0.
      *
      * @throws std::runtime_error if the subtitle communication channel fails to initialize.
      */
     TtmlSubtecParser(SubtitleMimeType type, int width, int height);
+
 
     /// Deleted copy constructor to prevent copying.
     TtmlSubtecParser(const TtmlSubtecParser&) = delete;
@@ -67,8 +68,9 @@ public:
      * in seconds. Also resets internal state flags and optionally resumes track downloads
      * if a callback is registered.
      *
-     * @param startPosSeconds The starting playback position in seconds.
-     * @param basePTS The base presentation timestamp (PTS) in microseconds.
+     * @param[in] startPosSeconds The starting playback position in seconds. Expected value: non-negative double.
+     * @param[in] basePTS         The base presentation timestamp (PTS) in microseconds. Expected value: non-negative unsigned long long.
+     *
      * @return true Always returns true upon successful initialization.
      */
     bool init(double startPosSeconds, unsigned long long basePTS) override;
@@ -81,13 +83,15 @@ public:
      * the subtitle rendering channel. For linear content, it also calculates and sends a time offset
      * based on the first `begin` timestamp found in the TTML data.
      *
-     * @param buffer Pointer to the input data buffer.
-     * @param bufferLen Length of the input buffer in bytes.
-     * @param position Current playback position in seconds.
-     * @param duration Duration of the current segment in seconds.
+     * @param[in] buffer     Pointer to the input data buffer. Expected value: non-null pointer to valid TTML stream data.
+     * @param[in] bufferLen  Length of the input buffer in bytes. Expected value: positive size_t value.
+     * @param[in] position   Current playback position in seconds. Expected value: non-negative double.
+     * @param[in] duration   Duration of the current segment in seconds. Expected value: non-negative double.
+     *
      * @return true Always returns true after processing.
      */
     bool processData(const char* buffer, size_t bufferLen, double position, double duration) override;
+
 
     /**
      * @brief Closes the subtitle parser.
@@ -107,7 +111,7 @@ public:
     /**
      * @brief Sets the progress event offset.
      *
-     * @param offset The offset value to set.
+     * @param[in] offset The offset value to set.
      */
     void setProgressEventOffset(double offset) override {}
 
@@ -117,7 +121,7 @@ public:
      * Sends a timestamp packet to the subtitle channel to synchronize subtitle rendering
      * with the current playback position.
      *
-     * @param positionMs The current playback position in milliseconds.
+     * @param[in] positionMs The current playback position in milliseconds. Expected value: non-negative unsigned long long.
      */
     void updateTimestamp(unsigned long long positionMs) override;
 
@@ -127,7 +131,7 @@ public:
      * Sends a pause or resume packet to the subtitle rendering channel based on the input flag.
      * This is typically used to synchronize subtitle behavior with media playback state.
      *
-     * @param pause If true, subtitles are paused; if false, subtitles are resumed.
+     * @param[in] pause If true, subtitles are paused; if false, subtitles are resumed.
      */
     void pause(bool pause) override;
 
@@ -137,14 +141,14 @@ public:
      * Sends a mute or unmute packet to the subtitle rendering channel based on the input flag.
      * This is typically used to control subtitle visibility during playback.
      *
-     * @param mute If true, subtitles are muted (hidden); if false, subtitles are unmuted (shown).
+     * @param[in] mute If true, subtitles are muted (hidden); if false, subtitles are unmuted (shown).
      */
     void mute(bool mute) override;
 
     /**
      * @brief Sets the linear content flag for the subtitle parser.
      *
-     * @param isLinear If true, the content is linear; if false, it is not.
+     * @param[in] isLinear If true, the content is linear; if false, it is not.
      */
     void isLinear(bool isLinear) override { m_isLinear = isLinear; }
 
