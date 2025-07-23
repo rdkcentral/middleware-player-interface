@@ -3,6 +3,9 @@
 
 cmake_minimum_required(VERSION 3.5)
 project(Playergstinterface)
+
+set(CMAKE_CXX_STANDARD 14)
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
@@ -72,15 +75,24 @@ if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
     execute_process (
         COMMAND bash -c "xcrun --show-sdk-path" OUTPUT_VARIABLE osxSdkPath OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++14 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
+    set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
     set(OS_LD_FLAGS "${OS_LD_FLAGS} -F${osxSdkPath}/System/Library/Frameworks -framework Cocoa -L${osxSdkPath}/../MacOSX.sdk/usr/lib -L.libs/lib -L/usr/local/lib/")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot ${osxSdkPath}/../MacOSX.sdk -I/usr/local/include")
     string(STRIP ${OS_LD_FLAGS} OS_LD_FLAGS)
+    pkg_check_modules(OPENSSL REQUIRED openssl)
+    set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "${OPENSSL_LINK_LIBRARIES}")
     link_directories(${OPENSSL_LIBRARY_DIRS})
+    link_directories(${GSTREAMER_LIBRARY_DIRS})
     set(CMAKE_THREAD_LIBS_INIT "-lpthread")
     set(CMAKE_HAVE_THREADS_LIBRARY 1)
     pkg_check_modules(GLIB REQUIRED GLib-2.0)
     include_directories(${GLIB_INCLUDE_DIRS})
+    pkg_check_modules(LIBCJSON REQUIRED libcjson)
+    include_directories(${LIBCJSON_INCLUDE_DIRS})
+    set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "${LIBCJSON_LINK_LIBRARIES}")
+    # This is .libs/lib/pkgconfig which picks up all locally built dependencies
+    link_directories(${LIBCJSON_LIBRARY_DIRS})
+    #link_directories(".libs/lib")
 
     # XCode build flags. Even when using CLANG, the GCC name is required to enable the check
     set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_FUNCTION "YES")
