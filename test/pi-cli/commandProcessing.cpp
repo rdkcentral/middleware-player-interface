@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
+#include <fstream>
 
 // --- CommandExecutor Implementation ---
 void CommandExecutor::threadFunction() {
@@ -420,6 +421,65 @@ void setVideoRectangle(InterfacePlayerRDK& player, const std::vector<std::string
     }
 }
 
+void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
+    // Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]
+    if (params.size() < 2) {
+        std::cout << "Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]\n";
+        return;
+    }
+    int mediaType = std::stoi(params[0]);
+    std::string filePath = params[1];
+    double pts = params.size() > 2 ? std::stod(params[2]) : 0.0;
+    double dts = params.size() > 3 ? std::stod(params[3]) : 0.0;
+    double duration = params.size() > 4 ? std::stod(params[4]) : 0.0;
+    double fragmentPTSoffset = params.size() > 5 ? std::stod(params[5]) : 0.0;
+
+    // Read file into buffer
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+    if (!file) {
+        std::cout << "injectfragment: Failed to open file: " << filePath << "\n";
+        return;
+    }
+    std::streamsize size = file.tellg();
+    if (size <= 0) {
+        std::cout << "injectfragment: File is empty: " << filePath << "\n";
+        return;
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        std::cout << "injectfragment: Failed to read file: " << filePath << "\n";
+        return;
+    }
+
+    // Default flags for SendHelper
+    bool copy = true;
+    bool initFragment = false;
+    bool discontinuity = false;
+    bool notifyFirstBufferProcessed = false;
+    bool sendNewSegmentEvent = false;
+    bool resetTrickUTC = false;
+    bool firstBufferPushed = false;
+
+    bool ok = player.SendHelper(
+        mediaType,
+        buffer.data(),
+        buffer.size(),
+        pts,
+        dts,
+        duration,
+        fragmentPTSoffset,
+        copy,
+        initFragment,
+        discontinuity,
+        notifyFirstBufferProcessed,
+        sendNewSegmentEvent,
+        resetTrickUTC,
+        firstBufferPushed
+    );
+    std::cout << "injectfragment executed. Success: " << (ok ? "true" : "false") << "\n";
+}
+
 // --- Register All Commands ---
 std::map<std::string, Command> initializeCommands(CommandExecutor& executor, InterfacePlayerRDK& player) {
     std::map<std::string, Command> commands;
@@ -462,6 +522,7 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("removeprobes", Command("removeprobes", "Remove probes.", [&player](const std::vector<std::string>& params) { removeProbesCommand(player, params); }));
     commands.emplace("clearprotectionevent", Command("clearprotectionevent", "Clear protection event.", [&player](const std::vector<std::string>& params) { clearProtectionEventCommand(player, params); }));
     commands.emplace("setvideorectangle", Command("setvideorectangle", "Usage: setvideorectangle <x> <y> <width> <height>", [&](const std::vector<std::string>& params) { setVideoRectangle(player, params); }));
-                     
+    commands.emplace("injectfragment", Command("injectfragment", "Inject a fragment into the player. Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]", [&player](const std::vector<std::string>& params) { injectFragmentCommand(player, params); } ) );
+
     return commands;
 }
