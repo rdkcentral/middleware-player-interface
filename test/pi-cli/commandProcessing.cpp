@@ -183,14 +183,13 @@ void setAudioVolumeCommand(InterfacePlayerRDK& player, const std::vector<std::st
 }
 
 void setupStreamCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
-    if (params.size() != 3) {
-        std::cout << "Usage: setupstream <streamId> <playerInstance(int)> <url>\n";
+    if (params.size() != 2) {
+        std::cout << "Usage: setupstream <streamId> <url>\n";
         return;
     }
     int streamId = std::stoi(params[0]);
-    void* _this = reinterpret_cast<void*>(std::stoul(params[1]));
-    std::string url = params[2];
-    int result = player.SetupStream(streamId, _this, url);
+    std::string url = params[1];
+    int result = player.InterfacePlayer_SetupStream(streamId, url);
     std::cout << "SetupStream executed. Result: " << result << "\n";
 }
 
@@ -423,16 +422,18 @@ void setVideoRectangle(InterfacePlayerRDK& player, const std::vector<std::string
 
 void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
     // Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]
-    if (params.size() < 2) {
-        std::cout << "Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]\n";
+    if (params.size() < 3) {
+        std::cout << "Usage: injectfragment <mediaType:int> <filePath> <initFragment> [pts] [dts] [duration] [fragmentPTSoffset]\n";
         return;
     }
     int mediaType = std::stoi(params[0]);
     std::string filePath = params[1];
-    double pts = params.size() > 2 ? std::stod(params[2]) : 0.0;
-    double dts = params.size() > 3 ? std::stod(params[3]) : 0.0;
-    double duration = params.size() > 4 ? std::stod(params[4]) : 0.0;
-    double fragmentPTSoffset = params.size() > 5 ? std::stod(params[5]) : 0.0;
+
+    bool initFragment = (params[2] == "1" || params[2] == "true");
+    double pts = params.size() > 3 ? std::stod(params[3]) : 0.0;
+    double dts = params.size() > 4 ? std::stod(params[4]) : 0.0;
+    double duration = params.size() > 5 ? std::stod(params[5]) : 0.0;
+    double fragmentPTSoffset = params.size() > 6 ? std::stod(params[6]) : 0.0;
 
     // Read file into buffer
     std::ifstream file(filePath, std::ios::binary | std::ios::ate);
@@ -454,7 +455,6 @@ void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::st
 
     // Default flags for SendHelper
     bool copy = true;
-    bool initFragment = false;
     bool discontinuity = false;
     bool notifyFirstBufferProcessed = false;
     bool sendNewSegmentEvent = false;

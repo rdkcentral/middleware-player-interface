@@ -12,6 +12,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <unistd.h>
+#include <gst/gst.h>
 #include "InterfacePlayerRDK.h"
 #include "commandProcessing.h"
 
@@ -76,7 +77,7 @@ void initializeReadline() {
     };
 }
 
-int main(int argc, char *argv[]) {
+int picli_main(int argc, char *argv[]) {
     // Create the command executor
     CommandExecutor executor;
     InterfacePlayerRDK player;
@@ -130,4 +131,14 @@ int main(int argc, char *argv[]) {
     executor.stop();
 
     return 0;
+}
+
+int
+main (int argc, char *argv[])
+{
+#if defined(__APPLE__)
+  return gst_macos_main ((GstMainFunc) picli_main, argc, argv, NULL);
+#else
+  return picli_main (argc, argv);
+#endif
 }
