@@ -1,0 +1,59 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 65fd51f..89f9076 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,6 +14,8 @@ pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
+ pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+ pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+ pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
++pkg_check_modules(OPENSSL REQUIRED openssl)
++pkg_check_modules(LIBCJSON REQUIRED libcjson)
+ 
+ include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR} subtitle playerisobmff isobmff 
+@@ -102,6 +104,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+     set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_VARIABLE "YES")
+ else()
+     set(USE_MAC_FOR_RANDOM_GEN "-DUSE_MAC_FOR_RANDOM_GEN")
++    pkg_check_modules(GLIB REQUIRED glib-2.0)
++    message("GLIB $GLIB_INCLUDE_DIRS")
++
+ endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+ 
+ set(LIBPLAYERGSTINTERFACE_HEADERS
+diff --git a/install-middleware.sh b/install-middleware.sh
+index c4488f1..cb5e236 100755
+--- a/install-middleware.sh
++++ b/install-middleware.sh
+@@ -39,7 +39,7 @@ source scripts/install_dependencies.sh
+ # gtest install and build
+ source scripts/install_gtest.sh
+ # glib install and build
+-source scripts/install_glib.sh
++# source scripts/install_glib.sh
+ # libdash install and build
+ source scripts/install_libdash.sh
+ # libcjson install and build
+@@ -130,8 +130,8 @@ INSTALL_STATUS_ARR+=("install_build_googletest check passed.")
+ 
+ # Build glib
+ #
+-install_build_glib_fn "${OPTION_CLEAN}" 
+-INSTALL_STATUS_ARR+=("install_build_glib check passed.")
++# install_build_glib_fn "${OPTION_CLEAN}"
++# INSTALL_STATUS_ARR+=("install_build_glib check passed.")
+ 
+ # Build libcjson
+ install_build_libcjson_fn "${OPTION_CLEAN}" 
+diff --git a/scripts/install_dependencies.sh b/scripts/install_dependencies.sh
+index 937856b..aaf02ab 100644
+--- a/scripts/install_dependencies.sh
++++ b/scripts/install_dependencies.sh
+@@ -114,6 +114,7 @@ function install_pkgs_linux_fn()
+     install_package_fn git
+     install_package_fn cmake
+     install_package_fn gcc
++    install_package_fn libglib2.0-dev
+     install_package_fn g++
+     install_package_fn libcurl4-openssl-dev
+     install_package_fn libgstreamer1.0-dev
