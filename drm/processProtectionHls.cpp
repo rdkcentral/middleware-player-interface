@@ -183,7 +183,7 @@ shared_ptr<DrmHelper> ProcessContentProtection( std::string attrName, bool propa
 	int status = DRM_API_FAILED;  
 	string psshDataStr = "";
 	char* psshData = NULL;
-	
+
 	do
 	{
 		shared_ptr<DrmHelper> drmHelper = getDrmHelper(attrName, propagateURIParam, isSamplesRequired);

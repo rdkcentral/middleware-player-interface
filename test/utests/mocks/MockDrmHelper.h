@@ -41,7 +41,7 @@ public:
 	MOCK_METHOD(bool, isClearDecrypt, (), (const));
 
 	MOCK_METHOD(bool, isHdcp22Required, (), (const, override));
-	
+
 	MOCK_METHOD(const std::string&, getDrmMetaData, (), (const, override));
 
 	MOCK_METHOD(void, setDrmMetaData, (const std::string& metaData), (override));
@@ -66,7 +66,7 @@ public:
 
 	MOCK_METHOD(void, transformLicenseResponse, (std::shared_ptr<DrmData> licenseResponse), (const, override));
 
-    	MOCK_METHOD(DRMMemorySystem*, getMemorySystem, (), (override));
+	MOCK_METHOD(DRMMemorySystem*, getMemorySystem, (), (override));
 
 	MOCK_METHOD(void, cancelDrmSession, (), (override));
 

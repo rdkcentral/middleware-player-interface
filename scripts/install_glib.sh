@@ -10,8 +10,8 @@ function install_build_glib_fn()
         if [ -d glib ] ; then
             rm -rf glib
             # uninstall?
-            #rm $LOCAL_DEPS_BUILD_DIR/lib/libgmock.a	
-            #rm $LOCAL_DEPS_BUILD_DIR/lib/libgmock_main.a	
+            #rm $LOCAL_DEPS_BUILD_DIR/lib/libgmock.a
+            #rm $LOCAL_DEPS_BUILD_DIR/lib/libgmock_main.a
             #rm $LOCAL_DEPS_BUILD_DIR/lib/libgtest.a
         fi
     fi

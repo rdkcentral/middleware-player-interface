@@ -102,7 +102,7 @@ public:
      *   @retval false on failure
      */
     bool InvokeJSONRPC(std::string method, const JsonObject &param, JsonObject &result, const uint32_t waitTime = THUNDER_RPC_TIMEOUT);
-	
+
     /**
      *   @fn SubscribeEvent
      *   @note   Subscribe event data for the specific plugin

@@ -41,18 +41,17 @@ include_directories(${PLAYER_ROOT}/externals/playersecmanager)
 include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
-
 set(TEST_SOURCES FunctionalTests.cpp
 		 OcdmBasicSessionAdapterTests.cpp)
 
-set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
+set(AAMP_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
                  ${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
                  ${PLAYER_ROOT}/drm/DrmSession.cpp
 		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
-     ${PLAYER_ROOT}/ProcessHandler.cpp
-     ${PLAYER_ROOT}/PlayerUtils.cpp
-     ${PLAYER_ROOT}/baseConversion/_base64.cpp)
-
+		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
+                 ${PLAYER_ROOT}/ProcessHandler.cpp
+                 ${PLAYER_ROOT}/PlayerUtils.cpp
+                 ${PLAYER_ROOT}/baseConversion/_base64.cpp)
 
 #[[class OCDMBasicSessionAdapter inherits from class OCDMSessionAdapter,
 which inherits from the abstract class DrmSession.
@@ -61,7 +60,7 @@ However, OCDMSessionAdapter has a more complex implementation, so a fake has bee
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
-               ${PLAYER_SOURCES})
+               ${AAMP_SOURCES})
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)

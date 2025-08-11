@@ -204,7 +204,7 @@ TEST_F(OcdmBasicSessionAdapterTests, DecryptWithValidMemorySystemDecodeFail)
 										MemBufEq(g_mockKeyId.data(), g_mockKeyId.size()),
 										g_mockKeyId.size(),
 										initWithLast15)).WillOnce(Return(ERROR_NONE));
-	EXPECT_CALL(*g_mockMemorySystem, decode(MemBufEq(dataToSend, sizeToSend), sizeToSend,const_cast<uint8_t *>(payloadData), payloadDataSize)).WillOnce(Return(false));							
+	EXPECT_CALL(*g_mockMemorySystem, decode(MemBufEq(dataToSend, sizeToSend), sizeToSend,const_cast<uint8_t *>(payloadData), payloadDataSize)).WillOnce(Return(false));
 	ret_value = m_ocdmbasicsessionadapter->decrypt(f_pbIV, f_cbIV, payloadData, payloadDataSize, nullptr);
 
 	EXPECT_EQ(ret_value,-1);

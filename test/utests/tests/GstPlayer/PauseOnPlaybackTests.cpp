@@ -53,7 +53,7 @@ protected:
 		g_mockGLib = new NiceMock<MockGLib>();
 		g_mockGstHandlerControl = new MockGstHandlerControl();
 		g_mockPlayerScheduler = new MockPlayerScheduler();
-    	mInterfaceGstPlayer = new InterfacePlayerRDK();
+	mInterfaceGstPlayer = new InterfacePlayerRDK();
 
 		//init callback to avoid bad_function_call error
 		mInterfaceGstPlayer->TearDownCallback([this](bool status, int mediaType) {
@@ -88,7 +88,7 @@ protected:
 
 		delete g_mockGstHandlerControl;
 		g_mockGstHandlerControl = nullptr;
-	
+
 	    delete g_mockPlayerScheduler;
 	    g_mockPlayerScheduler = nullptr;
 	}
@@ -182,9 +182,9 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigureNormalPlayback)
 // Test bus_message callback when PauseOnPlayback has been enabled, and sink
 // has the property frame-step-on-preroll
 // Due to g_object_set being a variadic function it is not possible/simple to mock,
-// and therefore confirm that the property is set. However it is checked that 
-// step event is sent. 
-// The task FirstFrameCallback is not exected as this would be triggered by the 
+// and therefore confirm that the property is set. However it is checked that
+// step event is sent.
+// The task FirstFrameCallback is not exected as this would be triggered by the
 // "first-video-frame-callback" callback from gstreamer when the frame is displayed
 TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 {
@@ -229,10 +229,10 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PAUSED))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
-	
+
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-  	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
     ASSERT_TRUE(bus_sync_func != nullptr);
     ASSERT_TRUE(bus_message_func != nullptr);
@@ -363,24 +363,6 @@ TEST_F(PauseOnPlaybackTests, bus_message_FrameStepPropertyNotAvailable)
 			SetArgPointee<2>(GST_STATE_PAUSED),
 			SetArgPointee<3>(GST_STATE_NULL)));
 
-    // Property not available
-	//EXPECT_CALL(*g_mockGLib, g_object_class_find_property(_,StrEq("frame-step-on-preroll")))
-	//	.WillOnce(Return(nullptr));
-
-    // No simple solution to mock variadic functions, so cannot check calls to g_object_set
-
-   // EXPECT_CALL(*g_mockGStreamer, gst_event_new_step(_,_,_,_,_))
-	//	.Times(0);
-
-    //EXPECT_CALL(*g_mockGStreamer, gst_element_send_event(_,_))
-	//	.Times(0);
-
-    //Note: Need to address once bus_message is migrated to interfacePlayer
-	//EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(PlayerAsyncTaskObj((void *)mAAMPGstPlayer)))//ScheduleTask(_))//,mAAMPGstPlayer,_))
-	//	.WillRepeatedly(Return(1));
-
-	//EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(PlayerAsyncTaskObj(_,mAAMPGstPlayer,StrEq("FirstFrameCallback"))))
-	//	.WillOnce(Return(1));
 
 	// Call the bus_message function
 	bus_message_func(&bus, &pipeline_message, mInterfaceGstPlayer);

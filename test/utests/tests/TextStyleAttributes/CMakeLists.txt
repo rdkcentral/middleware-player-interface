@@ -35,8 +35,8 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 set(TEST_SOURCES    GetTextStyleAttributesTests.cpp
                     TextStyleAttributesTests.cpp)
-	    
-set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp 
+
+set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/subtec/subtecparser/TextStyleAttributes.cpp)
 
 add_executable(${EXEC_NAME}

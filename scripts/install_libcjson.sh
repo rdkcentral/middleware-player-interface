@@ -6,7 +6,7 @@ function install_build_libcjson_fn()
     if [[ "$OSTYPE" == "darwin"* ]]; then
 
         # Should not be built or installed, but aampmetrics needs it in /usr/local
-        # which is a problem on MacOS ARM64 as brew installs to /opt/homebrew now and 
+        # which is a problem on MacOS ARM64 as brew installs to /opt/homebrew now and
         # aampmetrics assumes/hardcodes -L/usr/local/lib
         # Once fixed by using ${LIBCJSON_LINK_LIBRARIES} instead of -lcjson this
         # script can be removed
@@ -35,7 +35,7 @@ function install_build_libcjson_fn()
             cmake .. -DCMAKE_INSTALL_PREFIX=${LOCAL_DEPS_BUILD_DIR}
             make
             make install
-    
+
             INSTALL_STATUS_ARR+=("cjson was successfully installed.")
         fi
 
@@ -53,7 +53,7 @@ function install_build_libcjson_fn()
                 echo "Required symlink $TARGET for arm64 already exists."
 
             else
-                
+
                 echo "Creating required symlink for arm64: $TARGET -> $SOURCE"
                 sudo ln -s "$SOURCE" "$TARGET"
             fi

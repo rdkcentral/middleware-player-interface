@@ -19,7 +19,7 @@ include(GoogleTest)
 
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
-set(EXEC_NAME Base64PLAYER)
+set(EXEC_NAME Base64AAMP)
 
 include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle)
@@ -37,9 +37,8 @@ set(TEST_SOURCES Base64Tests.cpp
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/baseConversion/_base64.cpp)
 
-
 add_executable(${EXEC_NAME}
-               ${TEST_SOURCES} 
+               ${TEST_SOURCES}
                ${PLAYER_SOURCES} )
 
 if (CMAKE_XCODE_BUILD_SYSTEM)

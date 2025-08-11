@@ -25,4 +25,3 @@ GstCaps *GetCaps(GstStreamOutputFormat format)
 }
 
 
-

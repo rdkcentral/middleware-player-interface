@@ -28,7 +28,6 @@
 
 #include "ProcessHandler.h"
 #include "PlayerExternalsInterface.h"
-
 #include <assert.h>
 #include <iostream>
 #include <sstream>

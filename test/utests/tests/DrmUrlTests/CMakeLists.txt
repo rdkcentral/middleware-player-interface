@@ -43,7 +43,7 @@ include_directories(${PLAYER_ROOT}/../base16_64)
 
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
-set(TEST_SOURCES DrmTestsRun.cpp 
+set(TEST_SOURCES DrmTestsRun.cpp
 				 DrmSessionTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)

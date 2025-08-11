@@ -133,14 +133,7 @@ static std::map<std::string, std::vector<std::string>> gstMapDecoderLookUptable 
 	{"ac-3", {"omxac3dec", "avdec_ac3", "avdec_ac3_fixed"}},
 	{"ac-4", {"omxac4dec"}}};
 
-struct MonitorAVState
-{
-	long long tLastReported;
-	long long tLastSampled;
-	const char *description;
-	gint64 av_position[2];
-	bool happy;
-};
+
 
 struct gst_media_stream
 {
@@ -330,7 +323,6 @@ class InterfacePlayerPriv
 		 * @param[in] buffer - input buffer to be forwarded
 		 */
 		void ForwardBuffersToAuxPipeline(GstBuffer *buffer, bool pauseInjector, void *user_data);
-
 
 };
 #endif

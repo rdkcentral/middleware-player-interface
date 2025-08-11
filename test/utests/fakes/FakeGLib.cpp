@@ -49,7 +49,7 @@ void g_object_set(gpointer object, const gchar *first_property_name, ...)
 				(strcmp(property_name, "show-video-window") == 0) ||
 				(strcmp(property_name, "zoom-mode") == 0)
 			   )
-			{				
+			{
 				g_mockGLib->g_object_set(object, property_name, va_arg(args_list, int));
 			}
 			else if((strcmp(property_name, "rectangle") == 0))

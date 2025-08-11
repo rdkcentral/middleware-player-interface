@@ -1,6 +1,6 @@
-# AAMP Microtests
+# Player Microtests
 
-A test infrastructure using GoogleTest C++ testing and mocking framework, to verify the behavior of individual AAMP objects.
+A test infrastructure using GoogleTest C++ testing and mocking framework, to verify the behavior of individual Player objects.
 
 CTest is a testing tool that is part of CMake, and is used to automatically execute all the tests, and provides a report of the tests run, whether they passed/failed and time taken. It can be configured to run tests in parallel, output logging on failure, run specific tests etc.
 
@@ -18,7 +18,7 @@ NOTE: Writing microtests is a really useful tool in improving code quality but i
 
 ## Pre-requisites to building:
 
-AAMP installed using install-aamp.sh (-c if code coverage is neeeded) script which:
+Player installed using install-middleware.sh (-c if code coverage is neeeded) script which:
  - installs headers from dependent libraries
  - installs GoogleTest and GoogleMock
  - installs jq
@@ -32,14 +32,14 @@ From the *utests* folder run:
 ```
 ## To run tests and generate combined report in json format
 
-./run.sh -e 
+./run.sh -e
 
 Report can be found in utests/TestReport.json
 
 ## Check line coverage in microtests:
 
-For code coverage install-aamp.sh -c 
-must have been run first to generate a baseline set of aamp files.
+For code coverage install-middleware.sh -c
+must have been run first to generate a baseline set of player files.
 
 From the *utests* directory, run:
 
@@ -98,9 +98,9 @@ ctest -R PrivateInstance.*PositionAlready
 
 A CMake library containing fake/stub implementations of class methods, to allow compiling of class under test in isolation; these fakes are common to all tests.
 
-Implementation can be extended to call a mock instance, to allow testing of expectations. For example, see FakePrivateInstanceAAMP.cpp where some methods being used by existing tests have been extended to call a mock of PrivateInstanceAAMP if the mock has been constructed.
+Implementation can be extended to call a mock instance, to allow testing of expectations. For example, see FakePrivateInstancePlayer.cpp where some methods being used by existing tests have been extended to call a mock of PrivateInstancePlayer if the mock has been constructed.
 
-The files in here will likely need to be updated for any API changes/additions made to AAMP modules, otherwise unresolved symbol errors are likely to be seen.
+The files in here will likely need to be updated for any API changes/additions made to Player modules, otherwise unresolved symbol errors are likely to be seen.
 
 ### mocks
 
@@ -110,7 +110,7 @@ See [gMock for Dummies](https://google.github.io/googletest/gmock_for_dummies.ht
 
 ### tests
 
-A directory containing the tests for each of AAMP's modules contained within their own sub-directory.
+A directory containing the tests for each of Player's modules contained within their own sub-directory.
 The CMakeLists.txt file adds all the modules' subdirectories.
 
 See [CMake Modules - GoogleTest](https://cmake.org/cmake/help/latest/module/GoogleTest.html)

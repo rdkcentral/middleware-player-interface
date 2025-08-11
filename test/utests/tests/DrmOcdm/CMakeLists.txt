@@ -64,7 +64,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 	${PLAYER_ROOT}/baseConversion/_base64.cpp
 	${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
 	${PLAYER_ROOT}/externals/playersecmanager/PlayerSecManager.cpp
-	${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp	
+	${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp
 	${PLAYER_ROOT}/baseConversion/_base64.cpp
 				${PLAYER_ROOT}/PlayerUtils.cpp
 				 ${PLAYER_ROOT}/drm/DrmSessionFactory.cpp
@@ -85,7 +85,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 				 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 				 ${UTESTS_ROOT}/drm/mocks/gstMocks.c
 				 ${PLAYER_ROOT}/ProcessHandler.cpp)
-				 
+
 
 add_definitions(-DAAMP_HLS_DRM)
 add_definitions(-DUSE_SHARED_MEMORY)
@@ -96,7 +96,7 @@ add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
 			   ${PLAYER_SOURCES}
 			   ${FAKE_SOURCES})
-			   
+
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 

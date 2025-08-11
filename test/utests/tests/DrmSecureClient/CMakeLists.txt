@@ -65,7 +65,7 @@ if(SEC_CLIENT_HEADERS)
 					 ${PLAYER_ROOT}/drm/DrmSessionFactory.cpp
 					 ${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
 					 ${PLAYER_ROOT}/drm/helper/DrmHelperFactory.cpp
-					 ${PLAYER_ROOT}/drm/DRMSessionManager.cpp
+					 ${PLAYER_ROOT}/drm/DrmSessionManager.cpp
 					 ${PLAYER_ROOT}/drm/DrmSession.cpp
 					 ${PLAYER_ROOT}/drm/ocdm/opencdmsessionadapter.cpp
 					 ${PLAYER_ROOT}/drm/ocdm/opencdmsessionadapter.cpp

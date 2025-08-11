@@ -36,6 +36,7 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
 include_directories(${UTESTS_ROOT}/mocks)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/../test/gstTestHarness)
 
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
@@ -43,7 +44,7 @@ set(TEST_SOURCES PauseOnPlaybackTests.cpp
               FunctionalTests.cpp
               GstPlayerTests.cpp
               )
-	      
+
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
 		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp

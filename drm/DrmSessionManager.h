@@ -113,8 +113,9 @@ struct configs{
     bool mRuntimeDRMConfig;
     int mContentProtectionDataUpdateTimeout;
     bool mEnablePROutputProtection;
-    bool  mPropagateURIParam; 
+    bool  mPropagateURIParam;
     bool mIsFakeTune;
+    bool mIsWVKIDWorkaround;
 };
 /**
  *  @class	DrmSessionManager
@@ -137,11 +138,11 @@ private:
 	std::mutex cachedKeyMutex;
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
-	int mMaxDrmSessions;
+	int mMaxDRMSessions;
 	std::atomic<bool> mIsVideoOnMute;
 	std::atomic<int> mCurrentSpeed;
 	std::atomic<bool> mFirstFrameSeen;
-
+	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
 	 *
@@ -187,18 +188,18 @@ public:
 	/**
 	 *  @fn DrmSessionManager
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player);
+	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
 
 	void initializeDrmSessions();
 
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
-	 *  @param[in]	sessionHndle - Session handle.
+	 *  @param[in]	sessionHandle - Session handle.
 	 *  @param[in]	status - Status of the session.
 	 *  @param[in]	systemData - System data.
 	 */
-	void watermarkSessionHandlerWrapper(uint32_t sessionHndle, uint32_t status, const std::string &systemData);
+	void watermarkSessionHandlerWrapper(uint32_t sessionHandle, uint32_t status, const std::string &systemData);
 
 	/**
 	 *  @fn registerCallback
@@ -370,7 +371,7 @@ public:
 	/**
 	 * @fn initializeDrmSession
 	 */
-	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int& err);
+	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int &err );
 	/**
 	 * @fn notifyCleanup
 	 */
@@ -406,6 +407,63 @@ public:
         {
               ProfileUpdateCb = callback;
         };
+
+	using ProfileBeginCallback = std::function<void(int)>;
+	ProfileBeginCallback profileBeginCb;
+	void RegisterProfBegin(const ProfileBeginCallback callback)
+	{
+		profileBeginCb = callback;
+	};
+
+	using ProfileEndCallback = std::function<void(int streamType)>;
+	ProfileEndCallback profileEndCb;
+	void RegisterProfEnd(const ProfileEndCallback callback)
+	{
+		profileEndCb = callback;
+	};
+
+	using ProfileErrorCallback = std::function<void(int streamType, int result)>;
+	ProfileErrorCallback profileErrorCb;
+	void RegisterProfError(const ProfileErrorCallback callback)
+	{
+		profileErrorCb = callback;
+	};
+
+	using LAProfileBeginCallback = std::function<void(int)>;
+	LAProfileBeginCallback laprofileBeginCb;
+	void RegisterLAProfBegin(const LAProfileBeginCallback callback)
+	{
+		laprofileBeginCb = callback;
+	};
+
+	using LAProfileEndCallback = std::function<void(int streamType)>;
+	LAProfileEndCallback laprofileEndCb;
+	void RegisterLAProfEnd(const LAProfileEndCallback callback)
+	{
+		laprofileEndCb = callback;
+	};
+
+	using LAProfileErrorCallback = std::function<void(void *ptr)>;
+	LAProfileErrorCallback laprofileErrorCb;
+	void RegisterLAProfError(const LAProfileErrorCallback callback)
+	{
+		laprofileErrorCb = callback;
+	};
+
+	using SetFailureCallback = std::function<void(void *ptr, int err)>;
+	SetFailureCallback setfailureCb;
+	void RegisterSetFailure(const SetFailureCallback callback)
+	{
+		setfailureCb = callback;
+	};
+
+	//using DrmMetaDataCallback =	std::function<void *()>;
+	using DrmMetaDataCallback = std::function<std::shared_ptr<void>()>;
+	DrmMetaDataCallback DrmMetaDataCb;
+	void RegisterMetaDataCb(const DrmMetaDataCallback callback)
+	{
+		DrmMetaDataCb = callback;
+	};
 	/*
 	 * @brief Register Content Protection Update callback to application 
 	 */
@@ -425,15 +483,10 @@ public:
 	 */
         void UpdateDRMConfig(
                        bool useSecManager,
-                //       int licenseRetryWaitTime,
-                //       int drmNetworkTimeout,
-                //       int curlConnectTimeout,
-                //       bool curlLicenseLogging,
-                //       bool runtimeDRMConfig,
-                //       int contentProtectionDataUpdateTimeout,
                        bool enablePROutputProtection,
                        bool propagateURIParam,
-                       bool isFakeTune);
+                       bool isFakeTune,
+		       bool wideVineKIDWorkaround);
 
 
 };

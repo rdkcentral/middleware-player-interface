@@ -42,30 +42,29 @@ bool OCDMSessionAdapter::verifyOutputProtection()
     return ret_val;
 }
 
-void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData, uint32_t f_cbInitData, std::string &customData) 
+void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData, uint32_t f_cbInitData, std::string &customData)
 {
 
 }
 
-DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_t timeout) 
+DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_t timeout)
 {
     return nullptr;
 }
 
-int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout) 
+int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 {
     return 0;
 }
 
-KeyState OCDMSessionAdapter::getState() 
+KeyState OCDMSessionAdapter::getState()
 {
     return KEY_INIT;
 }
-void OCDMSessionAdapter::clearDecryptContext() 
+void OCDMSessionAdapter::clearDecryptContext()
 {
 }
 bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 {
     return true;
 }
-
