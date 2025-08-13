@@ -130,7 +130,7 @@ void PlayerScheduler::ExecuteAsyncTask()
 				if (obj.mId != PLAYER_TASK_ID_INVALID)
 				{
 					mCurrentTaskId = obj.mId;
-					MW_LOG_INFO("Found entry in function queue!!, task:%s. CurrentTaskId:%d ",obj.mTaskName.c_str(),mCurrentTaskId);
+					MW_LOG_INFO("Found entry in function queue!!, task:%s. CurrentTaskId:%d ",mCurrentTaskId);
 					//Unlock so that new entries can be added to queue while function executes
 					queueLock.unlock();
 
