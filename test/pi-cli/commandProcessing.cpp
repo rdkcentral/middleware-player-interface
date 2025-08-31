@@ -3,6 +3,45 @@
 #include <algorithm>
 #include <sstream>
 #include <fstream>
+#include <atomic>
+#include <chrono>
+
+// Forward declaration for use in PositionPollingThread
+void getPositionMillisecondsCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
+
+// --- PositionPollingThread Helper ---
+class PositionPollingThread {
+public:
+    PositionPollingThread(InterfacePlayerRDK& player)
+        : player(player), running(false) {}
+
+    void start(int intervalMs) {
+        stop();
+        running = true;
+        pollingThread = std::thread([this, intervalMs]() {
+            while (running) {
+                getPositionMillisecondsCommand(player, {});
+                std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+            }
+        });
+    }
+
+    void stop() {
+        running = false;
+        if (pollingThread.joinable()) {
+            pollingThread.join();
+        }
+    }
+
+    ~PositionPollingThread() {
+        stop();
+    }
+
+private:
+    InterfacePlayerRDK& player;
+    std::atomic<bool> running;
+    std::thread pollingThread;
+};
 
 // --- CommandExecutor Implementation ---
 void CommandExecutor::threadFunction() {
@@ -516,6 +555,34 @@ void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::st
     std::cout << "injectfragment executed. Success: " << (ok ? "true" : "false") << "\n";
 }
 
+void getPositionMillisecondsCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
+    // Usage: getpositionmilliseconds
+    if (!params.empty()) {
+        std::cout << "Usage: getpositionmilliseconds\n";
+        return;
+    }
+    int64_t posMs = player.GetPositionMilliseconds();
+    std::cout << "GetPositionMilliseconds: " << posMs << " ms\n";
+}
+
+
+static PositionPollingThread* g_positionPollingThread = nullptr;
+
+void reportPositionsCommand(const std::vector<std::string>& params) {
+    if (params.size() != 1) {
+        std::cout << "Usage: reportpositions <intervalMs>\n";
+        return;
+    }
+    int intervalMs = std::stoi(params[0]);
+    if (intervalMs <= 0) {
+        g_positionPollingThread->stop();
+        std::cout << "Stopped position polling.\n";
+        return;
+    }
+    g_positionPollingThread->start(intervalMs);
+    std::cout << "Started position polling every " << intervalMs << " ms.\n";
+}
+
 // --- Register All Commands ---
 std::map<std::string, Command> initializeCommands(CommandExecutor& executor, InterfacePlayerRDK& player) {
     std::map<std::string, Command> commands;
@@ -559,6 +626,13 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("clearprotectionevent", Command("clearprotectionevent", "Clear protection event.", [&player](const std::vector<std::string>& params) { clearProtectionEventCommand(player, params); }));
     commands.emplace("setvideorectangle", Command("setvideorectangle", "Usage: setvideorectangle <x> <y> <width> <height>", [&](const std::vector<std::string>& params) { setVideoRectangle(player, params); }));
     commands.emplace("injectfragment", Command("injectfragment", "Inject a fragment into the player. Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]", [&player](const std::vector<std::string>& params) { injectFragmentCommand(player, params); } ) );
+    commands.emplace("getpositionmilliseconds", Command("getpositionmilliseconds", "Get current position in milliseconds.", [&player](const std::vector<std::string>& params) { getPositionMillisecondsCommand(player, params); }));
+
+    // Initialize the polling thread pointer if not already done
+    if (!g_positionPollingThread) {
+        g_positionPollingThread = new PositionPollingThread(player);
+    }
+    commands.emplace("reportpositions", Command("reportpositions","Start polling position every <intervalMs> ms. Usage: reportpositions <intervalMs>",[](const std::vector<std::string>& params) {reportPositionsCommand(params);}));
 
     return commands;
 }
