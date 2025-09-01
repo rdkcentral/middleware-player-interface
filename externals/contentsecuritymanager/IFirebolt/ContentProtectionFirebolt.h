@@ -138,6 +138,17 @@ public:
 	 * @param error Error code (if any)
 	 */
 	void ConnectionChanged(const bool connected, int error);
+	
+	/**
+	 * @brief Handles watermark-related events from Firebolt.
+	 *
+	 * This method processes watermark events received from the Firebolt SDK,
+	 * such as status changes or notifications related to watermarking.
+	 *
+	 * @param sessionId The DRM session identifier associated with the event.
+	 * @param statusStr The status string describing the watermark event.
+	 * @param appId The application identifier related to the event.
+	 */
 	void HandleWatermarkEvent(const std::string& sessionId, const std::string& statusStr, const std::string& appId);
 private:
 	/**
