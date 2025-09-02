@@ -326,7 +326,7 @@ bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &
 		if (!keyIDSlot.empty() && keyIDSlot.end() != std::find(keyIDSlot.begin(), keyIDSlot.end(), keyIdArray))
 		{
 			std::string debugStr = PlayerLogManager::getHexDebugStr(keyIdArray);
-			MW_LOG_WARN("Session created/in progress with same keyID %s at slot %d", debugStr.c_str(), sessionSlot);
+			MW_LOG_INFO("Session created/in progress with same keyID %s at slot %d", debugStr.c_str(), sessionSlot);
 			status = !cachedKeyIDs[sessionSlot].isFailedKeyId;
 			ret = true;
 			break;
@@ -358,7 +358,7 @@ int DrmSessionManager::getSlotIdForSession(DrmSession* session)
 			}
 		}
 	}
-	
+
 	if (slot == -1)
 	{
 		MW_LOG_WARN("DRM Session not found");
