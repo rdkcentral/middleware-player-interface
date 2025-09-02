@@ -192,6 +192,13 @@ public:
 
 	void initializeDrmSessions();
 
+	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
+	{	
+        std::lock_guard<std::mutex> guard(cachedKeyMutex);
+        cachedKeyIDs[0].data.push_back(keyId);
+        cachedKeyIDs[0].isFailedKeyId = isFailed;
+    }
+
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
