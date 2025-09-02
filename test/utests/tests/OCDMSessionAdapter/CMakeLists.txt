@@ -54,10 +54,10 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/opencdmsessionadapter.cpp
                  ${PLAYER_ROOT}/drm/DrmUtils.cpp
     		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp
-		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
-     ${PLAYER_ROOT}/ProcessHandler.cpp
-     ${PLAYER_ROOT}/PlayerUtils.cpp
-     ${PLAYER_ROOT}/baseConversion/_base64.cpp)
+		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
+     		${PLAYER_ROOT}/PlayerUtils.cpp
+		${PLAYER_ROOT}/ProcessHandler.cpp
+		${PLAYER_ROOT}/baseConversion/_base64.cpp)
 
 add_definitions(-DUSE_THUNDER_OCDM_API_0_2)
 add_definitions(-DUSE_OPENCDM_ADAPTER)

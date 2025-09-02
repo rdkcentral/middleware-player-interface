@@ -676,7 +676,6 @@ public:
 	{
 		return samples[part].dts;
 	}
-
 	double getDuration( int part )
 	{
 		return samples[part].duration;

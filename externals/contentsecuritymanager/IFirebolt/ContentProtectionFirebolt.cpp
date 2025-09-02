@@ -30,6 +30,9 @@
 #include <inttypes.h>
 #include "contentprotection.h"
 #include "fireboltaamp.h"
+
+#include "PlayerExternalUtils.h"
+
 std::condition_variable mConnectionCV;
 std::mutex mConnectionMutex;
 using namespace Firebolt;

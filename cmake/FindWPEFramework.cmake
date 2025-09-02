@@ -47,7 +47,7 @@ if(PC_WPEFRAMEWORK_FOUND)
         HINTS ${PC_WPEFRAMEWORK_INCLUDEDIR} ${PC_WPEFRAMEWORK_INCLUDE_DIRS})
 
 if (USE_THUNDER_R4)
-    set(WPEFRAMEWORK_LIBS WPEFrameworkPlugins WPEFrameworkCore WPEFrameworkCOM WPEFrameworkWebSocket)
+       set(WPEFRAMEWORK_LIBS WPEFrameworkPlugins WPEFrameworkCore WPEFrameworkCOM WPEFrameworkWebSocket)
 else()
     set(WPEFRAMEWORK_LIBS WPEFrameworkPlugins WPEFrameworkCore WPEFrameworkTracing WPEFrameworkProtocols)
 endif()
@@ -93,9 +93,6 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(WPEFRAMEWORK DEFAULT_MSG
     WPEFRAMEWORK_LIBRARIES
     WPEFRAMEWORK_INCLUDE_DIRS)
-
-message(STATUS "  -> WPEFRAMEWORK_LIBRARY = ${WPEFRAMEWORK_LIBRARY}")
-
 
 if(WPEFRAMEWORK_FOUND)
 else()

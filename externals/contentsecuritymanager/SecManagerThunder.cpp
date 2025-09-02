@@ -32,6 +32,7 @@
 #include <sstream>
 #include <string>
 #include "ThunderAccessPlayer.h"
+#include "PlayerExternalUtils.h"
 
 /**
  * @brief SecManagerThunder Constructor

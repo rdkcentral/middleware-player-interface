@@ -19,13 +19,12 @@ include(GoogleTest)
 
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
-set(EXEC_NAME PlayerOcdmBasicSessionAdapterTests)
+set(EXEC_NAME OcdmBasicSessionAdapterTests)
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/subtec/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/ocdm)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
-include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
@@ -39,11 +38,9 @@ include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
 include_directories(${UTESTS_ROOT}/ocdm)
 include_directories(${UTESTS_ROOT}/mocks)
-include_directories(${PLAYER_ROOT}/externals)
-include_directories(${PLAYER_ROOT}/drm/ocdm)
-include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
+
 set(TEST_SOURCES FunctionalTests.cpp
 		 OcdmBasicSessionAdapterTests.cpp)
 

@@ -1,4 +1,4 @@
-name: Build Component in Native Environment
+name: L1 tests
 
 on:
   pull_request:
@@ -6,36 +6,24 @@ on:
     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
 
 jobs:
-  build-player-interface-on-pr:
-    name: Build player-interface component in github rdkcentral
+  execute-unit-tests-on-pr:
+    name: Runs all unit tests
     runs-on: ubuntu-latest
-    container:
-     image: ghcr.io/rdkcentral/docker-rdk-ci:latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
       
       - name: native build
-        run: |
-         apt-get update
-         apt-get install -y sudo
-         sudo apt-get install -y python3-pip
-         sudo apt remove -y meson || true
-         sudo pip3 install --upgrade meson
-         hash -r
-         yes | ./install-middleware.sh -s subtec
-        env:
-          GITHUB_TOKEN: ${{ secrets.RDKCM_RDKE }}
+        run: yes | ./install-middleware.sh -s subtecii
 
-                # Run L1 tests
+        # Run L1 tests
       - name: Run unit tests
         working-directory: ./test/utests
         run: ./run.sh
 
         # Publish test results
       - name: Publish L1 test results
-        if: ${{ !env.ACT }}
         uses: dorny/test-reporter@v1
         with:
           name: Unit Test Results
@@ -44,7 +32,6 @@ jobs:
             
         # Upload artifact (test/utests/build/ctest-results.xml)
       - name: Upload test result file (test/utests)
-        if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: ctest-results-middleware-utests-${{ github.run_id }}

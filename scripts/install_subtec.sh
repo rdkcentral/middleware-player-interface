@@ -43,12 +43,6 @@ function subtec_install_fn() {
 
     sed -i ${SED_ARG} 's:COMMAND gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/TeletextDbusInterface.xml:COMMAND '"${2}"'/glib/build/gio/gdbus-2.0/codegen/gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/TeletextDbusInterface.xml:g' subttxrend-dbus/CMakeLists.txt
 
-    echo "Update asio::service to asio::context"
-    sed -i ${SED_ARG} 's/asio::io_service/asio::io_context/g'  websocket-ipplayer2-utils/src/ipp2/servers/SimpleWebServer.cpp
-    sed -i ${SED_ARG} 's/asio::ip::address::from_string/asio::ip::make_address/g'  websocket-ipplayer2-utils/src/ipp2/servers/SimpleWebServer.cpp
-    sed -i ${SED_ARG} 's/\([a-zA-Z0-9_]*\)->reset()/\1->restart()/g'  websocket-ipplayer2-utils/src/ipp2/servers/SimpleWebServer.cpp
-    sed -i ${SED_ARG} 's/\([a-zA-Z0-9_]*\)->post(/asio::post(*\1, /g'  websocket-ipplayer2-utils/src/ipp2/servers/SimpleWebServer.cpp
-    
     echo "subtec-app source prepared"
     popd
 }
