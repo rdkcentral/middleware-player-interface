@@ -818,3 +818,4 @@ void DrmSessionManager::watermarkSessionHandlerWrapper(uint32_t sessionHandle, u
 		mPlayerSendWatermarkSessionUpdateEventCB( sessionHandle, status, systemData);
 	}
 }
+
