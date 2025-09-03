@@ -38,8 +38,6 @@ source scripts/install_options.sh
 source scripts/install_dependencies.sh
 # gtest install and build
 source scripts/install_gtest.sh
-# glib install and build
-source scripts/install_glib.sh
 # libdash install and build
 source scripts/install_libdash.sh
 # libcjson install and build
@@ -127,11 +125,6 @@ INSTALL_STATUS_ARR+=("install_gstplugingood_fn check passed.")
 #
 install_build_googletest_fn "${OPTION_CLEAN}"
 INSTALL_STATUS_ARR+=("install_build_googletest check passed.")
-
-# Build glib
-#
-install_build_glib_fn "${OPTION_CLEAN}"
-INSTALL_STATUS_ARR+=("install_build_glib check passed.")
 
 # Build libcjson
 install_build_libcjson_fn "${OPTION_CLEAN}"

@@ -47,6 +47,20 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager/IFirebolt)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Remove any pkg-config based GStreamer link libraries
+    set(GSTREAMER_LINK_LIBRARIES "")
+    set(GST_LIBRARIES "")
+    set(GSTREAMERBASE_LINK_LIBRARIES "")
+    set(GSTVIDEO_LINK_LIBRARIES "")
+    # Add GStreamer.framework to linker flags
+    set(OS_LD_FLAGS)
+    list(APPEND OS_LD_FLAGS -F/Library/Frameworks "-framework GStreamer")
+    list(APPEND LIB_EXT_DEPENDS ${OS_LD_FLAGS})
+else()
+    list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+endif()
+
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
 if(DISABLE_SECURITY_TOKEN)
@@ -59,7 +73,7 @@ endif()
 # set(CMAKE_USE_THUNDER_OCDM_API_0_2 TRUE)
 # set(CMAKE_USE_SECCLIENT TRUE)
 # set(CMAKE_USE_SECCLIENT_MOCKS TRUE)
-set(LIB_EXT_DEPENDS ${LIB_EXT_DEPENDS} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
 # Library source files
 set(EXT_SOURCES PlayerExternalsInterface.cpp PlayerRfc.cpp PlayerExternalUtils.cpp)
@@ -117,15 +131,15 @@ endif()
 
 #secmanager/client macros
 if(CMAKE_USE_SECCLIENT)
-	message("CMAKE_USE_SECCLIENT set")
-	set(LIB_EXT_DEPENDS "${LIB_EXT_DEPENDS}  -lFireboltSDK")
-	set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_SECCLIENT")
+    message("CMAKE_USE_SECCLIENT set")
+    list(APPEND LIB_EXT_DEPENDS "-lFireboltSDK")
+    list(APPEND LIB_EXT_DEFINES "-DUSE_SECCLIENT")
     list(APPEND LIB_EXT_DEPENDS -lSecClient )
 endif()
 if(CMAKE_USE_SECMANAGER)
 	message("CMAKE_USE_SECMANAGER set")
-	set(LIB_EXT_DEPENDS "${LIB_EXT_DEPENDS}  -lFireboltSDK")
-	set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_SECMANAGER")
+	list(APPEND LIB_EXT_DEPENDS "-lFireboltSDK")
+	list(APPEND LIB_EXT_DEFINES "-DUSE_SECMANAGER")
 endif()
 
 # Define the shared library
@@ -148,8 +162,6 @@ if(CMAKE_WPEFRAMEWORK_REQUIRED)
 endif()
 
 set_target_properties(playerfbinterface PROPERTIES COMPILE_FLAGS "${LIB_EXT_DEFINES}")
-
-string(STRIP "${LIB_EXT_DEPENDS}" LIB_EXT_DEPENDS)
 
 target_link_libraries(playerfbinterface ${LIB_EXT_DEPENDS})
 target_link_libraries(playerfbinterface playerlogmanager)

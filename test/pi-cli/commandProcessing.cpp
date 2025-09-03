@@ -58,9 +58,45 @@ void CommandExecutor::stop() {
 }
 
 void displayHelp(const std::map<std::string, Command>& commands) {
+    // Find the maximum width of "- command:" for alignment
+    size_t maxCmdWidth = 0;
+    for (const auto& [key, command] : commands) {
+        size_t len = command.matchValue.length() + 1; // matchValue + ":"
+        if (len > maxCmdWidth)
+            maxCmdWidth = len;
+    }
+    // Set the helpText column (e.g., 2 spaces after the widest command)
+    size_t helpCol = maxCmdWidth + 2;
+
     std::cout << "Available commands:\n";
     for (const auto& [key, command] : commands) {
-        std::cout << "- " << command.matchValue << ": " << command.helpText << "\n";
+        std::string cmdStr = command.matchValue + ":";
+        size_t cmdWidth = cmdStr.length();
+
+        // Split helpText
+        const std::string& help = command.helpText;
+        size_t usagePos = help.find("Usage:");
+        std::string desc, usage;
+        if (usagePos != std::string::npos) {
+            desc = help.substr(0, usagePos);
+            usage = help.substr(usagePos);
+        } else {
+            desc = help;
+        }
+
+        // Print command and aligned description
+        std::cout << cmdStr;
+        if (!desc.empty() && desc.back() == '\n')
+            desc.pop_back();
+        // Align to helpCol
+        if (cmdWidth < helpCol)
+            std::cout << std::string(helpCol - cmdWidth, ' ');
+        std::cout << "- " << desc << std::endl;
+
+        // Print aligned usage if present
+        if (!usage.empty()) {
+            std::cout << std::string(helpCol, ' ') << usage << std::endl;
+        }
     }
 }
 
