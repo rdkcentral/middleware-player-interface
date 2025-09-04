@@ -52,14 +52,14 @@ include_directories(${PLAYER_ROOT}/baseConversion)
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
 set(TEST_SOURCES DrmTestsRun.cpp
-	#DrmUtilsTests.cpp
-	#DrmHLSTests.cpp
-	#DrmHelperTests.cpp
-	#DrmSessionFactoryTests.cpp
-	#DrmMemorySystemTests.cpp
-	#ClearKeyDrmSessionTests.cpp
-	#PlayerHlsDrmSessionInterfaceTests.cpp
-	#DrmDataTests.cpp
+	DrmUtilsTests.cpp
+	DrmHLSTests.cpp
+	DrmHelperTests.cpp
+	DrmSessionFactoryTests.cpp
+	DrmMemorySystemTests.cpp
+	ClearKeyDrmSessionTests.cpp
+	PlayerHlsDrmSessionInterfaceTests.cpp
+	DrmDataTests.cpp
 	DrmSessionManagerTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp)

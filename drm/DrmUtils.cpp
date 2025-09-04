@@ -133,6 +133,12 @@ static void swapBytes(unsigned char *bytes, int pos1, int pos2)
  */
 void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidBytes)
 {
+	if (guidBytes == nullptr || original == nullptr) {
+        MW_LOG_WARN("convertEndianness called with null pointer(s): guidBytes=%p, original=%p",
+                    (void*)guidBytes, (void*)original);
+        return; // do nothing, safe exit
+    }
+
 	memcpy(guidBytes, original, 16);
 	swapBytes(guidBytes, 0, 3);
 	swapBytes(guidBytes, 1, 2);
@@ -150,6 +156,17 @@ std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int
 	//WV PSSH format 4+4+4+16(system id)+4(data size)
 	uint32_t header = 28;
 	std::string metadata;
+
+	if (psshData == nullptr) {
+		MW_LOG_WARN("extractWVContentMetadataFromPssh called with nullptr psshData");
+		return "";
+	}
+
+	if (dataLength <= 0) {
+		MW_LOG_WARN("extractWVContentMetadataFromPssh called with invalid dataLength: %d", dataLength);
+		return "";
+	}
+	
 	uint32_t  content_id_size =
                     (uint32_t)((psshData[header] & 0x000000FFu) << 24 |
                                (psshData[header+1] & 0x000000FFu) << 16 |
@@ -168,4 +185,4 @@ std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int
 
 	return metadata;
 }
-//End of special for Widevine
+
