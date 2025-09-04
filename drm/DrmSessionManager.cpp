@@ -21,7 +21,6 @@
  * @brief Source file for DrmSessionManager.
  */
 
-
 #include "DrmSessionManager.h"
 #include "_base64.h"
 #include <iostream>
@@ -38,6 +37,9 @@
 
 KeyID::KeyID() : creationTime(0), isFailedKeyId(false), isPrimaryKeyId(false), data()
 {
+	int* p = new int [10];
+    delete[] p;
+    p[0] = 10;
 }
 
 
