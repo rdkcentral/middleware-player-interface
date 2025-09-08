@@ -25,6 +25,7 @@
 
 #include "DrmSessionManager.h"
 #include "_base64.h"
+#include "PlayerLogManager.h"
 #include <iostream>
 #include "DrmHelper.h"
 #include <inttypes.h>

@@ -17,52 +17,51 @@
  * limitations under the License.
  */
 
-#ifndef SOC_INTERFACE_H
-#define SOC_INTERFACE_H
+#pragma once
 
-#include "PlayerSocInterfaceImpl.h"
-
+#include <iostream>
+#include <gst/gst.h>
+#include <functional>
+#include <vector>
 #include <memory>
+#include <gst/base/gstbasesink.h>
 
 /**
- * @class SocInterface
- * @brief Interface class for SoC-specific functionalities.
+ * @brief Enumeration for play flags.
+ *
+ * This enumeration defines flags used to control playback behavior.
  */
-class SocInterface
+enum playFlags
 {
-protected:
+	PLAY_FLAG_VIDEO = (1 << 0),                         /**< value is 0x001 */
+	PLAY_FLAG_AUDIO = (1 << 1),                         /**< value is 0x002 */
+	PLAY_FLAG_TEXT = (1 << 2),                          /**< value is 0x004 */
+	PLAY_FLAG_VIS = (1 << 3),                           /**< value is 0x008 */
+	PLAY_FLAG_SOFT_VOLUME = (1 << 4),           /**< value is 0x010 */
+	PLAY_FLAG_NATIVE_AUDIO = (1 << 5),          /**< value is 0x020 */
+	PLAY_FLAG_NATIVE_VIDEO = (1 << 6),          /**< value is 0x040 */
+	PLAY_FLAG_DOWNLOAD = (1 << 7),                      /**< value is 0x080 */
+	PLAY_FLAG_BUFFERING = (1 << 8),             /**< value is 0x100 */
+	PLAY_FLAG_DEINTERLACE = (1 << 9),           /**< value is 0x200 */
+	PLAY_FLAG_SOFT_COLORBALANCE = (1 << 10) /**< value is 0x400 */
+};
 
-	static std::shared_ptr<SocInterface> s_pSocInterface;
 
-	std::shared_ptr<PlayerSocInterfaceImpl> m_pPlayerSocInterfaceImpl = nullptr;
 
-	SocInterface();
+class PlayerSocInterfaceImpl{
 
-	
-public:
+	/*config to indicate platforms using westeros sink*/
+	bool mUsingWesterosSink = false;	
 
-	~SocInterface();
-	
-	/**
-	 * @brief Creates an instance of the SoC-specific interface.
-	 * @return A pointer to the created SocInterface object.
-	 */
-	static std::shared_ptr<SocInterface> CreateSocInterface();
+    public:
 
-	/**
-	 * @brief Sets the state of Westeros Sink usage.
-	 *
-	 * This function updates the internal flag to indicate whether
-	 * Westeros Sink is being used. It does not enable or disable
-	 * Westeros Sink itself, but merely informs the SocInterface
-	 * about its status.
-	 *
-	 * @param status Set to `true` if Westeros Sink is enabled, `false` otherwise.
-	 */
-	void SetWesterosSinkState(bool status);
-	
-	/*@brief returns true if video stats required from sink otherwise false*/
-	bool IsPlaybackQualityFromSink();
+    PlayerSocInterfaceImpl();
+
+    ~PlayerSocInterfaceImpl();
+
+    void SetWesterosSinkState(bool status);
+
+    bool IsPlaybackQualityFromSink();
 	
 	/**
 	 * Sets buffer size and duration for the given GstElement.
@@ -79,7 +78,6 @@ public:
 	 * @param status Enable (TRUE) or disable (FALSE) asynchronous mode.
 	 */
 	void SetSinkAsync(GstElement *sink, gboolean status);
-
 	
 	/**
 	 * @brief Check if AppSrc should be used.
@@ -367,7 +365,7 @@ public:
 	 * @param flags Reference to the flags integer.
 	 * @param isSub Flag indicating whether the content is a subtitle.
 	 */
-	void SetPlaybackFlags(gint &flags, bool isSub);
+	void SetPlaybackFlags(gint &flags,  bool isSub);
 	
 	/**
 	 * @brief checks if the firstFrame is received from the simulator
@@ -427,5 +425,6 @@ public:
 	 *@return 'true' if video master otherwise false.
 	 */
 	bool IsVideoMaster();
+    
+
 };
-#endif

@@ -17,217 +17,264 @@
  * limitations under the License.
  */
 
-#include <assert.h>
 #include "SocInterface.h"
-#include "vendor/amlogic/AmlogicSocInterface.h"
-#include "vendor/brcm/BrcmSocInterface.h"
-#include "vendor/realtek/RealtekSocInterface.h"
-#include "vendor/default/DefaultSocInterface.h"
 
-/**
- * @brief Checks if the input string starts with the given prefix.
- *
- * @param inputStr The input string to check.
- * @param prefix The prefix to check for.
- *
- * @return True if the input string starts with the prefix, false otherwise.
- */
-bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
+
+/**< Static variable for singleton */
+std::shared_ptr<SocInterface> SocInterface::s_pSocInterface = nullptr;
+
+
+SocInterface::SocInterface()
 {
-	bool rc = true;
-	while( *prefix )
-	{
-		if( *inputStr++ != *prefix++ )
-		{
-			rc = false;
-			break;
-		}
-	}
-	return rc;
+	m_pPlayerSocInterfaceImpl = std::shared_ptr<PlayerSocInterfaceImpl>(new PlayerSocInterfaceImpl());
 }
 
-/**
- *  @brief To enable certain player configs based upon platform check
- */
-SocPlatformType InferPlatformFromPluginScan()
+SocInterface::~SocInterface()
 {
-	SocPlatformType platform = SOC_PLATFORM_DEFAULT;
-	// Ensure GST is initialized
-	if (!gst_init_check(nullptr, nullptr, nullptr)) {
-		MW_LOG_ERR("gst_init_check() failed");
-	}
-	static const std::pair<const char*, SocPlatformType> plugins[] = {
-		{"amlhalasink", SOC_PLATFORM_AMLOGIC},
-		{"omxeac3dec", SOC_PLATFORM_REALTEK},
-		{"brcmaudiodecoder", SOC_PLATFORM_BROADCOM},
-	};
-	
-	GstRegistry* registry = gst_registry_get();
-	
-	for (const auto& plugin : plugins)
-	{
-		GstPluginFeature* pluginFeature = gst_registry_lookup_feature(registry, plugin.first);
-		if (pluginFeature)
-		{
-			gst_object_unref(pluginFeature);
-			MW_LOG_MIL("InterfacePlayerRDK: %s plugin found in registry", plugin.first);
-			platform = plugin.second;
-			break;
-		}
-	}
-	
-	if( platform == SOC_PLATFORM_DEFAULT )
-	{
-		MW_LOG_WARN("InterfacePlayerRDK: None of the plugins found in registry");
-	}
-	return platform;
+	m_pPlayerSocInterfaceImpl = nullptr;
+	s_pSocInterface = nullptr;
 }
 
-/**
- * @brief Infers SoC platform type from device.properties.
- * @return Inferred SoC platform type.
- */
-SocPlatformType SocInterface::InferPlatformFromDeviceProperties( void )
-{
-	SocPlatformType platform = SOC_PLATFORM_DEFAULT;
-	FILE* fp = fopen("/etc/device.properties", "rb");
-	if (fp)
-	{
-		MW_LOG_MIL("opened /etc/device.properties");
-		char buf[4096];
-		while( fgets(buf, sizeof(buf), fp) )
-		{
-			if (strncmp(buf, "SOC=", 4) == 0)
-			{
-				char* socName = buf + 4;  // Start after "SOC="
-				for (int i = 0; socName[i] != '\0'; i++)
-				{
-					if (isspace(socName[i]))
-					{
-						socName[i] = '\0';  // Terminate at first whitespace
-						break;
-					}
-				}
-				if (*socName != '\0')  // If SOC name is not empty
-				{
-					MW_LOG_MIL("*** SOC %s ***", socName);
-					if (strcmp(socName, "AMLOGIC") == 0)
-					{
-						platform = SOC_PLATFORM_AMLOGIC;
-						break;
-					}
-					else if (strcmp(socName, "RTK") == 0)
-					{
-						platform = SOC_PLATFORM_REALTEK;
-						break;
-					}
-					else if (strcmp(socName, "BRCM") == 0)
-					{
-						platform = SOC_PLATFORM_BROADCOM;
-						break;
-					}
-				}
-				else
-				{
-					MW_LOG_WARN("*** SOC not found ***");
-				}
-			}
-		}
-		fclose(fp);
-	}
-	else
-	{
-		MW_LOG_ERR("failed to open /etc/device.properties.");
-	}
-	return platform;
-}
-
-
-/**
- * @brief Creates an instance of the SoC-specific interface based on the detected platform.
- *
- * @return A pointer to the created SocInterface object, or nullptr on failure.
- */
 std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 {
-	static std::shared_ptr<SocInterface> socInterface;
-	if( !socInterface)
+	if( !s_pSocInterface)
 	{
-		SocPlatformType platformType = InferPlatformFromDeviceProperties();
-		if(platformType == SOC_PLATFORM_DEFAULT)
-		{
-			platformType = InferPlatformFromPluginScan();
-		}
-		switch (platformType)
-		{
-			case SOC_PLATFORM_AMLOGIC:
-				socInterface = std::make_shared<AmlogicSocInterface>();
-				break;
-			case SOC_PLATFORM_BROADCOM:
-				socInterface = std::make_shared<BrcmSocInterface>();
-				break;
-			case SOC_PLATFORM_REALTEK:
-				socInterface = std::make_shared<RealtekSocInterface>();
-				break;
-			default:
-				socInterface = std::make_shared<DefaultSocInterface>();
-				break;
-		}
+		s_pSocInterface = std::shared_ptr<SocInterface>(new SocInterface());
 	}
-	return socInterface;
+	return s_pSocInterface;
 }
 
-/**
- * @brief Get video PTS.
- *
- * Retrieves the current video presentation timestamp (PTS).
- *
- * @param video_sink The video sink element (unused)
- * @param video_dec The video decoder element.
- * @param isWesteros A flag for Westeros logic.
- *
- * @return Video PTS in nanoseconds, or -1 on error.
- */
-long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
-{
-	gint64 currentPTS = 0;
-	if(video_dec)
-	{
-		g_object_get(video_dec, "video-pts", &currentPTS, NULL);
-		if(!isWesteros)
-		{
-			currentPTS *= 2;
-		}
-	}
-	return (long long)currentPTS;
-}
-
-/**
- * @brief Set decode error on source.
- *
- * Sets a decode error flag on the given source object.
- *
- * @param src The source object.
- */
-void SocInterface::SetDecodeError(GstObject* src)
-{
-	if(src)
-	{
-		g_object_set(src, "report_decode_errors", TRUE, NULL);
-	}
-}
-
-/**
- * @brief Sets the state of Westeros Sink usage.
- *
- * This function updates the internal flag to indicate whether
- * Westeros Sink is being used. It does not enable or disable
- * Westeros Sink itself, but merely informs the SocInterface
- * about its status.
- *
- * @param status Set to `true` if Westeros Sink is enabled, `false` otherwise.
- */
 void SocInterface::SetWesterosSinkState(bool status)
 {
-	mUsingWesterosSink = status;
+	m_pPlayerSocInterfaceImpl->SetWesterosSinkState(status);
+}
+
+bool SocInterface::IsPlaybackQualityFromSink()
+{
+	return m_pPlayerSocInterfaceImpl->IsPlaybackQualityFromSink();
+}
+
+void SocInterface::SetVideoBufferSize(GstElement *sink, int size)
+{
+	m_pPlayerSocInterfaceImpl->SetVideoBufferSize(sink, size);
+}
+
+void SocInterface::SetSinkAsync(GstElement *sink, gboolean status)
+{
+	m_pPlayerSocInterfaceImpl->SetSinkAsync(sink, status);
+}
+
+bool SocInterface::IsSupportedAC4()
+{
+	return m_pPlayerSocInterfaceImpl->IsSupportedAC4();
+}
+
+bool SocInterface::UseWesterosSink()
+{
+	return m_pPlayerSocInterfaceImpl->UseWesterosSink();
+}
+
+bool SocInterface::IsAudioFragmentSyncSupported()
+{
+	return m_pPlayerSocInterfaceImpl->IsAudioFragmentSyncSupported();
+}
+
+bool SocInterface::EnableLiveLatencyCorrection()
+{
+	return m_pPlayerSocInterfaceImpl->EnableLiveLatencyCorrection();
+}
+
+int SocInterface::RequiredQueuedFrames()
+{
+	return m_pPlayerSocInterfaceImpl->RequiredQueuedFrames();
+}
+
+bool SocInterface::EnablePTSRestamp()
+{
+	return m_pPlayerSocInterfaceImpl->EnablePTSRestamp();
+}
+
+bool SocInterface::IsFirstTuneWithWesteros()
+{
+	return m_pPlayerSocInterfaceImpl->IsFirstTuneWithWesteros();
+}
+
+void SocInterface::SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume)
+{
+	m_pPlayerSocInterfaceImpl->SetAudioProperty(volume, mute, isSinkBinVolume);
+}
+
+void SocInterface::SetSeamlessSwitch(GstElement* object,  gboolean value)
+{
+	m_pPlayerSocInterfaceImpl->SetSeamlessSwitch(object, value);
+}
+
+bool SocInterface::AudioOnlyMode(GstElement *sinkbin)
+{
+	return m_pPlayerSocInterfaceImpl->AudioOnlyMode(sinkbin);
+}
+
+bool SocInterface::SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec)
+{
+	return m_pPlayerSocInterfaceImpl->SetPlaybackRate(sources, pipeline, rate, video_dec, audio_dec);
+}
+
+GstPad* SocInterface::GetSourcePad(GstElement* element)
+{
+	return m_pPlayerSocInterfaceImpl->GetSourcePad(element);
+}
+
+GstElement* SocInterface::GetVideoSink(GstElement* sinkbin)
+{
+	return m_pPlayerSocInterfaceImpl->GetVideoSink(sinkbin);
+}
+
+void SocInterface::SetAC4Tracks(GstElement *src, int trackId)
+{
+	m_pPlayerSocInterfaceImpl->SetAC4Tracks(src, trackId);
+}
+
+bool SocInterface::SetPlatformPlaybackRate()
+{
+	return m_pPlayerSocInterfaceImpl->SetPlatformPlaybackRate();
+}
+
+bool SocInterface::SetRateCorrection()
+{
+	return m_pPlayerSocInterfaceImpl->SetRateCorrection();
+}
+
+bool SocInterface::IsVideoSink(const char* name, bool isRialto)
+{
+	return m_pPlayerSocInterfaceImpl->IsVideoSink(name, isRialto);
+}
+
+bool SocInterface::IsAudioSinkOrAudioDecoder(const char* name, bool isRialto)
+{
+	return m_pPlayerSocInterfaceImpl->IsAudioSinkOrAudioDecoder(name, isRialto);
+}
+
+bool SocInterface::IsVideoDecoder(const char* name, bool isRialto)
+{
+	return m_pPlayerSocInterfaceImpl->IsVideoDecoder(name, isRialto);
+}
+
+bool SocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync)
+{
+	return m_pPlayerSocInterfaceImpl->ConfigureAudioSink(audio_sink, src, decStreamSync);
+}
+
+bool SocInterface::IsAudioOrVideoDecoder(const char* name, bool isRialto)
+{
+	return m_pPlayerSocInterfaceImpl->IsAudioOrVideoDecoder(name, isRialto);
+}
+
+bool SocInterface::DisableAsyncAudio(GstElement *audio_sink, int rate, bool isSeeking)
+{
+	return m_pPlayerSocInterfaceImpl->DisableAsyncAudio(audio_sink, rate, isSeeking);
+}
+
+void SocInterface::GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec)
+{
+	m_pPlayerSocInterfaceImpl->GetCCDecoderHandle(dec_handle, video_dec);
+}
+
+bool SocInterface::ResetTrickUTC()
+{
+	return m_pPlayerSocInterfaceImpl->ResetTrickUTC();
+}
+
+long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
+{
+	return m_pPlayerSocInterfaceImpl->GetVideoPts(video_sink, video_dec, isWesteros);
+}
+
+bool SocInterface::NotifyVideoFirstFrame()
+{
+	return m_pPlayerSocInterfaceImpl->NotifyVideoFirstFrame();
+}
+
+void SocInterface::SetDecodeError(GstObject* src)
+{
+	m_pPlayerSocInterfaceImpl->SetDecodeError(src);
+}
+
+void SocInterface::SetFreerunThreshold(GstObject* src)
+{
+	m_pPlayerSocInterfaceImpl->SetFreerunThreshold(src);
+}
+
+bool SocInterface::RequiredElementSetup()
+{
+	return m_pPlayerSocInterfaceImpl->RequiredElementSetup();
+}
+
+void SocInterface::SetAudioRoutingProperties(GstElement *source)
+{
+	m_pPlayerSocInterfaceImpl->SetAudioRoutingProperties(source);
+}
+
+bool SocInterface::HasFirstAudioFrameCallback()
+{
+	return m_pPlayerSocInterfaceImpl->HasFirstAudioFrameCallback();
+}
+
+bool SocInterface::IsVideoSinkHandleErrors()
+{
+	return m_pPlayerSocInterfaceImpl->IsVideoSinkHandleErrors();
+}
+
+void SocInterface::SetPlaybackFlags(gint &flags, bool isSub)
+{
+	m_pPlayerSocInterfaceImpl->SetPlaybackFlags(flags, isSub);
+}
+
+bool SocInterface::IsSimulatorFirstFrame()
+{
+	return m_pPlayerSocInterfaceImpl->IsSimulatorFirstFrame();
+}
+
+bool SocInterface::IsSimulatorSink()
+{
+	return m_pPlayerSocInterfaceImpl->IsSimulatorSink();
+}
+
+void SocInterface::ConfigurePluginPriority()
+{
+	m_pPlayerSocInterfaceImpl->ConfigurePluginPriority();
+}
+
+bool SocInterface::ShouldTearDownForTrickplay()
+{
+	return m_pPlayerSocInterfaceImpl->ShouldTearDownForTrickplay();
+}
+
+bool SocInterface::IsSimulatorVideoSample()
+{
+	return m_pPlayerSocInterfaceImpl->IsSimulatorVideoSample();
+}
+
+void SocInterface::SetH264Caps(GstCaps *caps)
+{
+	m_pPlayerSocInterfaceImpl->SetH264Caps(caps);
+}
+
+void SocInterface::SetHevcCaps(GstCaps *caps)
+{
+	m_pPlayerSocInterfaceImpl->SetHevcCaps(caps);
+}
+
+bool SocInterface::ResetNewSegmentEvent()
+{
+	return m_pPlayerSocInterfaceImpl->ResetNewSegmentEvent();
+}
+
+bool SocInterface::IsPlatformSegmentReady()
+{
+	return m_pPlayerSocInterfaceImpl->IsPlatformSegmentReady();
+}
+
+bool SocInterface::IsVideoMaster()
+{
+	return m_pPlayerSocInterfaceImpl->IsVideoMaster();
 }

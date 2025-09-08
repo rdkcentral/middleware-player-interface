@@ -57,13 +57,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/baseConversion)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerLogManager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerJsonObject)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mp4demux)
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 
 #shoud be made part of PLAYERGSTINTERFACE cmakelists
 add_subdirectory(baseConversion)
 add_subdirectory(playerLogManager)
 add_subdirectory(playerJsonObject)
 add_subdirectory(externals)
+add_subdirectory(vendor)
 
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/PlayerCCManager.cpp PlayerUtils.cpp)
 
@@ -149,11 +150,6 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	drm/DrmCallbacks.h
 	drm/ocdm/opencdmsessionadapter.h
 	drm/DrmJsonObject.h
-	vendor/SocInterface.h
-	vendor/amlogic/AmlogicSocInterface.h
-	vendor/realtek/RealtekSocInterface.h
-	vendor/brcm/BrcmSocInterface.h
-	vendor/default/DefaultSocInterface.h
     subtitle/vttCue.h
 	ProcessHandler.h
 	)
@@ -182,7 +178,6 @@ install(FILES closedcaptions/CCTrackInfo.h
 	drm/helper/VanillaDrmHelper.h
 	drm/HlsOcdmBridgeInterface.h
 	drm/HlsDrmSessionManager.h
-	vendor/SocInterface.h
 	subtitle/subtitleParser.h
 	subtec/subtecparser/WebVttSubtecParser.hpp
 	subtec/subtecparser/TtmlSubtecParser.hpp
@@ -203,11 +198,6 @@ set(SOURCES
 	PlayerScheduler.cpp
 	gstplayertaskpool.cpp
 	PlayerUtils.cpp
-	vendor/SocInterface.cpp
-	vendor/amlogic/AmlogicSocInterface.cpp
-	vendor/realtek/RealtekSocInterface.cpp
-	vendor/brcm/BrcmSocInterface.cpp
-	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
 	)
@@ -372,8 +362,7 @@ target_include_directories(playergstinterface PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/playerisobmff
 	${CMAKE_CURRENT_SOURCE_DIR}/playerjsonobject
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions
-	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/subtec
-	${CMAKE_CURRENT_SOURCE_DIR}/vendor)
+	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/subtec)
 
 if (CMAKE_SUBTITLE_SUPPORT)
 	target_link_libraries(playergstinterface subtec_connector)
@@ -386,7 +375,8 @@ target_link_libraries(playergstinterface
                       ${LIBPLAYERGSTINTERFACE_DEPENDS}
                       subtec
                       baseconversion
-                      playerfbinterface)
+                      playerfbinterface
+					  SocInterface)
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
