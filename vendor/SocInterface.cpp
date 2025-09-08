@@ -64,6 +64,11 @@ void SocInterface::SetSinkAsync(GstElement *sink, gboolean status)
 	m_pPlayerSocInterfaceImpl->SetSinkAsync(sink, status);
 }
 
+bool SocInterface::UseAppSrc()
+{
+	return m_pPlayerSocInterfaceImpl->UseAppSrc();
+}
+
 bool SocInterface::IsSupportedAC4()
 {
 	return m_pPlayerSocInterfaceImpl->IsSupportedAC4();
