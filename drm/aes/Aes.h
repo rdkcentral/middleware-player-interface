@@ -66,6 +66,11 @@ public:
 	 */
 	DRMState GetState();
 	/**
+	 * @brief SetState Function to get current DRM State
+	 *
+	 */
+	void SetState(DRMState state);
+	/**
 	 * @fn AcquireKey
 	 *
 	 * @param[in] metadata   Ignored

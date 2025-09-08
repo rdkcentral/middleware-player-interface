@@ -148,6 +148,17 @@ DRMState AesDec::GetState()
 }
 
 /**
+ * @brief SetState Function to get current DRM State
+ *
+ */
+void AesDec::SetState(DRMState state)
+{
+	DRMState prevState = mDrmState;
+	mDrmState = state;
+	MW_LOG_INFO("AesDec:: DRM state changed from %d to %d", (int)prevState, (int)mDrmState);
+}
+
+/**
  * @brief Set information required for decryption
  *
  */
@@ -156,6 +167,11 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 	DrmReturn err = eDRM_ERROR;
         std::unique_lock<std::mutex> lock(mMutex);
 
+	if( !drmInfo)
+	{
+		MW_LOG_ERR("AesDec:: NULL drmInfo");
+		return err;	
+	}
 	mAcquireKeyWaitTime = acquireKeyWaitTime;
 	if (mDrmState == eDRM_ACQUIRING_KEY)
 	{
