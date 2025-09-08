@@ -31,7 +31,7 @@ set(SOC_IMP_SRC PlayerSocInterfaceImpl.cpp)
 
 add_library(PlayerSocInterfaceImpl SHARED ${SOC_IMP_SRC})
 
-set_target_properties(PlayerSocInterfaceImpl PROPERTIES PUBLIC_HEADER "PlayerSocInterfaceImpl.h")
+set_target_properties(PlayerSocInterfaceImpl PROPERTIES PUBLIC_HEADER "../PlayerSocInterfaceImpl.h")
 
 set_target_properties(PlayerSocInterfaceImpl PROPERTIES COMPILE_FLAGS "${PlayerSocInterfaceImpl_DEFINES}")
 
