@@ -38,6 +38,12 @@ jobs:
       - name: Run unit tests
         working-directory: ./test/utests
         run: ./run.sh
+        
+      # Debug: list what test files actually exist
+      - name: Debug test output
+        run: |
+          echo "Listing files under test/utests/build"
+          ls -R test/utests/build || true
 
       # Publish test results
       - name: Publish L1 test results
