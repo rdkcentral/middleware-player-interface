@@ -21,6 +21,8 @@ project(SocInterface)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(CMAKE_PLATFORM_UBUNTU "Enable OpenCL feature" OFF)
+
 install(FILES SocInterface.h
 PlayerSocInterfaceImpl.h
 DESTINATION include)
@@ -30,10 +32,16 @@ set(VENDOR_SRC SocInterface.cpp)
 add_library(SocInterface SHARED ${VENDOR_SRC})
 
 #if simulator
-if(CMAKE_SYSTEM_NAME STREQUAL Linux OR CMAKE_SYSTEM_NAME STREQUAL Darwin)
+if(CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    if(CMAKE_PLATFORM_UBUNTU)
+        message("UBUNTU implementation")
+        add_definitions(-DUBUNTU)
+    endif()
+    message("Simulator implementation")
     add_subdirectory(default)
     set(SOCINTERFACE_DEPENDS ${SOCINTERFACE_DEPENDS} PlayerSocInterfaceImpl)
 else()
+    message("SOC implementation")
     pkg_check_modules(SOC_IMPL REQUIRED libplayersocinterfaceimpl)
     set(SOCINTERFACE_DEPENDS ${SOCINTERFACE_DEPENDS} ${SOC_IMPL_LINK_LIBRARIES})
 endif()
