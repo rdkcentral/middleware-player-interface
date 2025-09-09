@@ -47,8 +47,6 @@ jobs:
           name: Unit Test Results
           path: test/utests/build/ctest-results.xml
           reporter: java-junit
-          fail-on-error: true
-          fail-on-empty: true
 
       # Upload artifact
       - name: Upload test result file (test/utests)
