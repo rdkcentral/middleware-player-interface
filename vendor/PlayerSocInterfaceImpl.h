@@ -26,6 +26,8 @@
 #include <memory>
 #include <gst/base/gstbasesink.h>
 
+#define LOG_PIS(fmt, ...) do { fprintf(stderr, "[PIS:%s:%d]: " fmt "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); fflush(stderr); } while (0)
+
 /**
  * @brief Enumeration for play flags.
  *
