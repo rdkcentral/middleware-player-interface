@@ -2,7 +2,7 @@ name: Build Component in Native Environment
 
 on:
   pull_request:
-    branches: [ develop , main ]
+    branches: [ develop, main ]
     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
 
 jobs:
@@ -10,30 +10,34 @@ jobs:
     name: Build player-interface component in github rdkcentral
     runs-on: ubuntu-latest
     container:
-     image: ghcr.io/rdkcentral/docker-rdk-ci:latest
+      image: ghcr.io/rdkcentral/docker-rdk-ci:latest
 
     steps:
+      # Checkout repo with full history (important for dorny/test-reporter)
       - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: native build
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # ensures full history for git
+
+      # Build
+      - name: Native build
         run: |
-         apt-get update
-         apt-get install -y sudo
-         sudo apt-get install -y python3-pip
-         sudo apt remove -y meson || true
-         sudo pip3 install --upgrade meson
-         hash -r
-         yes | ./install-middleware.sh -s subtec
+          apt-get update
+          apt-get install -y sudo
+          sudo apt-get install -y python3-pip
+          sudo apt remove -y meson || true
+          sudo pip3 install --upgrade meson
+          hash -r
+          yes | ./install-middleware.sh -s subtec
         env:
           GITHUB_TOKEN: ${{ secrets.RDKCM_RDKE }}
 
-                # Run L1 tests
+      # Run Unit Tests
       - name: Run unit tests
         working-directory: ./test/utests
         run: ./run.sh
 
-        # Publish test results
+      # Publish test results
       - name: Publish L1 test results
         if: ${{ !env.ACT }}
         uses: dorny/test-reporter@v1
@@ -41,8 +45,10 @@ jobs:
           name: Unit Test Results
           path: test/utests/build/ctest-results.xml
           reporter: java-junit
-            
-        # Upload artifact (test/utests/build/ctest-results.xml)
+          fail-on-error: true
+          fail-on-empty: true
+
+      # Upload artifact
       - name: Upload test result file (test/utests)
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
@@ -50,7 +56,7 @@ jobs:
           name: ctest-results-middleware-utests-${{ github.run_id }}
           path: test/utests/build/ctest-results.xml
 
-        # Show failure
+      # Show last 50 lines of results if failed
       - name: Show failure details (if any)
-        # if: failure()
+        if: failure()
         run: tail -n 50 test/utests/build/ctest-results.xml || true
