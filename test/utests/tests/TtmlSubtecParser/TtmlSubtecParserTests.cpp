@@ -52,6 +52,19 @@ public:
     using TtmlSubtecParser::m_firstBeginOffset;
     
 };
+class TtmlSubtecParserTest : public ::testing::Test 
+{
+    protected:
+	void SetUp() override
+	{
+	}
+
+	void TearDown() override
+	{
+	}
+
+public:
+};
 
 /**
 * @brief Test the construction of TtmlSubtecParser with valid TTML type and default dimensions.
