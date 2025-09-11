@@ -46,6 +46,7 @@ include_directories(${PLAYER_ROOT}/drm)
 include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/drm/ocdm)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
 
@@ -62,11 +63,13 @@ set(TEST_SOURCES DrmTestsRun.cpp
 	DrmDataTests.cpp
 	DrmSessionManagerTests.cpp)
 
-set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp)
+set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
+				 ${PLAYER_ROOT}/test/utests/fakes/FakeCrypto.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/baseConversion/_base64.cpp
 					${PLAYER_ROOT}/PlayerUtils.cpp
+					${PLAYER_ROOT}/drm/aes/Aes.cpp
 					${PLAYER_ROOT}/drm/DrmSessionFactory.cpp
 					${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
 					${PLAYER_ROOT}/drm/helper/DrmHelperFactory.cpp
@@ -123,8 +126,6 @@ if (COVERAGE_ENABLED)
 							  DEPENDENCIES ${EXEC_NAME})
 endif()
 
-find_package(OpenSSL REQUIRED)
-target_link_libraries(${EXEC_NAME} PRIVATE OpenSSL::Crypto 
-						${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes )
+target_link_libraries(${EXEC_NAME} ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes)
 
 player_utest_run_add(${EXEC_NAME})

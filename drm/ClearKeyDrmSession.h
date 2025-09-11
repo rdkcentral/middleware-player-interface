@@ -46,7 +46,7 @@ private:
 
 	KeyState m_eKeyState;
 	string m_sessionID;
-	unsigned char* m_keyStr;
+	std::vector<unsigned char> m_keyStr;
 	size_t m_keyLen;
 	unsigned char* m_keyId;
 	size_t m_keyIdLen;

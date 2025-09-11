@@ -338,32 +338,32 @@ bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &
 
 int DrmSessionManager::getSlotIdForSession(DrmSession* session)
 {
-	if (session == nullptr) {
-		MW_LOG_WARN("getSlotIdForSession called with nullptr session");
-		return -1;
-	}
-
 	int slot = -1;
 	std::lock_guard<std::mutex> guard(mDrmSessionLock);
 
-	if (drmSessionContexts != NULL)
+	if (session == nullptr) {
+		MW_LOG_WARN("getSlotIdForSession called with nullptr session");
+	}
+	else 
 	{
-		for (int i = 0; i < mMaxDRMSessions; i++)
+		if (drmSessionContexts != NULL)
 		{
-			if (drmSessionContexts[i].drmSession == session)
+			for (int i = 0; i < mMaxDRMSessions; i++)
 			{
-				MW_LOG_INFO("DRM Session found at slot:%d", i);
-				slot = i;
-				break;
+				if (drmSessionContexts[i].drmSession == session)
+				{
+					MW_LOG_INFO("DRM Session found at slot:%d", i);
+					slot = i;
+					break;
+				}
 			}
 		}
-	}
 
-	if (slot == -1)
-	{
-		MW_LOG_WARN("DRM Session not found");
+		if (slot == -1)
+		{
+			MW_LOG_WARN("DRM Session not found");
+		}
 	}
-
 	return slot;
 }
 

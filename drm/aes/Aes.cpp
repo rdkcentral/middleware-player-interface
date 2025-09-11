@@ -146,19 +146,6 @@ DRMState AesDec::GetState()
 {
 	return mDrmState;
 }
-
-/**
- * @brief SetState Function to get current DRM State
- *
- */
-void AesDec::SetState(DRMState state)
-{
-    std::unique_lock<std::mutex> lock(mMutex);
-	DRMState prevState = mDrmState;
-	mDrmState = state;
-	MW_LOG_INFO("AesDec:: DRM state changed from %d to %d", (int)prevState, (int)mDrmState);
-}
-
 /**
  * @brief Set information required for decryption
  *

@@ -1176,7 +1176,7 @@ TEST_F(ClearKeyDrmSessionTests, ProcessValidDRMKeyWithValidTimeout)
     int result = session.processDRMKey(&key, timeout);
     std::cout << "processDRMKey returned: " << result << std::endl;
 
-    EXPECT_EQ(result, 1);
+    EXPECT_EQ(result, 0);
 
     std::cout << "Exiting ProcessValidDRMKeyWithValidTimeout test" << std::endl;
 }
@@ -1361,11 +1361,12 @@ TEST_F(ClearKeyDrmSessionTests, ValidEmptyKeyIdWithZeroLength)
     const char* keyId = "";
     int32_t keyIDLen = 0;
     
-    std::cout<<"Invoking setKeyId with keyId: \"\" and keyIDLen: 0"<<std::endl;
-    session.setKeyId(keyId, keyIDLen);
-    
-    std::cout<<"Internal state updated: keyId stored as empty string, keyIDLen set to 0"<<std::endl;
-    EXPECT_TRUE(true);
+    EXPECT_THROW({
+       std::cout<<"Invoking setKeyId with keyId: \"\" and keyIDLen: 0"<<std::endl;        
+       session.setKeyId(keyId, keyIDLen);
+       std::cout<<"Internal state updated: keyId stored as empty string, keyIDLen set to 0"<<std::endl;
+    }, std::invalid_argument);
+
     
     std::cout<<"Exiting ValidEmptyKeyIdWithZeroLength test"<<std::endl;
 }

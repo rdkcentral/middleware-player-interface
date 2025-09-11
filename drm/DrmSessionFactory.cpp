@@ -35,7 +35,7 @@
 DrmSession* DrmSessionFactory::GetDrmSession(DrmHelperPtr drmHelper, DrmCallbacks *drmCallbacks)
 {
 	if (!drmHelper || !drmCallbacks) {
-        // Optionally log error or handle it gracefully
+        // e.g., std::cerr << "DrmSessionFactory::GetDrmSession: Null drmHelper or drmCallbacks" << std::endl;
         return nullptr;
     }
 	const std::string systemId = drmHelper->ocdmSystemId();
