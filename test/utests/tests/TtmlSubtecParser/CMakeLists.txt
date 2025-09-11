@@ -17,17 +17,17 @@
 
 include(GoogleTest)
 
-set(AAMP_ROOT "../../../../")
+set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
 set(EXEC_NAME TtmlSubtecParserTests)
 
-include_directories(${AAMP_ROOT} ${AAMP_ROOT}/isobmff ${AAMP_ROOT}/drm ${AAMP_ROOT}/downloader ${AAMP_ROOT}/drm/helper ${AAMP_ROOT}/drm/ave ${AAMP_ROOT}/subtitle ${AAMP_ROOT}/middleware/subtitle)
-include_directories(${AAMP_ROOT}/subtec/libsubtec)
-include_directories(${AAMP_ROOT}/subtec/subtecparser)
-include_directories(${AAMP_ROOT}/playerLogManager)
-include_directories(${AAMP_ROOT}/playerjsonobject)
-include_directories(${AAMP_ROOT}/baseConversion)
-include_directories(${AAMP_ROOT}/playerisobmff)
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ave ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle)
+include_directories(${PLAYER_ROOT}/subtec/libsubtec)
+include_directories(${PLAYER_ROOT}/subtec/subtecparser)
+include_directories(${PLAYER_ROOT}/playerLogManager)
+include_directories(${PLAYER_ROOT}/playerjsonobject)
+include_directories(${PLAYER_ROOT}/baseConversion)
+include_directories(${PLAYER_ROOT}/playerisobmff)
 
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
@@ -36,23 +36,24 @@ include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${LibXml2_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
-include_directories(${AAMP_ROOT}/tsb/api)
-include_directories(${AAMP_ROOT}/../)
+include_directories(${PLAYER_ROOT}/tsb/api)
+include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES TtmlSubtecParserTests.cpp
 	         TtmlSubtecParserPlayer.cpp)
 
+set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakePacketSender.cpp)
 
-set(AAMP_SOURCES ${AAMP_ROOT}/subtec/subtecparser/TtmlSubtecParser.cpp
-                 ${AAMP_ROOT}/playerLogManager/PlayerLogManager.cpp
-	         ${AAMP_ROOT}/playerisobmff/playerisobmffbuffer.cpp
-	         ${AAMP_ROOT}/playerisobmff/playerisobmffbox.cpp
-		 ${AAMP_ROOT}/subtec/libsubtec/SubtecChannel.cpp
-		 ${AAMP_ROOT}/subtec/libsubtec/PacketSender.cpp)
+set(PLAYER_SOURCES ${PLAYER_ROOT}/subtec/subtecparser/TtmlSubtecParser.cpp
+                 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
+	         ${PLAYER_ROOT}/playerisobmff/playerisobmffbuffer.cpp
+	         ${PLAYER_ROOT}/playerisobmff/playerisobmffbox.cpp
+		 ${PLAYER_ROOT}/subtec/libsubtec/SubtecChannel.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
-               ${AAMP_SOURCES})
+               ${PLAYER_SOURCES}
+               ${FAKE_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 

@@ -96,7 +96,6 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
 
-add_definitions(-DAAMP_HLS_DRM)
 add_definitions(-DUSE_SHARED_MEMORY)
 add_definitions(-DUSE_OPENCDM -DUSE_OPENCDM_ADAPTER)
 add_definitions(-DUSE_THUNDER_OCDM_API_0_2)

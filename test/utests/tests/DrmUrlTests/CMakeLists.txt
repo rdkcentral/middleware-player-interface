@@ -51,8 +51,6 @@ set(TEST_SOURCES DrmTestsRun.cpp
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
 
-add_definitions(-DAAMP_SIMULATOR_BUILD)
-
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
 			   ${PLAYER_SOURCES})
