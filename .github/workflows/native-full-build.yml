@@ -16,9 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
      
-      - name: Run unit tests
-        run:  tail -f /dev/null
-
       - name: native build
         run: |
          apt-get update
