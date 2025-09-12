@@ -49,17 +49,16 @@
 /**
  * @brief ClearKeySession Constructor
  */
-ClearKeySession::ClearKeySession()
-    : DrmSession(CLEAR_KEY_SYSTEM_STRING),
-      m_sessionID(),
-      m_eKeyState(KEY_INIT),
-      decryptMutex(),
-      m_keyId(new unsigned char[16]()),  // 16 bytes initialized to 0
-	  mOpensslCtx(),
-	  m_keyStr(16, 0), // 16 bytes initialized to 0
-      m_keyLen(0),
-	  m_keyIdLen(0)
-
+ClearKeySession::ClearKeySession() :
+		DrmSession(CLEAR_KEY_SYSTEM_STRING),
+		m_sessionID(),
+		m_eKeyState(KEY_INIT),
+		decryptMutex(),
+		m_keyId(NULL),
+		mOpensslCtx(),
+		m_keyStr(NULL),
+		m_keyLen(0),
+		m_keyIdLen(0)
 {
     initDRMSession();
 }
@@ -195,11 +194,10 @@ ClearKeySession::~ClearKeySession()
     {
         free(m_keyId);
     }
-    if(!m_keyStr.empty())
-    {
-		m_keyStr.clear();
+    if(m_keyStr != NULL)
+	{
+		free(m_keyStr);
 	}
-
 	m_eKeyState = KEY_CLOSED;
 }
 
@@ -289,16 +287,14 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 					char *keyIdStr = cJSON_GetStringValue(keyIdJsonObj);
 					size_t resKeyIdLen = 0;
 					size_t resKeyLen = 0;
-					unsigned char* decoded = base64_URL_Decode(keyJsonStr, &resKeyLen, strlen(keyJsonStr));
-					m_keyStr.assign(decoded, decoded + resKeyLen);  // copy bytes into vector
-					if (resKeyIdLen == m_keyIdLen && 0 == memcmp(m_keyId, decoded, m_keyIdLen))
+					unsigned char * resKeyId = base64_URL_Decode(keyIdStr,	&resKeyIdLen, strlen(keyIdStr));
+					if (resKeyIdLen == m_keyIdLen && 0 == memcmp(m_keyId, resKeyId, m_keyIdLen))
 					{
-						if (!m_keyStr.empty())
+						if (m_keyStr != NULL)
 						{
-							m_keyStr.clear();
+							free (m_keyStr);
 						}
-						unsigned char* decode = base64_URL_Decode(keyJsonStr, &resKeyLen, strlen(keyJsonStr));
-						m_keyStr.assign(decode, decode + resKeyLen);  // copy bytes into vector
+						m_keyStr = base64_URL_Decode(keyJsonStr, &resKeyLen, strlen(keyJsonStr));
 						if (resKeyLen == AES_CTR_KEY_LEN)
 						{
 							m_keyLen = resKeyLen;
@@ -309,11 +305,9 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 						else
 						{
 							MW_LOG_ERR("ClearKeySession: ERROR : Failed parse Key from response");
-							if (!m_keyStr.empty())
+							if (m_keyStr != NULL)
 							{
-								m_keyStr.clear();
-								free(decode);
-								decode = NULL;
+								free (m_keyStr);
 							}
 							m_eKeyState = KEY_ERROR;
 						}
@@ -323,10 +317,10 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 						MW_LOG_ERR("ClearKeySession: ERROR : Failed parse KeyID/invalid keyID, from response");
 						m_eKeyState = KEY_ERROR;
 					}
-					if (decoded)
+					if (m_keyStr)
 					{
-						free(decoded);
-						decoded = NULL;
+						free(m_keyStr);
+						m_keyStr = NULL;
 					}
 				}
 				else
@@ -555,7 +549,7 @@ int ClearKeySession::decrypt(const uint8_t *f_pbIV, uint32_t f_cbIV,
 		{
 			uint32_t decLen = payloadDataSize;
 
-			if(!EVP_DecryptInit_ex(OPEN_SSL_CONTEXT, EVP_aes_128_ctr(), NULL, m_keyStr.data(), ivBuff))
+			if(!EVP_DecryptInit_ex(OPEN_SSL_CONTEXT, EVP_aes_128_ctr(), NULL, m_keyStr, ivBuff))
 			{
 				MW_LOG_TRACE( "ClearKeySession: EVP_DecryptInit_ex failed");
 			}
@@ -624,9 +618,10 @@ void ClearKeySession:: clearDecryptContext()
 		m_keyId = NULL;
 		m_keyIdLen = 0;
 	}
-	if(!m_keyStr.empty())
+	if(m_keyStr != NULL)
 	{
-		m_keyStr.clear();
+		free(m_keyStr);
+		m_keyStr = NULL;
 		m_keyLen = 0;
 	}
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L

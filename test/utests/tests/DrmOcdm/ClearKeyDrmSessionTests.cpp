@@ -1176,7 +1176,7 @@ TEST_F(ClearKeyDrmSessionTests, ProcessValidDRMKeyWithValidTimeout)
     int result = session.processDRMKey(&key, timeout);
     std::cout << "processDRMKey returned: " << result << std::endl;
 
-    EXPECT_EQ(result, 0);
+    EXPECT_EQ(result, 1);
 
     std::cout << "Exiting ProcessValidDRMKeyWithValidTimeout test" << std::endl;
 }

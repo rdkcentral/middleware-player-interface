@@ -57,11 +57,6 @@ bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 		MW_LOG_WARN("Invalid startPosSeconds %.3f - resetting to 0.0", startPosSeconds);
 		startPosSeconds = 0.0;
 	}
-	else if (basePTS < 0)
-	{
-		MW_LOG_WARN("Invalid basePTS %llu - resetting to 0", basePTS);
-		basePTS = 0;
-	}
 	else
 	{
 #ifdef TTML_DEBUG
