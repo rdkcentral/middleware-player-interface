@@ -64,10 +64,9 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-	include(CodeCoverage)
-	APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+target_link_libraries(${EXEC_NAME} PRIVATE fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})
