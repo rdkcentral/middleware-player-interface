@@ -140,7 +140,7 @@ void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidByt
 	if (guidBytes == nullptr || original == nullptr) {
         MW_LOG_WARN("convertEndianness called with null pointer(s): guidBytes=%p, original=%p",
                     (void*)guidBytes, (void*)original);
-        return; // do nothing, safe exit
+        return;
     }
 
 	memcpy(guidBytes, original, 16);
@@ -163,28 +163,26 @@ std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int
 
 	if (psshData == nullptr) {
 		MW_LOG_WARN("extractWVContentMetadataFromPssh called with nullptr psshData");
-		return "";
 	}
-
-	if (dataLength <= 0) {
+	else if (dataLength <= 0) {
 		MW_LOG_WARN("extractWVContentMetadataFromPssh called with invalid dataLength: %d", dataLength);
-		return "";
 	}
-	
-	uint32_t  content_id_size =
-                    (uint32_t)((psshData[header] & 0x000000FFu) << 24 |
+	else {
+		uint32_t  content_id_size =
+                    	(uint32_t)((psshData[header] & 0x000000FFu) << 24 |
                                (psshData[header+1] & 0x000000FFu) << 16 |
                                (psshData[header+2] & 0x000000FFu) << 8 |
                                (psshData[header+3] & 0x000000FFu));
 
-	MW_LOG_INFO("content meta data length  : %d",content_id_size);
-	if ((header + 4 + content_id_size) <= dataLength)
-	{
-		metadata = std::string(psshData + header + 4, content_id_size);
-	}
-	else
-	{
-		MW_LOG_WARN("psshData : %d bytes in length, metadata would read past end of buffer", dataLength);
+		MW_LOG_INFO("content meta data length  : %d",content_id_size);
+		if ((header + 4 + content_id_size) <= dataLength)
+		{
+			metadata = std::string(psshData + header + 4, content_id_size);
+		}
+		else
+		{
+			MW_LOG_WARN("psshData : %d bytes in length, metadata would read past end of buffer", dataLength);
+		}
 	}
 
 	return metadata;

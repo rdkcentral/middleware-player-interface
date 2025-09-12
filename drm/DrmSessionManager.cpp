@@ -753,9 +753,9 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 	}
 
 	std::vector<uint8_t> drmInitData;
-	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
 	drmHelper->createInitData(drmInitData);
 
+	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
 	MW_LOG_INFO("DRM session Custom Data - %s ", mCustomData.empty()?"NULL":mCustomData.c_str());
 	drmSessionContexts[sessionSlot].drmSession->generateDRMSession(drmInitData.data(), (uint32_t)drmInitData.size(), mCustomData);
 
