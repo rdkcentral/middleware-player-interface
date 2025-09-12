@@ -290,7 +290,7 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 					unsigned char * resKeyId = base64_URL_Decode(keyIdStr,	&resKeyIdLen, strlen(keyIdStr));
 					if (resKeyIdLen == m_keyIdLen && 0 == memcmp(m_keyId, resKeyId, m_keyIdLen))
 					{
-						if (m_keyStr)
+						if (m_keyStr != NULL)
 						{
 							free (m_keyStr);
 							m_keyStr = NULL;
@@ -306,9 +306,10 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 						else
 						{
 							MW_LOG_ERR("ClearKeySession: ERROR : Failed parse Key from response");
-							if (m_keyStr != NULL)
+							if (m_keyStr)
 							{
 								free (m_keyStr);
+								m_keyStr = NULL;
 							}
 							m_eKeyState = KEY_ERROR;
 						}
