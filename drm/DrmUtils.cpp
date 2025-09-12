@@ -91,6 +91,10 @@ size_t DrmData::getDataLength()
  */
 void DrmData::setData(const char *dataPtr, size_t dataLength)
 {
+	if(!data.empty())
+	{
+		data.clear();
+	}
 	if(dataPtr != nullptr && dataLength > 0) {
 		data.assign(dataPtr,dataLength);
 	}	

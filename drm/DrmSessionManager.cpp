@@ -748,7 +748,7 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 
 	if( sessionSlot < 0 )
 	{
-        err = MW_DRM_SESSIONID_EMPTY;   // define this error code in your enums/consts
+        err = MW_DRM_SESSIONID_EMPTY;
         return KEY_ERROR_EMPTY_SESSION_ID;
 	}
 
