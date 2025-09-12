@@ -24,7 +24,7 @@ set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
 set(DRM_ROOT ${UTESTS_ROOT}/drm)
 set(RFC_ROOT ${UTESTS_ROOT}/rfc)
-set(EXEC_NAME DrmOcdm)
+set(EXEC_NAME DrmAes)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DREALTEKCE=1")
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm  ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ocdm ${PLAYER_ROOT}/drm/ ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/externals/contentsecuritymanager ${PLAYER_ROOT}/externals/contentsecuritymanager/IFirebolt)
@@ -46,25 +46,15 @@ include_directories(${PLAYER_ROOT}/drm)
 include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/drm/ocdm)
 include_directories(${PLAYER_ROOT}/externals)
-include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
 
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
 set(TEST_SOURCES DrmTestsRun.cpp
-	DrmUtilsTests.cpp
-	DrmHLSTests.cpp
-	DrmHelperTests.cpp
-	DrmSessionFactoryTests.cpp
-	DrmMemorySystemTests.cpp
-	ClearKeyDrmSessionTests.cpp
-	PlayerHlsDrmSessionInterfaceTests.cpp
-	DrmDataTests.cpp
-	DrmSessionManagerTests.cpp)
+				 DrmTestsAes.cpp)
 
-set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
-				 ${PLAYER_ROOT}/test/utests/fakes/FakeCrypto.cpp)
+set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/baseConversion/_base64.cpp
@@ -125,6 +115,8 @@ if (COVERAGE_ENABLED)
 							  DEPENDENCIES ${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(${EXEC_NAME} PRIVATE OpenSSL::Crypto 
+						${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes )
 
 player_utest_run_add(${EXEC_NAME})

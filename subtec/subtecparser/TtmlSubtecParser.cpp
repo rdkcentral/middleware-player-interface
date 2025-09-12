@@ -51,21 +51,29 @@ TtmlSubtecParser::TtmlSubtecParser(SubtitleMimeType type, int width, int height)
 
 bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 {
+	bool ret = false;
+	if (startPosSeconds < 0.0)
+	{
+		MW_LOG_WARN("Invalid startPosSeconds %.3f - resetting to 0.0", startPosSeconds);
+	}
+	else
+	{
 #ifdef TTML_DEBUG
 	printf( "TtmlSubtecParser::init(startPosSeconds=%.3fs,basePTS=%llu\n", startPosSeconds, basePTS );
 #endif
-	MW_LOG_INFO("startPosSeconds %.3fs basePTS=%llu", startPosSeconds, basePTS);
-	m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds * 1000.0));
- 	if(playerResumeTrackDownloads_CB)
- 	{
-		playerResumeTrackDownloads_CB();
- 	}
+		MW_LOG_INFO("startPosSeconds %.3fs basePTS=%llu", startPosSeconds, basePTS);
+		m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds * 1000.0));
+		if(playerResumeTrackDownloads_CB)
+		{
+			playerResumeTrackDownloads_CB();
+		}
 
-	m_parsedFirstPacket = false;
-	m_sentOffset = false;
-	m_firstBeginOffset = 0.0;
-
-	return true;
+		m_parsedFirstPacket = false;
+		m_sentOffset = false;
+		m_firstBeginOffset = 0.0;
+		ret = true;	
+	}
+	return ret;
 }
 
 void TtmlSubtecParser::updateTimestamp(unsigned long long positionMs)

@@ -23,13 +23,12 @@ set(DRM_ROOT ${UTESTS_ROOT}/drm)
 set(EXEC_NAME DrmUrlTests)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DREALTEKCE=1")
 
-include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/test/aampcli ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/middleware/subtec/subtecparser ${PLAYER_ROOT}/middleware/playerjsonobject ${PLAYER_ROOT}/middleware/subtec/libsubtec ${PLAYER_ROOT}/middleware/externals/contentsecuritymanager)
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/test/aampcli ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/externals/contentsecuritymanager)
 include_directories(${PLAYER_ROOT}/tsb/api)
-include_directories(${PLAYER_ROOT}/middleware)
-include_directories(${PLAYER_ROOT}/middleware/externals)
-include_directories(${PLAYER_ROOT}/middleware/playerLogManager)
-include_directories(${PLAYER_ROOT}/middleware/baseConversion)
-include_directories(${PLAYER_ROOT}/middleware/drm)
+include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/playerLogManager)
+include_directories(${PLAYER_ROOT}/baseConversion)
+include_directories(${PLAYER_ROOT}/drm)
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
@@ -51,8 +50,6 @@ set(TEST_SOURCES DrmTestsRun.cpp
 				 DrmSessionTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
-
-add_definitions(-DAAMP_SIMULATOR_BUILD)
 
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}

@@ -81,5 +81,5 @@ public:
 
 };
 
-
+extern MockDrmHelper *g_mockDrmHelper;
 #endif /* AAMP_MOCK_AAMP_CONFIG_H */

@@ -193,6 +193,27 @@ public:
 	void initializeDrmSessions();
 
 	/**
+	 * @brief Tests caching of a DRM key ID.
+	 *
+	 * This function is a unit test helper that verifies the behavior of key ID caching
+	 * in the ClearKey DRM session. It accepts a key ID as a byte vector and optionally
+	 * indicates whether the test case is expected to fail.
+	 *
+	 * @param keyId     The key ID to be tested, represented as a vector of bytes.
+	 * @param isFailed  Optional flag indicating if the test should simulate a failure.
+	 *                  - false (default): Expect success.
+	 *                  - true: Expect failure.
+	 *
+	 * @note This is a test utility function and not intended for production use.
+	 */
+	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
+	{	
+        std::lock_guard<std::mutex> guard(cachedKeyMutex);
+        cachedKeyIDs[0].data.push_back(keyId);
+        cachedKeyIDs[0].isFailedKeyId = isFailed;
+    }
+
+	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
 	 *  @param[in]	sessionHandle - Session handle.
