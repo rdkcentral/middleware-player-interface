@@ -37,7 +37,7 @@ class TextStyleAttributes
 {
 
 public:
-    /**
+	/**
      * @enum FontSize
      * @brief Available Fontsize
      */
@@ -48,7 +48,7 @@ public:
         FONT_SIZE_LARGE,
         FONT_SIZE_EXTRALARGE,
         FONT_SIZE_MAX
-    } FontSize;
+    } FontSize;	
 
     /**
      *  @enum FontStyle
@@ -102,6 +102,8 @@ public:
         { "cyan", COLOR_CYAN},
         { "auto", COLOR_EMBEDDED}
     };
+	int fontSize{};
+    std::string fontColor;
 
     /**
      *  @enum EdgeType
@@ -152,10 +154,20 @@ public:
         EDGE_COLOR_ARR_POSITION
     } AttribPosInArray;
 
-    TextStyleAttributes();
+	TextStyleAttributes();
 
-    TextStyleAttributes(const TextStyleAttributes&)  = delete;
-    TextStyleAttributes& operator=(const TextStyleAttributes&);
+    ~TextStyleAttributes() = default;
+
+    TextStyleAttributes(const TextStyleAttributes&) = default;
+
+ 	TextStyleAttributes& operator=(const TextStyleAttributes& other) {
+        if (this != &other) {
+            this->fontSize = other.fontSize;
+            this->fontColor = other.fontColor;
+        }
+        return *this;
+    }
+
 
 	/**
 	 * @fn getAttributes

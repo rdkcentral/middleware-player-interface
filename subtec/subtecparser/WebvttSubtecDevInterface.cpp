@@ -23,6 +23,9 @@
 
 WebvttSubtecDevInterface::WebvttSubtecDevInterface(int width, int height) : m_channel(nullptr)
 {
+	if(width <= 0 || height <= 0) {
+			throw std::invalid_argument("Width and height must be greater than zero");
+	}
 	m_channel = SubtecChannel::SubtecChannelFactory(SubtecChannel::ChannelType::TTML);
 	if (!m_channel->InitComms())
 	{
