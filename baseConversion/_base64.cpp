@@ -35,25 +35,34 @@
  */
 char *base64_Encode(const unsigned char *src, size_t len)
 {
-	const unsigned char *fin = &src[len];
-	const static char *encode = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // base64
-	char *rc = (char *)malloc(((len+2)/3)*4+1);
-	if( rc )
+	char *rc = NULL;
+	
+	if( src == NULL)
 	{
-		char *dst = rc;
-		unsigned int temp;
-		int pad = 0;
-		for( int i=0; i<len; i+=3 )
+		//invalid parameters
+	}
+	else
+	{
+		const unsigned char *fin = &src[len];
+		const static char *encode = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // base64
+		rc = (char *)malloc(((len+2)/3)*4+1);
+		if( rc )
 		{
-			temp = (*src++) << 16;
-			if( src<fin ) temp |= (*src++) << 8; else pad++;
-			if( src<fin ) temp |= (*src++); else pad++;
-			*dst++ = encode[(temp & 0x00FC0000) >> 18];
-			*dst++ = encode[(temp & 0x0003F000) >> 12];
-			*dst++ = (pad>=2)?'=':encode[(temp & 0x00000FC0) >> 6 ];
-			*dst++ = (pad>=1)?'=':encode[(temp & 0x0000003F)];
+			char *dst = rc;
+			unsigned int temp;
+			int pad = 0;
+			for( int i=0; i<len; i+=3 )
+			{
+				temp = (*src++) << 16;
+				if( src<fin ) temp |= (*src++) << 8; else pad++;
+				if( src<fin ) temp |= (*src++); else pad++;
+				*dst++ = encode[(temp & 0x00FC0000) >> 18];
+				*dst++ = encode[(temp & 0x0003F000) >> 12];
+				*dst++ = (pad>=2)?'=':encode[(temp & 0x00000FC0) >> 6 ];
+				*dst++ = (pad>=1)?'=':encode[(temp & 0x0000003F)];
+			}
+			*dst++ = 0x00;
 		}
-		*dst++ = 0x00;
 	}
 	return rc;
 }
@@ -64,65 +73,89 @@ char *base64_Encode(const unsigned char *src, size_t len)
  */
 unsigned char *base64_Decode(const char *src, size_t *outLen, size_t srcLen)
 {
-	static const signed char decode[256] =
+	unsigned char *rc = NULL;
+	if( src == NULL)
 	{
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, 63, -1, 63,
-		52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1,  0, -1, -1,
-		-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-		15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
-		-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-		41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-	};
-	unsigned char *rc = (unsigned char *)malloc(srcLen*3/4);
-	*outLen = 0; // default
-	if( rc )
+		//invalid parameters
+		*outLen = 0; //default
+	}
+	else if( outLen == NULL)
 	{
-		unsigned char *dst = rc;
-		while( srcLen>0 && src[srcLen-1] == '=' )
-		{ // strip padding
-			srcLen--;
-		}
-		const char *fin = &src[srcLen];
-		while( src<fin )
+		//invalid parameters
+		srcLen = 0; //default
+		src = NULL;
+	}
+	else 
+	{
+		static const signed char decode[256] =
 		{
-			unsigned int buf = 0;
-			int count = 0;
-			for( int i=0; i<4; i++ )
-			{
-				buf<<=6;
-				if( src<fin )
-				{
-					unsigned char c = (unsigned char)*src++;
-					int digit64 = decode[c];
-					if( digit64<0 )
-					{ // invalid character
-						free( rc );
-						return NULL;
-					}
-					buf |= digit64;
-					count++;
-				}
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, 63, -1, 63,
+			52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1,  0, -1, -1,
+			-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+			15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+			-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+			41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		};
+		rc = (unsigned char *)malloc(srcLen*3/4);
+		*outLen = 0; // default
+		if( rc )
+		{
+			unsigned char *dst = rc;
+			while( srcLen>0 && src[srcLen-1] == '=' )
+			{ // strip padding
+				srcLen--;
 			}
-			if( count>=2 ) *dst++ = (buf>>(8*2))&0xff;
-			if( count>=3 ) *dst++ = (buf>>(8*1))&0xff;
-			if( count>=4 ) *dst++ = (buf>>(8*0))&0xff;
+			const char *fin = &src[srcLen];
+			while( src<fin )
+			{
+				unsigned int buf = 0;
+				int count = 0;
+				for( int i=0; i<4; i++ )
+				{
+					buf<<=6;
+					if( src<fin )
+					{
+						unsigned char c = (unsigned char)*src++;
+						int digit64 = decode[c];
+						if( digit64<0 )
+						{ // invalid character
+							free( rc );
+							return NULL;
+						}
+						buf |= digit64;
+						count++;
+					}
+				}
+				if( count>=2 ) *dst++ = (buf>>(8*2))&0xff;
+				if( count>=3 ) *dst++ = (buf>>(8*1))&0xff;
+				if( count>=4 ) *dst++ = (buf>>(8*0))&0xff;
+			}
+			*outLen = dst-rc;
 		}
-		*outLen = dst-rc;
 	}
 	return rc;
 }
 
 unsigned char *base64_Decode(const char *src, size_t *len)
 {
-	return base64_Decode(src, len, strlen(src));
+	unsigned char *rc = NULL;
+	if( src == NULL || len == NULL)
+	{
+		//invalid parameters
+	}
+	else
+	{
+		rc = base64_Decode(src, len, strlen(src));
+	}
+	return rc;
 }
