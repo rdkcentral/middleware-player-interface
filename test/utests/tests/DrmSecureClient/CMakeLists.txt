@@ -103,10 +103,29 @@ xcode_define_schema(${EXEC_NAME})
 endif()
 
 if (COVERAGE_ENABLED)
-	include(CodeCoverage)
-	APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} ${LIBCJSON_LINK_LIBRARIES} ${UUID_LINK_LIBRARIES} pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+if (APPLE)
+   target_link_options(${EXEC_NAME} PRIVATE -F/Library/Frameworks -Wl,-rpath,/Library/Frameworks)
+
+    # Link all non-framework libraries first
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        ${LIBCJSON_LINK_LIBRARIES}
+        ${UUID_LINK_LIBRARIES}
+        pthread
+        ${GMOCK_LINK_LIBRARIES}
+        ${GTEST_LINK_LIBRARIES}
+    )
+
+    # Now link the framework, in a SEPARATE statement
+    target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+else()
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        ${GLIB_LIBRARIES}
+        ${GSTREAMER_LIBRARIES}
+        ${LIBCJSON_LINK_LIBRARIES} ${UUID_LINK_LIBRARIES} pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES}
+    )
+endif()
 
 player_utest_run_add(${EXEC_NAME})
