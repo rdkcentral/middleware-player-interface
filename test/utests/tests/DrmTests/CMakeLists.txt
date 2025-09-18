@@ -24,7 +24,7 @@ set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
 set(DRM_ROOT ${UTESTS_ROOT}/drm)
 set(RFC_ROOT ${UTESTS_ROOT}/rfc)
-set(EXEC_NAME DrmOcdm)
+set(EXEC_NAME DrmTests)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DREALTEKCE=1")
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm  ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ocdm ${PLAYER_ROOT}/drm/ ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/externals/contentsecuritymanager ${PLAYER_ROOT}/externals/contentsecuritymanager/IFirebolt)
@@ -61,7 +61,10 @@ set(TEST_SOURCES DrmTestsRun.cpp
 	ClearKeyDrmSessionTests.cpp
 	PlayerHlsDrmSessionInterfaceTests.cpp
 	DrmDataTests.cpp
-	DrmSessionManagerTests.cpp)
+	DrmSessionManagerTests.cpp
+	DrmJsonObjectTests.cpp
+	HlsDrmSessionInterfaceTests.cpp
+	PlayerHlsDrmSessionInterfaceBaseTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
 				 ${PLAYER_ROOT}/test/utests/fakes/FakeCrypto.cpp)

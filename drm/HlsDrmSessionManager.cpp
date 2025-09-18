@@ -52,11 +52,14 @@ bool HlsDrmSessionManager::isDrmSupported(const struct DrmInfo& drmInfo) const
  */
 std::shared_ptr<HlsDrmBase> HlsDrmSessionManager::createSession(const struct DrmInfo& drmInfo, int  streamTypeIn)
 {
+
 	DrmMediaType streamType = (DrmMediaType)streamTypeIn;
 	std::shared_ptr<HlsDrmBase> bridge = nullptr;
 	DrmHelperPtr drmHelper = DrmHelperEngine::getInstance().createHelper(drmInfo);
 
-	this->GetHlsDrmSessionCb(bridge, drmHelper ,mDrmSession, streamType);
-	
+	if(this->GetHlsDrmSessionCb)
+	{
+		this->GetHlsDrmSessionCb(bridge, drmHelper ,mDrmSession, streamType);
+	}
 	return bridge;
 }
