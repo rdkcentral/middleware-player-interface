@@ -50,6 +50,114 @@ class FakePlayerIarmInterface : public PlayerExternalsInterfaceBase
     public:
         FakePlayerIarmInterface(){}
 
+                /**
+         * @brief Get the source video width.
+         *
+         * Returns the width of the source video stream.
+         *
+         * @return int Source width in pixels.
+         */
+        int getSourceWidth() const { return m_sourceWidth; }
+    
+        /**
+         * @brief Get the source video height.
+         *
+         * Returns the height of the source video stream.
+         *
+         * @return int Source height in pixels.
+         */
+        int getSourceHeight() const { return m_sourceHeight; }
+        
+        /**
+         * @brief Get the display width.
+         *
+         * Returns the width of the display.
+         *
+         * @return int Display width in pixels.
+         */
+        int getDisplayWidth() const { return m_displayWidth; }
+        
+        /**
+         * @brief Get the display height.
+         *
+         * Returns the height of the display.
+         *
+         * @return int Display height in pixels.
+         */
+        int getDisplayHeight() const { return m_displayHeight; }
+        
+        /**
+         * @brief Check if HDCP is enabled.
+         *
+         * Returns true if HDCP (High-bandwidth Digital Content Protection) is enabled.
+         *
+         * @return bool True if HDCP is enabled, false otherwise.
+         */
+        bool isHDCPEnabled() const { return m_isHDCPEnabled; }
+        
+        /**
+         * @brief Get the associated GstElement pointer.
+         *
+         * Returns the internal GstElement pointer used by this player interface.
+         *
+         * @return GstElement* Pointer to the GstElement.
+         */
+        GstElement* getGstElement() const { return m_gstElement; }
+    
+        /**
+         * @brief Set the source video width.
+         *
+         * Sets the width of the source video stream.
+         *
+         * @param width Source width in pixels.
+         */
+        void setSourceWidth(int width) { m_sourceWidth = width; }
+    
+        /**
+         * @brief Set the source video height.
+         *
+         * Sets the height of the source video stream.
+         *
+         * @param height Source height in pixels.
+         */
+        void setSourceHeight(int height) { m_sourceHeight = height; }
+    
+        /**
+         * @brief Set the display width.
+         *
+         * Sets the width of the display.
+         *
+         * @param width Display width in pixels.
+         */
+        void setDisplayWidth(int width) { m_displayWidth = width; }
+    
+        /**
+         * @brief Set the display height.
+         *
+         * Sets the height of the display.
+         *
+         * @param height Display height in pixels.
+         */
+        void setDisplayHeight(int height) { m_displayHeight = height; }
+    
+        /**
+         * @brief Enable or disable HDCP.
+         *
+         * Sets the HDCP (High-bandwidth Digital Content Protection) enabled state.
+         *
+         * @param enabled True to enable HDCP, false to disable.
+         */
+        void setHDCPEnabled(bool enabled) { m_isHDCPEnabled = enabled; }
+    
+        /**
+         * @brief Set the GstElement pointer (for fake/test purposes).
+         *
+         * Sets the internal GstElement pointer used by this player interface.
+         *
+         * @param element Pointer to the GstElement.
+         */
+        void setGstElementFake(GstElement *element) { m_gstElement = element; }
+       
         /**
          * @fn IARMInit
          * @brief Initialize IARM
