@@ -3086,27 +3086,36 @@ TEST(PlayerIsoBmffBoxTests, ValidContainerConstructionWithDefaultNewTrackId) {
 TEST(PlayerIsoBmffBoxTests, ValidContainerConstructionWithNewTrackIdOverride) {
     std::cout << "Entering ValidContainerConstructionWithNewTrackIdOverride test" << std::endl;
 
-    uint32_t sz = 200;
-    char btype[5] = {0};
-    // Use strncpy to initialize btype with "trak"
-    strncpy(btype, "trak", 4);
+    uint32_t sz = 8; // minimal valid box (size + type)
     uint8_t* ptr = new uint8_t[sz];
-    std::cout << "Allocated buffer at address: " << static_cast<const void*>(ptr) << " with size: " << sz << std::endl;
+
+    // Write size (8) in big endian
+    ptr[0] = 0x00;
+    ptr[1] = 0x00;
+    ptr[2] = 0x00;
+    ptr[3] = 0x08;
+
+    // Write type = "trak"
+    ptr[4] = 't';
+    ptr[5] = 'r';
+    ptr[6] = 'a';
+    ptr[7] = 'k';
+
     int newTrackId = 123;
     std::cout << "Invoking constructContainer with sz=" << sz 
-              << ", btype=" << btype 
-              << ", ptr address=" << static_cast<const void*>(ptr) 
+              << ", type=trak, ptr=" << static_cast<const void*>(ptr)
               << ", newTrackId=" << newTrackId << std::endl;
-    
+
     player_isobmff::GenericContainerIsoBmffBox* containerBox = nullptr;
     EXPECT_NO_THROW({
-        containerBox = player_isobmff::GenericContainerIsoBmffBox::constructContainer(sz, btype, ptr, newTrackId);
+        containerBox = player_isobmff::GenericContainerIsoBmffBox::constructContainer(sz, "trak", ptr, newTrackId);
     });
-    EXPECT_NE(containerBox, nullptr);    
-    // Free allocated memory used for buffer
+    EXPECT_NE(containerBox, nullptr);
+
     delete[] ptr;
     std::cout << "Exiting ValidContainerConstructionWithNewTrackIdOverride test" << std::endl;
 }
+
 /**
  * @brief Verify that constructing a GenericContainerIsoBmffBox with a zero size returns nullptr.
  *
