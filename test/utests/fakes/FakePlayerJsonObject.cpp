@@ -1,226 +1,86 @@
-/*
-* If not stated otherwise in this file or this component's license file the
-* following copyright and licenses apply:
-*
-* Copyright 2022 RDK Management
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+#include <memory>
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <cstring>
 
 #include "MockPlayerJsonObject.h"
-#include "PlayerJsonObject.h"
 
-std::shared_ptr<MockPlayerJsonObject> g_mockPlayerJsonObject;
+// ------------------ Global mock object ------------------
+std::shared_ptr<MockPlayerJsonObject> g_mockPlayerJsonObject = nullptr;
 
-PlayerJsonObject::PlayerJsonObject() : mParent(NULL), mJsonObj()
-{
-}
+// ------------------ cJSON stubs ------------------
+extern "C" {
+    struct cJSON; // forward declaration
 
-PlayerJsonObject::PlayerJsonObject(const std::string& jsonStr) : mParent(NULL), mJsonObj()
-{
-}
-
-PlayerJsonObject::PlayerJsonObject(const char* jsonStr) : mParent(NULL), mJsonObj()
-{
-}
-
-PlayerJsonObject::~PlayerJsonObject()
-{
-}
-
-bool PlayerJsonObject::add(const std::string& name, const std::string& value, const ENCODING encoding)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value, encoding);
+    // Creation / Deletion
+    cJSON* cJSON_CreateObject() { return (cJSON*)calloc(1, sizeof(cJSON)); }
+    cJSON* cJSON_CreateArray() { return (cJSON*)calloc(1, sizeof(cJSON)); }
+    cJSON* cJSON_CreateString(const char* str) { 
+        cJSON* item = (cJSON*)calloc(1, sizeof(cJSON)); 
+        if (str) item->valuestring = strdup(str); 
+        return item; 
+    }
+    cJSON* cJSON_CreateNumber(double num) { 
+        cJSON* item = (cJSON*)calloc(1, sizeof(cJSON)); 
+        item->valuedouble = num; 
+        item->valueint = (int)num; 
+        return item; 
+    }
+    cJSON* cJSON_CreateBool(int b) { 
+        cJSON* item = (cJSON*)calloc(1, sizeof(cJSON)); 
+        item->valueint = (b != 0); 
+        return item; 
+    }
+    void cJSON_Delete(cJSON* item) {
+        if (!item) return;
+        if (item->valuestring) free(item->valuestring);
+        free(item);
+    }
+	cJSON * cJSON_GetObjectItem(const cJSON * const object, const char * const string) {
+		if (!object || !string) return nullptr;
+		// For simplicity, assume object has a child with matching string
+		cJSON* child = object->child;
+		while (child) {
+			if (child->string && strcmp(child->string, string) == 0) {
+				return child;
+			}
+			child = child->next;
+		}
+		return nullptr;	
 	}
-	return false;
-}
 
-bool PlayerJsonObject::add(const std::string& name, const char *value, const ENCODING encoding)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value, encoding);
+	void cJSON_free(void *object){
+		free(object);
 	}
-	return false;
-}
 
-bool PlayerJsonObject::add(const std::string& name, const std::vector<std::string>& values)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, values);
-	}
-	return false;
-}
+    // Type checking
+    int cJSON_IsArray(const cJSON* item) { (void)item; return 0; }
+    int cJSON_IsString(const cJSON* item) { (void)item; return 0; }
+    int cJSON_IsNumber(const cJSON* item) { (void)item; return 0; }
+    int cJSON_IsObject(const cJSON* item) { (void)item; return 0; }
 
-bool PlayerJsonObject::add(const std::string& name, const std::vector<uint8_t>& values, const ENCODING encoding)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, values, encoding);
-	}
-	return false;
-}
+    // Printing
+    char* cJSON_Print(const cJSON* item) { (void)item; char* res = (char*)malloc(16); strcpy(res, "{}"); return res; }
+    char* cJSON_PrintUnformatted(const cJSON* item) { (void)item; char* res = (char*)malloc(8); strcpy(res, "{}"); return res; }
 
-bool PlayerJsonObject::add(const std::string& name, PlayerJsonObject& value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
+    // Get string value
+    char* cJSON_GetStringValue(const cJSON* item) { 
+        if (!item) return nullptr; 
+        return item->valuestring; 
+    }
 
-bool PlayerJsonObject::add(const std::string& name, std::vector<PlayerJsonObject*>& values)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, values);
-	}
-	return false;
-}
+    // Parsing stub
+    cJSON* cJSON_Parse(const char* str) { (void)str; return cJSON_CreateObject(); }
 
-bool PlayerJsonObject::add(const std::string& name, cJSON *value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
+	// Object / Array manipulation stubs
+    cJSON_bool cJSON_AddItemToObject(cJSON* object, const char* string, cJSON* item) {
+        (void)object; (void)string; (void)item;
+        return 1; // success
+    }
 
-bool PlayerJsonObject::add(const std::string& name, bool value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::add(const std::string& name, int value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::add(const std::string& name, double value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::add(const std::string& name, long value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->add(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::set(PlayerJsonObject *parent, cJSON *object)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->set(parent, object);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::get(const std::string& name, PlayerJsonObject &value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->get(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::get(const std::string& name, std::string& value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->get(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::get(const std::string& name, int& value)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->get(name, value);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::get(const std::string& name, std::vector<std::string>& values)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->get(name, values);
-	}
-	return false;
-}
-
-bool PlayerJsonObject::get(const std::string& name, std::vector<uint8_t>& values, const ENCODING encoding)
-{
-	if (g_mockPlayerJsonObject != nullptr)
-	{
-		return g_mockPlayerJsonObject->get(name, values, encoding);
-	}
-	return false;
-}
-
-std::string PlayerJsonObject::print()
-{
-	return "";
-}
-
-std::string PlayerJsonObject::print_UnFormatted()
-{
-	return "";
-}
-
-void PlayerJsonObject::print(std::vector<uint8_t>& data)
-{
-}
-
-bool PlayerJsonObject::isArray(const std::string& name)
-{
-	return false;
-}
-
-bool PlayerJsonObject::isString(const std::string& name)
-{
-	return false;
-}
-
-bool PlayerJsonObject::isNumber(const std::string& name)
-{
-	return false;
-}
-
-bool PlayerJsonObject::isObject(const std::string& name)
-{
-	return false;
+    cJSON_bool cJSON_AddItemToArray(cJSON* array, cJSON* item) {
+        (void)array; (void)item;
+        return 1; // success
+    }
 }

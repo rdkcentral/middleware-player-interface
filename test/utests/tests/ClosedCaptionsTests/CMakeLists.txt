@@ -44,6 +44,7 @@ set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSubtecConnecter.cpp)
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/closedcaptions/subtec/PlayerSubtecCCManager.cpp
 		${PLAYER_ROOT}/closedcaptions/PlayerCCManager.cpp
+        ${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp
 		${PLAYER_ROOT}/PlayerUtils.cpp
         ${PLAYER_ROOT}/baseConversion/_base64.cpp)
 
