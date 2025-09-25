@@ -342,24 +342,29 @@ int DrmSessionManager::getSlotIdForSession(DrmSession* session)
 	int slot = -1;
 	std::lock_guard<std::mutex> guard(mDrmSessionLock);
 
-	if (drmSessionContexts != NULL)
+	if (session == nullptr) {
+		MW_LOG_WARN("getSlotIdForSession called with nullptr session");
+	}
+	else 
 	{
-		for (int i = 0; i < mMaxDRMSessions; i++)
+		if (drmSessionContexts != NULL)
 		{
-			if (drmSessionContexts[i].drmSession == session)
+			for (int i = 0; i < mMaxDRMSessions; i++)
 			{
-				MW_LOG_INFO("DRM Session found at slot:%d", i);
-				slot = i;
-				break;
+				if (drmSessionContexts[i].drmSession == session)
+				{
+					MW_LOG_INFO("DRM Session found at slot:%d", i);
+					slot = i;
+					break;
+				}
 			}
 		}
-	}
 
-	if (slot == -1)
-	{
-		MW_LOG_WARN("DRM Session not found");
+		if (slot == -1)
+		{
+			MW_LOG_WARN("DRM Session not found");
+		}
 	}
-
 	return slot;
 }
 
@@ -423,6 +428,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &err, std::shared_ptr<DrmHel
 		/* This should never happen, since the caller should have already
 		ensure the provided DRMInfo is supported using hasDRM */
 		MW_LOG_ERR(" Failed to create DRM Session invalid parameters ");
+		err = MW_DRM_INIT_FAILED;
 		return nullptr;
 	}
 
@@ -525,8 +531,14 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 
 	std::vector<uint8_t> keyIdArray;
 	std::map<int, std::vector<uint8_t>> keyIdArrays;
-	drmHelper->getKeys(keyIdArrays);
 
+	if( !drmHelper || !Instance )
+	{
+		MW_LOG_ERR(" Failed to get DRM Session invalid parameters ");
+		err = MW_INVALID_DRM_KEY;
+		return code;
+	}
+	drmHelper->getKeys(keyIdArrays);
 	drmHelper->getKey(keyIdArray);
 
 	//Need to Check , Are all Drm Schemes/Helpers capable of providing a non zero keyId?
@@ -727,6 +739,19 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmHelper, int sessionSlot, int &err )
 {
 	KeyState code = KEY_ERROR;
+
+	if( !drmHelper)
+	{
+		MW_LOG_ERR("InitializeDrmSession Fails due to invalid parameter");
+		err = MW_DRM_INIT_FAILED;
+		return code;
+	}
+
+	if( sessionSlot < 0 )
+	{
+        err = MW_DRM_SESSIONID_EMPTY;
+        return KEY_ERROR_EMPTY_SESSION_ID;
+	}
 
 	std::vector<uint8_t> drmInitData;
 	drmHelper->createInitData(drmInitData);

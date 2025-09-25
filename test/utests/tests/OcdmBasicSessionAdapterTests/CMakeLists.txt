@@ -21,7 +21,10 @@ set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
 set(EXEC_NAME OcdmBasicSessionAdapterTests)
 
-include_directories(${PLAYER_ROOT})
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/subtec/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/ocdm)
+include_directories(${PLAYER_ROOT}/tsb/api)
+include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
@@ -33,20 +36,15 @@ include_directories(${GMOCK_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
-include_directories(${PLAYER_ROOT}/drm)
 include_directories(${UTESTS_ROOT}/ocdm)
 include_directories(${UTESTS_ROOT}/mocks)
-include_directories(${PLAYER_ROOT}/externals)
-include_directories(${PLAYER_ROOT}/drm/ocdm)
-include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
-include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 
 set(TEST_SOURCES FunctionalTests.cpp
 		 OcdmBasicSessionAdapterTests.cpp)
 
-set(AAMP_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
+set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
                  ${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
                  ${PLAYER_ROOT}/drm/DrmSession.cpp
 		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
@@ -62,7 +60,7 @@ However, OCDMSessionAdapter has a more complex implementation, so a fake has bee
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
-               ${AAMP_SOURCES})
+               ${PLAYER_SOURCES})
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
@@ -73,14 +71,9 @@ endif()
 
 
 if (COVERAGE_ENABLED)
-    include(CodeCoverage)
-    APPEND_COVERAGE_COMPILER_FLAGS()
-    #include("${PROJECT_SOURCE_DIR}/cmake_exclude_file.list")
-    SETUP_TARGET_FOR_COVERAGE_LCOV(NAME ${EXEC_NAME}_coverage
-                              EXECUTABLE ${EXEC_NAME}
-                              DEPENDENCIES ${EXEC_NAME})
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES})
+target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})

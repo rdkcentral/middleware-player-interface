@@ -60,7 +60,7 @@ ClearKeySession::ClearKeySession() :
 		m_keyLen(0),
 		m_keyIdLen(0)
 {
-	initDRMSession();
+    initDRMSession();
 }
 
 
@@ -82,11 +82,19 @@ void ClearKeySession::initDRMSession()
  */
 void ClearKeySession::setKeyId(const char* keyId, int32_t keyIDLen)
 {
-	if (m_keyId != NULL)
-	{
-		free(m_keyId);
-	}
+	if (keyId == nullptr || keyIDLen <= 0) {
+        MW_LOG_ERR("ClearKeySession: Invalid keyId or keyIDLen %d", keyIDLen);
+		throw std::invalid_argument("Invalid keyId length");
+    }
+	if (m_keyId != NULL) {
+        free(m_keyId);
+    }
+
 	m_keyId = (unsigned char*) malloc(sizeof(unsigned char) * keyIDLen);
+	if (!m_keyId) {
+        throw std::runtime_error("Memory allocation failed for keyId");
+    }
+
 	memcpy(m_keyId, keyId, keyIDLen);
 	m_keyIdLen = keyIDLen;
 }
@@ -187,10 +195,9 @@ ClearKeySession::~ClearKeySession()
         free(m_keyId);
     }
     if(m_keyStr != NULL)
-    {
-        free(m_keyStr);
-    }
-
+	{
+		free(m_keyStr);
+	}
 	m_eKeyState = KEY_CLOSED;
 }
 
@@ -286,6 +293,7 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 						if (m_keyStr != NULL)
 						{
 							free (m_keyStr);
+							m_keyStr = NULL;
 						}
 						m_keyStr = base64_URL_Decode(keyJsonStr, &resKeyLen, strlen(keyJsonStr));
 						if (resKeyLen == AES_CTR_KEY_LEN)
@@ -314,6 +322,7 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 					if (resKeyId)
 					{
 						free(resKeyId);
+						resKeyId = NULL;
 					}
 				}
 				else
