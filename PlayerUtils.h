@@ -92,11 +92,8 @@ void ResolveURL(std::string& dst, std::string base, const char *uri , bool bProp
  * @return The current time in milliseconds
  */
 long long GetCurrentTimeMS(void);
-/**
- * @brief Resolve file URL from the base and file path
- */
-void player_ResolveURL(std::string& dst, std::string base, const char *uri , bool bPropagateUriParams);
 
+const char* Test_ParseUriProtocol(const char* uri);
 /**
  * @brief parse leading protocol from uri if present
  * @param[in] uri manifest/ fragment uri

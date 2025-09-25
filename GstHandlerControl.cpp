@@ -60,26 +60,35 @@ GstHandlerControl::ScopeHelper GstHandlerControl::getScopeHelper()
 
 bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string name)
 {
-	const std::chrono::steady_clock::time_point end =
-	std::chrono::milliseconds{MaximumDelayMilliseconds} + std::chrono::steady_clock::now();
-
-	disable();
-
-	std::unique_lock<std::mutex> lock(mSync);
-	while(mInstanceCount && (std::chrono::steady_clock::now()<end))
+	bool ret = false;
+	if (MaximumDelayMilliseconds < 0)
 	{
-		mDoneCond.wait_until(lock, end);
+		MW_LOG_ERR("Invalid MaximumDelayMilliseconds: %d", MaximumDelayMilliseconds);
 	}
+	else 
+	{
+		const std::chrono::steady_clock::time_point end =
+		std::chrono::milliseconds{MaximumDelayMilliseconds} + std::chrono::steady_clock::now();
 
-	if(mInstanceCount)
-	{
-		MW_LOG_ERR("GstPlayer: %d instance%s of %s running", 
-		mInstanceCount, mInstanceCount?"s":"", name.c_str());
-		return false;
+		disable();
+
+		std::unique_lock<std::mutex> lock(mSync);
+		while(mInstanceCount && (std::chrono::steady_clock::now()<end))
+		{
+			mDoneCond.wait_until(lock, end);
+		}
+
+		if(mInstanceCount)
+		{
+			MW_LOG_ERR("GstPlayer: %d instance%s of %s running", 
+			mInstanceCount, mInstanceCount?"s":"", name.c_str());
+			ret = false;
+		}
+		else
+		{
+			MW_LOG_MIL("GstPlayer: all instances of %s completed.", name.c_str());
+			ret = true;
+		}
 	}
-	else
-	{
-		MW_LOG_MIL("GstPlayer: all instances of %s completed.", name.c_str());
-		return true;
-	}
+	return ret;
 }
