@@ -68,11 +68,11 @@ if (CMAKE_PLATFORM_UBUNTU)
 endif()
 
 set(PLAYER_SOURCES
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstcdmidecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstclearkeydecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstplayreadydecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstverimatrixdecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstwidevinedecryptor.cpp
+				#}/gst-plugins/drm/gst/gstcdmidecryptor.cpp
+				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstclearkeydecryptor.cpp
+				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstplayreadydecryptor.cpp
+				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstverimatrixdecryptor.cpp
+				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstwidevinedecryptor.cpp
 				${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
 
 add_executable(${EXEC_NAME}

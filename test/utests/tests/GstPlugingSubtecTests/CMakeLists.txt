@@ -19,7 +19,7 @@ include(GoogleTest)
 
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
-set(EXEC_NAME PlayerCommonTests)
+set(EXEC_NAME PlayerGstSubtecbinTests)
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ave ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
@@ -43,26 +43,27 @@ include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 include_directories(${PLAYER_ROOT})
 
-set(TEST_SOURCES PlayerCommonRun.cpp
-		 PlayerMetaDataFun.cpp
-		 PlayerSchedulerFun.cpp
-		 PlayerUtilsFun.cpp
-		 ProcessHandlerFun.cpp
-	 	 gstPlayerTaskPoolFun.cpp
-		 SocUtilsFun.cpp)
+set(TEST_SOURCES GstPlugingSubtecRun.cpp
+	GstsubtecbinFun.cpp
+	Gstsubtecmp4transformFun.cpp
+	GstsubtecsinkFun.cpp
+	GstvipertransformFun.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeSocUtils.cpp
-		 ${UTESTS_ROOT}/fakes/FakeGstPlayerTaskPool.cpp)
+		 ${UTESTS_ROOT}/fakes/FakeGstPlayerTaskPool.cpp
+		 ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp 
                   ${PLAYER_ROOT}/PlayerScheduler.cpp
                   ${PLAYER_ROOT}/PlayerUtils.cpp
-                  ${PLAYER_ROOT}/baseConversion/_base64.cpp
-                  ${PLAYER_ROOT}/ProcessHandler.cpp
-                  ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
-		  ${PLAYER_ROOT}/GstUtils.cpp
-                  ${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
-                  ${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
+                  ${PLAYER_ROOT}/baseConversion/_base64.cpp)
+
+add_definitions(-DUSE_OPENCDM_ADAPTER)
+
+if (CMAKE_PLATFORM_UBUNTU)
+	add_definitions(-DUBUNTU)
+endif()
+
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}

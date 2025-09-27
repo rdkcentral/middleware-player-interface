@@ -20,8 +20,10 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 #include "gstcdmidecryptor.h"
+#ifndef UBUNTU
 #include <open_cdm.h>
 #include <open_cdm_adapter.h>
+#endif
 #if defined(AMLOGIC)
 #include <gst_svp_meta.h>
 #endif
