@@ -59,9 +59,7 @@ jobs:
         working-directory: ${{ github.workspace }}/../
         run: |
           rm -rf rdk-middleware-tools
-          git clone -b RDKEMW-8643 https://$PAT@github.com/rdk-e/rdk-middleware-tools.git
-          cd rdk-middleware-tools
-          git branch
+          git clone https://$PAT@github.com/rdk-e/rdk-middleware-tools.git
         env:
           PAT: ${{ secrets.PAT }}
 
