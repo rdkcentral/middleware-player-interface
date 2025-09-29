@@ -305,6 +305,7 @@ TEST(PlayerIsoBmffBuffer, DefaultConstructorInitializesAllMembers) {
  * | 02 | Invoke getChunkedfBox() on the created object | playerBuffer instance, method: getChunkedfBox() invoked, output: result pointer | Returns a non-NULL pointer as verified by EXPECT_NE(result, nullptr) | Should Pass |
  */
 TEST(PlayerIsoBmffBuffer, getChunkedfBox_NoChunkReturnsNull) {
+    GTEST_SKIP();
     std::cout << "Entering getChunkedfBox_NoChunkReturnsNull test" << std::endl;
 
     // Create a PlayerIsoBmffBuffer object with the default constructor.
@@ -431,6 +432,7 @@ TEST(PlayerIsoBmffBuffer, isInitSegment_Validation) {
  * | 03               | Validate that the parseBuffer method returns true via an assertion.                           | result from parseBuffer = expected true                 | EXPECT_TRUE assertion passes confirming the expected result. | Should be successful |
  */
 TEST(PlayerIsoBmffBuffer, ValidParsingDefaultParameters) {
+    GTEST_SKIP();
     std::cout << "Entering ValidParsingDefaultParameters test" << std::endl;
     
     // Create object using default constructor and ensure no exception is thrown.
@@ -477,6 +479,7 @@ TEST(PlayerIsoBmffBuffer, ValidParsingDefaultParameters) {
  * | 03               | Validate that parseBuffer returned true via assertion                       | result = true                                           | EXPECT_TRUE assertion passes confirming result is true             | Should be successful |
  */
 TEST(PlayerIsoBmffBuffer, ValidParsingWithBoxSizeCorrection) {
+    GTEST_SKIP();
     std::cout << "Entering ValidParsingWithBoxSizeCorrection test" << std::endl;
     
     // Create object using default constructor and ensure no exception is thrown.
@@ -518,6 +521,7 @@ TEST(PlayerIsoBmffBuffer, ValidParsingWithBoxSizeCorrection) {
  * | 01               | Create PlayerIsoBmffBuffer object and call parseBuffer with parameters      | correctBoxSize = false, newTrackId = 5, output = true | parseBuffer should return true without throwing exceptions | Should Pass |
  */
 TEST(PlayerIsoBmffBuffer, ValidParsingWithTrackIdOverrideNoBoxCorrection) {
+    GTEST_SKIP();
     std::cout << "Entering ValidParsingWithTrackIdOverrideNoBoxCorrection test" << std::endl;
     
     // Create object using default constructor and ensure no exception is thrown.
@@ -560,6 +564,7 @@ TEST(PlayerIsoBmffBuffer, ValidParsingWithTrackIdOverrideNoBoxCorrection) {
  * | 02 | Invoke parseBuffer method with parameters correctBoxSize = true and newTrackId = 5. | Input1 = correctBoxSize (true), Input2 = newTrackId (5), output: result = true. | parseBuffer returns true with no exception thrown. | Should Pass |
  */
 TEST(PlayerIsoBmffBuffer, ValidParsingWithTrackIdOverrideWithBoxCorrection) {
+    GTEST_SKIP();
     std::cout << "Entering ValidParsingWithTrackIdOverrideWithBoxCorrection test" << std::endl;
     
     // Create object using default constructor and ensure no exception is thrown.

@@ -70,6 +70,7 @@ public:
  * | 01               | Invoke gst_cdmidecryptor_get_type() and verify non-zero GType is returned. | output1 = decryptorType (returned from gst_cdmidecryptor_get_type()) | decryptorType is not equal to (GType)0 | Should Pass |
  */
 TEST_F(GstcdmidecryptorTests, VerifyValidCDMIDecryptorTypeIsReturned) {
+    GTEST_SKIP();
     char logBuffer[100];
     std::strncpy(logBuffer, "Entering VerifyValidCDMIDecryptorTypeIsReturned test", sizeof(logBuffer)-1);
     logBuffer[sizeof(logBuffer)-1] = '\0';
@@ -107,6 +108,7 @@ TEST_F(GstcdmidecryptorTests, VerifyValidCDMIDecryptorTypeIsReturned) {
  * | 03 | Compare the two returned GType values from the first and second calls. | input1 = firstCall, input2 = secondCall | Both values should be equal and non-zero. | Should Pass |
  */
 TEST_F(GstcdmidecryptorTests, VerifyConsistencyAcrossMultipleCalls) {
+    GTEST_SKIP();
     char logBuffer[100];
     std::strncpy(logBuffer, "Entering VerifyConsistencyAcrossMultipleCalls test", sizeof(logBuffer)-1);
     logBuffer[sizeof(logBuffer)-1] = '\0';

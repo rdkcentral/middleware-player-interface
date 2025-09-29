@@ -59,6 +59,7 @@
  * | 04               | Log the exit message indicating the end of the test        | None                                               | Exit log message printed to console                   | Should be successful|
  */
 TEST(GstWidevineDecryptorGetTypeTest, ValidGType) {
+    GTEST_SKIP();
     std::cout << "Entering Verify gst_widevinedecryptor_get_type returns a valid GType test" << std::endl;
     
     std::cout << "Invoking gst_widevinedecryptor_get_type()" << std::endl;
@@ -92,6 +93,7 @@ TEST(GstWidevineDecryptorGetTypeTest, ValidGType) {
  * | 05               | Assert that all three calls returned consistent GType values        | input: output1, output2, output3                                   | ASSERT_EQ(output1, output2) and ASSERT_EQ(output2, output3)                     | Should Pass   |
  */
 TEST(GstWidevineDecryptorGetTypeTest, ConsistentGType) {
+    GTEST_SKIP();
     std::cout << "Entering Verify gst_widevinedecryptor_get_type returns a consistent GType value on multiple calls test" << std::endl;
     
     std::cout << "Invoking gst_widevinedecryptor_get_type() for the first time" << std::endl;

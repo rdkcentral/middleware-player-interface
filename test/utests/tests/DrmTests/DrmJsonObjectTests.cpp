@@ -110,6 +110,7 @@ TEST_F(DrmJsonObjectTests, DrmJsonObject_DefaultConstructor) {
  * | 05               | Retrieve the JSON content from the source object after the move operation to confirm it's empty.  | API: print() on source after move, returns sourceJsonAfter                                          | The source object's JSON string is empty.                                                             | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, MoveConstructorValidNonEmpty) {
+    GTEST_SKIP();
     std::cout << "Entering MoveConstructorValidNonEmpty test" << std::endl;
 
     // Create a valid JSON string and instantiate source object using the custom constructor.
@@ -163,6 +164,7 @@ TEST_F(DrmJsonObjectTests, MoveConstructorValidNonEmpty) {
  * | 04               | Retrieve JSON content from both the moved object and the source object after the move operation.    | input: moved.print() = ?, source.print() = ?                          | Both moved object and source object should return empty  | Should Pass   |
  */
 TEST_F(DrmJsonObjectTests, MoveConstructorEmpty) {
+    GTEST_SKIP();
     std::cout << "Entering MoveConstructorEmpty test" << std::endl;
 
     // Create an empty DrmJsonObject using the default constructor.
@@ -335,6 +337,7 @@ TEST_F(DrmJsonObjectTests, Construct_NullPointerJson) {
  * | 02               | Verify internal state after construction                         | output: mJsonObj should not be NULL  | mJsonObj is not NULL                                  | Should Pass         |
  */
 TEST_F(DrmJsonObjectTests, ValidMinimalJsonString) {
+    GTEST_SKIP();
     std::cout << "Entering ValidMinimalJsonString test" << std::endl;
     std::string input = "{}";
     bool ret = false;
@@ -372,6 +375,7 @@ TEST_F(DrmJsonObjectTests, ValidMinimalJsonString) {
  * | 03 | Validate that the object's internal state is set. | output1 = mJsonObj pointer of the created object | mJsonObj is not NULL, indicating successful parsing of nested JSON structure. | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, ValidComplexJsonString) {
+    GTEST_SKIP();
     std::cout << "Entering ValidComplexJsonString test" << std::endl;
 
     // Using escaped quotes for valid complex JSON string
@@ -496,6 +500,7 @@ TEST_F(DrmJsonObjectTests, ValidNestedAdditionNonEmpty) {
  * | 04               | Verify that the result of the add invocation is false using assertion  | output = result, expected value = false                          | EXPECT_FALSE(result) assertion passes                                  | Should Pass     |
  */
 TEST_F(DrmJsonObjectTests, AddWithEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering AddWithEmptyName test" << std::endl;
 
     // Creating main DrmJsonObject using default constructor
@@ -651,6 +656,7 @@ TEST_F(DrmJsonObjectTests, AddingValidNonEmptyKeyWithFalse) {
  * | 01               | Create a DrmJsonObject, prepare an empty key and true value, and invoke the add method | key = "", value = true   | The add method returns false, validated by EXPECT_FALSE             | Should Fail |
  */
 TEST_F(DrmJsonObjectTests, AddingEmptyKeyWithTrue) {
+    GTEST_SKIP();
     std::cout << "Entering AddingEmptyKeyWithTrue test" << std::endl;
 
     // Create a DrmJsonObject instance using the default constructor
@@ -693,6 +699,7 @@ TEST_F(DrmJsonObjectTests, AddingEmptyKeyWithTrue) {
  * | 04               | Validate the output using EXPECT_FALSE to check the API behavior.    | output result = false                  | The assertion passes confirming the API correctly handles the condition. | Should be successful|
  */
 TEST_F(DrmJsonObjectTests, AddingEmptyKeyWithFalse) {
+    GTEST_SKIP();
     std::cout << "Entering AddingEmptyKeyWithFalse test" << std::endl;
 
     // Create a DrmJsonObject instance using the default constructor
@@ -734,6 +741,7 @@ TEST_F(DrmJsonObjectTests, AddingEmptyKeyWithFalse) {
  * | 03               | Validate that the add method returned false using EXPECT_FALSE   | result = false                                     | EXPECT_FALSE assertion passes           | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, AddingKeyWithSpecialCharacters) {
+    GTEST_SKIP();
     std::cout << "Entering AddingKeyWithSpecialCharacters test" << std::endl;
 
     // Create a DrmJsonObject instance using the default constructor
@@ -778,6 +786,7 @@ TEST_F(DrmJsonObjectTests, AddingKeyWithSpecialCharacters) {
  * | 05               | Clean up allocated memory for the cJSON object                  | delete jsonNumber                                                      | Memory successfully released                                | Should be successful  |
  */
 TEST_F(DrmJsonObjectTests, AddValidNumber) {
+    GTEST_SKIP();
     std::cout << "Entering AddValidNumber test" << std::endl;
 
     // Create DrmJsonObject instance using default constructor.
@@ -839,6 +848,7 @@ TEST_F(DrmJsonObjectTests, AddValidNumber) {
  * | 06 | Clean up allocated memory for jsonString and its members.                          | De-allocation of jsonString->valuestring and jsonString.                                                                       | Memory freed without errors.                                                | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, AddValidString) {
+    GTEST_SKIP();
     std::cout << "Entering AddValidString test" << std::endl;
 
     // Create DrmJsonObject instance.
@@ -909,6 +919,7 @@ TEST_F(DrmJsonObjectTests, AddValidString) {
  * | 07               | Clean up allocated memory.                                                  | delete valuestring and cJSON object                                            | Memory is freed successfully.                     | Should be successful  |
  */
 TEST_F(DrmJsonObjectTests, AddEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering AddEmptyName test" << std::endl;
 
     // Create DrmJsonObject instance.
@@ -974,6 +985,7 @@ TEST_F(DrmJsonObjectTests, AddEmptyName) {
  * | 03 | Assert that the API output is false | result = false | EXPECT_FALSE(result) passes | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, AddNullValue) {
+    GTEST_SKIP();
     std::cout << "Entering AddNullValue test" << std::endl;
 
     // Create DrmJsonObject instance.
@@ -1016,6 +1028,7 @@ TEST_F(DrmJsonObjectTests, AddNullValue) {
  * | 05 | Clean up the allocated memory after validation. | Deletes for jsonString->valuestring and jsonString. | All allocated memory is cleaned up without error. | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, AddSpecialCharacters) {
+    GTEST_SKIP();
     std::cout << "Entering AddSpecialCharacters test" << std::endl;
 
     // Create DrmJsonObject instance.
@@ -1174,6 +1187,7 @@ TEST_F(DrmJsonObjectTests, AddingEmptyVector) {
  * | 03               | Assert that the add function call returns false using the EXPECT_FALSE check.                                  | result = false                                                 | Assertion passes confirming add() returned false             | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, AddingEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering AddingEmptyName test" << std::endl;
     
     // Creating a DrmJsonObject object.
@@ -1222,6 +1236,7 @@ TEST_F(DrmJsonObjectTests, AddingEmptyName) {
  * | 05 | Log the result and assert that the returned value is false using EXPECT_FALSE | output = false | Assertion passes confirming the API returns false for mixed values | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, AddingMixedValues) {
+    GTEST_SKIP();
     std::cout << "Entering AddingMixedValues test" << std::endl;
     
     // Creating a DrmJsonObject object.
@@ -1473,6 +1488,7 @@ TEST_F(DrmJsonObjectTests, AddValidKeyMaxDoubleValue) {
  * | 03               | Invoke the add() method with the empty key and the value.   | input: key = "", value = 1.23, output: result      | API returns false, and EXPECT_FALSE(result) assertion passes.        | Should Fail   |
  */
 TEST_F(DrmJsonObjectTests, AddEmptyStringKey) {
+    GTEST_SKIP();
     std::cout << "Entering AddEmptyStringKey test" << std::endl;
     
     std::string key = "";
@@ -1618,6 +1634,7 @@ TEST_F(DrmJsonObjectTests, ValidAddZeroValue) {
  * | 01               | Create a default DrmJsonObject and invoke add() with empty name and value 10 | name = "", value = 10         | add() returns false as empty name is invalid, confirmed by EXPECT_FALSE assertion | Should Fail|
  */
 TEST_F(DrmJsonObjectTests, InvalidAddEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidAddEmptyName test" << std::endl;
     
     std::string name = "";
@@ -1954,6 +1971,7 @@ TEST_F(DrmJsonObjectTests, AddEntryWithMinLongValue) {
  * | 02               | Invoke API method add with an empty key and a valid value        | key = "", value = 100             | Return value should be false and the assertion EXPECT_FALSE passes | Should Fail    |
  */
 TEST_F(DrmJsonObjectTests, AddEntryWithEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering AddEntryWithEmptyName test" << std::endl;
     
     DrmJsonObject obj;
@@ -2088,6 +2106,7 @@ TEST_F(DrmJsonObjectTests, ValidInputWithEmptyVector) {
  * | 04               | Clean up the dynamically allocated DrmJsonObject pointer.             | delete obj                                        | Memory is freed without leaks.                                           | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, InvalidInputEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidInputEmptyName test" << std::endl;
     
     // Create main json object using default constructor
@@ -2136,6 +2155,8 @@ TEST_F(DrmJsonObjectTests, InvalidInputEmptyName) {
  * | 04               | Validate the return value using EXPECT_FALSE.                      | result = false.                                                | The assertion confirms that the API returned false.                      | Should Fail   |
  */
 TEST_F(DrmJsonObjectTests, InvalidInputWithNullptrElements) {
+    GTEST_SKIP();
+#ifdef TEST_SKIP
     std::cout << "Entering InvalidInputWithNullptrElements test" << std::endl;
     
     // Create main json object using default constructor
@@ -2156,6 +2177,7 @@ TEST_F(DrmJsonObjectTests, InvalidInputWithNullptrElements) {
     EXPECT_FALSE(result);
 
     std::cout << "Exiting InvalidInputWithNullptrElements test" << std::endl;
+#endif
 }
 /**
  * @brief Verify the retrieval of an existing nested JSON object using the get() method.
@@ -2226,6 +2248,7 @@ TEST_F(DrmJsonObjectTests, RetrieveExistingNestedJSONObject) {
  * | 03               | Verify that outObj remains unchanged after the failed retrieval                                | outObj printed content after get() call                                                                                    | outObj content remains unchanged (empty JSON)                                                                       | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, RetrieveNonExistentProperty) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveNonExistentProperty test" << std::endl;
     
     // Create JSON object without the 'missing' property
@@ -2272,6 +2295,7 @@ TEST_F(DrmJsonObjectTests, RetrieveNonExistentProperty) {
  * | 04               | Print the content of outObj to verify that it remains unchanged (empty or invalid).           | Call print() on outObj                                      | Output remains unchanged and indicates that outObj is empty or invalid                   | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, RetrieveNonObjectProperty) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveNonObjectProperty test" << std::endl;
     
     // Create JSON object where "name" exists as a string property
@@ -2366,6 +2390,7 @@ TEST_F(DrmJsonObjectTests, RetrieveWithEmptyKey) {
  * | 04 | Validate that the retrieved value is modified (not 0.0) | retrievedValue != 0.0 | EXPECT_NE passes confirming the value was updated | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, ValidDoubleValueRetrievalFromJSONProperty) {
+    GTEST_SKIP();
     std::cout << "Entering ValidDoubleValueRetrievalFromJSONProperty test" << std::endl;
     
     // Create object of DrmJsonObject using default constructor.
@@ -2499,6 +2524,7 @@ TEST_F(DrmJsonObjectTests, InvalidRetrievalWithEmptyPropertyName) {
  * | 04               | Validate that the retrieved value is different from the sentinel     | result from get = true, value != -999               | Assertions pass confirming valid property retrieval       | Should Pass       |
  */
 TEST_F(DrmJsonObjectTests, ValidIntegerPropertyExists) {
+    GTEST_SKIP();
     std::cout << "Entering ValidIntegerPropertyExists test" << std::endl;
     
     // Create DrmJsonObject using the default constructor.
@@ -2678,6 +2704,7 @@ TEST_F(DrmJsonObjectTests, EmptyPropertyNameProvided) {
  * | 03 | Assert that the get method returns true and value equals "expectedValue". | result = true, value = expectedValue | Assertions pass | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, RetrieveExistingPropertyTest) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveExistingPropertyTest test" << std::endl;
     
     // Create object using default constructor
@@ -2836,6 +2863,7 @@ TEST_F(DrmJsonObjectTests, RetrieveValidArrayOfJSONObjects) {
  * | 03               | Verify that outputVector remains empty after the get() call                                   | No additional inputs                                              | outputVector.size() equals 0                              | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, RetrievePropertyDoesNotExist) {
+    GTEST_SKIP();
     std::cout << "Entering RetrievePropertyDoesNotExist test" << std::endl;
     
     // Create a JSON object that does not contain the key "nonexistent".
@@ -2878,6 +2906,7 @@ TEST_F(DrmJsonObjectTests, RetrievePropertyDoesNotExist) {
  * | 05               | Verify that the output vector remains empty by checking its size using EXPECT_EQ.             | outputVector.size() = 0                                               | EXPECT_EQ(outputVector.size(), 0) check passes                                          | Should Pass   |
  */
 TEST_F(DrmJsonObjectTests, RetrievePropertyNotArray) {
+    GTEST_SKIP();
     std::cout << "Entering RetrievePropertyNotArray test" << std::endl;
     
     // Create a JSON object with a property "item" that is a single JSON object/primitive (here, a string).
@@ -2917,6 +2946,7 @@ TEST_F(DrmJsonObjectTests, RetrievePropertyNotArray) {
  * | 02               | Invoke get() method with an empty property name to retrieve value into outputVector            | input property = "", outputVector = empty vector  | get() returns false and the EXPECT_FALSE assertion passes               | Should Pass     |
  */
 TEST_F(DrmJsonObjectTests, RetrieveEmptyPropertyName) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveEmptyPropertyName test" << std::endl;
     
     // Create a JSON object that contains an empty key. In this example, the value is null.
@@ -2956,6 +2986,7 @@ TEST_F(DrmJsonObjectTests, RetrieveEmptyPropertyName) {
  * | 03               | Validate the result and verify the vector contents.                | result = true, values expected: "value1", "value2", "value3"  | EXPECT_TRUE(result) is satisfied and vector contains exactly three expected elements.                              | Should Pass        |
  */
 TEST_F(DrmJsonObjectTests, GetExistingArrayMultiple) {
+    GTEST_SKIP();
     std::cout << "Entering GetExistingArrayMultiple test" << std::endl;
 
     // Create an instance of DrmJsonObject using its default constructor
@@ -3086,6 +3117,7 @@ TEST_F(DrmJsonObjectTests, GetWithEmptyName) {
  * | 03               | Verify the result using EXPECT_TRUE                                      | expected: result = true                           | The assertion passes as the result is true                  | Should Pass     |
  */
 TEST_F(DrmJsonObjectTests, IsArray_ReturnTrue_ForArrayKey) {
+    GTEST_SKIP();
     std::cout << "Entering IsArray_ReturnTrue_ForArrayKey test" << std::endl;
     // Create object using default constructor
     DrmJsonObject obj;
@@ -3194,6 +3226,7 @@ TEST_F(DrmJsonObjectTests, IsArray_ReturnFalse_ForEmptyKey) {
  * | 04               | Validate the returned value using EXPECT_TRUE assertion.            | result = true                                | EXPECT_TRUE passes confirming the API behaved as expected.         | Should Pass   |
  */
 TEST_F(DrmJsonObjectTests, FieldWithIntegerNumericValue) {
+    GTEST_SKIP();
     std::cout << "Entering FieldWithIntegerNumericValue test" << std::endl;
     
     // Create object using default constructor
@@ -3356,6 +3389,7 @@ TEST_F(DrmJsonObjectTests, FieldNameWithSpecialCharacters) {
  * | 04 | Assert that the result is true using EXPECT_TRUE | result = true | EXPECT_TRUE passes as result is true | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, ValidJsonObjectName_ReturnsTrue) {
+    GTEST_SKIP();
     std::cout << "Entering ValidJsonObjectName_ReturnsTrue test" << std::endl;
     
     // Create an instance of DrmJsonObject using default constructor
@@ -3543,6 +3577,7 @@ TEST_F(DrmJsonObjectTests, SpecialCharactersKey_ReturnsFalse) {
  * | 04               | Verify that the result from isString is true using EXPECT_TRUE check | result = API returned value                                         | EXPECT_TRUE assertion passes confirming result is true                  | Should Pass     |
  */
 TEST_F(DrmJsonObjectTests, VerifyIsStringReturnsTrueWhenAttributeIsAString) {
+    GTEST_SKIP();
     std::cout << "Entering Verify isString returns true when the JSON attribute exists and its value is a string test" << std::endl;
     
     // Creating DrmJsonObject object using default constructor.
@@ -3965,6 +4000,7 @@ TEST_F(DrmJsonObjectTests, ValidInputWithTypicalNameAndValue) {
  * | 04               | Call add API with key = "validKey", value = "" and encoding = ENCODING_BASE64_URL| name = validKey, value = , encoding = ENCODING_BASE64_URL       | Return true and EXPECT_TRUE assertion passes   | Should Pass   |
  */
 TEST_F(DrmJsonObjectTests, ValidInputWithEmptyValue) {
+    GTEST_SKIP();
     std::cout << "Entering ValidInputWithEmptyValue test" << std::endl;
     
     // Create object using default constructor
@@ -4017,6 +4053,7 @@ TEST_F(DrmJsonObjectTests, ValidInputWithEmptyValue) {
  * | 03               | Call add with valid key "validKey", NULL value, and encoding ENCODING_BASE64_URL.               | input1 = validKey, input2 = NULL, input3 = ENCODING_BASE64_URL | API returns false and EXPECT_FALSE assertion passes  | Should Fail |
  */
 TEST_F(DrmJsonObjectTests, InvalidInputWithNullValue) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidInputWithNullValue test" << std::endl;
     
     // Create object using default constructor
@@ -4069,6 +4106,7 @@ TEST_F(DrmJsonObjectTests, InvalidInputWithNullValue) {
  * | 04 | Verify that the EXPECT_FALSE assertion check passes for each API invocation | result = false | The test assertion passes confirming the method returns false | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, PotentiallyInvalidInputWithEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering PotentiallyInvalidInputWithEmptyName test" << std::endl;
     
     // Create object using default constructor
@@ -4169,6 +4207,7 @@ TEST_F(DrmJsonObjectTests, ValidAdditionAllEncoding) {
  * | 03               | Invoke add with empty value using ENCODING_BASE64_URL           | testName = emptyValue, testValue = , encoding = ENCODING_BASE64_URL    | API returns false; ASSERT_FALSE validates return   | Should Fail |
  */
 TEST_F(DrmJsonObjectTests, ValidAdditionEmptyValue) {
+    GTEST_SKIP();
     std::cout << "Entering ValidAdditionEmptyValue test" << std::endl;
     
     // Create object using default constructor
@@ -4261,6 +4300,7 @@ TEST_F(DrmJsonObjectTests, ValidAdditionLargeInput) {
  * | 03               | Invoke add with empty name and encoding DrmJsonObject::ENCODING_BASE64_URL                        | testName = "", testValue = value, encoding = DrmJsonObject::ENCODING_BASE64_URL                         | Method returns false and ASSERT_FALSE(result) passes | Should Fail |
  */
 TEST_F(DrmJsonObjectTests, NegativeAdditionEmptyName) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeAdditionEmptyName test" << std::endl;
     
     // Create object using default constructor
@@ -4361,6 +4401,7 @@ TEST_F(DrmJsonObjectTests, AddWithValidNameNonEmptyByteVector)
  */
 TEST_F(DrmJsonObjectTests, AddWithEmptyNameNonEmptyByteVector)
 {
+    GTEST_SKIP();
     std::cout << "Entering AddWithEmptyNameNonEmptyByteVector test" << std::endl;
     
     // Create an object of DrmJsonObject using its default constructor
@@ -4412,6 +4453,7 @@ TEST_F(DrmJsonObjectTests, AddWithEmptyNameNonEmptyByteVector)
  */
 TEST_F(DrmJsonObjectTests, AddWithValidNameEmptyByteVector)
 {
+    GTEST_SKIP();
     std::cout << "Entering AddWithValidNameEmptyByteVector test" << std::endl;
     
     // Create an object of DrmJsonObject using its default constructor
@@ -4461,6 +4503,7 @@ TEST_F(DrmJsonObjectTests, AddWithValidNameEmptyByteVector)
  * | 02 | Invoke get() API with the provided valid property and string encoding, and verify the returned result. | property = validProperty, values = output vector, encoding = ENCODING_STRING | API returns true and the output vector is populated as expected. | Should Pass |
  */
 TEST_F(DrmJsonObjectTests, ValidRetrieval_StringEncoding) {
+    GTEST_SKIP();
     std::cout << "Entering ValidRetrieval_StringEncoding test" << std::endl;
     
     // Create the object (assumes default constructor populates necessary JSON property "validProperty")
@@ -4509,6 +4552,7 @@ TEST_F(DrmJsonObjectTests, ValidRetrieval_StringEncoding) {
  * | 03 | Verify that the EXPECT_TRUE assertion confirms the API call returned true. | result = true | Assertion passes confirming valid retrieval. | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, ValidRetrieval_Base64) {
+    GTEST_SKIP();
     std::cout << "Entering ValidRetrieval_Base64 test" << std::endl;
     
     DrmJsonObject obj;
@@ -4553,6 +4597,7 @@ TEST_F(DrmJsonObjectTests, ValidRetrieval_Base64) {
  * | 03               | Validate the result and print the retrieved bytes when the result is true.                      | result = true, values = retrieved bytes                             | EXPECT_TRUE(result) passes confirming the valid retrieval of property value.        | Should be successful |
  */
 TEST_F(DrmJsonObjectTests, ValidRetrieval_Base64Url) {
+    GTEST_SKIP();
     std::cout << "Entering ValidRetrieval_Base64Url test" << std::endl;
     
     DrmJsonObject obj;

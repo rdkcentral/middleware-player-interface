@@ -49,7 +49,8 @@ set(TEST_SOURCES PlayerCommonRun.cpp
 		 PlayerUtilsFun.cpp
 		 ProcessHandlerFun.cpp
 	 	 gstPlayerTaskPoolFun.cpp
-		 SocUtilsFun.cpp)
+		 SocUtilsFun.cpp
+     PlayerInterfaceRDKprivFun.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeSocUtils.cpp
 		 ${UTESTS_ROOT}/fakes/FakeGstPlayerTaskPool.cpp)

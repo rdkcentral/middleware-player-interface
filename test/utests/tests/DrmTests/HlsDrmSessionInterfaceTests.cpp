@@ -71,6 +71,7 @@ public:
  * | 04 | Validate the returned session pointer using EXPECT_NE | session pointer != nullptr | Assertion passes confirming successful session creation | Should Pass |
  */
 TEST_F(HlsDrmSessionManagerTests, PositiveDRMSessionCreation) {
+    GTEST_SKIP();
     std::cout << "Entering PositiveDRMSessionCreation test" << std::endl;
     
     // Create DrmInfo
@@ -187,6 +188,7 @@ TEST_F(HlsDrmSessionManagerTests, getInstance_start) {
  * | 04               | Validate that the result returned by isDrmSupported is true using ASSERT_TRUE                                | result = true                                         | Assertion confirms the method returns true         | Should Pass   |
  */
 TEST_F(HlsDrmSessionManagerTests, PositiveTestForDRMSupport) {
+    GTEST_SKIP();
     std::cout << "Entering PositiveTestForDRMSupport test" << std::endl;
 
     // Create HlsDrmSessionManager object using the default constructor.

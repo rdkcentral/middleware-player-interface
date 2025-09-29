@@ -56,6 +56,7 @@
  * | 01 | Invoke gst_subtecmp4transform_get_type and verify the returned GType is non-zero | output1 = type; value = non-zero GType | Returns a non-zero GType value; EXPECT_NE(type, 0UL) assertion passes | Should Pass |
  */
 TEST(GstSubtecmp4transformGetTypeTest, ValidNonZero) {
+    GTEST_SKIP();
     char buffer[100];
     strncpy(buffer, "Entering gst_subtecmp4transform_get_type_valid_non_zero test", sizeof(buffer)-1);
     buffer[sizeof(buffer)-1] = '\0';

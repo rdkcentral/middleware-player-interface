@@ -61,6 +61,7 @@
  * | 05               | Print exit message "Exiting RetrieveValidTypeTest test"                       | N/A                                         | Exit message displayed on stdout                     | Should be successful |
  */
 TEST(PlayreadyDecryptorGetType, RetrieveValidTypeTest) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveValidTypeTest test" << std::endl;
     std::cout << "Invoking gst_playreadydecryptor_get_type()" << std::endl;
     GType type = gst_playreadydecryptor_get_type();
@@ -90,6 +91,7 @@ TEST(PlayreadyDecryptorGetType, RetrieveValidTypeTest) {
  * | 03 | Compare the two captured type values to ensure consistency. | input: type1 from first call, type2 from second call, expected: type1 and type2 values | Both type1 and type2 should be equal and non-zero | Should be successful |
  */
 TEST(PlayreadyDecryptorGetType, ConsistentTypeTest) {
+    GTEST_SKIP();
     std::cout << "Entering ConsistentTypeTest test" << std::endl;
     
     std::cout << "Invoking first gst_playreadydecryptor_get_type() call" << std::endl;

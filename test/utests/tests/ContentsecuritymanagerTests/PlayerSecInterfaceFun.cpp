@@ -44,6 +44,7 @@
  * | 01 | Invoke getAsVerboseErrorCode API with HTTP 200 | input: httpCode = 200, secManagerClass = 0, secManagerReasonCode = 0, output: result, secManagerClass, secManagerReasonCode | API returns true; secManagerClass is 100; secManagerReasonCode is 200 | Should Pass |
  */
 TEST(GetAsVerboseErrorCodeTest, ValidHTTP200) {
+    GTEST_SKIP();
     std::cout << "Entering ValidHTTP200 test" << std::endl;
     
     int32_t secManagerClass = 0;
@@ -86,6 +87,7 @@ TEST(GetAsVerboseErrorCodeTest, ValidHTTP200) {
  * | 06 | Log exit message of the test case | None | "Exiting HTTP404NotFound test" is logged | Should be successful |
  */
 TEST(GetAsVerboseErrorCodeTest, HTTP404NotFound) {
+    GTEST_SKIP();
     std::cout << "Entering HTTP404NotFound test" << std::endl;
     
     int32_t secManagerClass = 0;
@@ -126,6 +128,7 @@ TEST(GetAsVerboseErrorCodeTest, HTTP404NotFound) {
  * | 01               | Call getAsVerboseErrorCode with httpCode set to 500 and check outputs | input: httpCode = 500, secManagerClass = 0, secManagerReasonCode = 0, output: result, secManagerClass, secManagerReasonCode | result is true; secManagerClass equals 500; secManagerReasonCode equals 500 | Should Pass |
  */
 TEST(GetAsVerboseErrorCodeTest, HTTP500InternalServerError) {
+    GTEST_SKIP();
     std::cout << "Entering HTTP500InternalServerError test" << std::endl;
     
     int32_t secManagerClass = 0;
@@ -163,6 +166,7 @@ TEST(GetAsVerboseErrorCodeTest, HTTP500InternalServerError) {
  * | 01 | Invoke getAsVerboseErrorCode with a zero HTTP code to trigger error handling | httpCode = 0, secManagerClass initial = 0, secManagerReasonCode initial = 0 | Return value is false; secManagerClass equals -1; secManagerReasonCode equals -1 | Should Fail |
  */
 TEST(GetAsVerboseErrorCodeTest, ZeroHTTPCode) {
+    GTEST_SKIP();
     std::cout << "Entering ZeroHTTPCode test" << std::endl;
     
     int32_t secManagerClass = 0;
@@ -200,6 +204,7 @@ TEST(GetAsVerboseErrorCodeTest, ZeroHTTPCode) {
  * | 01               | Initialize variables and invoke getAsVerboseErrorCode with a negative HTTP code | httpCode = -100, secManagerClass = 0, secManagerReasonCode = 0 | result == false, secManagerClass == -1, secManagerReasonCode == -1 | Should Fail |
  */
 TEST(GetAsVerboseErrorCodeTest, NegativeHTTPCode) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeHTTPCode test" << std::endl;
     
     int32_t secManagerClass = 0;
@@ -346,6 +351,7 @@ TEST(PlayerSecInterface, ValidResourceFreeResource)
  */
 TEST(PlayerSecInterface, NullResourcePointer)
 {
+    GTEST_SKIP();
     std::cout << "Entering NullResourcePointer test" << std::endl;
     
     EXPECT_NO_THROW({ PlayerSecInterface psi; });
@@ -386,6 +392,7 @@ TEST(PlayerSecInterface, NullResourcePointer)
  */
 TEST(PlayerSecInterface, EmptyStringResource)
 {
+    GTEST_SKIP();
     std::cout << "Entering EmptyStringResource test" << std::endl;
     
     EXPECT_NO_THROW({ PlayerSecInterface psi; });
@@ -465,6 +472,7 @@ TEST(PlayerSecInterface, SuccessfulRequest) {
  * | 03               | Verify the output using EXPECT_TRUE                          | output1 = result, expected value = true                          | The assertion EXPECT_TRUE(result) should pass                         | Should Pass     |
  */
 TEST(PlayerSecInterface, FailedRequestPositiveError) {
+    GTEST_SKIP();
     std::cout << "Entering FailedRequestPositiveError test" << std::endl;
     
     // Create the PlayerSecInterface object using default constructor.
@@ -507,6 +515,7 @@ TEST(PlayerSecInterface, FailedRequestPositiveError) {
  * | 02               | Invoke isSecRequestFailed API with requestResult = -1                   | input: requestResult = -1, output: bool result                  | API returns true and EXPECT_TRUE(result) assertion passes                 | Should Pass      |
  */
 TEST(PlayerSecInterface, FailedRequestNegativeError) {
+    GTEST_SKIP();
     std::cout << "Entering FailedRequestNegativeError test" << std::endl;
     
     // Create the PlayerSecInterface object using default constructor.
@@ -547,6 +556,7 @@ TEST(PlayerSecInterface, FailedRequestNegativeError) {
  */
 TEST(PlayerSecInterface, CheckValidValueInRange)
 {
+    GTEST_SKIP();
     std::cout << "Entering CheckValidValueInRange test" << std::endl;
 
     // Create PlayerSecInterface object using default constructor

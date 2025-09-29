@@ -34,6 +34,7 @@ include_directories(${PLAYER_ROOT}/vendor)
 include_directories(${PLAYER_ROOT}/vendor/brcm)
 include_directories(${PLAYER_ROOT}/vendor/amlogic)
 include_directories(${PLAYER_ROOT}/vendor/default)
+include_directories(${PLAYER_ROOT}/vendor/realtek)
 
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
@@ -49,14 +50,16 @@ include_directories(${PLAYER_ROOT})
 set(TEST_SOURCES PlayerVendorRun.cpp
 		 AmlogicSocInterfaceFun.cpp
 		 BrcmSocInterfaceFun.cpp
-		 DefaultSocInterfaceFun.cpp)
+		 DefaultSocInterfaceFun.cpp
+     RealtekSocInterfaceFun.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeSocUtils.cpp
 		 ${UTESTS_ROOT}/fakes/FakeGstPlayerTaskPool.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp 
                   ${PLAYER_ROOT}/vendor/amlogic/AmlogicSocInterface.cpp
-                  ${PLAYER_ROOT}/vendor/brcm/BrcmSocInterface.cpp)
+                  ${PLAYER_ROOT}/vendor/brcm/BrcmSocInterface.cpp
+                  ${PLAYER_ROOT}/vendor/realtek/RealtekSocInterface.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}

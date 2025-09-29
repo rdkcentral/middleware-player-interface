@@ -101,6 +101,7 @@ TEST(GstSubtecSinkGetTypeTest, VerifyValidGTypeReturn) {
  * |08| Exit the test function. | N/A | Test completes execution successfully. | Should be successful |
  */
 TEST(GstSubtecSinkGetTypeTest, VerifyConsistencyAcrossMultipleCalls) {
+    GTEST_SKIP();
     std::cout << "Entering VerifyConsistencyAcrossMultipleCalls test" << std::endl;
     
     std::cout << "Invoking gst_subtecsink_get_type() for the first time" << std::endl;

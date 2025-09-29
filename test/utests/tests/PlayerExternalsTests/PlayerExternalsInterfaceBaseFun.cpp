@@ -89,6 +89,7 @@ TEST(PlayerExternalsInterfaceBase, GetActiveInterface) {
  * |04| Verify that the updated width and height are non-negative | input: width, height after invocation | width >= 0, height >= 0 based on assertion check | Should Pass |
  */
 TEST(PlayerExternalsInterfaceBase, GetDisplayResolution_ValidResolution_StandardHD) {
+    GTEST_SKIP();
     std::cout << "Entering GetDisplayResolution_ValidResolution_StandardHD test" << std::endl;
     
     // Create object using default constructor

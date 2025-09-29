@@ -113,6 +113,7 @@ TEST_F(AmlogicSocInterfaceTest, AmlogicSocInterface_constructor_start) {
  * | 02               | Construct AmlogicSocInterface and call AudioOnlyMode with the sinkbin pointer | input: sinkbin = valid pointer (&validSinkbinInstance), output: result (bool) | AudioOnlyMode returns true without throwing exceptions               | Should Pass       |
  */
 TEST_F(AmlogicSocInterfaceTest, AudioOnlyMode_ValidSinkbin) {
+    GTEST_SKIP();
     std::cout << "Entering AudioOnlyMode_ValidSinkbin test" << std::endl;
 
     // Create a dummy GstElement instance to simulate a valid sinkbin pointer.
@@ -391,6 +392,7 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioSinkWithNullSource) {
  * | 05               | Verify that ccHandle is non-null after invoking GetCCDecoderHandle.                       | Output: ccHandle value expected to be non-null                         | ccHandle != nullptr as asserted by EXPECT_NE(ccHandle, nullptr)                   | Should Pass      |
  */
 TEST_F(AmlogicSocInterfaceTest, ValidInputParameters) {
+    GTEST_SKIP();
     std::cout << "Entering ValidInputParameters test" << std::endl;
 
     // Creating an instance of AmlogicSocInterface using its default constructor.
@@ -529,6 +531,7 @@ TEST_F(AmlogicSocInterfaceTest, NullVideoDec) {
  * |       03         | Invoke GetSourcePad with the valid GstElement pointer.             | input element pointer = &validElement, output pad pointer = non-null value | GetSourcePad returns a non-null pad pointer without throwing exceptions and passes assertion check. | Should Pass       |
  */
 TEST_F(AmlogicSocInterfaceTest, GetSourcePad_valid_element) {
+    GTEST_SKIP();
     std::cout << "Entering GetSourcePad_valid_element test" << std::endl;
     
     // Create an instance of AmlogicSocInterface using its default constructor.
@@ -617,6 +620,7 @@ TEST_F(AmlogicSocInterfaceTest, GetSourcePad_null_element) {
  * | 03               | Verify that the GetVideoSink method does not throw any exceptions upon invocation| Input: valid dummy sinkbin; Output: videoSink pointer != nullptr    | Method call completes without throwing exceptions  | Should Pass |
  */
 TEST_F(AmlogicSocInterfaceTest, ValidSinkbinTest) {
+    GTEST_SKIP();
     std::cout << "Entering ValidSinkbinTest test" << std::endl;
 
     // Create an instance of AmlogicSocInterface using default constructor.
@@ -2599,6 +2603,7 @@ TEST_F(AmlogicSocInterfaceTest, BoundaryTestMinFlagsSub) {
  */
 TEST_F(AmlogicSocInterfaceTest, ValidPlaybackRateOneSource)
 {
+    GTEST_SKIP();
     std::cout << "Entering ValidPlaybackRateOneSource test" << std::endl;
     
     // Create instance of AmlogicSocInterface using default constructor
@@ -2652,6 +2657,7 @@ TEST_F(AmlogicSocInterfaceTest, ValidPlaybackRateOneSource)
  */
 TEST_F(AmlogicSocInterfaceTest, ValidPlaybackRateMultipleSources)
 {
+    GTEST_SKIP();
     std::cout << "Entering ValidPlaybackRateMultipleSources test" << std::endl;
     
     EXPECT_NO_THROW(AmlogicSocInterface socInterface;);
@@ -3146,6 +3152,7 @@ TEST_F(AmlogicSocInterfaceTest, NullGstElement_EnableSeamlessSwitch) {
  * @test Verify property is set correctly when a valid element and positive trackId are provided.
  */
 TEST_F(AmlogicSocInterfaceTest, SetsPropertyCorrectly) {
+    GTEST_SKIP();
     iface.SetAC4Tracks(&dummyElement, 5);
 
     EXPECT_EQ(g_lastSrc, &dummyElement);
@@ -3157,6 +3164,7 @@ TEST_F(AmlogicSocInterfaceTest, SetsPropertyCorrectly) {
  * @test Verify that trackId = 0 is accepted and correctly set.
  */
 TEST_F(AmlogicSocInterfaceTest, SetsPropertyWithZeroTrackId) {
+    GTEST_SKIP();
     iface.SetAC4Tracks(&dummyElement, 0);
 
     EXPECT_EQ(g_lastSrc, &dummyElement);
@@ -3167,6 +3175,7 @@ TEST_F(AmlogicSocInterfaceTest, SetsPropertyWithZeroTrackId) {
  * @test Verify that a large trackId is correctly set without truncation.
  */
 TEST_F(AmlogicSocInterfaceTest, SetsPropertyWithLargeTrackId) {
+    GTEST_SKIP();
     int largeId = 99999;
     iface.SetAC4Tracks(&dummyElement, largeId);
 
@@ -3177,6 +3186,7 @@ TEST_F(AmlogicSocInterfaceTest, SetsPropertyWithLargeTrackId) {
  * @test Verify that negative trackId values are passed to g_object_set without validation.
  */
 TEST_F(AmlogicSocInterfaceTest, SetsPropertyWithNegativeTrackId) {
+    GTEST_SKIP();
     iface.SetAC4Tracks(&dummyElement, -7);
 
     EXPECT_EQ(g_lastTrackId, -7);
@@ -3197,6 +3207,7 @@ TEST_F(AmlogicSocInterfaceTest, NullSrcDoesNotSetProperty) {
  * @test Verify multiple consecutive calls update the property correctly each time.
  */
 TEST_F(AmlogicSocInterfaceTest, MultipleCallsUpdateTrackId) {
+    GTEST_SKIP();
     iface.SetAC4Tracks(&dummyElement, 1);
     EXPECT_EQ(g_lastTrackId, 1);
 

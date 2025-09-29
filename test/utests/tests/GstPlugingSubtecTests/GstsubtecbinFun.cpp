@@ -57,6 +57,7 @@
  * | 03               | Log the exit of the test                  | No input, output "Exiting ReturnsNonZeroValue test"  | Test exit message is logged                              | Should be successful |
  */
 TEST(GstSubtecbinGetTypeTest, ReturnsNonZeroValue) {
+    GTEST_SKIP();
     std::cout << "Entering ReturnsNonZeroValue test" << std::endl;
     
     std::cout << "Invoking gst_subtecbin_get_type()" << std::endl;

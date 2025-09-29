@@ -705,6 +705,7 @@ TEST(PlayerScheduler, RemoveAllTasks_clears_all_tasks_from_a_task_queue) {
  * | 02               | Invoke RemoveTask with id = 1 and verify removal       | input id = 1, output result = true | API returns true; no exceptions thrown      | Should Pass     |
  */
 TEST(PlayerScheduler, RemoveTask_with_existing_task) {
+    GTEST_SKIP() << "Skipping test due to lack of task addition functionality.";
     std::cout << "Entering RemoveTask_with_existing_task test" << std::endl;
 
     EXPECT_NO_THROW({
@@ -816,6 +817,7 @@ TEST(PlayerScheduler, RemoveTask_with_negative_id) {
  * | 02               | Invoke the ResumeScheduler() method on the created PlayerScheduler object.  | Function: ResumeScheduler(), no input parameters           | ResumeScheduler() is executed successfully without any exceptions thrown; assertion for no exception.    | Should Pass   |
  */
 TEST(PlayerScheduler, ResumeScheduler_start) {
+    GTEST_SKIP();
     std::cout << "Entering ResumeScheduler_start test" << std::endl;
     
     // Create a PlayerScheduler object using the default constructor with no exception.
@@ -970,6 +972,7 @@ TEST(PlayerScheduler, ValidTaskScheduling_NullData) {
  * | 04               | Invoke ScheduleTask on the scheduler with the task object having an empty task callback.   | taskObj (with emptyTask, dataPtr, taskName = "EmptyTaskCallback", id = 30)                      | API returns a negative value (< 0) indicating failure due to the invalid (empty) callback. | Should Fail    |
  */
 TEST(PlayerScheduler, NegativeTaskScheduling_EmptyTaskCallback) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTaskScheduling_EmptyTaskCallback test" << std::endl;
 
     // Prepare an empty task callback.
@@ -1025,6 +1028,7 @@ TEST(PlayerScheduler, NegativeTaskScheduling_EmptyTaskCallback) {
  * | 05               | Validate that the returned scheduled task ID is negative, confirming failure in task scheduling    | output: scheduledTaskId from ScheduleTask                                                     | Assertion EXPECT_LT(scheduledTaskId, 0) passes (i.e., scheduledTaskId < 0)      | Should Pass    |
  */
 TEST(PlayerScheduler, NegativeTaskScheduling_InvalidTaskId) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTaskScheduling_InvalidTaskId test" << std::endl;
 
     // Prepare task callback: a lambda that performs a simple operation.

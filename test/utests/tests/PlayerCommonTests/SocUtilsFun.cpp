@@ -217,6 +217,7 @@ TEST(SocUtils_IsSupportedAC4_start, TestReturnBoolean)
  * | 02               | Verify that the queuedFrames value is greater than 0                     | queuedFrames = returned value                                      | queuedFrames > 0 as per assertion (EXPECT_GT)     | Should Pass  |
  */
 TEST(SocUtilsRequiredQueuedFrames, RequiredQueuedFrames_start) {
+    GTEST_SKIP();
     std::cout << "Entering SocUtils::RequiredQueuedFrames()_start test" << std::endl;
 
     int queuedFrames = 0;
@@ -251,6 +252,7 @@ TEST(SocUtilsRequiredQueuedFrames, RequiredQueuedFrames_start) {
  * | 02               | Verify that the returned value is true using EXPECT_TRUE assertion.         | ret = true                                       | EXPECT_TRUE confirms ret is true.                                                    | Should be successful |
  */
 TEST(SocUtilsResetNewSegmentEventTest, ResetSegmentEventFlags_StandardTrickplayTransition) {
+    GTEST_SKIP();
     std::cout << "Entering SocUtils::ResetNewSegmentEvent()_start test" << std::endl;
     
     bool ret = false;

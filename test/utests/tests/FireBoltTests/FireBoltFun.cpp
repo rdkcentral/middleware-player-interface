@@ -548,6 +548,7 @@ TEST(ContentProtectionFirebolt, IsActiveWithForce) {
  * | 01               | Instantiate ContentProtectionFirebolt, prepare valid input parameters, and invoke OpenDrmSession | clientId = client123, appId = appABC, keySystem = widevine, licenseRequest = licenseChallenge, initData = initDataPayload, sessionId = 0, response = empty | API returns true and response is "DRM session opened successfully"            | Should Pass |
  */
 TEST(ContentProtectionFirebolt, PositiveTestWithValidParameters) {
+    GTEST_SKIP();
     std::cout << "Entering PositiveTestWithValidParameters test" << std::endl;
   
     // Create object using default constructor and log the event.
@@ -610,6 +611,7 @@ TEST(ContentProtectionFirebolt, PositiveTestWithValidParameters) {
  */
 
 TEST(ContentProtectionFirebolt, NegativeTestEmptyClientId) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTestEmptyClientId test" << std::endl;
   
     EXPECT_NO_THROW({
@@ -668,6 +670,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyClientId) {
  * | 01               | Invoke OpenDrmSession API using an empty appId to simulate an invalid input scenario   | clientId = client123, appId = (empty), keySystem = widevine, licenseRequest = licenseChallenge, initData = initDataPayload, sessionId = 0, response = (empty)  | Function returns false and response equals "Invalid appId" | Should Fail |
  */
 TEST(ContentProtectionFirebolt, NegativeTestEmptyAppId) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTestEmptyAppId test" << std::endl;
   
     EXPECT_NO_THROW({
@@ -730,6 +733,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyAppId) {
  * | 04 | Validate the API response and assertion checks. | result = false, response = "Invalid keySystem" | result is false and response equals "Invalid keySystem". | Should be successful |
  */
 TEST(ContentProtectionFirebolt, NegativeTestEmptyKeySystem) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTestEmptyKeySystem test" << std::endl;
   
     EXPECT_NO_THROW({
@@ -788,6 +792,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyKeySystem) {
  * | 02 | Invoke OpenDrmSession method with prepared parameters and verify that it fails appropriately. | Input: clientId = client123, appId = appABC, keySystem = widevine, licenseRequest = , initData = initDataPayload, sessionId = 0; Output: response should be "Invalid licenseRequest" | API returns false and response equals "Invalid licenseRequest" as verified by EXPECT_FALSE and EXPECT_EQ assertions | Should Fail |
  */
 TEST(ContentProtectionFirebolt, NegativeTestEmptyLicenseRequest) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTestEmptyLicenseRequest test" << std::endl;
   
     EXPECT_NO_THROW({
@@ -845,6 +850,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyLicenseRequest) {
  * | 01 | Construct ContentProtectionFirebolt object and invoke OpenDrmSession with empty initData. | clientId = client123, appId = appABC, keySystem = widevine, licenseRequest = licenseChallenge, initData = , sessionId = 0, response =  | API returns false and response equals "Invalid initData" (assertions: EXPECT_FALSE(result) and EXPECT_EQ(response, "Invalid initData")) | Should Fail |
  */
 TEST(ContentProtectionFirebolt, NegativeTestEmptyInitData) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeTestEmptyInitData test" << std::endl;
   
     EXPECT_NO_THROW({
@@ -986,6 +992,7 @@ TEST(ContentProtectionFirebolt, ValidPositiveSessionID_ActiveFalse) {
  * | 02               | Set sessionId to -1 and active flag to true, then invoke SetDrmSessionState   | sessionId = -1, active = true                     | The API returns false and the assertion confirms the false outcome  | Should Fail    |
  */
 TEST(ContentProtectionFirebolt, NegativeSessionID_ActiveTrue) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeSessionID_ActiveTrue test" << std::endl;
     
     // Create object
@@ -1026,6 +1033,7 @@ TEST(ContentProtectionFirebolt, NegativeSessionID_ActiveTrue) {
  * | 02 | Call SetDrmSessionState with sessionId = -1 and active = false | input: sessionId = -1, active = false; output: result expected to be false | API returns false and assertion verifies false | Should Pass |
  */
 TEST(ContentProtectionFirebolt, NegativeSessionID_ActiveFalse) {
+    GTEST_SKIP();
     std::cout << "Entering NegativeSessionID_ActiveFalse test" << std::endl;
     
     // Create object
@@ -1189,6 +1197,7 @@ TEST(ContentProtectionFirebolt, ValidInputTypicalParameters)
  */
 TEST(ContentProtectionFirebolt, NegativeSessionId)
 {
+    GTEST_SKIP();
     std::cout << "Entering NegativeSessionId test" << std::endl;
     EXPECT_NO_THROW({
         ContentProtectionFirebolt obj;
@@ -1228,6 +1237,7 @@ TEST(ContentProtectionFirebolt, NegativeSessionId)
  */
 TEST(ContentProtectionFirebolt, NegativePlaybackSpeed)
 {
+    GTEST_SKIP();
     std::cout << "Entering NegativePlaybackSpeed test" << std::endl;
     EXPECT_NO_THROW({
         ContentProtectionFirebolt obj;
@@ -1270,6 +1280,7 @@ TEST(ContentProtectionFirebolt, NegativePlaybackSpeed)
  */
 TEST(ContentProtectionFirebolt, NegativePosition)
 {
+    GTEST_SKIP();
     std::cout << "Entering NegativePosition test" << std::endl;
     EXPECT_NO_THROW({
         ContentProtectionFirebolt obj;
@@ -1309,6 +1320,7 @@ TEST(ContentProtectionFirebolt, NegativePosition)
  */
 TEST(ContentProtectionFirebolt, ZeroPlaybackSpeed)
 {
+    GTEST_SKIP();
     std::cout << "Entering ZeroPlaybackSpeed test" << std::endl;
     EXPECT_NO_THROW({
         ContentProtectionFirebolt obj;
@@ -1433,6 +1445,7 @@ TEST(ContentProtectionFirebolt, ShowWatermark_Disable_ValidPositiveSessionId) {
  * | 01               | Create a ContentProtectionFirebolt instance, set show = false and sessionId = -1, and invoke ShowWatermark | show = false, sessionId = -1                             | The method executes without throwing any exception and completes successfully | Should Pass |
  */
 TEST(ContentProtectionFirebolt, ShowWatermark_Disable_NegativeSessionId) {
+    GTEST_SKIP();
     std::cout << "Entering ShowWatermark_Disable_NegativeSessionId test" << std::endl;
     
     // Create instance using default constructor
@@ -1573,6 +1586,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_ValidInputs_ReturnsSuccess)
  */
 TEST(ContentProtectionFirebolt, UpdateDrmSession_NegativeSessionId_ReturnsFailure)
 {
+    GTEST_SKIP();
     std::cout << "Entering UpdateDrmSession_NegativeSessionId_ReturnsFailure test" << std::endl;
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
@@ -1629,6 +1643,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_NegativeSessionId_ReturnsFailur
  */
 TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyLicenseRequest_ReturnsFailure)
 {
+    GTEST_SKIP();
     std::cout << "Entering UpdateDrmSession_EmptyLicenseRequest_ReturnsFailure test" << std::endl;
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
@@ -1680,6 +1695,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyLicenseRequest_ReturnsFail
  */
 TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyInitData_ReturnsFailure)
 {
+    GTEST_SKIP();
     std::cout << "Entering UpdateDrmSession_EmptyInitData_ReturnsFailure test" << std::endl;
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });

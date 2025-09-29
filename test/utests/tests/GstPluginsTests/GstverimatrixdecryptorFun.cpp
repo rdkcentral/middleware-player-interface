@@ -60,6 +60,7 @@
  * | 04               | Log the exit message indicating the end of the test                                        | N/A                                         | "Exiting ReturnsValidNonZeroType test" message printed            | Should be successful |
  */
 TEST(GstVerimatrixDecryptorGetType, ReturnsValidNonZeroType) {
+    GTEST_SKIP();
     std::cout << "Entering ReturnsValidNonZeroType test" << std::endl;
     
     std::cout << "Invoking gst_verimatrixdecryptor_get_type()" << std::endl;

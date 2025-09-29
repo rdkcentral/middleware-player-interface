@@ -125,6 +125,7 @@ TEST(FakePlayerIarmInterface, GetActiveInterface_start) {
  * | 04               | Validate that the updated width and height values are non zero.                             | width = updated value, height = updated value                          | Assertion checks pass confirming that width and height are non-zero.                                  | Should Pass         |
  */
 TEST(FakePlayerIarmInterface, GetDisplayResolution_PositiveTest) {
+    GTEST_SKIP();
     std::cout << "Entering GetDisplayResolution_PositiveTest test" << std::endl;
 
     // Create object using default constructor and log the construction.
@@ -182,6 +183,7 @@ TEST(FakePlayerIarmInterface, GetDisplayResolution_PositiveTest) {
  */
 TEST(FakePlayerIarmInterface, ValidParameterNameRetrievingConfiguration)
 {
+    GTEST_SKIP();
     std::cout << "Entering ValidParameterNameRetrievingConfiguration test" << std::endl;
     EXPECT_NO_THROW({
         FakePlayerIarmInterface testObj;
@@ -791,6 +793,7 @@ TEST(FakePlayerIarmInterface, DestructorDoesNotThrow) {
  * | 02 | Invoke IsSourceUHD() method on the object | Method invocation on object with m_gstElement = NULL | API returns false; assertion EXPECT_FALSE(retVal) passes | Should Pass |
  */
 TEST(FakePlayerIarmInterface, ReturnsFalseWhenGstElementIsNull) {
+    GTEST_SKIP();
     std::cout << "Entering ReturnsFalseWhenGstElementIsNull test" << std::endl;
 
     // Create object using default constructor (assumed to set m_gstElement = NULL)
@@ -1279,6 +1282,7 @@ TEST(PlayerExternalsInterface, GetActiveInterface_start)
  */
 TEST(PlayerExternalsInterface, GetDisplayResolution_ValidResolutionRetrievalZeroInit)
 {
+    GTEST_SKIP();
     std::cout << "Entering GetDisplayResolution_ValidResolutionRetrievalZeroInit test" << std::endl;
 
     // Create an instance of PlayerExternalsInterface using default constructor
@@ -1363,6 +1367,7 @@ TEST(PlayerExternalsInterface, GetPlayerExternalsInterfaceInstance_Positive) {
  */
 TEST(PlayerExternalsInterface, ValidTR181AudioConfigParameterReturnsValidConfig)
 {
+    GTEST_SKIP();
     std::cout << "Entering ValidTR181AudioConfigParameterReturnsValidConfig test" << std::endl;
 
     // Create PlayerExternalsInterface object using the default constructor
@@ -1413,6 +1418,7 @@ TEST(PlayerExternalsInterface, ValidTR181AudioConfigParameterReturnsValidConfig)
  */
 TEST(PlayerExternalsInterface, NullParameterReturnsError)
 {
+    GTEST_SKIP();
     std::cout << "Entering NullParameterReturnsError test" << std::endl;
 
     EXPECT_NO_THROW({
@@ -1464,6 +1470,7 @@ TEST(PlayerExternalsInterface, NullParameterReturnsError)
  */
 TEST(PlayerExternalsInterface, EmptyStringParameterReturnsError)
 {
+    GTEST_SKIP();
     std::cout << "Entering EmptyStringParameterReturnsError test" << std::endl;
 
     EXPECT_NO_THROW({

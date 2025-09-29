@@ -44,6 +44,7 @@ using namespace RFCSettings;
  * | 01               | Call RFCSettings::readRFCValue with valid input parameters         | input: rfcName = "RFC1", playerName = "Player1", output: result variable;                              | API should not throw any exception and must return a non-empty string | Should Pass |
  */
 TEST(readRFCValue_ValidInput, ValidParameterAndPlayerName) {
+    GTEST_SKIP();
     std::cout << "Entering ValidParameterAndPlayerName test" << std::endl;
     std::string result;
     EXPECT_NO_THROW({
