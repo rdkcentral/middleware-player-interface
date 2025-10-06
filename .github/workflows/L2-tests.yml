@@ -1,14 +1,17 @@
 name: L2 tests
 
-on:
-  pull_request:
-    branches: [ develop ]
-    paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
+# Uncomment below block to execute this workflow on Github Environment
+# on:
+#   pull_request:
+#     branches: [ develop ]
+#     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
+
+on: [act] # This workflow triggers when using the 'act' tool locally
 
 jobs:
   execute-L2-tests:
     name: Runs all L2 tests
-    runs-on: ubuntu-latest
+    runs-on: comcast-ubuntu-latest
 
     steps:
       - name: Checkout code
