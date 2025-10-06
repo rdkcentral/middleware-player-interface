@@ -19,7 +19,7 @@
 
 #include "PlayerSocInterfaceImpl.h"
 
-#define REQUIRED_QUEUED_FRAMES_DEFAULT (5+1)
+#define REQUIRED_QUEUED_FRAMES_REALTEK (3+1)
 
 /**
  * @brief Checks if the input string starts with the given prefix.
@@ -58,15 +58,18 @@ void PlayerSocInterfaceImpl::SetWesterosSinkState(bool status)
 
 bool PlayerSocInterfaceImpl::IsPlaybackQualityFromSink()
 {
-	return false;
+	return true;
 }
 
 void PlayerSocInterfaceImpl::SetVideoBufferSize(GstElement *sink, int size)
 {
+	g_object_set(sink, "buffer-size", (guint64)size, NULL);
+	g_object_set(sink, "buffer-duration", 3000000000, NULL); //3000000000(ns), 3s
 }
 
 void PlayerSocInterfaceImpl::SetSinkAsync(GstElement *sink, gboolean status)
 {
+	gst_base_sink_set_async_enabled(GST_BASE_SINK(sink), status);
 }
 
 bool PlayerSocInterfaceImpl::UseAppSrc()
@@ -86,17 +89,17 @@ bool PlayerSocInterfaceImpl::UseWesterosSink()
 
 bool PlayerSocInterfaceImpl::IsAudioFragmentSyncSupported()
 {
-	return false;
+	return true;
 }
 
 bool PlayerSocInterfaceImpl::EnableLiveLatencyCorrection()
 {
-	return false;
+	return true;
 }
 
 int PlayerSocInterfaceImpl::RequiredQueuedFrames()
 {
-	return REQUIRED_QUEUED_FRAMES_DEFAULT;
+	return REQUIRED_QUEUED_FRAMES_REALTEK;
 }
 
 bool PlayerSocInterfaceImpl::EnablePTSRestamp()
@@ -106,84 +109,62 @@ bool PlayerSocInterfaceImpl::EnablePTSRestamp()
 
 bool PlayerSocInterfaceImpl::IsFirstTuneWithWesteros()
 {
-	return false;
+	return true;
 }
 
 void PlayerSocInterfaceImpl::SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume)
 {
-	/* Avoid mute property setting for AMLOGIC as use of "mute" property on pipeline is impacting all other players */
-	/* Using "stream-volume" property of audio-sink for setting volume and mute for AMLOGIC platform */
-	volume = "stream-volume";
-	isSinkBinVolume = false;
+	volume = "volume";
+	mute = "mute";
+	isSinkBinVolume = true;		/*volume/mute property should be applied on sinkbin*/
 }
 
 void PlayerSocInterfaceImpl::SetSeamlessSwitch(GstElement* object,  gboolean value)
 {
-	LOG_PIS("AMLOGIC:setting seamless property");
-	g_object_set(sink, "seamless-switch", value, NULL);
 }
 
 bool PlayerSocInterfaceImpl::AudioOnlyMode(GstElement *sinkbin)
 {
-	gint n_audio;
-	bool firstFrameReceived = false;
-	g_object_get(sinkbin, "n-audio", &n_audio, NULL);
-
-	if(n_audio > 0)
-	{
-		firstFrameReceived = true;
-	}
-	return firstFrameReceived;
+	return false;
 }
 
 bool PlayerSocInterfaceImpl::SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec)
 {
-	bool status = false;
-	/*for gst version 1.18.0 we need to apply rate into audio/video source pad*/
-	for (GstElement* source : sources)
+	if(!pipeline)
 	{
-		if(source)
-		{
-			GstPad* sourceEleSrcPad = gst_element_get_static_pad(GST_ELEMENT(source), "src");
-			if(!sourceEleSrcPad)
-			{
-				LOG_PIS("failed to get static pad retrying");
-				continue;
-			}
-			/*
-			 gboolean ret = gst_pad_send_event(sourceEleSrcPad, gst_event_new_seek (rate, GST_FORMAT_TIME,
-			 static_cast<GstSeekFlags>(GST_SEEK_FLAG_INSTANT_RATE_CHANGE),
-			 GST_SEEK_TYPE_NONE,0, GST_SEEK_TYPE_NONE, 0));
-			 gst_object_unref(sourceEleSrcPad);
-			 */
-			GstEvent* seek_event = gst_event_new_seek(rate, GST_FORMAT_TIME, static_cast<GstSeekFlags>(GST_SEEK_FLAG_INSTANT_RATE_CHANGE), GST_SEEK_TYPE_NONE, 0, GST_SEEK_TYPE_NONE, 0);
-			if (!seek_event)
-			{
-				LOG_PIS("Failed to create seek event");
-				gst_object_unref(sourceEleSrcPad);
-				continue;
-			}
-			gboolean ret = gst_pad_send_event(sourceEleSrcPad, seek_event);
-			gst_object_unref(sourceEleSrcPad);
-			if(ret)
-			{
-				status = true;
-			}
-			else
-			{
-				LOG_PIS("Vendor: failed to send the rate event to src pad");
-			}
-		}
+		LOG_PIS("Failed to set playback rate");
+		return false;
+	}
+	LOG_PIS("=send custom-instant-rate-change : %f ...", rate);
+	GstStructure *structure = gst_structure_new("custom-instant-rate-change", "rate", G_TYPE_DOUBLE, rate, NULL);
+	if(!structure)
+	{
+		LOG_PIS("Failed to create custom-instant-rate-change structure");
+		return false;
+	}
+	/* The above statement creates a new GstStructure with the name
+	   'custom-instant-rate-change' that has a member variable
+	   'rate' of G_TYPE_DOUBLE and a value of rate i.e. second last parameter */
+	GstEvent * rate_event = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_OOB, structure);
+	if (!rate_event)
+	{
+		LOG_PIS("Failed to create rate_event");
+		gst_structure_free (structure);
+		return false;
+	}
+	int ret = gst_element_send_event(pipeline, rate_event );
+	if(!ret)
+	{
+		LOG_PIS("Rate change failed : %g [gst_element_send_event]", rate);
+		return false;
 	}
 	LOG_PIS("Current rate: %g", rate);
-
-	return status;
+	return true;
 }
 
 GstPad* PlayerSocInterfaceImpl::GetSourcePad(GstElement* element)
 {
-	GstPad* sourceEleSrcPad = gst_element_get_static_pad(source, "src");
-	return sourceEleSrcPad;  // Return the pad, or NULL if not found
+	return NULL;  // Return the pad, or NULL if not found
 }
 
 GstElement* PlayerSocInterfaceImpl::GetVideoSink(GstElement* sinkbin)
@@ -217,7 +198,7 @@ void PlayerSocInterfaceImpl::SetAC4Tracks(GstElement *src, int trackId)
 
 bool PlayerSocInterfaceImpl::SetPlatformPlaybackRate()
 {
-	return false;
+	return true;
 }
 
 bool PlayerSocInterfaceImpl::SetRateCorrection()
@@ -227,31 +208,20 @@ bool PlayerSocInterfaceImpl::SetRateCorrection()
 
 bool PlayerSocInterfaceImpl::IsVideoSink(const char* name, bool isRialto)
 {
-	if (name == nullptr)
-	{
+	if(name)
+		return (StartsWith(name, "westerossink") || StartsWith(name, "rtkv1sink") || (isRialto && StartsWith(name, "rialtomsevideosink") == true));
+	else
 		return false;
-	}
-
-	// Check for Westeros sink
-	if (mUsingWesterosSink && StartsWith(name, "westerossink"))
-	{
-		return true;
-	}
-
-	// Check for Rialto sink
-	if (isRialto && StartsWith(name, "rialtomsevideosink"))
-	{
-		return true;
-	}
-
-	return false;
 }
 
 bool PlayerSocInterfaceImpl::IsAudioSinkOrAudioDecoder(const char* name, bool isRialto)
 {
 	if(name)
 	{
-		return StartsWith(name, "amlhalasink");
+		return (StartsWith(name, "rtkaudiosink")
+				|| StartsWith(name, "alsasink")
+				|| StartsWith(name, "fakesink")
+				|| (isRialto && StartsWith(name, "rialtomseaudiosink") == true));
 	}
 	else
 	{
@@ -263,16 +233,10 @@ bool PlayerSocInterfaceImpl::IsVideoDecoder(const char* name, bool isRialto)
 {
 	if(name)
 	{
-		if(mUsingWesterosSink)
-		{
-			return StartsWith(name, "westerossink");
-		}
-
-		else if (isRialto)
-		{
-			return StartsWith(name, "rialtomsevideosink");
-		}
+		return (StartsWith(name, "omxwmvdec") || StartsWith(name, "omxh26")
+				|| StartsWith(name, "omxav1dec") || StartsWith(name, "omxvp") || StartsWith(name, "omxmpeg"));
 	}
+	
 	return false;
 }
 
@@ -286,16 +250,15 @@ bool PlayerSocInterfaceImpl::ConfigureAudioSink(GstElement **audio_sink, GstObje
 
 	bool status = false;
 	const char* srcName = GST_OBJECT_NAME(src);
-	if (srcName && StartsWith(srcName, "amlhalasink"))
+
+	if (srcName && (StartsWith(srcName, "rtkaudiosink")
+				|| StartsWith(srcName, "alsasink")
+				|| StartsWith(srcName, "fakesink")))
 	{
 		gst_object_replace(reinterpret_cast<GstObject **>(audio_sink), src);
-
-		if (*audio_sink)  // Ensure audio_sink was set correctly
-		{
-			g_object_set(*audio_sink, "disable-xrun", TRUE, NULL);
-			status = true;
-		}
+		status = true;
 	}
+
 	return status;
 }
 
@@ -304,7 +267,7 @@ bool PlayerSocInterfaceImpl::IsAudioOrVideoDecoder(const char* name, bool isRial
 	bool AudioOrVideoDecoder = false;
 	if(name)
 	{
-		if(mUsingWesterosSink && StartsWith(name, "westerossink"))
+		if(StartsWith(name, "omx"))
 		{
 			AudioOrVideoDecoder = true;
 		}
@@ -318,78 +281,101 @@ bool PlayerSocInterfaceImpl::IsAudioOrVideoDecoder(const char* name, bool isRial
 
 bool PlayerSocInterfaceImpl::DisableAsyncAudio(GstElement *audio_sink, int rate, bool isSeeking)
 {
-	return false;
+	bool bAsyncModify = false;
+	if (audio_sink)
+	{
+		if (rate > 1 || rate < 0 || isSeeking)
+		{
+			LOG_PIS("Disable async for audio stream at trickplay");
+			if (gst_base_sink_is_async_enabled(GST_BASE_SINK(audio_sink)) == TRUE)
+			{
+				gst_base_sink_set_async_enabled(GST_BASE_SINK(audio_sink), FALSE);
+				bAsyncModify = true;
+			}
+		}
+	}
+	return bAsyncModify;
 }
 
 void PlayerSocInterfaceImpl::GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec)
 {
-	if (video_dec)
-	{
-		g_object_get(video_dec, "videodecoder", dec_handle, NULL);
-	}
+	*dec_handle = video_dec; // Realtek directly returns the decoder element
 }
 
 bool PlayerSocInterfaceImpl::ResetTrickUTC()
 {
-	return false;
+	return true;
 }
 
 long long PlayerSocInterfaceImpl::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
 {
 	gint64 currentPTS = 0;
-	if(video_dec)
+	GstElement *element = nullptr;
+	if(video_sink)
 	{
-		g_object_get(video_dec, "video-pts", &currentPTS, NULL);
-		if(!isWesteros)
-		{
-			currentPTS *= 2;
-		}
+		element = video_sink;
+	}
+
+	if (element)
+	{
+		g_object_get(element, "video-pts", &currentPTS, NULL);	/* Gets the 'video-pts' from the element into the currentPTS */
 	}
 	return (long long)currentPTS;
 }
 
 bool PlayerSocInterfaceImpl::NotifyVideoFirstFrame()
 {
-	return false;
+	return true;
 }
 
 void PlayerSocInterfaceImpl::SetDecodeError(GstObject* src)
 {
-	if(src)
-	{
-		g_object_set(src, "report_decode_errors", TRUE, NULL);
-	}
 }
 
 void PlayerSocInterfaceImpl::SetFreerunThreshold(GstObject* src)
 {
-
+	if(src)
+	{
+		g_object_set(src, "freerun-threshold", DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS, NULL);
+	}
 }
 
 bool PlayerSocInterfaceImpl::RequiredElementSetup()
 {
-	return false;
+	return true;
 }
 
 void PlayerSocInterfaceImpl::SetAudioRoutingProperties(GstElement *source)
 {
-	
+	if ((strstr(GST_ELEMENT_NAME(source), "omxaacdec") != NULL) ||
+			(strstr(GST_ELEMENT_NAME(source), "omxac3dec") != NULL) ||
+			(strstr(GST_ELEMENT_NAME(source), "omxeac3dec") != NULL) ||
+			(strstr(GST_ELEMENT_NAME(source), "omxmp3dec") != NULL) ||
+			(strstr(GST_ELEMENT_NAME(source), "omxvorbisdec") != NULL) ||
+			(strstr(GST_ELEMENT_NAME(source), "omxac4dec") != NULL))
+	{
+		g_object_set(source, "audio-tunnel-mode", FALSE, NULL );
+		LOG_PIS("callback_element_added audio-tunnel-mode FALSE");
+		g_object_set(source, "aux-audio", TRUE, NULL );
+		LOG_PIS("callback_element_added aux-audio TRUE");
+	}	
 }
 
 bool PlayerSocInterfaceImpl::HasFirstAudioFrameCallback()
 {
-	return true;
+	return false;
 }
 
 bool PlayerSocInterfaceImpl::IsVideoSinkHandleErrors()
 {
-	return false;
+	return true;
 }
 
 void PlayerSocInterfaceImpl::SetPlaybackFlags(gint &flags,  bool isSub)
 {
 	flags = PLAY_FLAG_VIDEO | PLAY_FLAG_AUDIO | PLAY_FLAG_NATIVE_AUDIO | PLAY_FLAG_NATIVE_VIDEO;
-	flags = PLAY_FLAG_VIDEO | PLAY_FLAG_AUDIO | PLAY_FLAG_SOFT_VOLUME;
+
+	flags = PLAY_FLAG_VIDEO | PLAY_FLAG_AUDIO |  PLAY_FLAG_NATIVE_AUDIO | PLAY_FLAG_NATIVE_VIDEO | PLAY_FLAG_SOFT_VOLUME;
 	if(isSub)
 	{
 		flags = PLAY_FLAG_TEXT;
@@ -422,24 +408,26 @@ bool PlayerSocInterfaceImpl::IsSimulatorVideoSample()
 
 void PlayerSocInterfaceImpl::SetH264Caps(GstCaps *caps)
 {
+	gst_caps_set_simple (caps, "enable-fastplayback", G_TYPE_STRING, "true", NULL);
 }
 
 void PlayerSocInterfaceImpl::SetHevcCaps(GstCaps *caps)
 {
+	gst_caps_set_simple (caps, "enable-fastplayback", G_TYPE_STRING, "true", NULL);
 }
 
 bool PlayerSocInterfaceImpl::ResetNewSegmentEvent()
 {
-	return true;
+	return false;
 }
 
 bool PlayerSocInterfaceImpl::IsPlatformSegmentReady()
 {
-	return true;
+	return false;
 
 }
 
 bool PlayerSocInterfaceImpl::IsVideoMaster()
 {
-	return false;
+	return true;
 }
