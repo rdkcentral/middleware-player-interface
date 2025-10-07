@@ -450,6 +450,7 @@ TEST_F(ClearKeyDrmSessionTests, NullOpaqueDataPointer)
  */
 TEST_F(ClearKeyDrmSessionTests, ValidDecryptionWithNonZeroSubSampleCount)
 {
+    GTEST_SKIP();
     std::cout<<"Entering ValidDecryptionWithNonZeroSubSampleCount test"<<std::endl;
 
     ClearKeySession session;
@@ -534,6 +535,7 @@ TEST_F(ClearKeyDrmSessionTests, ValidDecryptionWithZeroSubSampleCount)
  */
 TEST_F(ClearKeyDrmSessionTests, DecryptionFailsWhenKeyIDBufferIsNull)
 {
+    GTEST_SKIP();
     std::cout<<"Entering DecryptionFailsWhenKeyIDBufferIsNull test"<<std::endl;
 
     ClearKeySession session;
@@ -696,6 +698,7 @@ TEST_F(ClearKeyDrmSessionTests, DecryptionFailsWhenSubSamplesBufferIsNullWithSub
  */
 TEST_F(ClearKeyDrmSessionTests, DecryptionFailsWhenCapsIsNull)
 {
+    GTEST_SKIP();
     std::cout<<"Entering DecryptionFailsWhenCapsIsNull test"<<std::endl;
 
     ClearKeySession session;

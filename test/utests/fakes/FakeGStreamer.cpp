@@ -876,3 +876,99 @@ GstPad * gst_ghost_pad_new (const gchar * name, GstPad * target)
 	return NULL;
 }
 
+GType gst_app_sink_get_type(void)
+{
+	return false;
+}
+
+GstSample* gst_app_sink_pull_sample(GstAppSink *appsink)
+{
+	return NULL;
+}
+
+void gst_app_sink_set_caps(GstAppSink *appsink, const GstCaps *caps)
+{
+	TRACE_FUNC();	
+}
+
+GstStructure* gst_caps_get_structure(const GstCaps *caps, guint index)
+{
+	TRACE_FUNC();
+	return NULL;
+}
+
+GstBuffer* gst_sample_get_buffer(GstSample *sample)
+{
+	return NULL;
+}
+
+GstCaps* gst_sample_get_caps(GstSample *sample)
+{
+	return NULL;
+}
+
+gboolean gst_structure_get_int(const GstStructure *structure, const gchar *field, gint *value)
+{
+	return false;
+}
+
+void* g_memdup2(const void* mem, size_t n_bytes) {
+    void* p = g_malloc(n_bytes);
+    return memcpy(p, mem, n_bytes);
+}
+
+GstDebugCategory* gst_debug_category_new(const gchar *name,
+                                         GstDebugColorFlags color,
+                                         const gchar *description)
+{
+	return NULL;
+}
+
+void gst_element_class_set_static_metadata(GstElementClass *element_class,
+                                           const gchar *long_name,
+                                           const gchar *klass_name,
+                                           const gchar *description,
+                                           const gchar *author)
+{
+	TRACE_FUNC();
+}
+
+void gst_element_class_add_static_pad_template(GstElementClass *klass,
+                                               const GstStaticPadTemplate *templ)
+{
+	TRACE_FUNC();
+}
+
+GType gst_base_transform_get_type(void)
+{
+	return false;
+}
+
+const gchar* g_intern_static_string(const gchar *string)
+{
+	return string;
+}
+
+gpointer g_type_class_peek_parent(gpointer g_class)
+{
+	return NULL;
+}
+
+GType g_type_register_static_simple(GType parent_type,
+                                    const gchar *type_name,
+                                    guint class_size,
+                                    GClassInitFunc class_init,
+                                    guint instance_size,
+                                    GInstanceInitFunc instance_init,
+                                    GTypeFlags flags)
+{
+	return NULL;
+}
+
+void g_log(const gchar *log_domain,
+           GLogLevelFlags log_level,
+           const gchar *format,
+           ...)
+{
+	TRACE_FUNC();
+}
