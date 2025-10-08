@@ -19,6 +19,9 @@ include(GoogleTest)
 
 pkg_check_modules(UUID REQUIRED uuid)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
 
 set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
@@ -46,6 +49,7 @@ include_directories(${DRM_ROOT}/ocdm)
 include_directories(${UTESTS_ROOT}/mocks)
 include_directories(${UTESTS_ROOT}/drm/mocks)
 include_directories(${GSTREAMER_INCLUDE_DIRS})
+include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(${UUID_INCLUDE_DIRS})
@@ -59,16 +63,20 @@ set(TEST_SOURCES PlayerClearKeyDecryptorTests.cpp
 				PlayerPlayReadyDecryptorTests.cpp
 				PlayerVeriMatrixDecryptorTests.cpp
 				PlayerWidevineDecryptorTests.cpp
-				PluginsRun.cpp)
+				PluginsRun.cpp )
 				
 add_definitions(-DUSE_OPENCDM_ADAPTER)
 
-if (CMAKE_PLATFORM_UBUNTU)
+# This is a misnomer, it has nothing to do with Ubuntu, but causes a workaround to be enabled in 
+# gst-plugins/drm/gst/gstcdmidecryptor.cpp. Should rename the ifdef there and here.
+if (CMAKE_PLATFORM_UBUNTU OR APPLE)
 	add_definitions(-DUBUNTU)
 endif()
 
+set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp)
+
 set(PLAYER_SOURCES
-				#}/gst-plugins/drm/gst/gstcdmidecryptor.cpp
+				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstcdmidecryptor.cpp
 				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstclearkeydecryptor.cpp
 				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstplayreadydecryptor.cpp
 				#${PLAYER_ROOT}/gst-plugins/drm/gst/gstverimatrixdecryptor.cpp
@@ -77,7 +85,7 @@ set(PLAYER_SOURCES
 
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
-			   ${MOCK_SOURCES}
+			   ${FAKE_SOURCES}
 			   ${PLAYER_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
@@ -88,10 +96,40 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-	include(CodeCoverage)
-	APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} -lpthread ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+link_directories(${GSTREAMER_LIBRARY_DIRS})
+
+if(APPLE)
+    target_link_options(${EXEC_NAME} PRIVATE -F/Library/Frameworks -Wl,-rpath,/Library/Frameworks)
+
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        fakes
+        ${UUID_LINK_LIBRARIES}
+        -lpthread
+        ${LIBCJSON_LINK_LIBRARIES}
+        ${GMOCK_LINK_LIBRARIES}
+        ${GTEST_LINK_LIBRARIES}
+    )
+    target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+
+else()
+    # Linux: Use .so (dylib) linking
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        fakes
+        ${UUID_LINK_LIBRARIES}
+        ${OS_LD_FLAGS}
+        -lpthread
+        ${GLIB_LINK_LIBRARIES}
+        ${LIBCJSON_LINK_LIBRARIES}
+        ${GMOCK_LINK_LIBRARIES}
+        ${GTEST_LINK_LIBRARIES}
+        ${GOBJECT_LINK_LIBRARIES}
+        ${GSTREAMERAPP_LINK_LIBRARIES}
+        ${GSTREAMERBASE_LINK_LIBRARIES}
+        ${GSTREAMER_LINK_LIBRARIES} # This should resolve to -lgstreamer-1.0 etc.
+    )
+endif()
 
 player_utest_run_add(${EXEC_NAME})

@@ -917,7 +917,7 @@ void* g_memdup2(const void* mem, size_t n_bytes) {
     return memcpy(p, mem, n_bytes);
 }
 
-GstDebugCategory* gst_debug_category_new(const gchar *name,
+GstDebugCategory* _gst_debug_category_new(const gchar *name,
                                          GstDebugColorFlags color,
                                          const gchar *description)
 {
@@ -971,4 +971,55 @@ void g_log(const gchar *log_domain,
            ...)
 {
 	TRACE_FUNC();
+}
+// _gst_debug_category_new
+GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorMode color, const gchar *description) {
+    static GstDebugCategory dummy;
+    (void)name; (void)color; (void)description;
+    return &dummy;
+}
+
+// Avoid GLib macro expansion conflicts
+#ifdef g_once_init_enter_pointer
+#undef g_once_init_enter_pointer
+#endif
+
+#ifdef g_once_init_leave_pointer
+#undef g_once_init_leave_pointer
+#endif
+
+#if 0
+extern "C" {
+gboolean g_once_init_enter_pointer(gpointer *location) {
+    (void)location;
+    return TRUE; // always "first call"
+}
+
+// g_once_init_leave_pointer
+void g_once_init_leave_pointer(gpointer *location, gpointer init_value) {
+    (void)location; (void)init_value;
+}
+}
+#endif
+
+// g_type_check_class_cast
+gpointer g_type_check_class_cast(gpointer g_class, gsize type) {
+    (void)g_class; (void)type;
+    return nullptr;
+}
+
+// g_type_class_adjust_private_offset
+void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
+    (void)g_class; (void)offset;
+}
+
+// gst_element_class_add_static_pad_template
+void gst_element_class_add_static_pad_template(GstElementClass *klass, GstPadTemplate *templ) {
+    (void)klass; (void)templ;
+}
+
+void gst_element_class_set_static_metadata(GstElementClass *klass, const gchar *long_name,
+                                           const gchar *klass_name, const gchar *description)
+{
+    (void)klass; (void)long_name; (void)klass; (void)description;
 }
