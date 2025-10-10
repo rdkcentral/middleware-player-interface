@@ -1,4 +1,6 @@
 name: L2 tests
+permissions:
+  contents: read
 
 # Uncomment below block to execute this workflow on Github Environment
 # on:
