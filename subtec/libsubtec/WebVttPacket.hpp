@@ -118,13 +118,47 @@ class WebVttChannel : public SubtecChannel
 {
 public:
     WebVttChannel() : SubtecChannel() {}
-
+    /**
+    * @brief Sends a WebVTT selection packet with specified dimensions.
+    *
+    * This overridden method constructs and sends a WebVTT selection packet
+    * containing the width and height of the display area. It delegates
+    * packet creation and sending to `sendPacket<WebVttSelectionPacket>()`.
+    *
+    * @param[in] width   Display width in pixels.
+    * @param[in] height  Display height in pixels.
+    *
+    * @return None.
+    */
     virtual void SendSelectionPacket(uint32_t width, uint32_t height) override {
         sendPacket<WebVttSelectionPacket>(width, height);
     }
+    /**
+    * @brief Sends a WebVTT data packet containing caption content.
+    *
+    * This overridden method constructs and sends a WebVTT data packet using
+    * the provided data buffer. An optional time offset can be applied
+    * to adjust the display timing of the captions.
+    *
+    * @param[in] data             WebVTT data to send (rvalue reference, moved into the packet).
+    * @param[in] time_offset_ms   Optional time offset in milliseconds (default: 0).
+    *
+    * @return None.
+    */
     virtual void SendDataPacket(std::vector<uint8_t> &&data, std::int64_t time_offset_ms = 0) override {
         sendPacket<WebVttDataPacket>(time_offset_ms, std::move(data));
     }
+    /**
+    * @brief Sends a WebVTT timestamp packet.
+    *
+    * This overridden method constructs and sends a WebVTT timestamp packet
+    * containing the provided timestamp in milliseconds. It delegates
+    * packet creation to `sendPacket<WebVttTimestampPacket>()`.
+    *
+    * @param[in] timestampMs  Timestamp in milliseconds to send.
+    *
+    * @return None.
+    */
     virtual void SendTimestampPacket(uint64_t timestampMs) override {
         sendPacket<WebVttTimestampPacket>(timestampMs);
     }
