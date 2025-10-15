@@ -45,20 +45,76 @@ public:
 
 	/*HlsDrmBase Methods*/
 
+	/**
+	* @brief Sets metadata for the DRM session.
+	*
+	* Default implementation returns an error.
+	*
+	* @param[in] metadata   Pointer to the metadata structure.
+	* @param[in] trackType  Type of the track (e.g., audio, video, subtitles).
+	*
+	* @return eDRM_ERROR by default.
+	*/
 	virtual DrmReturn SetMetaData(void* metadata,int trackType) override {return DrmReturn::eDRM_ERROR;}
-
+	
+   /**
+	* @brief Sets decryption information for the DRM session.
+	*
+	* Default implementation returns an error.
+	*
+	* @param[in] drmInfo             Pointer to a DrmInfo structure containing decryption info.
+	* @param[in] acquireKeyWaitTime  Maximum time in milliseconds to wait for key acquisition.
+	*
+	* @return eDRM_ERROR by default.
+	*/
 	virtual DrmReturn SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWaitTime) override {return DrmReturn::eDRM_ERROR;}
-
+	/**
+	* @brief Decrypts encrypted data for the DRM session.
+	*
+	* Default implementation returns an error.
+	*
+	* @param[in] bucketType         Identifier of the data bucket type.
+	* @param[in] encryptedDataPtr   Pointer to the encrypted data buffer.
+	* @param[in] encryptedDataLen   Length of the encrypted data buffer in bytes.
+	* @param[in] timeInMs           Optional wait time in milliseconds (default: DECRYPT_WAIT_TIME_MS).
+	*
+	* @return eDRM_ERROR by default.
+	*/
 	virtual DrmReturn Decrypt(int bucketType, void *encryptedDataPtr, size_t encryptedDataLen, int timeInMs = DECRYPT_WAIT_TIME_MS) override {return DrmReturn::eDRM_ERROR;}
-
+	/**
+	* @brief Releases the DRM session.
+	*
+	* Default implementation does nothing.
+	*/
 	virtual void Release() override {}
-
+	/**
+	* @brief Cancels any pending key acquisition.
+	*
+	* Default implementation does nothing.
+	*/
 	virtual void CancelKeyWait() override {}
-
+	/**
+	* @brief Restores the DRM key state.
+	*
+	* Default implementation does nothing.
+	*/
 	virtual void RestoreKeyState() override {}
-
-	virtual void AcquireKey(void *metadata,int trackType) override {}
-
+	/**
+	* @brief Acquires a key for the DRM session.
+	*
+	* Default implementation does nothing.
+	*
+	* @param[in] metadata   Pointer to metadata used for key acquisition.
+	* @param[in] trackType  Type of track for which the key is required.
+	*/
+	virtual void AcquireKey(void *metadata,int trackType) override {}	
+	/**
+	* @brief Returns the current DRM session state.
+	*
+	* Default implementation returns `eDRM_KEY_FAILED`.
+	*
+	* @return DRM session state as a `DRMState` enum value.
+	*/
 	virtual DRMState GetState() override {return DRMState::eDRM_KEY_FAILED;}
 
 };
