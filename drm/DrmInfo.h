@@ -61,6 +61,19 @@ struct DrmInfo
 	{
 		memcpy( iv, other.iv, DRM_IV_LEN );
 	}
+	/**
+	* @brief Copy assignment operator for the DrmInfo structure.
+	*
+	* This operator copies all members from another `DrmInfo` instance into
+	* this instance, performing a deep copy of all standard members and
+	* a byte-wise copy of the IV array (`iv`). Note that the IV array is
+	* copied directly using `memcpy`, so both objects will share the same
+	* IV content but independent memory storage.
+	*
+	* @param[in] other  The source `DrmInfo` object to copy from.
+	*
+	* @return Reference to the current `DrmInfo` instance after assignment.
+	*/
 	DrmInfo& operator=(const DrmInfo& other)
 	{
 		method = other.method;
