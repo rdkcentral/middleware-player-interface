@@ -95,7 +95,21 @@ namespace DrmUtils
 	 *  @return	Extracted ContentMetaData.
 	 */
 	std::string extractWVContentMetadataFromPssh(const char* psshData, int dataLength);
-
+	/**
+	* @brief Extracts the Key ID from a PSSH (Protection System Specific Header) box.
+	*
+	* This function parses the provided PSSH data to extract the Key ID associated
+	* with the specified DRM system. The Key ID can then be used for license acquisition
+	* or other DRM operations.
+	*
+	* @param[in]  psshData    Pointer to the PSSH data buffer.
+	* @param[in]  dataLength  Length of the PSSH data buffer in bytes.
+	* @param[out] len         Pointer to an integer that will receive the length of the extracted Key ID.
+	* @param[in]  drmSystem   The DRM system identifier used to interpret the PSSH data.
+	*
+	* @return Pointer to a newly allocated buffer containing the extracted Key ID.
+	*         Returns `nullptr` if extraction fails. The caller is responsible for freeing the returned buffer.
+	*/
 	unsigned char * extractKeyIdFromPssh(const char* psshData, int dataLength, int *len, DRMSystems drmSystem);
 }
 #endif
