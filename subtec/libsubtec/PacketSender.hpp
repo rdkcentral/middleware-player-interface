@@ -62,6 +62,17 @@ class PacketSender
 public:    
     ~PacketSender();
     /**
+     * @brief Closes the player and releases associated resources.
+     *
+     * This function stops any ongoing playback, cleans up internal
+     * resources, and resets the player to an uninitialized state.
+     * It should be called before destroying the player instance
+     * or when playback is no longer required.
+     *
+     * @return None
+     */
+    void Close();
+    /**
     * @brief Flushes any pending packets from the sender queue.
     *
     * This function ensures that all queued packets are sent or discarded
