@@ -382,17 +382,81 @@ namespace subtecConnector
     mrcc_Error initPacketSender();
 
 namespace ccMgrAPI
-{
+    {
+    /**
+    * @brief Displays closed captions on the screen.
+    *
+    * This function enables and renders closed captions for the active stream.
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccShow(void);
+    /**
+    * @brief Hides closed captions from the screen.
+    *
+    * This function disables or stops rendering closed captions for the active stream.
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccHide(void);
-
+    /**
+    * @brief Sets the digital closed caption channel.
+    *
+    * This function selects the digital caption service channel (e.g., CEA-708 service number)
+    * to be displayed.
+    *
+    * @param channel Digital closed caption channel number to set.
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccSetDigitalChannel(unsigned int channel);
-
+    /**
+    * @brief Sets the analog closed caption channel.
+    *
+    * This function selects the analog closed caption channel (e.g., CEA-608 field/channel)
+    * to be displayed.
+    *
+    * @param channel Analog closed caption channel number to set.
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccSetAnalogChannel(unsigned int channel);
-
+    /**
+    * @brief Sets the closed caption display attributes.
+    *
+    * This function configures caption rendering parameters such as font, color,
+    * opacity, and background style.
+    *
+    * @param attrib  Pointer to the structure containing caption display attributes.
+    * @param type    Attribute type identifier (e.g., digital or analog).
+    * @param ccType  Closed caption type (e.g., GSW_CC_DIGITAL or GSW_CC_ANALOG).
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccSetAttributes(gsw_CcAttributes * attrib, short type, gsw_CcType ccType);
+    /**
+    * @brief Retrieves the current closed caption display attributes.
+    *
+    * This function obtains the currently active caption rendering settings.
+    *
+    * @param attrib  Pointer to the structure that will store the current attributes.
+    * @param ccType  Closed caption type (e.g., GSW_CC_DIGITAL or GSW_CC_ANALOG).
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType ccType);
-
+    /**
+    * @brief Retrieves the closed caption capability information.
+    *
+    * This function queries the supported caption attributes and their value ranges.
+    *
+    * @param attribType  Attribute type to query (e.g., font size, color, background).
+    * @param ccType      Closed caption type (e.g., GSW_CC_DIGITAL or GSW_CC_ANALOG).
+    * @param value       Pointer to a buffer that will receive the capability data.
+    * @param size        Pointer to a variable that will store the size of the returned data.
+    *
+    * @return mrcc_Error Returns MRCC_SUCCESS on success or an appropriate error code on failure.
+    */
     mrcc_Error ccGetCapability(gsw_CcAttribType attribType, gsw_CcType ccType, void **value, unsigned int *size);
 
     // mrcc_Error ccSetCCState(CCStatus_t ccStatus, int /*not used*/);
