@@ -18,7 +18,7 @@
  */
 
 #include "PlayerSocInterfaceImpl.h"
-
+#define DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS 12	/**< Currently MAX FRAG DURATION + 2 per Realtek */
 #define REQUIRED_QUEUED_FRAMES_REALTEK (3+1)
 
 /**
