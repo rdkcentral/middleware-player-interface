@@ -17,8 +17,8 @@
 * limitations under the License.
 */
 
-#ifndef PLAYER_MOCK_AAMP_CONFIG_H
-#define PLAYER_MOCK_AAMP_CONFIG_H
+#ifndef AAMP_MOCK_AAMP_CONFIG_H
+#define AAMP_MOCK_AAMP_CONFIG_H
 
 #include <gmock/gmock.h>
 #include "AampConfig.h"
@@ -50,4 +50,4 @@ public:
 
 extern MockAampConfig *g_mockAampConfig;
 
-#endif /* PLAYER_MOCK_AAMP_CONFIG_H */
+#endif /* AAMP_MOCK_AAMP_CONFIG_H */

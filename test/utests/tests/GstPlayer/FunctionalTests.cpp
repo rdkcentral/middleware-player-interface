@@ -246,7 +246,15 @@ public:
 
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 			.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
-		
+
+		/*mAAMPGstPlayer->Configure(FORMAT_VIDEO_ES_H264,
+								  FORMAT_AUDIO_ES_AAC,
+								  setup->auxFormat,
+								  FORMAT_SUBTITLE_WEBVTT,
+								  setup->bESChangeStatus,
+								  setup->forwardAudioToAux,
+								  setup->setReadyAfterPipelineCreation);*/
+
 		mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264,
 										GST_FORMAT_AUDIO_ES_AAC,
 										setup->auxFormat,
@@ -345,13 +353,10 @@ TEST_F(GstPlayerTests, Constructor)
 //	} Config_Params;
 
 static GstPlayerTests::Config_Params tbl[] = {
-	// focus on Rialto only
-	{GST_FORMAT_INVALID, 	  false, false, false, false, false, true },
-//	{GST_FORMAT_INVALID, 	  false, false, false, false, true, false },
-//	{GST_FORMAT_INVALID, 	  false, false, false, false, true, true  },
-//	{GST_FORMAT_INVALID, 	  false, false, false, true,  true, false },
-//	{GST_FORMAT_AUDIO_ES_AC3, true,  true,  true,  false, true, false }
-};
+	{GST_FORMAT_INVALID, 	  false, false, false, false, true, false },
+	{GST_FORMAT_INVALID, 	  false, false, false, false, true, true  },
+	{GST_FORMAT_INVALID, 	  false, false, false, true,  true, false },
+	{GST_FORMAT_AUDIO_ES_AC3, true,  true,  true,  false, true, false } };
 
 // Parameter test class, for running same tests with different settings
 
@@ -429,9 +434,7 @@ TEST_P(GstPlayerTestsP, SetVideoMute)
 	DestroyAMPGstPlayer();
 }
 
-// focus on Rialto only
-INSTANTIATE_TEST_SUITE_P(GstPlayer,GstPlayerTestsP, testing::Values(0));
-//INSTANTIATE_TEST_SUITE_P(GstPlayer,GstPlayerTestsP, testing::Values(0,1,2,3));
+INSTANTIATE_TEST_SUITE_P(GstPlayer,GstPlayerTestsP, testing::Values(0,1,2,3));
 
 TEST_F(GstPlayerTests, TimerAdd)
 {
