@@ -29,4 +29,4 @@ set_target_properties(playersocinterfaceimpl PROPERTIES COMPILE_FLAGS "${PlayerS
 
 # Install the library and its headers
 install(TARGETS playersocinterfaceimpl
-    DESTINATION lib)
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
