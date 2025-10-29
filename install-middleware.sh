@@ -23,6 +23,10 @@ if [[ -z "${MAKEFLAGS}" ]]; then
     export MAKEFLAGS=-j$(nproc)
 fi
 
+# Set the CMAKE_POLICY_VERSION_MINIMUM to 3.5
+# Mostly required for OSX builds
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+
 # Fail the script should any step fail. To override this behavior use "|| true" on those statements
 set -eo pipefail
 
@@ -38,18 +42,16 @@ source scripts/install_options.sh
 source scripts/install_dependencies.sh
 # gtest install and build
 source scripts/install_gtest.sh
+# glib install and build
+source scripts/install_glib.sh
 # libdash install and build
 source scripts/install_libdash.sh
-# libcjson install and build
-source scripts/install_libcjson.sh
 # gstreamer install
 source scripts/install_gstreamer.sh
 # subtec install and build
 source scripts/install_subtec.sh
 # rialto install and build
 source scripts/install_rialto.sh
-# player interface install and build
-source scripts/install_player.sh
 #
 
 
@@ -126,9 +128,10 @@ INSTALL_STATUS_ARR+=("install_gstplugingood_fn check passed.")
 install_build_googletest_fn "${OPTION_CLEAN}"
 INSTALL_STATUS_ARR+=("install_build_googletest check passed.")
 
-# Build libcjson
-install_build_libcjson_fn "${OPTION_CLEAN}"
-INSTALL_STATUS_ARR+=("install_build_libcjson check passed.")
+# Build glib
+#
+install_build_glib_fn "${OPTION_CLEAN}"
+INSTALL_STATUS_ARR+=("install_build_glib check passed.")
 
 # Build subtec
 #
@@ -151,11 +154,6 @@ fi
 #
 rialto_install_build_fn "${OPTION_CLEAN}"
 INSTALL_STATUS_ARR+=("rialto_install_build_fn check passed.")
-
-# Build libplayergstinterface / player interface
-#
-player_install_build_fn "${CLEAN}"
-INSTALL_STATUS_ARR+=("player_install_build check passed.")
 
 tools_print_summary_fn
 

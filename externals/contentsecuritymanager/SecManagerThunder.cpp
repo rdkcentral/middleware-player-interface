@@ -32,7 +32,6 @@
 #include <sstream>
 #include <string>
 #include "ThunderAccessPlayer.h"
-#include "PlayerExternalUtils.h"
 
 /**
  * @brief SecManagerThunder Constructor
@@ -103,6 +102,23 @@ SecManagerThunder::~SecManagerThunder()
 		mSchedulerStarted = false;
 	}
 	UnRegisterAllEvents();
+}
+
+/**
+ * @brief To acquire access token
+ */
+bool SecManagerThunder::getSessionToken(std::string &token)
+{
+	ThunderAccessPlayer authService(AUTH_SERVICE_CALL_SIGN);
+	JsonObject param;
+	JsonObject response;
+
+	if (authService.InvokeJSONRPC("getSessionToken", param, response, 10000))
+	{
+		token = response["token"].String();
+		return true;
+	}
+	return false;
 }
 
 /**

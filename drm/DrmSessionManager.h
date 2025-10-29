@@ -129,7 +129,9 @@ public:
 	configs *m_drmConfigParam;
 	PlayerSecInterface *playerSecInstance;/** PlayerSecInterface instance **/
 	ContentSecurityManagerSession mContentSecurityManagerSession;
-        std::atomic<bool> mFirstFrameSeen;
+    std::atomic<bool> mFirstFrameSeen;
+	std::atomic<bool> mIsVideoOnMute;
+	std::atomic<int> mCurrentSpeed;
 private:
 	KeyID *cachedKeyIDs;
 	char* accessToken;
@@ -140,8 +142,6 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
-	std::atomic<bool> mIsVideoOnMute;
-	std::atomic<int> mCurrentSpeed;
 	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
@@ -191,27 +191,6 @@ public:
 	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
 
 	void initializeDrmSessions();
-
-	/**
-	 * @brief Tests caching of a DRM key ID.
-	 *
-	 * This function is a unit test helper that verifies the behavior of key ID caching
-	 * in the ClearKey DRM session. It accepts a key ID as a byte vector and optionally
-	 * indicates whether the test case is expected to fail.
-	 *
-	 * @param keyId     The key ID to be tested, represented as a vector of bytes.
-	 * @param isFailed  Optional flag indicating if the test should simulate a failure.
-	 *                  - false (default): Expect success.
-	 *                  - true: Expect failure.
-	 *
-	 * @note This is a test utility function and not intended for production use.
-	 */
-	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
-	{	
-        std::lock_guard<std::mutex> guard(cachedKeyMutex);
-        cachedKeyIDs[0].data.push_back(keyId);
-        cachedKeyIDs[0].isFailedKeyId = isFailed;
-    }
 
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
@@ -286,7 +265,7 @@ public:
 	 *  @retval  	error_code - Gets updated with proper error code, if session creation fails.
 	 *  			No NULL checks are done for error_code, caller should pass a valid pointer.
 	 */
-	DrmSession * createDrmSession(int &err, const char* systemId, MediaFormat mediaFormat,
+	DrmSession * createDrmSession(int &responseCode, int &err, const char* systemId, MediaFormat mediaFormat,
 			const unsigned char * initDataPtr, uint16_t dataLength, int streamType,
 			DrmCallbacks* player, void *ptr, const unsigned char *contentMetadata = nullptr, 
 	                	bool isPrimarySession = false );
@@ -294,7 +273,7 @@ public:
 	 * @fn createDrmSession
 	 * @return drmSession
 	 */
-	DrmSession* createDrmSession( int &err, DrmHelperPtr drmHelper,  DrmCallbacks* Instance, int streamType, void *metaDataPtr);
+	DrmSession* createDrmSession(int& responseCode, int &err, DrmHelperPtr drmHelper,  DrmCallbacks* Instance, int streamType, void *metaDataPtr);
 
 	/**
 	 *  @fn		IsKeyIdProcessed
@@ -409,7 +388,7 @@ public:
         /*
          *@brief Type definition for acquireLicense callback from application 
          */
-        using LicenseCallback = std::function<KeyState(DrmHelperPtr drmHelper, int sessionSlot, int &cdmError,
+        using LicenseCallback = std::function<KeyState(int& responseCode, DrmHelperPtr drmHelper, int sessionSlot, int &cdmError,
                         GstMediaType streamType,void *metaDataPtr, bool isLicenseRenewal)>;
         LicenseCallback AcquireLicenseCb;
         /*
@@ -428,28 +407,12 @@ public:
         {
               ProfileUpdateCb = callback;
         };
-
-	using ProfileBeginCallback = std::function<void(int)>;
-	ProfileBeginCallback profileBeginCb;
-	void RegisterProfBegin(const ProfileBeginCallback callback)
+	using ProfileDecryptProfileCallback = std::function<void(int, int , int)>;
+	ProfileDecryptProfileCallback profileDecryptProfileCb;
+	void RegisterDecryptProfile(const ProfileDecryptProfileCallback callback)
 	{
-		profileBeginCb = callback;
+		profileDecryptProfileCb = callback;
 	};
-
-	using ProfileEndCallback = std::function<void(int streamType)>;
-	ProfileEndCallback profileEndCb;
-	void RegisterProfEnd(const ProfileEndCallback callback)
-	{
-		profileEndCb = callback;
-	};
-
-	using ProfileErrorCallback = std::function<void(int streamType, int result)>;
-	ProfileErrorCallback profileErrorCb;
-	void RegisterProfError(const ProfileErrorCallback callback)
-	{
-		profileErrorCb = callback;
-	};
-
 	using LAProfileBeginCallback = std::function<void(int)>;
 	LAProfileBeginCallback laprofileBeginCb;
 	void RegisterLAProfBegin(const LAProfileBeginCallback callback)
@@ -478,13 +441,12 @@ public:
 		setfailureCb = callback;
 	};
 
-	//using DrmMetaDataCallback =	std::function<void *()>;
 	using DrmMetaDataCallback = std::function<std::shared_ptr<void>()>;
 	DrmMetaDataCallback DrmMetaDataCb;
 	void RegisterMetaDataCb(const DrmMetaDataCallback callback)
 	{
 		DrmMetaDataCb = callback;
-	};
+	}
 	/*
 	 * @brief Register Content Protection Update callback to application 
 	 */
