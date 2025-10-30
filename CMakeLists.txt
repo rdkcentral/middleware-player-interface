@@ -191,8 +191,6 @@ if(NOT CMAKE_PLATFORM_UBUNTU AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 						vendor/realtek/RealtekSocInterface.cpp
 						vendor/brcm/BrcmSocInterface.cpp
 						)
-else()
-	list(APPEND SOURCES test/utests/fakes/FakeSocInterface.cpp)
 endif()
 set(LIBPLAYERGSTINTERFACE_DRM_SOURCES drm/PlayerHlsDrmSessionInterface.cpp
 	drm/DrmSessionManager.cpp
