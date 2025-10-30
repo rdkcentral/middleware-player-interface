@@ -121,19 +121,9 @@ typedef enum
 } GstPrivPlayerState;
 
 /**
- * @name gstMapDecoderLookUptable
- *
- * @brief Decoder map list lookup table
- * convert from codec to string map list of gstreamer
- * component.
+ * @struct gst_media_stream
+ * @brief Holds information about each media stream
  */
-static std::map<std::string, std::vector<std::string>> gstMapDecoderLookUptable =
-{
-	{"ac-3", {"omxac3dec", "avdec_ac3", "avdec_ac3_fixed"}},
-	{"ac-4", {"omxac4dec"}}};
-
-
-
 struct gst_media_stream
 {
 	GstElement *sinkbin;              /**< Sink element to consume data */
