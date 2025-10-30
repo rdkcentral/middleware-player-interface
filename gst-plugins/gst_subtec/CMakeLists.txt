@@ -29,15 +29,16 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 
-if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../middleware/subtec/libsubtec)
-    link_directories(${GSTREAMERBASE_LIBRARY_DIRS} ${GSTREAMER_LIBRARY_DIRS})
-    link_directories(${CMAKE_INSTALL_PREFIX})
-endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Use only the framework, NOT -lgstbase-1.0 or -lgstreamer-1.0
+    set(GSTSUBTEC_DEPENDENCIES)
+    list(APPEND GSTSUBTEC_DEPENDENCIES -F/Library/Frameworks "-framework GStreamer")
+else()
+    set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES})
+endif()
+
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
-
-set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES})
 
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
 

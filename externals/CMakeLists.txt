@@ -50,6 +50,21 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IIarm)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IFirebolt)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IFirebolt)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Remove any pkg-config based GStreamer link libraries
+    set(GSTREAMER_LINK_LIBRARIES "")
+    set(GST_LIBRARIES "")
+    set(GSTREAMERBASE_LINK_LIBRARIES "")
+    set(GSTVIDEO_LINK_LIBRARIES "")
+    # Add GStreamer.framework to linker flags
+    set(OS_LD_FLAGS)
+    list(APPEND OS_LD_FLAGS -F/Library/Frameworks "-framework GStreamer")
+    list(APPEND LIB_EXT_DEPENDS ${OS_LD_FLAGS})
+else()
+    list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+endif()
+
+
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
 if(DISABLE_SECURITY_TOKEN)
