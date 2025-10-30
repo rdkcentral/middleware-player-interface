@@ -67,7 +67,9 @@ if (COVERAGE_ENABLED)
     APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-if (CMAKE_PLATFORM_UBUNTU)
+# This is a misnomer, it has nothing to do with Ubuntu, but causes a workaround to be enabled in 
+# gst-plugins/drm/gst/gstcdmidecryptor.cpp. Should rename the ifdef there and here.
+if (CMAKE_PLATFORM_UBUNTU OR APPLE)
     add_definitions(-DUBUNTU)
 endif()
 
