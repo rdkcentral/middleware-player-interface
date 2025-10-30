@@ -31,20 +31,22 @@ option(BUILD_PICLI "Build the pi-cli test project" OFF)
 set(CMAKE_CXX_STANDARD 17)
 find_package(PkgConfig REQUIRED)
 # this is more reliable on MacOS than pkg_check_module
-find_package(OpenSSL REQUIRED)
+# find_package(OpenSSL REQUIRED)
 
-pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0>=1.18.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
-pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
-pkg_check_modules(LIBCJSON REQUIRED libcjson)
-pkg_check_modules(GLIB REQUIRED glib-2.0)
+# pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
+# pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+# pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+# pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
+# pkg_check_modules(LIBCJSON REQUIRED libcjson)
+# pkg_check_modules(GLIB REQUIRED glib-2.0)
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
-else()
+# if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+# 	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+# else()
 	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
-endif(CMAKE_SYSTEM_NAME STREQUAL Linux)
+# endif(CMAKE_SYSTEM_NAME STREQUAL Linux)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} subtitle playerisobmff isobmff
 	closedcaptions
