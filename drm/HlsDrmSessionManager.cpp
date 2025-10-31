@@ -57,9 +57,11 @@ std::shared_ptr<HlsDrmBase> HlsDrmSessionManager::createSession(const struct Drm
 	std::shared_ptr<HlsDrmBase> bridge = nullptr;
 	DrmHelperPtr drmHelper = DrmHelperEngine::getInstance().createHelper(drmInfo);
 
-	if(this->GetHlsDrmSessionCb)
-	{
-		this->GetHlsDrmSessionCb(bridge, drmHelper ,mDrmSession, streamType);
-	}
+	// copy callback and session to local variables to avoid race conditions
+    auto cb = this->GetHlsDrmSessionCb;
+    auto session = mDrmSession;
+	if (cb) {
+        cb(bridge, drmHelper, session, streamType);
+    }
 	return bridge;
 }
