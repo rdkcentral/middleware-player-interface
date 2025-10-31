@@ -82,10 +82,24 @@ unsigned char *base64_Decode(const char *src, size_t *outLen, size_t srcLen)
     }
 	*outLen = 0; // default
 
-	if (src == NULL || srcLen == 0) {
+	if (src == NULL)
+	{
         // invalid parameter or nothing to decode
         return NULL;
     }
+	
+	if (srcLen == 0) 
+	{
+		// Empty input: return valid empty buffer
+		unsigned char *emptyBuf = (unsigned char *)malloc(1);
+		if (!emptyBuf) 
+		{
+			return NULL; // malloc failure
+		}
+		*outLen = 0;
+		emptyBuf[0] = '\0';  // optional, for safety
+		return emptyBuf;
+	}
 	
 	static const signed char decode[256] =
 	{
