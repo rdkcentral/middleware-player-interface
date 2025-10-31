@@ -151,6 +151,5 @@ unsigned char *base64_Decode(const char *src, size_t *len)
 	if (src == NULL || len == NULL) {
         return NULL;
     }
-	rc = base64_Decode(src, len, strlen(src));
-	return rc;
+	return base64_Decode(src, len, strlen(src));
 }
