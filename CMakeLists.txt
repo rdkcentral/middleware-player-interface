@@ -53,6 +53,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/baseConversion)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerLogManager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerJsonObject)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mp4demux)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/rialto)
 
 
 #set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
@@ -202,13 +203,19 @@ endif()
 		gstplayertaskpool.cpp
 		PlayerUtils.cpp
 		vendor/SocInterface.cpp
-		vendor/amlogic/AmlogicSocInterface.cpp
-		vendor/realtek/RealtekSocInterface.cpp
-		vendor/brcm/BrcmSocInterface.cpp
 		vendor/default/DefaultSocInterface.cpp
 		drm/processProtectionHls.cpp
 		ProcessHandler.cpp
 	)
+
+if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
+	list(APPEND SOURCES
+		vendor/amlogic/AmlogicSocInterface.cpp
+		vendor/realtek/RealtekSocInterface.cpp
+		vendor/brcm/BrcmSocInterface.cpp
+	)
+endif()
+
 	set(LIBPLAYERGSTINTERFACE_DRM_SOURCES drm/PlayerHlsDrmSessionInterface.cpp
 		drm/DrmSessionManager.cpp
 		drm/DrmSession.cpp
