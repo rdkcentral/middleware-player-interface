@@ -57,42 +57,32 @@ void WebVTTSubtecParser::reset()
 
 bool WebVTTSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 {
-	bool ret = false;
 	if( startPosSeconds < 0.0 )
 	{
 		MW_LOG_WARN("Invalid start position %f", startPosSeconds);
+		return false;
 	}
-	else {
-		MW_LOG_INFO("startPos %f basePTS %lld",  startPosSeconds, basePTS);
+	MW_LOG_INFO("startPos %f basePTS %lld",  startPosSeconds, basePTS);
 
-		m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds*1000.0));
-		if(playerResumeTrackDownloads_CB)
-		{
-			playerResumeTrackDownloads_CB();
-		}
-		ret = true;
+	m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds*1000.0));
+	if(playerResumeTrackDownloads_CB)
+	{
+		playerResumeTrackDownloads_CB();
 	}
-
-	return ret;
+	return true;
 }
 
 bool WebVTTSubtecParser::processData(const char* buffer, size_t bufferLen, double position, double duration)
 {
-	bool ret = false;
-
 	if(buffer == nullptr || bufferLen == 0 || position < 0.0 || duration < 0.0 || duration < position) {
 		MW_LOG_WARN("Invalid arguments");
+		return false;
 	}
-	else {
-		std::string str(const_cast<const char*>(buffer), bufferLen);
-		std::vector<uint8_t> data(str.begin(), str.end());
-
-		m_channel->SendDataPacket(std::move(data), 0);
-
-		ret = true;
-	}
-
-	return ret;
+	std::string str(const_cast<const char*>(buffer), bufferLen);
+	std::vector<uint8_t> data(str.begin(), str.end());
+	
+	m_channel->SendDataPacket(std::move(data), 0);
+	return true;
 }
 
 void WebVTTSubtecParser::mute(bool mute)
