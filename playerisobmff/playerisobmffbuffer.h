@@ -99,6 +99,12 @@ public:
 	 */
 	player_isobmff::IsoBmffBox* getChunkedfBox() const;
 
+	/**	
+	 * @fn UpdateBufferData
+	 * @return true if parsed or false	
+	 */	
+	int UpdateBufferData(size_t parsedBoxCount, char* &unParsedBuffer, size_t &unParsedBufferSize, size_t & parsedBufferSize);
+
 	/**
 	 * @fn setBuffer
 	 *
