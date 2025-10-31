@@ -42,7 +42,7 @@ char *base64_Encode(const unsigned char *src, size_t len)
 	/* handle empty input */
 	if (len == 0)
 	{
-		rc = (char*)malloc(1);
+		char *rc = (char*)malloc(1);
 		if (rc) rc[0] = '\0';
 		return rc;
 	}
