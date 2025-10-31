@@ -40,6 +40,7 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
 
+
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
 
 message(STATUS "GSTSUBTEC_DEPENDENCIES: ${GSTSUBTEC_DEPENDENCIES}")
