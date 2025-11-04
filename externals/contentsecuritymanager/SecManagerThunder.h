@@ -126,67 +126,150 @@ public:
 protected:
 	/*Event Handlers*/
 	/**
-	 *   @fn watermarkSessionHandler
-	 *   @param  parameters - i/p JsonObject params
-	 */
+	* @brief Handles a request to configure or manage a watermark session.
+	*
+	* This function processes a JSON object containing session-related parameters
+	* for watermark management, such as session ID or global settings.
+	*
+	* @param parameters A JSON object containing the watermark session configuration.
+	*/
 	void watermarkSessionHandler(const JsonObject& parameters);
 	/**
-	 *   @fn addWatermarkHandler
-	 *   @param  parameters - i/p JsonObject params
-	 */
+	* @brief Handles a request to add a new watermark based on JSON parameters.
+	*
+	* This function parses the provided JSON object to extract watermark
+	* properties such as graphic ID, z-index, position, and display attributes,
+	* and then creates the watermark accordingly.
+	*
+	* @param parameters A JSON object containing the configuration parameters for the new watermark.
+	*/
 	void addWatermarkHandler(const JsonObject& parameters);
 	/**
-	 *   @fn updateWatermarkHandler
-	 *   @param  parameters - i/p JsonObject params
-	 */
+	* @brief Handles a request to update an existing watermark based on JSON parameters.
+	*
+	* This function parses the JSON object to extract updated properties for an
+	* existing watermark, such as new image data, palette, or display position.
+	*
+	* @param parameters A JSON object containing the updated watermark parameters.
+	*/
 	void updateWatermarkHandler(const JsonObject& parameters);
 	/**
-	 *   @fn removeWatermarkHandler
-	 *   @param  parameters - i/p JsonObject params
-	 */
+	* @brief Handles a request to remove a watermark based on JSON parameters.
+	*
+	* This function parses the JSON object to identify the watermark to remove
+	* and deletes it from the display.
+	*
+	* @param parameters A JSON object containing the identifier of the watermark to remove.
+	*/
 	void removeWatermarkHandler(const JsonObject& parameters);
 	/**
-	 *   @fn showWatermarkHandler
-	 *   @param parameters - i/p JsonObject params	 
-	 */
+	* @brief Handles a request to show a watermark based on JSON parameters.
+	*
+	* This function parses the provided JSON object to extract watermark-related
+	* settings such as graphic ID, z-index, position, or other display properties,
+	* and then displays the watermark accordingly.
+	*
+	* @param parameters A JSON object containing the configuration parameters for the watermark.
+	*/
 	void showWatermarkHandler(const JsonObject& parameters);
-        /**
-         * @fn loadClutWatermark
-         * @param[in] sessionId - session id
-         *  
-         */
-        bool loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
 	/**
-	 *   @fn CreateWatermark
-	 */
+	* @brief Loads a watermark with a specific color lookup table (CLUT) and image data.
+	*
+	* This function initializes or updates a watermark using the provided CLUT buffer
+	* and image buffer. It supports specifying the palette format, size, and
+	* display dimensions including aspect ratio.
+	*
+	* @param sessionId             The session identifier associated with the watermark.
+	* @param graphicId             The identifier of the watermark to load or update.
+	* @param watermarkClutBufferKey Key or pointer to the CLUT buffer.
+	* @param watermarkImageBufferKey Key or pointer to the image buffer for the watermark.
+	* @param clutPaletteSize       Size of the CLUT palette in bytes.
+	* @param clutPaletteFormat     Format of the CLUT palette (e.g., "ARGB", "RGBA").
+	* @param watermarkWidth        Width of the watermark in pixels.
+	* @param watermarkHeight       Height of the watermark in pixels.
+	* @param aspectRatio           Aspect ratio of the watermark (width / height).
+	*
+	* @return bool Returns true if the watermark was successfully loaded; false otherwise.
+	*/
+    bool loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
+	/**
+	* @brief Creates a new watermark on the display.
+	*
+	* This function adds a watermark with the specified graphic ID and stacking
+	* order (z-index) on top of the video or UI layer.
+	*
+	* @param graphicId The identifier to assign to the new watermark.
+	* @param zIndex    The stacking order for the watermark; higher values
+	*                  appear above lower ones.
+	*/
 	void CreateWatermark(int graphicId, int zIndex);
 	/**
-	 *   @fn UpdateWatermark
+	 * @brief Updates the content of an existing watermark.
+	 *
+	 * This function modifies the watermark identified by the given graphic ID
+	 * using new symbol or image data.
+	 *
+	 * @param graphicId The identifier of the watermark to update.
+	 * @param smKey     The key or pointer to the new symbol/image data.
+	 * @param smSize    The size of the symbol/image data in bytes.
 	 */
 	void UpdateWatermark(int graphicId, int smKey, int smSize);
 	/**
-	 *   @fn GetWaterMarkPalette
+	 * @brief Retrieves the color palette of a watermark.
+	 *
+	 * This function fetches the color lookup table (CLUT) and image mapping
+	 * information for a specific watermark identified by its session ID and graphic ID.
+	 *
+	 * @param sessionId The session identifier associated with the watermark.
+	 * @param graphicId The identifier of the watermark whose palette is being queried.
 	 */
 	void GetWaterMarkPalette(int sessionId, int graphicId);
 	/**
-	 *   @fn ModifyWatermarkPalette
-	 */
+	* @brief Modifies the color palette of a watermark.
+	*
+	* This function updates the color lookup table (CLUT) and image mapping
+	* for a specific watermark identified by its graphic ID.
+	*
+	* @param graphicId The identifier of the watermark to modify.
+	* @param clutKey   The new color lookup table (CLUT) key to apply.
+	* @param imageKey  The new image key to apply to the watermark.
+	*/
 	void ModifyWatermarkPalette(int graphicId, int clutKey, int imageKey);
 	/**
-	 *   @fn DeleteWatermark
-	 */
+	* @brief Deletes a watermark from the display.
+	*
+	* This function removes the watermark identified by the given graphic ID
+	* from the video or UI overlay.
+	*
+	* @param graphicId The identifier of the watermark to delete.
+	*/
 	void DeleteWatermark(int graphicId);
 	/**
-	 *   @fn AlwaysShowWatermarkOnTop
-	 */
+	* @brief Configures whether the watermark should always appear on top.
+	*
+	* This function sets the display behavior of the watermark overlay. When enabled,
+	* the watermark will remain visible above all other video content, regardless of
+	* other UI or overlay elements.
+	*
+	* @param show Set to true to always show the watermark on top; false to allow it
+	*             to be occluded by other elements.
+	*/
 	void AlwaysShowWatermarkOnTop(bool show);
 	/**
-	 *   @fn RegisterAllEvents
-	 */
+	* @brief Registers all required events with the system or component.
+	*
+	* This function sets up all necessary event handlers or callbacks so that
+	* the system can respond to events appropriately. It should typically be
+	* called during initialization or when event handling needs to be restored.
+	*/
 	void RegisterAllEvents ();
 	/**
-	 *   @fn UnRegisterAllEvents
-	 */
+	* @brief Unregisters all previously registered events.
+	*
+	* This function removes all event handlers or callbacks that were
+	* registered with the system or component. After calling this function,
+	* no events will trigger until new handlers are registered.
+	*/
 	void UnRegisterAllEvents ();
 
 	ThunderAccessPlayer mSecManagerObj;       /**< ThunderAccessPlayer object for communicating with SecManager*/

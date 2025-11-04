@@ -33,8 +33,31 @@
  */
 class DrmCallbacks
 {
-public:
+	public:
+	/**
+	* @brief Performs individualization with the given payload.
+	*
+	* This pure virtual method must be implemented by derived classes to
+	* handle individualization requests for DRM systems. The payload
+	* contains the data required to individualize the device or session.
+	*
+	* @param[in] payload  The individualization payload as a string.
+	*
+	* @return None.
+	*/
 	virtual void Individualization(const std::string& payload) = 0;
+	/**
+	* @brief Initiates license renewal for DRM-protected content.
+	*
+	* This pure virtual method must be implemented by derived classes to
+	* perform license renewal using the provided DRM helper object.
+	* Additional user data can be passed through the `userData` pointer.
+	*
+	* @param[in] drmHelper  Shared pointer to a DRM helper object used to handle the renewal.
+	* @param[in] userData   Optional user data pointer to pass context information.
+	*
+	* @return None.
+	*/
 	virtual void LicenseRenewal(DrmHelperPtr drmHelper, void* userData) = 0;
 	virtual ~DrmCallbacks() {};
 };

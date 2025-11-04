@@ -207,9 +207,12 @@ public:
     void DisableContentRestrictionsOta(long grace, long time, bool eventChange) override;
 
     /**
-     * @fn EnableContentRestrictions
-     *
-     */
+    * @brief Enables content restrictions for OTA playback.
+    *
+    * This function applies content restrictions (e.g., parental controls,
+    * age ratings, or regional restrictions) to the currently playing
+    * Over-The-Air (OTA) stream.
+    */
     void EnableContentRestrictionsOta() override;
 
     /**
@@ -228,9 +231,11 @@ public:
     bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) override;
 
     /**
-     * @fn StopRmf
-     *
-     */
+    * @brief Stops the RMF (Reference Media Framework) player.
+    *
+    * This function halts playback, releases any resources associated with
+    * the RMF player, and transitions the player into a stopped state.
+    */
     void StopRmf() override;
 
     /**
@@ -405,47 +410,82 @@ private:
      *   @retval false on failure
      */
     bool SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
-
+    
     /**
-     * @fn GetAudioTrackInternal
+     * @brief Retrieves the currently selected audio track for OTA playback.
      *
+     * This function returns the internal identifier of the active audio track
+     * for the Over-The-Air (OTA) stream. It can be used to query or synchronize
+     * the audio track selection with other components.
+     *
+     * @return int The identifier of the currently selected OTA audio track.
      */
     int GetAudioTrackInternal_OTA();
-
+    
     /**
-     * @fn OnInputStatusChanged callback
-     *
-     */
+    * @brief Handles changes in input status.
+    *
+    * This function parses the provided JSON object to detect changes in input
+    * devices or sources, such as connection state, availability, or errors,
+    * and updates the system or UI accordingly.
+    *
+    * @param parameters A JSON object containing the input status change information.
+    */
     void OnInputStatusChanged(const JsonObject& parameters);
-
+    
     /**
-     * @fn OnSignalChanged callback
-     *
-     */
+    * @brief Handles changes in the input signal.
+    *
+    * This function parses the provided JSON object to detect changes in signal
+    * status, such as signal loss, signal strength, or format changes, and
+    * performs necessary updates to the system or UI.
+    *
+    * @param parameters A JSON object containing the signal change information.
+    */
     void OnSignalChanged (const JsonObject& parameters);
 
     /**
-     * @fn OnVideoStreamInfoUpdate callback
-     *
-     */
+    * @brief Handles updates to video stream information.
+    *
+    * This function parses the provided JSON object to extract video stream
+    * metadata, such as resolution, frame rate, codec, or other relevant
+    * parameters, and updates internal structures or UI accordingly.
+    *
+    * @param parameters A JSON object containing updated video stream information.
+    */
     void OnVideoStreamInfoUpdate(const JsonObject& parameters);
-
+    
     /**
-     * @fn onPlayerStatusHandler_OTA callback
+     * @brief Handles player status events from OTA (Over-The-Air) streams.
      *
+     * This function parses the provided JSON object to extract status information
+     * specific to OTA playback, such as tuning state, signal quality, or playback
+     * progress, and updates the system or UI accordingly.
+     *
+     * @param parameters A JSON object containing OTA player status information.
      */
     void onPlayerStatusHandler_OTA(const JsonObject& parameters);
 
     /**
-     * @fn onPlayerStatusHandler_RMF callback
-     *
-     */
+    * @brief Handles player status events from the RMF (Reference Media Framework).
+    *
+    * This function parses the provided JSON object to extract player status
+    * information, such as playback state, current position, or other relevant
+    * details, and updates the system or UI accordingly.
+    *
+    * @param parameters A JSON object containing status information from the player.
+    */
     void onPlayerStatusHandler_RMF(const JsonObject& parameters);
 
     /**
-     * @fn onPlayerErrorHandler_RMF callback
-     *
-     */
+    * @brief Handles player error events from the RMF (Reference Media Framework).
+    *
+    * This function parses the provided JSON object to extract error details
+    * such as error codes, messages, or additional context, and performs
+    * the necessary error handling or logging.
+    *
+    * @param parameters A JSON object containing error information from the player.
+    */
     void onPlayerErrorHandler_RMF(const JsonObject& parameters);
 
 };

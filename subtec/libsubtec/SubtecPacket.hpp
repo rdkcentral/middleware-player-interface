@@ -33,7 +33,18 @@ class Packet
 public:
     Packet() : m_buffer(), m_counter(std::numeric_limits<std::uint32_t>::max()) {}
     Packet(std::uint32_t counter) : m_buffer(), m_counter(counter) {}
-
+    /**
+    * @brief Retrieves the packet type from the internal buffer.
+    *
+    * This function reads the first 4 bytes of the packet buffer and
+    * computes the packet type as a 32-bit unsigned integer. If the buffer
+    * contains fewer than 4 bytes, the function returns 0.
+    *
+    * @note The type is calculated by combining the first four bytes of the buffer
+    *       using little-endian byte order.
+    *
+    * @return The packet type as a `uint32_t`. Returns 0 if the buffer is too small.
+    */
     const uint32_t getType()
     {
         uint32_t type = 0;
@@ -48,17 +59,43 @@ public:
         }
         return type;
     }
-
+    /**
+    * @brief Returns the internal buffer of the packet.
+    *
+    * This function provides read-only access to the packet's internal
+    * byte buffer. The returned reference allows inspection of the packet
+    * data without making a copy.
+    *
+    * @return A constant reference to the internal `std::vector<uint8_t>` buffer.
+    */
     const std::vector<uint8_t>& getBytes()
     {
         return m_buffer;
     }
-    
+    /**
+    * @brief Retrieves the packet counter.
+    *
+    * This function returns the sequence counter associated with the packet,
+    * which is typically used to track the order of packet transmission
+    * or reception.
+    *
+    * @return The packet counter as a `std::uint32_t`.
+    */
     const std::uint32_t getCounter()
     {
         return m_counter;
     }
-
+    /**
+    * @brief Converts a packet type value to a human-readable string.
+    *
+    * This static function maps a numeric packet type identifier to its
+    * corresponding descriptive string. It is useful for logging, debugging,
+    * or displaying packet type information in a readable format.
+    *
+    * @param[in] type  The packet type value as a `uint32_t`.
+    *
+    * @return A `std::string` representing the name or description of the packet type.
+    */
     static std::string getTypeString(uint32_t type)
     {
         std::string ret;
@@ -162,7 +199,17 @@ protected:
 
     std::vector<uint8_t> m_buffer;
     std::uint32_t m_counter;
-
+    /**
+    * @brief Appends a 32-bit unsigned integer to the internal buffer in little-endian order.
+    *
+    * This function splits the given 32-bit value into four bytes and appends them
+    * sequentially to the packet's internal byte buffer (`m_buffer`). The least
+    * significant byte is added first, followed by more significant bytes.
+    *
+    * @param[in] value  The 32-bit unsigned integer to append.
+    *
+    * @return None.
+    */
     void append32(std::uint32_t value)
     {
         m_buffer.push_back((static_cast<std::uint8_t>((value >> 0)) & 0xFF));
@@ -170,13 +217,33 @@ protected:
         m_buffer.push_back((static_cast<std::uint8_t>((value >> 16)) & 0xFF));
         m_buffer.push_back((static_cast<std::uint8_t>((value >> 24)) & 0xFF));
     }
-
+    /**
+    * @brief Appends a 64-bit signed integer to the internal buffer in little-endian order.
+    *
+    * This function splits the given 64-bit value into two 32-bit halves and appends
+    * them sequentially to the packet's internal buffer (`m_buffer`) using `append32()`.
+    * The least significant 32 bits are appended first, followed by the most significant 32 bits.
+    *
+    * @param[in] value  The 64-bit signed integer to append.
+    *
+    * @return None.
+    */
     void append64(std::int64_t value)
     {
         append32((static_cast<std::int32_t>((value >> 0)) & 0xFFFFFFFF));
         append32((static_cast<std::int32_t>((value >> 32)) & 0xFFFFFFFF));
     }
-
+    /**
+    * @brief Appends a packet type to the internal buffer.
+    *
+    * This function converts the `PacketType` enum to its underlying integral
+    * representation and appends it to the packet's internal buffer (`m_buffer`)
+    * using `append32()`.
+    *
+    * @param[in] type  The packet type to append, represented as a `PacketType` enum.
+    *
+    * @return None.
+    */
     void appendType(PacketType type)
     {
         append32(static_cast<std::underlying_type<PacketType>::type>(type));

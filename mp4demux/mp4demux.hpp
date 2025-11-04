@@ -125,7 +125,15 @@ private:
 	uint32_t width;
 	uint32_t height;
 	uint16_t language;
-	
+	/**
+	* @brief Reads a specified number of bytes from the current buffer or stream.
+	*
+	* This function reads the next `n` bytes from the buffer, interprets them
+	* as an unsigned integer, and advances the read position accordingly.
+	*
+	* @param n The number of bytes to read (up to 8).
+	* @return uint64_t The value represented by the read bytes.
+	*/
 	uint64_t ReadBytes( int n )
 	{
 		uint64_t rc = 0;
@@ -136,33 +144,87 @@ private:
 		}
 		return rc;
 	}
+	/**
+	* @brief Reads an unsigned 16-bit integer from the current buffer or stream.
+	*
+	* This function interprets the next 2 bytes as a big-endian unsigned 16-bit
+	* integer and advances the read position accordingly.
+	*
+	* @return uint16_t The 16-bit unsigned integer read from the buffer.
+	*/
 	uint16_t ReadU16()
 	{
 		return (uint16_t)ReadBytes(2);
 	}
+	/**
+	* @brief Reads an unsigned 32-bit integer from the current buffer or stream.
+	*
+	* This function interprets the next 4 bytes as a big-endian unsigned 32-bit
+	* integer and advances the read position accordingly.
+	*
+	* @return uint32_t The 32-bit unsigned integer read from the buffer.
+	*/	
 	uint32_t ReadU32()
 	{
 		return (uint32_t)ReadBytes(4);
 	}
+	/**
+	* @brief Reads a signed 32-bit integer from the current buffer or stream.
+	*
+	* This function interprets the next 4 bytes as a big-endian signed 32-bit
+	* integer and advances the read position accordingly.
+	*
+	* @return int32_t The 32-bit signed integer read from the buffer.
+	*/
 	int32_t ReadI32()
 	{
 		return (int32_t)ReadBytes(4);
 	}
+	/**
+	* @brief Reads an unsigned 64-bit integer from the current buffer or stream.
+	*
+	* This function interprets the next 8 bytes as a big-endian unsigned 64-bit
+	* integer and advances the read position accordingly.
+	*
+	* @return uint64_t The 64-bit unsigned integer read from the buffer.
+	*/
 	uint64_t ReadU64()
 	{
 		return ReadBytes(8);
 	}
+	/**
+	* @brief Reads and parses the header of the current media or MP4 box.
+	*
+	* This function extracts essential header information, such as box type,
+	* size, and other metadata, preparing the parser for processing the
+	* contained data.
+	*/
 	void ReadHeader( void )
 	{
 		version = *ptr++;
 		flags = (uint32_t)ReadBytes(3);
 	}
+	/**
+	* @brief Skips a specified number of bytes in the current buffer or stream.
+	*
+	* This function advances the read position by `len` bytes without processing
+	* the skipped data. It is typically used to bypass unused or reserved fields
+	* in a media stream or file.
+	*
+	* @param len The number of bytes to skip.
+	*/
 	void SkipBytes( size_t len )
 	{
 		PRINTF( "skipping %zu bytes\n", len );
 		ptr += len;
 	}
-
+	/**
+	* @brief Parses a Movie Fragment Header Box ('mfhd') in a fragmented MP4 (fMP4) stream.
+	*
+	* This function extracts global metadata for a movie fragment, such as the
+	* sequence number, which is used to track the order of fragments and ensure
+	* correct playback sequencing.
+	*/
 	void parseMovieFragmentHeaderBox( void )
 	{
 		ReadHeader();
@@ -170,7 +232,13 @@ private:
 		(void)sequence_number;
 		PRINTF( "sequence_number=%" PRIu32 "\n", sequence_number );
 	}
-	
+	/**
+	* @brief Parses a Track Fragment Header Box ('tfhd') in a fragmented MP4 (fMP4) stream.
+	*
+	* This function extracts track fragment-level metadata such as default sample
+	* duration, default sample size, default sample flags, and track ID, which
+	* are used to properly interpret and decode samples in the fragment.
+	*/
 	void parseTrackFragmentHeaderBox( void )
 	{
 		ReadHeader();
@@ -202,7 +270,13 @@ private:
 			PRINTF( "default_sample_flags=%" PRIu32 "\n", default_sample_flags );
 		}
 	}
-	
+	/**
+	* @brief Parses a Track Fragment Base Media Decode Time Box ('tfdt') in a fragmented MP4 (fMP4) stream.
+	*
+	* This function extracts the base media decode time for a track fragment,
+	* which is used to compute presentation timestamps (PTS) and ensure proper
+	* media synchronization during playback.
+	*/
 	void parseTrackFragmentBaseMediaDecodeTimeBox( void  )
 	{
 		ReadHeader();
@@ -210,7 +284,13 @@ private:
 		baseMediaDecodeTime  = ReadBytes(sz);
 		PRINTF( "baseMediaDecodeTime: %" PRIu64 "\n", baseMediaDecodeTime );
 	}
-	
+	/**
+	* @brief Parses a Track Fragment Run Box ('trun') in a fragmented MP4 (fMP4) stream.
+	*
+	* This function extracts sample information such as sample duration,
+	* size, flags, and composition time offsets for a track fragment, which
+	* is essential for proper decoding and playback of fragmented media.
+	*/	
 	void parseTrackFragmentRunBox( void )
 	{
 		ReadHeader();
@@ -278,7 +358,13 @@ private:
 			samples.push_back( sample );
 		}
 	}
-	
+	/**
+	* @brief Parses the Movie Header Box ('mvhd') in an MP4 stream.
+	*
+	* This function extracts global movie metadata, including timescale,
+	* duration, and playback rate, which are essential for overall
+	* media synchronization and timing calculations.
+	*/
 	void parseMovieHeaderBox( void )
 	{
 		ReadHeader();
@@ -295,13 +381,25 @@ private:
 			matrix[i] = ReadI32();
 		}
 	}
-	
+	/**
+	* @brief Parses the Movie Extends Header Box ('mehd') in an MP4 stream.
+	*
+	* This function extracts the default duration and other global metadata
+	* for a fragmented MP4 (fMP4) movie. The information is used to compute
+	* overall movie timing and synchronization.
+	*/
 	void parseMovieExtendsHeader( void )
 	{
 		ReadHeader();
 		fragment_duration = ReadU32();
 	}
-	
+	/**
+	* @brief Parses a Track Extends Box ('trex') in an MP4 stream.
+	*
+	* This function extracts default sample description and duration information
+	* for a track, which is used in fragmented MP4 (fMP4) streams to initialize
+	* track properties before sample data is processed.
+	*/
 	void parseTrackExtendsBox( void )
 	{
 		ReadHeader();
@@ -311,7 +409,13 @@ private:
 		default_sample_size = ReadU32();
 		default_sample_flags = ReadU32();
 	}
-	
+	/**
+	* @brief Parses a Track Header Box ('tkhd') in an MP4 stream.
+	*
+	* This function extracts metadata related to a specific track, such as
+	* track ID, duration, layer, alternate group, and other attributes
+	* necessary for track identification and playback.
+	*/	
 	void parseTrackHeader( void )
 	{
 		ReadHeader();
@@ -327,7 +431,13 @@ private:
 		width = ReadU32(); // fixed point
 		height = ReadU32(); // fixed point
 	}
-
+	/**
+	* @brief Parses a Media Header Box ('mdhd') in an MP4 stream.
+	*
+	* This function extracts timing and media-related metadata from the
+	* Media Header Box, including timescale, duration, and other relevant
+	* fields used for media synchronization.
+	*/
 	void parseMediaHeaderBox( void )
 	{
 		ReadHeader();
@@ -338,7 +448,16 @@ private:
 		duration = ReadU32();
 		language = ReadU16();
 	}
-	
+	/**
+	* @brief Parses a Sample Description Box ('stsd') in an MP4 stream.
+	*
+	* This function interprets the contents of a Sample Description Box, which
+	* contains codec-specific information, sample entries, and related metadata.
+	* The `indent` parameter can be used for structured logging or debug output.
+	*
+	* @param next   Pointer to the buffer containing the Sample Description Box data.
+	* @param indent Indentation level for debug or logging purposes.
+	*/
 	void parseSampleDescriptionBox( const uint8_t *next, int indent )
 	{ // stsd
 		ReadHeader();
@@ -346,7 +465,17 @@ private:
 		assert( count == 1 );
 		DemuxHelper(next, indent+1);
 	}
-		
+	/**
+	* @brief Parses the stream format information for a given codec type.
+	*
+	* This function interprets the format data of a media stream, such as
+	* codec parameters, sample descriptors, or other relevant metadata.
+	* The `indent` parameter can be used for structured logging or debug output.
+	*
+	* @param type   The codec or stream type identifier (e.g., H.264, H.265).
+	* @param next   Pointer to the buffer containing the stream format data.
+	* @param indent Indentation level for debug or logging purposes.
+	*/	
 	void parseStreamFormat( uint32_t type, const uint8_t *next, int indent )
 	{
 		int pad;
@@ -391,7 +520,14 @@ private:
 		}
 		DemuxHelper( next, indent+1 );
 	}
-	
+	/**
+	* @brief Reads the length of the next data element or sample.
+	*
+	* This function returns the length of the next unit of data to be processed,
+	* which may correspond to a sample, box, or other codec-specific structure.
+	*
+	* @return int The length of the next data element in bytes.
+	*/
 	int readLen( void )
 	{
 		int rc = 0;
@@ -403,7 +539,15 @@ private:
 			if( (octet&0x80)==0 ) return rc;
 		}
 	}
-	
+	/**
+	* @brief Helper function to parse codec configuration data.
+	*
+	* This function assists in interpreting codec-specific configuration information
+	* from the provided buffer. It is typically called internally by
+	* `parseCodecConfiguration()` to extract codec parameters required for decoding.
+	*
+	* @param next Pointer to the buffer containing codec configuration data.
+	*/
 	void parseCodecConfigHelper( const uint8_t *next )
 	{
 		while( ptr < next )
@@ -457,6 +601,16 @@ private:
 		}
 	}
 	
+	/**
+	* @brief Parses codec-specific configuration data.
+	*
+	* This function interprets the codec configuration information pointed to
+	* by `next` for a given codec type. It is typically used during MP4 or
+	* media initialization to extract codec parameters needed for decoding.
+	*
+	* @param type The codec type identifier (e.g., H.264, H.265, etc.).
+	* @param next Pointer to the buffer containing codec configuration data.
+	*/
 	void parseCodecConfiguration( uint32_t type, const uint8_t *next )
 	{
 		info.codec_type = type;
@@ -661,21 +815,43 @@ public:
 	{
 		return samples[part].ptr;
 	}
-	
+	/**
+	* @brief Retrieves the length of the specified sample part.
+	*
+	* @param part Index of the sample to query.
+	* @return size_t Length of the sample in bytes.
+	*/
 	size_t getLen( int part )
 	{
 		return samples[part].len;
 	}
 	
+	/**
+	* @brief Retrieves the presentation timestamp (PTS) of the specified sample part.
+	*
+	* @param part Index of the sample to query.
+	* @return double The PTS of the sample.
+	*/
 	double getPts( int part )
 	{
 		return samples[part].pts;
 	}
-	
+	/**
+	* @brief Retrieves the decoding timestamp (DTS) of the specified sample part.
+	*
+	* @param part Index of the sample to query.
+	* @return double The DTS of the sample.
+	*/
 	double getDts( int part )
 	{
 		return samples[part].dts;
 	}
+	/**
+	* @brief Retrieves the duration of the specified sample part.
+	*
+	* @param part Index of the sample to query.
+	* @return double Duration of the sample in the same time units as PTS/DTS.
+	*/
 	double getDuration( int part )
 	{
 		return samples[part].duration;
@@ -685,16 +861,43 @@ public:
 	{
 	}
 	
+	/**
+	* @brief Copy constructor for the Mp4Demux class (stub).
+	*
+	* This is a stub copy constructor and is not intended to be used.
+	* Calling this constructor will trigger an assertion failure.
+	*
+	* @param other The #Mp4Demux instance to copy from.
+	*/
 	Mp4Demux(const Mp4Demux & other)
 	{ // stub copy constructor
 		assert(0);
 	}
 	
+	/**
+	* @brief Copy assignment operator for the Mp4Demux class.
+	*
+	* This operator copies the state and internal data from another
+	* #Mp4Demux instance into this instance. It ensures that all
+	* relevant members are properly duplicated.
+	*
+	* @param other The other #Mp4Demux instance to copy from.
+	* @return Mp4Demux& Reference to this instance after assignment.
+	*/
 	Mp4Demux& operator=(const Mp4Demux & other)
 	{ // stub move constructor
 		assert(0);
 	}
 	
+	/**
+	* @brief Sets the capabilities (caps) on a GStreamer AppSrc element.
+	*
+	* This function configures the given #GstAppSrc element with the appropriate
+	* media caps, such as format, resolution, framerate, and codec information,
+	* required for downstream elements to process the stream correctly.
+	*
+	* @param appsrc Pointer to the #GstAppSrc element to configure.
+	*/
 	void setCaps( GstAppSrc *appsrc ) const
 	{
 		GstCaps * caps = NULL;
@@ -756,7 +959,18 @@ public:
 };
 
 /**
- * @brief apply adjustment for pts restamping
+ * @brief Adjusts the media decode timestamps in an MP4 stream.
+ *
+ * This function processes the provided MP4 data buffer and applies a
+ * timestamp adjustment to the media decode time (DTS) fields by the
+ * specified delta. This is useful for resynchronizing or offsetting
+ * media playback.
+ *
+ * @param ptr               Pointer to the MP4 data buffer to process.
+ * @param len               Length of the MP4 data buffer in bytes.
+ * @param pts_restamp_delta The delta (in time units) to apply to the decode timestamps.
+ *
+ * @return uint64_t The number of bytes processed in the buffer.
  */
 uint64_t mp4_AdjustMediaDecodeTime( uint8_t *ptr, size_t len, int64_t pts_restamp_delta );
 
