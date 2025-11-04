@@ -3628,7 +3628,7 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 
 	if (eGST_MEDIATYPE_VIDEO == mediaType)
 	{
-		MW_LOG_MIL("InterfacePlayerRDK_OnFirstVideoFrameCallback. got First Video Frame");
+		MW_LOG_MIL("OnFirstVideoFrame. got First Video Frame");
 
 		if (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified)
 		{
@@ -3655,7 +3655,7 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 	}
 	else if (eGST_MEDIATYPE_AUDIO == mediaType)
 	{
-		MW_LOG_MIL("InterfacePlayerRDK_OnAudioFirstFrameAudDecoder. got First Audio Frame");
+		MW_LOG_MIL("OnAudioFirstFrame. got First Audio Frame");
 		if (audioOnly)
 		{
 			if (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified)
