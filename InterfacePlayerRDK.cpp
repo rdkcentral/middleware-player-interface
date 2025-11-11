@@ -3148,7 +3148,8 @@ bool InterfacePlayerRDK::SendHelper(int type, const void *ptr, size_t len, doubl
 						double pts = mp4Demux->getPts(i);
 						double dts = mp4Demux->getDts(i);
 						double dur = mp4Demux->getDuration(i);
-						GstStructure *drm = mp4Demux->getDrmMetadata(i);
+						//temprorary fix
+						//GstStructure *drm = mp4Demux->getDrmMetadata(i);
 						gpointer data = g_malloc(sampleLen);
 						if( data )
 						{
@@ -3157,9 +3158,9 @@ bool InterfacePlayerRDK::SendHelper(int type, const void *ptr, size_t len, doubl
 							GST_BUFFER_PTS(gstBuffer) = (GstClockTime)(pts * GST_SECOND);
 							GST_BUFFER_DTS(gstBuffer) = (GstClockTime)(dts * GST_SECOND);
 							GST_BUFFER_DURATION(gstBuffer) = (GstClockTime)(dur * 1000000000LL);
-							if (drm)
+							//if (drm)
 							{
-								gst_buffer_add_protection_meta(gstBuffer, drm);
+								//gst_buffer_add_protection_meta(gstBuffer, drm);
 							}
 							GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(stream->source),gstBuffer);
 							if( ret == GST_FLOW_OK )
@@ -3176,7 +3177,7 @@ bool InterfacePlayerRDK::SendHelper(int type, const void *ptr, size_t len, doubl
 				}
 				else
 				{ // init header
-					mp4Demux->setCaps( GST_APP_SRC(stream->source) );
+					//mp4Demux->setCaps( GST_APP_SRC(stream->source) );
 				}
 				if( !copy )
 				{
