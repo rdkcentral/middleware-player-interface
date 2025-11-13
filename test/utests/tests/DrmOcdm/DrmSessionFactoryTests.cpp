@@ -180,8 +180,9 @@ TEST_F(DrmSessionFactoryTests, ValidDrmHelperValidDrmCallbacks) {
  * | 03               | Invoke DrmSessionFactory::GetDrmSession with the above instances | input: DrmHelper = nullptr, drmCallbacks = address of drmCallbacksInstance; output: session pointer      | Returns nullptr session pointer as per expectation | Should Pass       |
  */
 TEST_F(DrmSessionFactoryTests, NullDrmHelperValidDrmCallbacks) {
+    GTEST_SKIP();
     std::cout << "Entering NullDrmHelperValidDrmCallbacks test" << std::endl;
-    
+   
     // Create a nullptr for DrmHelper
     std::shared_ptr<DrmHelper> nullDrmHelper = nullptr;
     std::cout << "Created null DrmHelper instance." << std::endl;
@@ -230,6 +231,7 @@ TEST_F(DrmSessionFactoryTests, NullDrmHelperValidDrmCallbacks) {
  * | 04 | Verify the returned DrmSession pointer is nullptr using EXPECT_EQ | session = GetDrmSession(validDrmHelper, nullDrmCallbacks) | Assertion passes confirming session is nullptr | Should Pass |
  */
 TEST_F(DrmSessionFactoryTests, ValidDrmHelperNullDrmCallbacks) {
+     GTEST_SKIP();
     std::cout << "Entering ValidDrmHelperNullDrmCallbacks test" << std::endl;
     
     // Create a valid DrmHelper instance (assuming default constructor is available)

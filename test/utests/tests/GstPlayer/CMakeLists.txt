@@ -58,12 +58,16 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp
 	${UTESTS_ROOT}fakes/FakeGLib.cpp
-	${UTESTS_ROOT}/fakes/FakeGstUtils.cpp)
+	${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
+	${UTESTS_ROOT}/fakes/FakeSocInterface.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
 	       ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
+
+target_compile_definitions(${EXEC_NAME} PRIVATE UBUNTU)
+
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)

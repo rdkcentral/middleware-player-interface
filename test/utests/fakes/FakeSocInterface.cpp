@@ -211,3 +211,23 @@ bool DefaultSocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject 
         }
         return status;
 }
+void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_class ,
+                                                                                                        AcceptCapsFunc accept_caps_func)
+{
+
+}
+bool DefaultSocInterface::SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec)
+{
+	return false;
+}
+bool DefaultSocInterface::IsVideoMaster(GstElement *videoSink)
+{
+        gboolean isMaster{TRUE};
+        GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(videoSink),"is-master");
+        if( pspec!=NULL )
+        { // rialto-specific
+                g_object_get(videoSink, "is-master", &isMaster, nullptr);
+                MW_LOG_INFO("is-master %d", isMaster);
+        }
+        return (isMaster == TRUE);
+}
