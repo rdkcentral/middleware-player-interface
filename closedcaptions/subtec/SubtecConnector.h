@@ -85,7 +85,15 @@ typedef enum gsw_CcFontSize {
     GSW_CC_FONT_SIZE_MAX
 } gsw_CcFontSize;
 
-
+/**
+ * @var CCSupportedColors_strings
+ * @brief Array of supported closed caption color names as strings.
+ *
+ * The order of this array matches the order of the color values in CCSupportedColors.
+ * Each entry corresponds to a specific closed caption color.
+ *
+ * Example values: "BLACK", "WHITE", "RED", "GREEN", "BLUE", "YELLOW", "MAGENTA", "CYAN", "AUTO"
+ */
 static const char *CCSupportedColors_strings[] = {
     "BLACK",                /**< CCColor_BLACK,            */
     "WHITE",                /**< CCColor_WHITE,            */
@@ -98,6 +106,15 @@ static const char *CCSupportedColors_strings[] = {
     "AUTO",                 /**< CCColor_AUTO,             */
 };
 
+/**
+ * @var CCSupportedColors
+ * @brief Array of supported closed caption color values in RGB format.
+ *
+ * The order of this array matches the order of the color names in CCSupportedColors_strings.
+ * Each entry is a 32-bit unsigned integer representing an RGB color value.
+ *
+ * Example values: 0x00000000 (BLACK), 0x00ffffff (WHITE), 0x00FF0000 (RED), etc.
+ */
 static unsigned long CCSupportedColors[] = {
     0x00000000,             /**< CCColor_BLACK,            */
     0x00ffffff,             /**< CCColor_WHITE,            */
@@ -116,6 +133,50 @@ static unsigned long CCSupportedColors[] = {
 //#define GSW_CC_FONT_STYLE_EMBEDDED "EMBEDDED"
 typedef char gsw_CcFontStyle[GSW_CC_MAX_FONT_NAME_LENGTH];
 
+/**
+ * @def GSW_CC_FONT_STYLE_EMBEDDED
+ * @brief Embedded font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_DEFAULT
+ * @brief Default font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_MONOSPACED_SERIF
+ * @brief Monospaced serif font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_PROPORTIONAL_SERIF
+ * @brief Proportional serif font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_MONOSPACED_SANSSERIF
+ * @brief Monospaced sans-serif font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_PROPORTIONAL_SANSSERIF
+ * @brief Proportional sans-serif font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_CASUAL
+ * @brief Casual font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_CURSIVE
+ * @brief Cursive font style for closed captions.
+ */
+
+/**
+ * @def GSW_CC_FONT_STYLE_SMALL_CAPITALS
+ * @brief Small capitals font style for closed captions.
+ */
 #define GSW_CC_FONT_STYLE_EMBEDDED 		"embedded"  //"EMBEDDED"
 #define GSW_CC_FONT_STYLE_DEFAULT 		"Default"   //"DEFAULT"
 #define GSW_CC_FONT_STYLE_MONOSPACED_SERIF	"MonospacedSerif"   //"MONOSPACED_SERIF"
@@ -375,24 +436,95 @@ typedef enum {
 typedef int mrcc_Error;
 namespace subtecConnector
 {
+    /**
+     * @brief Reset the closed caption channel.
+     *
+     * This function resets the closed caption channel to its default state.
+     */
     void resetChannel();
+
+    /**
+     * @brief Close the closed caption subsystem.
+     *
+     * This function performs cleanup and closes the closed caption subsystem.
+     */
     void close();
 
+    /**
+     * @brief Initialize the HAL (Hardware Abstraction Layer) for closed captions.
+     *
+     * @param handle Pointer to the HAL handle.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error initHal(void *handle);
+
+    /**
+     * @brief Initialize the closed caption packet sender.
+     *
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error initPacketSender();
 
 namespace ccMgrAPI
 {
+    /**
+     * @brief Show closed captions.
+     *
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccShow(void);
+
+    /**
+     * @brief Hide closed captions.
+     *
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccHide(void);
 
+    /**
+     * @brief Set the digital closed caption channel.
+     *
+     * @param channel Digital channel number to set.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccSetDigitalChannel(unsigned int channel);
 
+    /**
+     * @brief Set the analog closed caption channel.
+     *
+     * @param channel Analog channel number to set.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccSetAnalogChannel(unsigned int channel);
 
+    /**
+     * @brief Set closed caption attributes.
+     *
+     * @param attrib Pointer to the attributes structure.
+     * @param type Attribute type.
+     * @param ccType Closed caption type.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccSetAttributes(gsw_CcAttributes * attrib, short type, gsw_CcType ccType);
+
+    /**
+     * @brief Get closed caption attributes.
+     *
+     * @param attrib Pointer to the attributes structure to fill.
+     * @param ccType Closed caption type.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType ccType);
 
+    /**
+     * @brief Get closed caption capability.
+     *
+     * @param attribType Attribute type to query.
+     * @param ccType Closed caption type.
+     * @param value Pointer to store the capability value.
+     * @param size Pointer to store the size of the capability value.
+     * @return mrcc_Error Error code indicating success or failure.
+     */
     mrcc_Error ccGetCapability(gsw_CcAttribType attribType, gsw_CcType ccType, void **value, unsigned int *size);
 
     // mrcc_Error ccSetCCState(CCStatus_t ccStatus, int /*not used*/);

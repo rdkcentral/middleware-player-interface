@@ -49,37 +49,137 @@ namespace subtecConnector
 class CCDataController
 {
 public:
+    /**
+     * @brief Get the singleton instance of CCDataController.
+     *
+     * @return Pointer to the CCDataController instance.
+     */
     static CCDataController* Instance();
 
+    /**
+     * @brief Callback for receiving closed caption data.
+     *
+     * @param decoderIndex Index of the decoder.
+     * @param eType Closed caption data type.
+     * @param ccData Pointer to closed caption data buffer.
+     * @param dataLength Length of the closed caption data.
+     * @param sequenceNumber Sequence number of the data packet.
+     * @param localPts Local presentation timestamp.
+     */
     void closedCaptionDataCb (int decoderIndex, VL_CC_DATA_TYPE eType, unsigned char* ccData,
                                     unsigned dataLength, int sequenceNumber, long long localPts);
 
+    /**
+     * @brief Callback for closed caption decode events.
+     *
+     * @param decoderIndex Index of the decoder.
+     * @param event Event code.
+     */
     void closedCaptionDecodeCb(int decoderIndex, int event);
 
+    /**
+     * @brief Send mute command for closed captions.
+     */
     void sendMute();
+
+    /**
+     * @brief Send unmute command for closed captions.
+     */
     void sendUnmute();
 
+    /**
+     * @brief Send pause command for closed captions.
+     */
     void sendPause();
+
+    /**
+     * @brief Send resume command for closed captions.
+     */
     void sendResume();
+
+    /**
+     * @brief Send reset channel packet for closed captions.
+     */
     void sendResetChannelPacket();
+
+    /**
+     * @brief Send command to set closed caption attributes.
+     *
+     * @param attrib Pointer to attributes structure.
+     * @param type Attribute type.
+     * @param ccType Closed caption type.
+     */
     void sendCCSetAttribute(gsw_CcAttributes * attrib, short type, gsw_CcType ccType);
 
+    /**
+     * @brief Set the digital closed caption channel.
+     *
+     * @param channel Channel number.
+     */
     void ccSetDigitalChannel(unsigned int channel);
+
+    /**
+     * @brief Set the analog closed caption channel.
+     *
+     * @param channel Channel number.
+     */
     void ccSetAnalogChannel(unsigned int channel);
 
+    /**
+     * @brief Get closed caption attributes.
+     *
+     * @param attrib Pointer to attributes structure to fill.
+     * @param ccType Closed caption type.
+     */
     void ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType ccType);
 
 private:
+    /**
+     * @brief Default constructor for CCDataController.
+     */
     CCDataController();
+
+    /**
+     * @brief Deleted copy constructor to prevent copying.
+     */
     CCDataController(const CCDataController&) = delete;
+
+    /**
+     * @brief Deleted move constructor to prevent moving.
+     */
     CCDataController(CCDataController&&) = delete;
+
+    /**
+     * @brief Closed captions channel handler.
+     */
     ClosedCaptionsChannel channel;
 
+    /**
+     * @brief Stores the current closed caption attributes.
+     */
     gsw_CcAttributes currentAttributes;
 };
 
+/**
+ * @brief Callback for closed caption decode events (C-style).
+ *
+ * @param context Pointer to user context.
+ * @param decoderIndex Index of the decoder.
+ * @param event Event code.
+ */
 void closedCaptionDecodeCb(void *context, int decoderIndex, int event);
 
+/**
+ * @brief Callback for receiving closed caption data (C-style).
+ *
+ * @param context Pointer to user context.
+ * @param decoderIndex Index of the decoder.
+ * @param eType Closed caption data type.
+ * @param ccData Pointer to closed caption data buffer.
+ * @param dataLength Length of the closed caption data.
+ * @param sequenceNumber Sequence number of the data packet.
+ * @param localPts Local presentation timestamp.
+ */
 void closedCaptionDataCb (void *context, int decoderIndex, VL_CC_DATA_TYPE eType, unsigned char* ccData,
                                 unsigned dataLength, int sequenceNumber, long long localPts);
 
