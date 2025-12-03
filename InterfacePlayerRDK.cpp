@@ -79,6 +79,9 @@ mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSys
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
 	// start Scheduler Worker for task handling
 	mScheduler.StartScheduler();
+
+	printf("InterfacePlayerRDK created in seperated repo\n");
+	fflush(stdout);
 }
 
 /* InterfacePlayerRDK destructor*/
