@@ -3,6 +3,45 @@
 #include <algorithm>
 #include <sstream>
 #include <fstream>
+#include <atomic>
+#include <chrono>
+
+// Forward declaration for use in PositionPollingThread
+void getPositionMillisecondsCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
+
+// --- PositionPollingThread Helper ---
+class PositionPollingThread {
+public:
+    PositionPollingThread(InterfacePlayerRDK& player)
+        : player(player), running(false) {}
+
+    void start(int intervalMs) {
+        stop();
+        running = true;
+        pollingThread = std::thread([this, intervalMs]() {
+            while (running) {
+                getPositionMillisecondsCommand(player, {});
+                std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+            }
+        });
+    }
+
+    void stop() {
+        running = false;
+        if (pollingThread.joinable()) {
+            pollingThread.join();
+        }
+    }
+
+    ~PositionPollingThread() {
+        stop();
+    }
+
+private:
+    InterfacePlayerRDK& player;
+    std::atomic<bool> running;
+    std::thread pollingThread;
+};
 
 // --- CommandExecutor Implementation ---
 void CommandExecutor::threadFunction() {
@@ -58,9 +97,45 @@ void CommandExecutor::stop() {
 }
 
 void displayHelp(const std::map<std::string, Command>& commands) {
+    // Find the maximum width of "- command:" for alignment
+    size_t maxCmdWidth = 0;
+    for (const auto& [key, command] : commands) {
+        size_t len = command.matchValue.length() + 1; // matchValue + ":"
+        if (len > maxCmdWidth)
+            maxCmdWidth = len;
+    }
+    // Set the helpText column (e.g., 2 spaces after the widest command)
+    size_t helpCol = maxCmdWidth + 2;
+
     std::cout << "Available commands:\n";
     for (const auto& [key, command] : commands) {
-        std::cout << "- " << command.matchValue << ": " << command.helpText << "\n";
+        std::string cmdStr = command.matchValue + ":";
+        size_t cmdWidth = cmdStr.length();
+
+        // Split helpText
+        const std::string& help = command.helpText;
+        size_t usagePos = help.find("Usage:");
+        std::string desc, usage;
+        if (usagePos != std::string::npos) {
+            desc = help.substr(0, usagePos);
+            usage = help.substr(usagePos);
+        } else {
+            desc = help;
+        }
+
+        // Print command and aligned description
+        std::cout << cmdStr;
+        if (!desc.empty() && desc.back() == '\n')
+            desc.pop_back();
+        // Align to helpCol
+        if (cmdWidth < helpCol)
+            std::cout << std::string(helpCol - cmdWidth, ' ');
+        std::cout << "- " << desc << std::endl;
+
+        // Print aligned usage if present
+        if (!usage.empty()) {
+            std::cout << std::string(helpCol, ' ') << usage << std::endl;
+        }
     }
 }
 
@@ -202,6 +277,19 @@ void pauseCommand(InterfacePlayerRDK& player, const std::vector<std::string>& pa
     }
     bool result = player.Pause(pauseVal, forceStop);
     std::cout << "Pause executed. Result: " << (result ? "true" : "false") << "\n";
+}
+
+void resumeCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
+    if (!params.empty()) {
+        std::cout << "Usage: resume\n";
+        return;
+    }
+    bool result = player.Pause(false, false);
+    std::cout << "Resume executed. Success: " << (result ? "true" : "false") << "\n";
+    if (result) {
+        std::cout << "Pipeline state: " << (player.IsPipelinePaused() ? "Paused" : "Playing") << "\n";
+        std::cout << "Current position: " << player.GetPositionMilliseconds() << " ms\n";
+    }
 }
 
 void resumeInjectorCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
@@ -480,6 +568,34 @@ void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::st
     std::cout << "injectfragment executed. Success: " << (ok ? "true" : "false") << "\n";
 }
 
+void getPositionMillisecondsCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
+    // Usage: getpositionmilliseconds
+    if (!params.empty()) {
+        std::cout << "Usage: getpositionmilliseconds\n";
+        return;
+    }
+    int64_t posMs = player.GetPositionMilliseconds();
+    std::cout << "GetPositionMilliseconds: " << posMs << " ms\n";
+}
+
+
+static PositionPollingThread* g_positionPollingThread = nullptr;
+
+void reportPositionsCommand(const std::vector<std::string>& params) {
+    if (params.size() != 1) {
+        std::cout << "Usage: reportpositions <intervalMs>\n";
+        return;
+    }
+    int intervalMs = std::stoi(params[0]);
+    if (intervalMs <= 0) {
+        g_positionPollingThread->stop();
+        std::cout << "Stopped position polling.\n";
+        return;
+    }
+    g_positionPollingThread->start(intervalMs);
+    std::cout << "Started position polling every " << intervalMs << " ms.\n";
+}
+
 // --- Register All Commands ---
 std::map<std::string, Command> initializeCommands(CommandExecutor& executor, InterfacePlayerRDK& player) {
     std::map<std::string, Command> commands;
@@ -498,6 +614,7 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("setaudiovolume", Command("setaudiovolume", "Set audio volume. Usage: setaudiovolume <volume>", [&player](const std::vector<std::string>& params) { setAudioVolumeCommand(player, params); }));
     commands.emplace("setupstream", Command("setupstream", "Setup stream. Usage: setupstream <streamId> <playerInstance(int)> <url>", [&player](const std::vector<std::string>& params) { setupStreamCommand(player, params); }));
     commands.emplace("pause", Command("pause", "Pause the pipeline. Usage: pause [pause(bool)] [forceStop(bool)]", [&player](const std::vector<std::string>& params) { pauseCommand(player, params); }));
+    commands.emplace("resume", Command("resume", "Resume playback.\nUsage: resume", [&player](const std::vector<std::string>& params) { resumeCommand(player, params); }));
     commands.emplace("resumeinjector", Command("resumeinjector", "Resume injector.", [&player](const std::vector<std::string>& params) { resumeInjectorCommand(player, params); }));
     commands.emplace("stop", Command("stop", "Stop playback.", [&player](const std::vector<std::string>& params) { stopCommand(player, params); }));
     commands.emplace("flush", Command("flush", "Flush pipeline.", [&player](const std::vector<std::string>& params) { flushCommand(player, params); }));
@@ -523,6 +640,13 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("clearprotectionevent", Command("clearprotectionevent", "Clear protection event.", [&player](const std::vector<std::string>& params) { clearProtectionEventCommand(player, params); }));
     commands.emplace("setvideorectangle", Command("setvideorectangle", "Usage: setvideorectangle <x> <y> <width> <height>", [&](const std::vector<std::string>& params) { setVideoRectangle(player, params); }));
     commands.emplace("injectfragment", Command("injectfragment", "Inject a fragment into the player. Usage: injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]", [&player](const std::vector<std::string>& params) { injectFragmentCommand(player, params); } ) );
+    commands.emplace("getpositionmilliseconds", Command("getpositionmilliseconds", "Get current position in milliseconds.", [&player](const std::vector<std::string>& params) { getPositionMillisecondsCommand(player, params); }));
+
+    // Initialize the polling thread pointer if not already done
+    if (!g_positionPollingThread) {
+        g_positionPollingThread = new PositionPollingThread(player);
+    }
+    commands.emplace("reportpositions", Command("reportpositions","Start polling position every <intervalMs> ms. Usage: reportpositions <intervalMs>",[](const std::vector<std::string>& params) {reportPositionsCommand(params);}));
 
     return commands;
 }
