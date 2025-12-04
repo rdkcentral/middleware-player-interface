@@ -68,3 +68,10 @@ bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 {
     return true;
 }
+
+const std::vector<std::vector<uint8_t>>& OCDMSessionAdapter::getUsableKeys() const
+{
+    static const std::vector<std::vector<uint8_t>> emptyKeys;
+    return emptyKeys;
+}
+
