@@ -99,8 +99,8 @@ target_include_directories (gstaamp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../ $
 set(LIBPLUGIN_DEFINES "${PLUGIN_DEFINES}")
 
 if (CMAKE_AMLOGIC_SOC)
-        message("CMAKE_AMLOGIC_SOC set")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAMLOGIC")
+    message("CMAKE_AMLOGIC_SOC set")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAMLOGIC")
 	target_link_libraries (gstaamp gstsvpext)
 endif()
 

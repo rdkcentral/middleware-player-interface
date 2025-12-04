@@ -388,6 +388,8 @@ endif()
 	message("Building middleware support libraries")
 	add_subdirectory(gst-plugins)
 
+	target_link_libraries(playergstinterface gstsvpext)
+
 	target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 
 	target_link_libraries(playergstinterface ${GST_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
