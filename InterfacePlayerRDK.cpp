@@ -3133,7 +3133,7 @@ bool InterfacePlayerRDK::SendHelper(int type, const void *ptr, size_t len, doubl
 			{
 				interfacePlayerPriv->ForwardBuffersToAuxPipeline(buffer, mPauseInjector, this);
 			}
-#if !defined(UBUNTU)
+			
 			if( mediaType<2 && m_gstConfigParam->useMp4Demux &&
 			   !copy /* avoid using this path for hls/ts */ )
 			{
@@ -3190,7 +3190,6 @@ bool InterfacePlayerRDK::SendHelper(int type, const void *ptr, size_t len, doubl
 				}
 			}
 			else
-#endif
 			{
 				GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(stream->source), buffer);
 				
