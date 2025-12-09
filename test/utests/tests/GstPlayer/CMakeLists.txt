@@ -66,8 +66,6 @@ add_executable(${EXEC_NAME}
 	       ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
 
-target_compile_definitions(${EXEC_NAME} PRIVATE UBUNTU)
-
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
