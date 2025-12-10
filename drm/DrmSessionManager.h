@@ -336,6 +336,22 @@ public:
 	 */
 	bool getFailedKeyIdStatus(int sessionIndex);
 	/**
+	 * @fn		testCacheKeyId
+	 * @brief	Test helper method to cache a keyId for testing purposes
+	 *
+	 * @param	keyId - key Id to cache
+	 * @param	isFailed - whether to mark the key as failed
+	 */
+	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
+	{
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		KeyIdEntry entry;
+		entry.keyId = keyId;
+		entry.isFailedKeyId = isFailed;
+		cachedKeyIDs[0].data.push_back(entry);
+		cachedKeyIDs[0].isFailedKeyEntries = isFailed;
+	}
+	/**
 	 * @fn		clearDrmSession
 	 *
 	 * @param 	forceClearSession clear the drm session irrespective of failed keys if LicenseCaching is false.
