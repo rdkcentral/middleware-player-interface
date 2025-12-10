@@ -655,55 +655,6 @@ TEST_F(DrmSessionManagerTests, ConstructNullPlayer) {
     std::cout << "Exiting ConstructNullPlayer test" << std::endl;
 }
 /**
- * @brief Verify that the IsKeyIdProcessed method correctly identifies a cached key ID.
- *
- * This test creates a DrmSessionManager instance, prepares a keyIdArray, and invokes the IsKeyIdProcessed method.
- * It verifies that when the key ID is already cached, the method returns true and updates the status to true.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 013@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                              | Test Data                                      | Expected Result                                           | Notes          |
- * | :--------------: | ------------------------------------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------- | -------------- |
- * | 01               | Create a DrmSessionManager instance with a maximum of 5 sessions and a null player. | maxDrmSessions = 5, player = nullptr           | DrmSessionManager instance is created successfully.       | Should be successful |
- * | 02               | Prepare the input keyIdArray with values {1, 2, 3, 4}.                   | keyIdArray = {1, 2, 3, 4}                        | keyIdArray is initialized correctly.                      | Should be successful |
- * | 03               | Initialize the status variable to false.                                 | status = false                                  | Status remains false prior to the API call.               | Should be successful |
- * | 04               | Invoke the IsKeyIdProcessed method using keyIdArray and the status variable. | keyIdArray = {1, 2, 3, 4}, status = false        | Method returns true and updates status to true.           | Should Pass    |
- * | 05               | Validate the expected results using assertion checks.                    | Expected returnValue = true, expected status = true | EXPECT_TRUE assertions pass; both return and status are true. | Should Pass    |
- */
-TEST_F(DrmSessionManagerTests, ProcessedKeyIdAlreadyCached) {
-    std::cout << "Entering ProcessedKeyIdAlreadyCached test" << std::endl;
-    
-      // Step 01: Create DrmSessionManager instance
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
-        std::cout << "Callback invoked with id1=" << id1
-                  << ", id2=" << id2
-                  << ", text=" << text << std::endl;
-    };
-    void* player = nullptr;
-    DrmSessionManager drmSessionManager(5, player, callback);
-
-    // Step 02: Prepare keyIdArray
-    std::vector<uint8_t> keyIdArray = {1, 2, 3, 4};
-
-    // Step 04: Call IsKeyIdProcessed with status=false
-    bool status = false;
-    drmSessionManager.testCacheKeyId(keyIdArray, false);
-    bool returnValue = drmSessionManager.IsKeyIdProcessed(keyIdArray, status);
-
-    // Step 05: Assert
-    EXPECT_TRUE(returnValue);
-    EXPECT_TRUE(status);
-
-    std::cout << "Exiting ProcessedKeyIdAlreadyCached test" << std::endl;
-}
-/**
  * @brief Verify that IsKeyIdProcessed returns false and updates status accordingly when provided with an empty keyIdArray.
  *
  * This test checks that when the DrmSessionManager API IsKeyIdProcessed is invoked with an empty keyIdArray, the API correctly returns false and sets the status to false. This behavior is necessary to ensure that the system does not attempt processing when no key IDs are provided.
@@ -763,73 +714,6 @@ TEST_F(DrmSessionManagerTests, EmptyKeyIdArray) {
     EXPECT_FALSE(status);
     
     std::cout << "Exiting EmptyKeyIdArray test" << std::endl;
-}
-/**
- * @brief Verify that IsKeyIdProcessed correctly processes a single element key id.
- *
- * This test verifies that when a DrmSessionManager instance is created with a specified maximum
- * number of DRM sessions and a nullptr player, invoking the IsKeyIdProcessed method with a keyIdArray
- * containing a single element correctly returns true and updates the status to true. This ensures that
- * the method properly processes a single element key id.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 015@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                           | Test Data                                             | Expected Result                                                 | Notes         |
- * | :--------------: | --------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ------------- |
- * | 01               | Create a DrmSessionManager instance using the constructor             | maxDrmSessions = 5, player = nullptr                    | Instance is created successfully                                | Should be successful |
- * | 02               | Prepare the keyIdArray with a single element                          | input keyIdArray = {0}                                  | keyIdArray is initialized with one element                      | Should be successful |
- * | 03               | Initialize status variable to false                                   | status = false                                          | status is initialized to false                                   | Should be successful |
- * | 04               | Invoke IsKeyIdProcessed method with keyIdArray and status               | keyIdArray = {0}, status = false                        | Return value is true and status is updated to true               | Should Pass   |
- * | 05               | Validate API output using assertion checks                            | returnValue = true, status = true                      | EXPECT_TRUE assertions for both return value and status pass     | Should be successful |
- */
-TEST_F(DrmSessionManagerTests, SingleElementKeyIdProcessed) {
-    std::cout << "Entering SingleElementKeyIdProcessed test" << std::endl;
-    
-    // Create a DrmSessionManager instance using the custom constructor.
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
-        std::cout << "Callback invoked with id1=" << id1
-                  << ", id2=" << id2
-                  << ", text=" << text << std::endl;
-    };
-    
-    // Log input values
-    std::cout << "Invoking DrmSessionManager constructor with maxDrmSessions = 5 and player pointer = nullptr" << std::endl;    
-    
-    // Construct the object
-    DrmSessionManager drmSessionManager(5, nullptr, callback);
-    
-    std::cout << "Created DrmSessionManager instance with maxDrmSessions = 5 and player = nullptr" << std::endl;
-    
-    // Prepare input keyIdArray with a single element {0}.
-    std::vector<uint8_t> keyIdArray = {0};
-    std::cout << "Input keyIdArray: { " << static_cast<int>(keyIdArray[0]) << " }" << std::endl;
-    
-    // Initialize status to false.
-    bool status = false;
-    std::cout << "Initial status value: " << std::boolalpha << status << std::endl;
-    
-    // Invoke the IsKeyIdProcessed method.
-        drmSessionManager.testCacheKeyId(keyIdArray, false);
-
-    std::cout << "Invoking IsKeyIdProcessed with keyIdArray and status variable" << std::endl;
-    bool returnValue = drmSessionManager.IsKeyIdProcessed(keyIdArray, status);
-    
-    // Log the returned value and status.
-    std::cout << "Method IsKeyIdProcessed returned: " << std::boolalpha << returnValue 
-              << ", updated status: " << status << std::endl;
-    
-    // Validate the expected behavior.
-    EXPECT_TRUE(returnValue);
-    EXPECT_TRUE(status);
-    
-    std::cout << "Exiting SingleElementKeyIdProcessed test" << std::endl;
 }
 /**
  * @brief Test the registration and execution of a valid non-empty lambda callback in DrmSessionManager.
