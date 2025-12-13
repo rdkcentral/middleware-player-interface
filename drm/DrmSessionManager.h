@@ -71,19 +71,37 @@ struct DrmSessionContext
 };
 
 /**
- *  @struct	KeyID
- *  @brief	Structure to hold, keyId and session creation time for
- *  		keyId
+ *  @struct	KeyIdEntry
+ *  @brief	Structure to hold, keyId and its failed status
  */
-struct KeyID
+struct KeyIdEntry
 {
-	std::vector<std::vector<uint8_t>> data;
-	long long creationTime;
-	bool isFailedKeyId;
-	bool isPrimaryKeyId;
+	std::vector<uint8_t> keyId; 	/**<  Key ID */
+	bool isFailedKeyId;				/**< Flag to mark the failed key ID status */
 
-	KeyID();
+	/**
+	 *  @fn KeyIdEntry - constructor
+	 */
+	KeyIdEntry() : keyId(), isFailedKeyId(false)
+	{
+	}
 };
+
+/**
+ *  @struct	KeyIdEntries
+ *  @brief	Structure to hold, keyIds and session creation time for Entries
+ */
+struct KeyIdEntries
+{
+	std::vector<KeyIdEntry> data;	// List of KeyIdEntry
+	long long creationTime;			// Session creation time
+	bool isPrimaryKeyId;			// Flag to mark the primary key ID status
+	bool isFailedKeyEntries;		// Flag to mark the complete entry invalid
+
+	KeyIdEntries();
+};
+
+
 
 /**
  *  @brief	Enum to represent session manager state.
@@ -129,9 +147,11 @@ public:
 	configs *m_drmConfigParam;
 	PlayerSecInterface *playerSecInstance;/** PlayerSecInterface instance **/
 	ContentSecurityManagerSession mContentSecurityManagerSession;
-        std::atomic<bool> mFirstFrameSeen;
+    std::atomic<bool> mFirstFrameSeen;
+	std::atomic<bool> mIsVideoOnMute;
+	std::atomic<int> mCurrentSpeed;
 private:
-	KeyID *cachedKeyIDs;
+	KeyIdEntries *cachedKeyIDs;
 	char* accessToken;
 	int accessTokenLen;
 	SessionMgrState sessionMgrState;
@@ -140,8 +160,6 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
-	std::atomic<bool> mIsVideoOnMute;
-	std::atomic<int> mCurrentSpeed;
 	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
@@ -191,27 +209,6 @@ public:
 	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
 
 	void initializeDrmSessions();
-
-	/**
-	 * @brief Tests caching of a DRM key ID.
-	 *
-	 * This function is a unit test helper that verifies the behavior of key ID caching
-	 * in the ClearKey DRM session. It accepts a key ID as a byte vector and optionally
-	 * indicates whether the test case is expected to fail.
-	 *
-	 * @param keyId     The key ID to be tested, represented as a vector of bytes.
-	 * @param isFailed  Optional flag indicating if the test should simulate a failure.
-	 *                  - false (default): Expect success.
-	 *                  - true: Expect failure.
-	 *
-	 * @note This is a test utility function and not intended for production use.
-	 */
-	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
-	{	
-        std::lock_guard<std::mutex> guard(cachedKeyMutex);
-        cachedKeyIDs[0].data.push_back(keyId);
-        cachedKeyIDs[0].isFailedKeyId = isFailed;
-    }
 
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
@@ -286,7 +283,7 @@ public:
 	 *  @retval  	error_code - Gets updated with proper error code, if session creation fails.
 	 *  			No NULL checks are done for error_code, caller should pass a valid pointer.
 	 */
-	DrmSession * createDrmSession(int &err, const char* systemId, MediaFormat mediaFormat,
+	DrmSession * createDrmSession(int &responseCode, int &err, const char* systemId, MediaFormat mediaFormat,
 			const unsigned char * initDataPtr, uint16_t dataLength, int streamType,
 			DrmCallbacks* player, void *ptr, const unsigned char *contentMetadata = nullptr, 
 	                	bool isPrimarySession = false );
@@ -294,7 +291,7 @@ public:
 	 * @fn createDrmSession
 	 * @return drmSession
 	 */
-	DrmSession* createDrmSession( int &err, DrmHelperPtr drmHelper,  DrmCallbacks* Instance, int streamType, void *metaDataPtr);
+	DrmSession* createDrmSession(int& responseCode, int &err, DrmHelperPtr drmHelper,  DrmCallbacks* Instance, int streamType, void *metaDataPtr);
 
 	/**
 	 *  @fn		IsKeyIdProcessed
@@ -304,6 +301,15 @@ public:
 	 * 				false if key is not cached
 	 */
 	bool IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &status);
+	/**
+	 * @fn Validate multiple key IDs for a given DRM session slot using the provided DrmHelper
+	 *
+	 * @param[in] keyId The key ID to validate
+	 * @param[in] selectedSlot The DRM session slot to validate
+	 *
+	 * @return true if validation is successful, false otherwise
+	 */
+	bool ValidateMultiKeySlot(const std::vector<uint8_t>& keyId, int selectedSlot);
 	/**
 	 *  @fn         clearSessionData
 	 *
@@ -322,6 +328,29 @@ public:
 	 * @return	void.
 	 */
 	void clearFailedKeyIds();
+	/**
+	 * @fn		getFailedKeyIdStatus
+	 *
+	 * @param	sessionIndex - curl session index to check
+	 * @return	bool - true if the key ID is marked as failed, false otherwise
+	 */
+	bool getFailedKeyIdStatus(int sessionIndex);
+	/**
+	 * @fn		testCacheKeyId
+	 * @brief	Test helper method to cache a keyId for testing purposes
+	 *
+	 * @param	keyId - key Id to cache
+	 * @param	isFailed - whether to mark the key as failed
+	 */
+	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
+	{
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		KeyIdEntry entry;
+		entry.keyId = keyId;
+		entry.isFailedKeyId = isFailed;
+		cachedKeyIDs[0].data.push_back(entry);
+		cachedKeyIDs[0].isFailedKeyEntries = isFailed;
+	}
 	/**
 	 * @fn		clearDrmSession
 	 *
@@ -409,7 +438,7 @@ public:
         /*
          *@brief Type definition for acquireLicense callback from application 
          */
-        using LicenseCallback = std::function<KeyState(DrmHelperPtr drmHelper, int sessionSlot, int &cdmError,
+        using LicenseCallback = std::function<KeyState(int& responseCode, DrmHelperPtr drmHelper, int sessionSlot, int &cdmError,
                         GstMediaType streamType,void *metaDataPtr, bool isLicenseRenewal)>;
         LicenseCallback AcquireLicenseCb;
         /*
@@ -428,28 +457,12 @@ public:
         {
               ProfileUpdateCb = callback;
         };
-
-	using ProfileBeginCallback = std::function<void(int)>;
-	ProfileBeginCallback profileBeginCb;
-	void RegisterProfBegin(const ProfileBeginCallback callback)
+	using ProfileDecryptProfileCallback = std::function<void(int, int , int)>;
+	ProfileDecryptProfileCallback profileDecryptProfileCb;
+	void RegisterDecryptProfile(const ProfileDecryptProfileCallback callback)
 	{
-		profileBeginCb = callback;
+		profileDecryptProfileCb = callback;
 	};
-
-	using ProfileEndCallback = std::function<void(int streamType)>;
-	ProfileEndCallback profileEndCb;
-	void RegisterProfEnd(const ProfileEndCallback callback)
-	{
-		profileEndCb = callback;
-	};
-
-	using ProfileErrorCallback = std::function<void(int streamType, int result)>;
-	ProfileErrorCallback profileErrorCb;
-	void RegisterProfError(const ProfileErrorCallback callback)
-	{
-		profileErrorCb = callback;
-	};
-
 	using LAProfileBeginCallback = std::function<void(int)>;
 	LAProfileBeginCallback laprofileBeginCb;
 	void RegisterLAProfBegin(const LAProfileBeginCallback callback)
@@ -478,17 +491,16 @@ public:
 		setfailureCb = callback;
 	};
 
-	//using DrmMetaDataCallback =	std::function<void *()>;
 	using DrmMetaDataCallback = std::function<std::shared_ptr<void>()>;
 	DrmMetaDataCallback DrmMetaDataCb;
 	void RegisterMetaDataCb(const DrmMetaDataCallback callback)
 	{
 		DrmMetaDataCb = callback;
-	};
+	}
 	/*
 	 * @brief Register Content Protection Update callback to application 
 	 */
-	using ContentUpdateCallback = std::function<std::string(DrmHelperPtr drmHelper, int streamType, std::vector<uint8_t> keyId, int contentProtectionUpd)>;
+	using ContentUpdateCallback = std::function<std::string(DrmHelperPtr drmHelper, int streamType, const std::vector<uint8_t>& keyId, int contentProtectionUpd)>;
 	ContentUpdateCallback ContentUpdateCb;
 	void RegisterHandleContentProtectionCb(const ContentUpdateCallback callback)
 	{

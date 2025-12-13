@@ -19,10 +19,14 @@
 
 #include <assert.h>
 #include "SocInterface.h"
+#include "vendor/default/DefaultSocInterface.h"
+
+#if !defined(__APPLE__) && !defined(UBUNTU)
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
-#include "vendor/default/DefaultSocInterface.h"
+#endif
+
 
 /**
  * @brief Checks if the input string starts with the given prefix.
@@ -158,6 +162,7 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 		{
 			platformType = InferPlatformFromPluginScan();
 		}
+#if !defined(__APPLE__) && !defined(UBUNTU)
 		switch (platformType)
 		{
 			case SOC_PLATFORM_AMLOGIC:
@@ -173,6 +178,9 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 				socInterface = std::make_shared<DefaultSocInterface>();
 				break;
 		}
+#else
+		socInterface = std::make_shared<DefaultSocInterface>();
+#endif
 	}
 	return socInterface;
 }
@@ -230,4 +238,21 @@ void SocInterface::SetDecodeError(GstObject* src)
 void SocInterface::SetWesterosSinkState(bool status)
 {
 	mUsingWesterosSink = status;
+}
+
+/**
+ * @brief Configure Capability Acceptance for GStreamer Transform
+ *
+ * Sets up the accept_caps function pointer for a GStreamer base transform class.
+ * This allows the transform element to decide whether it can accept a given set of capabilities (caps),
+ * which is essential for negotiating media formats during pipeline setup.
+ *
+ * @param base_transform_class Pointer to the GStreamer base transform class to configure.
+ * @param accept_caps_func Function used to determine if the transform accepts specific caps.
+ */
+void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_class ,
+													AcceptCapsFunc accept_caps_func) {
+    if (accept_caps_func) {
+        base_transform_class->accept_caps = GST_DEBUG_FUNCPTR(accept_caps_func);
+    }
 }

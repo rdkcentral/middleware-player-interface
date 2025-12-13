@@ -91,8 +91,6 @@ public:
      *@brief Registers GetAccessKey callback from application
      */
     void RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback);
-
-	void setSessionManager(PlayerHlsDrmSessionInterfaceBase* mgr) {	m_pHlsDrmSessionManager = mgr; }
 };
 
 #endif //_PLAYER_HLS_DRM_SESSION_INTERFACE_H

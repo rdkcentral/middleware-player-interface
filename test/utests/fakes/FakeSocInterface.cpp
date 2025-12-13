@@ -55,30 +55,25 @@ void DefaultSocInterface::SetAC4Tracks(GstElement *src, int trackId)
 {
 	g_object_set(src, "ac4-presentation-group-index", trackId, NULL);
 }
-bool DefaultSocInterface::IsVideoSink(const char* name, bool isRialto)
+bool DefaultSocInterface::IsVideoSink(const char* name)
 {
-	return  (!mUsingWesterosSink && StartsWith(name, "brcmvideosink") == true) || // brcmvideosink0, brcmvideosink1, ...
-        ( mUsingWesterosSink && StartsWith(name, "westerossink") == true) ||
-        (isRialto && StartsWith(name, "rialtomsevideosink") == true);
+	return name && (
+					StartsWith(name,"rialtomsevideosink") ||
+					StartsWith(name, "brcmvideosink") ||
+					StartsWith(name, "westerossink") );
 }
 /**
  * @brief Check if the given name is a video decoder.
  * @param name Element name.
- * @param isRialto Rialto flag.
  * @param isWesteros Westeros flag.
  * @return True if it's a video decoder, false otherwise.
  */
-bool DefaultSocInterface::IsVideoDecoder(const char* name, bool isRialto)
+bool DefaultSocInterface::IsVideoDecoder(const char* name)
 {
-	if(mUsingWesterosSink)
-	{
-		return StartsWith(name, "westerossink");
-	}
-	else if (isRialto)
-	{
-		return StartsWith(name, "rialtomsevideosink");
-	}
-	return false;
+	return name && (
+					StartsWith(name,"rialtomsevideosink") ||
+					StartsWith(name, "brcmvideosink") ||
+					StartsWith(name, "westerossink") );
 }
 /**
  * @brief Check if the given name is an audio or video decoder.
@@ -86,18 +81,9 @@ bool DefaultSocInterface::IsVideoDecoder(const char* name, bool isRialto)
  * @param IsWesteros Westeros flag.
  * @return True if it's an audio or video decoder, false otherwise.
  */
-bool DefaultSocInterface::IsAudioOrVideoDecoder(const char* name, bool isRialto)
+bool DefaultSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
-	bool AudioOrVideoDecoder = false;
-	if(mUsingWesterosSink && StartsWith(name, "westerossink"))
-	{
-		AudioOrVideoDecoder = true;
-	}
-	else if(isRialto && StartsWith(name, "rialtomse"))
-	{
-		AudioOrVideoDecoder = true;
-	}
-	return AudioOrVideoDecoder;
+	return StartsWith(name,"rialtomsevideosink") || StartsWith(name,"rialtomseaudiosink");
 }
 /**
  * @brief Set playback flags.
@@ -224,4 +210,24 @@ bool DefaultSocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject 
                 status = true;
         }
         return status;
+}
+void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_class ,
+                                                                                                        AcceptCapsFunc accept_caps_func)
+{
+
+}
+bool DefaultSocInterface::SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec)
+{
+	return false;
+}
+bool DefaultSocInterface::IsVideoMaster(GstElement *videoSink)
+{
+        gboolean isMaster{TRUE};
+        GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(videoSink),"is-master");
+        if( pspec!=NULL )
+        { // rialto-specific
+                g_object_get(videoSink, "is-master", &isMaster, nullptr);
+                MW_LOG_INFO("is-master %d", isMaster);
+        }
+        return (isMaster == TRUE);
 }

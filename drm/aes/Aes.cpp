@@ -146,6 +146,7 @@ DRMState AesDec::GetState()
 {
 	return mDrmState;
 }
+
 /**
  * @brief Set information required for decryption
  *
@@ -155,11 +156,6 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 	DrmReturn err = eDRM_ERROR;
         std::unique_lock<std::mutex> lock(mMutex);
 
-	if( !drmInfo)
-	{
-		MW_LOG_ERR("AesDec:: NULL drmInfo");
-		return err;	
-	}
 	mAcquireKeyWaitTime = acquireKeyWaitTime;
 	if (mDrmState == eDRM_ACQUIRING_KEY)
 	{
@@ -181,24 +177,21 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 	mPrevDrmState = eDRM_INITIALIZED;
 	this->GetCurlInitCb(mCurlInstance);
 
-	if (licenseAcquisitionThreadStarted)
+	if (licenseAcquisitionThreadId.joinable())
 	{
 		licenseAcquisitionThreadId.join();
-		licenseAcquisitionThreadStarted = false;
 	}
 
 	try
 	{
 		licenseAcquisitionThreadId = std::thread(&AesDec::acquire_key, this);
 		err = eDRM_SUCCESS;
-		licenseAcquisitionThreadStarted = true;
 //TODO		MW_LOG_INFO("Thread created for acquire_key [%zx]", GetPrintableThreadID(licenseAcquisitionThreadId));
 	}
 	catch(const std::exception& e)
 	{
 		MW_LOG_ERR("AesDec:: thread create failed for acquire_key : %s", e.what());
 		mDrmState = eDRM_KEY_FAILED;
-		licenseAcquisitionThreadStarted = false;
 	}
 	MW_LOG_INFO("AesDec: drmState:%d ", mDrmState);
 	return err;
@@ -296,10 +289,9 @@ void AesDec::Release()
 	{
 		WaitForKeyAcquireCompleteUnlocked(mAcquireKeyWaitTime, err, lock );
 	}
-	if (licenseAcquisitionThreadStarted)
+	if (licenseAcquisitionThreadId.joinable())
 	{
 		licenseAcquisitionThreadId.join();
-		licenseAcquisitionThreadStarted = false;
 	}
 	mCond.notify_all();
 	if (-1 != mCurlInstance)
@@ -365,7 +357,6 @@ AesDec::AesDec() :  mDrmState(eDRM_INITIALIZED),
 		mCond(), mMutex(), mOpensslCtx(),
          	mDrmInfo(), mCurlInstance(-1),
 		licenseAcquisitionThreadId(),
-		licenseAcquisitionThreadStarted(false),
 		mAcquireKeyWaitTime(MAX_LICENSE_ACQ_WAIT_TIME)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
