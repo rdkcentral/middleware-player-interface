@@ -54,11 +54,10 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-    include(CodeCoverage)
-    APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 

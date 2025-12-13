@@ -2,10 +2,10 @@
 
 function install_build_glib_fn()
 {
-    cd $LOCAL_DEPS_BUILD_DIR
+    cd -- "$LOCAL_DEPS_BUILD_DIR"
 
     # $OPTION_CLEAN == true
-    if [ $1 = true ] ; then
+    if [[ "$1" == "true" ]]; then
         echo "glib clean"
         if [ -d glib ] ; then
             rm -rf glib
@@ -20,7 +20,7 @@ function install_build_glib_fn()
         echo "glib is already installed"
         INSTALL_STATUS_ARR+=("glib was already installed.")
     else
-        # TODO: create a pyton virtual env so we don't have to globally install this pkg and avoid "error: externally-managed-environment"
+        # TODO: create a python virtual env so we don't have to globally install this pkg and avoid "error: externally-managed-environment"
         PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install setuptools
 
         echo "Installing glib..."

@@ -21,9 +21,6 @@
 #define AMLOGIC_SOC_INTERFACE_H
 
 #include "SocInterface.h"
-#if defined(AMLOGIC)
-#include "gst_svp_meta.h"
-#endif
 /**
  * @brief Amlogic SoC interface class.
  *
@@ -94,6 +91,38 @@ class AmlogicSocInterface : public SocInterface
 		void SetAC4Tracks(GstElement *src, int trackId) override;
 
 		/**
+		 * @brief Get SVP Context
+		 */
+		void SvpGetContext(void **svpCtx, int flags)override;
+
+		/**
+		 * @brief Free SVP Context
+		 */
+		void SvpFreeContext(void *svpCtx)override;
+
+		/**
+		 * @brief Configure the accept caps
+		 * @return void
+		 */
+		void ConfigureAcceptCaps( GstBaseTransformClass* base_transform_class,
+                         AcceptCapsFunc accept_caps_func)override {
+			return;	 }
+
+		/**
+		 * @brief Indicates whether transform capabilities are required.
+		 * @return true if transform capabilities are required; otherwise, false
+		 */
+		bool IsTransformCapsRequired() const override {
+			return true; }
+
+		/**
+		 * @brief Indicates whether decryption is required.
+		 * @return true if decryption are required; otherwise, false
+		 */
+		bool IsDecryptRequired() const override {
+			return true; }
+
+		/**
 		 * @brief Set rate correction.
 		 * @return True on success, false otherwise.
 		 */
@@ -102,26 +131,23 @@ class AmlogicSocInterface : public SocInterface
 		/**
 		 * @brief Check if the given name is a video sink.
 		 * @param name Element name.
-		 * @param isRialto Rialto flag.
 		 * @return True if it's a video sink, false otherwise.
 		 */
-		bool IsVideoSink(const char* name, bool isRialto)override;
+		bool IsVideoSink(const char* name)override;
 
 		/**
 		 * @brief Check if the given name is an audio sink or audio decoder.
 		 * @param name Element name.
-		 * @param isRialto Rialto flag.
 		 * @return True if it's an audio sink or audio decoder, false otherwise.
 		 */
-		bool IsAudioSinkOrAudioDecoder(const char* name, bool isRialto)override;
+		bool IsAudioSinkOrAudioDecoder(const char* name) override;
 
 		/**
 		 * @brief Check if the given name is a video decoder.
 		 * @param name Element name.
-		 * @param isRialto Rialto flag.
 		 * @return True if it's a video decoder, false otherwise.
 		 */
-		bool IsVideoDecoder(const char* name, bool isRialto)override;
+		bool IsVideoDecoder(const char* name)override;
 
 		/**
 		 * @brief Configure the audio sink.
@@ -138,7 +164,7 @@ class AmlogicSocInterface : public SocInterface
 		 * @param IsWesteros Westeros flag.
 		 * @return True if it's an audio or video decoder, false otherwise.
 		 */
-		bool IsAudioOrVideoDecoder(const char* name, bool isRialto)override;
+		bool IsAudioOrVideoDecoder(const char* name)override;
 
 		/**
 		 * @brief Retrieves the CC decoder handle.
@@ -165,20 +191,15 @@ class AmlogicSocInterface : public SocInterface
 		virtual bool ResetNewSegmentEvent()override{return true;}
 
 		/**
-		 *@brief check if platform segment is ready
-		 *
-		 *it is used in scenarios where AV synchronization and trick mode speed adjustments are necessary.
-		 */
-		bool IsPlatformSegmentReady()override{return true;}
-
-		/**
 		 * @brief Check if the video is the master stream.
 		 *
 		 * This function always returns false, indicating that the video is not the master stream.
 		 *
+		 * @param videoSink The video sink element.
+		 * @param isRialto Flag indicating whether Rialto sink is being used.
 		 * @return false indicating the video is not the master stream.
 		 */
-		bool IsVideoMaster()override{return false;}
+		bool IsVideoMaster(GstElement *videoSink)override{return false;}
 
 };
 

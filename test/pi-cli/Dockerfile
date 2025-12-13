@@ -2,12 +2,14 @@
 ##################################################################################################################################
 # Docker Build Command : docker build -t pi-cli-docker1 . --build-arg EMAIL="<email>" --build-arg PASSWORD="<password>"
 # Here <email> is comcast email address and <password> can be generated from https://code.rdkcentral.com/r/settings/ 
+# Dockerfile now supports a branch argument. You can pass --build-arg BRANCH=<branch_name> when building. If not set, it will default to the develop branch
 ##################################################################################################################################
 
 FROM ubuntu:latest
 
 ARG EMAIL
 ARG PASSWORD
+ARG BRANCH
 
 # Install required packages
 RUN apt-get update && \
@@ -35,13 +37,11 @@ RUN git clone https://github.com/rdkcentral/middleware-player-interface.git
 # Set working directory to the cloned repo
 WORKDIR /app/middleware-player-interface
 
+# Set branch variable, default to 'develop' if not set
+RUN BRANCH_NAME=${BRANCH:-develop} && git checkout "$BRANCH_NAME"
 
 # Run the script
 RUN ./install-middleware.sh
-
-# Copy & Apply patch for Ubuntu
-WORKDIR /app/middleware-player-interface
-RUN git apply ./test/pi-cli/pi-cli-ubuntu.patch
 
 # to find libcjson, your path may vary
 RUN PKG_CONFIG_PATH="/app/middleware-player-interface/.libs/lib/pkgconfig"

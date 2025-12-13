@@ -18,11 +18,12 @@
 
 cmake_minimum_required(VERSION 3.5)
 project(Playergstinterface)
-
+set(CMAKE_CXX_STANDARD 17)
+find_package(OpenSSL REQUIRED)
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
 if(DISABLE_SECURITY_TOKEN)
-  add_definitions(-DDISABLE_SECURITY_TOKEN)
+	add_definitions(-DDISABLE_SECURITY_TOKEN)
 endif()
 
 # Option for building pi-cli
@@ -32,9 +33,14 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
-pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
 
-include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
+if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+else()
+	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
+endif(CMAKE_SYSTEM_NAME STREQUAL Linux)
+
+#include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} subtitle playerisobmff isobmff
 	closedcaptions
 	closedcaptions/subtec
@@ -47,9 +53,10 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/baseConversion)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerLogManager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerJsonObject)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mp4demux)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/rialto)
 
 
-set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
+#set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
 
 #shoud be made part of PLAYERGSTINTERFACE cmakelists
 add_subdirectory(baseConversion)
@@ -66,51 +73,66 @@ set(SUBTEC_CLASS_SOURCES playerisobmff/playerisobmffbox.cpp
 	subtec/subtecparser/TextStyleAttributes.cpp
 	subtec/subtecparser/WebvttSubtecDevInterface.cpp
 	playerJsonObject/PlayerJsonObject.cpp
-	)
+)
+
+if(CMAKE_RDK_SVP)
+	message("CMAKE_RDK_SVP Set")
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DUSE_SVP=1")
+endif()
 
 if(CMAKE_PLATFORM_UBUNTU)
-    message("CMAKE_PLATFORM_UBUNTU set")
-    link_directories(${CMAKE_LIBRARY_PATH})
+	message("CMAKE_PLATFORM_UBUNTU set")
+	link_directories(${CMAKE_LIBRARY_PATH})
 endif()
 
 if(CMAKE_SOC_PLATFORM_RPI)
-    message("CMAKE_SOC_PLATFORM_RPI set")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRPI=1")
+	message("CMAKE_SOC_PLATFORM_RPI set")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRPI=1")
 endif()
 
 #update XCode scheme flags, harmless for non Darwin builds
 set (CMAKE_CODE_GENERATE_SCHEME TRUE)
 if (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL Darwin)
-if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
-        set(OPENGL_LIBRARIES "-framework OpenGL -framework GLUT")
-else()
-       pkg_check_modules(OPENGL REQUIRED gl)
-       set(OPENGL_LIBRARIES "${OPENGL_LIBRARIES} -lglut")
-       pkg_check_modules(GLEW REQUIRED glew)
-endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+	if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+		set(OPENGL_LIBRARIES "-framework OpenGL -framework GLUT")
+	else()
+		pkg_check_modules(OPENGL REQUIRED gl)
+		set(OPENGL_LIBRARIES "${OPENGL_LIBRARIES} -lglut")
+		pkg_check_modules(GLEW REQUIRED glew)
+	endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 endif()
 
 # Mac OS X
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    execute_process (
-        COMMAND bash -c "xcrun --show-sdk-path" OUTPUT_VARIABLE osxSdkPath OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++14 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
-    set(OS_LD_FLAGS "${OS_LD_FLAGS} -F${osxSdkPath}/System/Library/Frameworks -framework Cocoa -L${osxSdkPath}/../MacOSX.sdk/usr/lib -L.libs/lib -L/usr/local/lib/")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot ${osxSdkPath}/../MacOSX.sdk -I/usr/local/include")
-    string(STRIP ${OS_LD_FLAGS} OS_LD_FLAGS)
-    link_directories(${OPENSSL_LIBRARY_DIRS})
-    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-    set(CMAKE_HAVE_THREADS_LIBRARY 1)
-    pkg_check_modules(GLIB REQUIRED GLib-2.0)
-    include_directories(${GLIB_INCLUDE_DIRS})
+	execute_process (
+		COMMAND bash -c "xcrun --show-sdk-path" OUTPUT_VARIABLE osxSdkPath OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
+	set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++14 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
+	set(OS_LD_FLAGS "${OS_LD_FLAGS} -F${osxSdkPath}/System/Library/Frameworks -framework Cocoa -L${osxSdkPath}/../MacOSX.sdk/usr/lib -L.libs/lib -L/usr/local/lib/")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot ${osxSdkPath}/../MacOSX.sdk -I/usr/local/include")
+	string(STRIP ${OS_LD_FLAGS} OS_LD_FLAGS)
+	link_directories(${OPENSSL_LIBRARY_DIRS})
+	set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+	set(CMAKE_HAVE_THREADS_LIBRARY 1)
+	pkg_check_modules(GLIB REQUIRED GLib-2.0)
+	include_directories(${GLIB_INCLUDE_DIRS})
 
-    # XCode build flags. Even when using CLANG, the GCC name is required to enable the check
-    set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_FUNCTION "YES")
-    set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_VARIABLE "YES")
+	# XCode build flags. Even when using CLANG, the GCC name is required to enable the check
+	set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_FUNCTION "YES")
+	set(CMAKE_XCODE_ATTRIBUTE_GCC_WARN_UNUSED_VARIABLE "YES")
 else()
-    set(USE_MAC_FOR_RANDOM_GEN "-DUSE_MAC_FOR_RANDOM_GEN")
+	set(USE_MAC_FOR_RANDOM_GEN "-DUSE_MAC_FOR_RANDOM_GEN")
 endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+	set(GSTREAMER_LINK_LIBRARIES "")
+	set(GST_LIBRARIES "")
+	set(GSTREAMERBASE_LIBRARIES "")
+	set(GSTVIDEO_LIBRARIES "")
+	set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${OPENSSL_LIBRARIES})
+else()
+	set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
+endif()
 
 set(LIBPLAYERGSTINTERFACE_HEADERS
 	closedcaptions/CCTrackInfo.h
@@ -136,9 +158,9 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/realtek/RealtekSocInterface.h
 	vendor/brcm/BrcmSocInterface.h
 	vendor/default/DefaultSocInterface.h
-    subtitle/vttCue.h
+	subtitle/vttCue.h
 	ProcessHandler.h
-	)
+)
 
 install(FILES closedcaptions/CCTrackInfo.h
 	PlayerScheduler.h
@@ -168,7 +190,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtitle/subtitleParser.h
 	subtec/subtecparser/WebVttSubtecParser.hpp
 	subtec/subtecparser/TtmlSubtecParser.hpp
-    GstUtils.h
+	GstUtils.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h
@@ -186,13 +208,19 @@ set(SOURCES
 	gstplayertaskpool.cpp
 	PlayerUtils.cpp
 	vendor/SocInterface.cpp
-	vendor/amlogic/AmlogicSocInterface.cpp
-	vendor/realtek/RealtekSocInterface.cpp
-	vendor/brcm/BrcmSocInterface.cpp
 	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
+)
+
+if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
+	list(APPEND SOURCES
+		vendor/amlogic/AmlogicSocInterface.cpp
+		vendor/realtek/RealtekSocInterface.cpp
+		vendor/brcm/BrcmSocInterface.cpp
 	)
+endif()
+
 set(LIBPLAYERGSTINTERFACE_DRM_SOURCES drm/PlayerHlsDrmSessionInterface.cpp
 	drm/DrmSessionManager.cpp
 	drm/DrmSession.cpp
@@ -204,7 +232,7 @@ set(LIBPLAYERGSTINTERFACE_DRM_SOURCES drm/PlayerHlsDrmSessionInterface.cpp
 	drm/DrmSystems.h
 	drm/aes/Aes.cpp
 	drm/DrmJsonObject.cpp
-	)
+)
 
 if (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL Darwin )
 	# uncomment below to build additional drm support in simulator
@@ -213,7 +241,7 @@ if (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL Darwin )
 	# set(CMAKE_USE_THUNDER_OCDM_API_0_2 TRUE)
 	# set(CMAKE_USE_SECCLIENT TRUE)
 	# set(CMAKE_USE_SECCLIENT_MOCKS TRUE)
-  endif()
+endif()
 
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} ${SOURCES}  ${SUBTEC_CLASS_SOURCES})
 
@@ -224,70 +252,70 @@ if(CMAKE_USE_THUNDER_OCDM_API_0_2)
 endif()
 
 if(CMAKE_USE_OPENCDM_ADAPTER)
-    message("Using OPEN CDM support enabled")
-    set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DUSE_OPENCDM_ADAPTER")
+	message("Using OPEN CDM support enabled")
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DUSE_OPENCDM_ADAPTER")
 
-    set(LIBPLAYERGSTINTERFACE_DRM_SOURCES "${LIBPLAYERGSTINTERFACE_DRM_SOURCES}" drm/HlsDrmSessionManager.cpp
-                                                     drm/HlsOcdmBridge.cpp
-                                                     drm/processProtectionHls.cpp
-    )
+	set(LIBPLAYERGSTINTERFACE_DRM_SOURCES "${LIBPLAYERGSTINTERFACE_DRM_SOURCES}" drm/HlsDrmSessionManager.cpp
+		drm/HlsOcdmBridge.cpp
+		drm/processProtectionHls.cpp
+	)
 
-    # DRM Helpers
-    if(CMAKE_USE_WIDEVINE)
-        set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/WidevineDrmHelper.cpp)
-    endif()
+	# DRM Helpers
+	if(CMAKE_USE_WIDEVINE)
+		set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/WidevineDrmHelper.cpp)
+	endif()
 
-    if(CMAKE_USE_CLEARKEY)
-	    set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/ClearKeyHelper.cpp)
-    endif()
+	if(CMAKE_USE_CLEARKEY)
+		set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/ClearKeyHelper.cpp)
+	endif()
 
-    if(CMAKE_USE_PLAYREADY)
-        set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/PlayReadyHelper.cpp)
-    endif()
+	if(CMAKE_USE_PLAYREADY)
+		set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/PlayReadyHelper.cpp)
+	endif()
 
-    if(CMAKE_USE_VERIMATRIX)
-        message("CMAKE_USE_VERIMATRIX set")
-        set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/VerimatrixHelper.cpp)
-    endif()
+	if(CMAKE_USE_VERIMATRIX)
+		message("CMAKE_USE_VERIMATRIX set")
+		set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/VerimatrixHelper.cpp)
+	endif()
 else()
-    message("No OpenCDM support enabled")
+	message("No OpenCDM support enabled")
 endif()
 
 if(CMAKE_USE_CLEARKEY)
-    set(LIBPLAYERGSTINTERFACE_DRM_SOURCES "${LIBPLAYERGSTINTERFACE_DRM_SOURCES}" drm/ClearKeyDrmSession.cpp)
-    set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/ClearKeyHelper.cpp)
-    set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DUSE_CLEARKEY")
+	set(LIBPLAYERGSTINTERFACE_DRM_SOURCES "${LIBPLAYERGSTINTERFACE_DRM_SOURCES}" drm/ClearKeyDrmSession.cpp)
+	set(LIBPLAYERGSTINTERFACE_HELP_SOURCES "${LIBPLAYERGSTINTERFACE_HELP_SOURCES}" drm/helper/ClearKeyHelper.cpp)
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DUSE_CLEARKEY")
 endif()
 
 if(CMAKE_USE_OPENCDM_ADAPTER)
-    message("Using OPEN CDM ADAPTER")
-    # Include OpenCDM-related source files
-    set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} 
-        drm/ocdm/opencdmsessionadapter.cpp
-        drm/ocdm/OcdmBasicSessionAdapter.cpp
-        drm/ocdm/OcdmGstSessionAdapter.cpp
-    )
+	message("Using OPEN CDM ADAPTER")
+	# Include OpenCDM-related source files
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} 
+		drm/ocdm/opencdmsessionadapter.cpp
+		drm/ocdm/OcdmBasicSessionAdapter.cpp
+		drm/ocdm/OcdmGstSessionAdapter.cpp
+	)
 
-    # Add GStreamer video dependency
-    set(LIBPLAYERGSTINTERFACE_DEPENDS "${LIBPLAYERGSTINTERFACE_DEPENDS} -lgstvideo-1.0")
+	# Add GStreamer video dependency
+	set(LIBPLAYERGSTINTERFACE_DEPENDS "${LIBPLAYERGSTINTERFACE_DEPENDS} -lgstvideo-1.0")
 
-    if(CMAKE_USE_OPENCDM_ADAPTER_MOCKS)
-        # Add mock headers and sources if mock is enabled
-        set(LIBPLAYERGSTINTERFACE_HEADERS ${LIBPLAYERGSTINTERFACE_HEADERS} open_cdm.h open_cdm_adapter.h)
-        set(LIBPLAYERGSTINTERFACE_MOCK_SOURCES ${LIBPLAYERGSTINTERFACE_MOCK_SOURCES} test/mocks/opencdmMocks.cpp)
-        set(LIBPLAYERGSTINTERFACE_MOCK_DEPENDS -lgmock -lgtest)
-    else()
-        # Link with actual OpenCDM library
-	set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "-locdm")
-    endif()
+	if(CMAKE_USE_OPENCDM_ADAPTER_MOCKS)
+		# Add mock headers and sources if mock is enabled
+		set(LIBPLAYERGSTINTERFACE_HEADERS ${LIBPLAYERGSTINTERFACE_HEADERS} open_cdm.h open_cdm_adapter.h)
+		set(LIBPLAYERGSTINTERFACE_MOCK_SOURCES ${LIBPLAYERGSTINTERFACE_MOCK_SOURCES} test/mocks/opencdmMocks.cpp)
+		set(LIBPLAYERGSTINTERFACE_MOCK_DEPENDS -lgmock -lgtest)
+	else()
+		# Link with actual OpenCDM library
+		set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "-locdm")
+	endif()
 
-    # Find OpenCDM headers and include them
-    find_path(STAGING_INCDIR opencdm)
-    include_directories(${STAGING_INCDIR}/opencdm)
+	# Find OpenCDM headers and include them
+	find_path(STAGING_INCDIR opencdm)
+	include_directories(${STAGING_INCDIR}/opencdm)
 
-    # Find GStreamer headers and include them
-    find_path(STAGING_INCDIR gstreamer-1.0)
-    include_directories(${STAGING_INCDIR}/gstreamer-1.0)
+	# Find GStreamer headers and include them
+	find_path(STAGING_INCDIR gstreamer-1.0)
+	include_directories(${STAGING_INCDIR}/gstreamer-1.0)
 endif()
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES}  ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES} )
 
@@ -313,7 +341,7 @@ target_include_directories(subtec PUBLIC
 install (TARGETS subtec
 	DESTINATION lib
 	PUBLIC_HEADER DESTINATION include
-	)
+)
 
 if (CMAKE_GST_SUBTEC_ENABLED)
 	set(CMAKE_SUBTITLE_SUPPORT TRUE)
@@ -341,7 +369,7 @@ if (CMAKE_SUBTITLE_SUPPORT)
 	target_link_libraries(subtec_connector playerlogmanager)
 	install(TARGETS subtec_connector DESTINATION lib)
 
-	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp)
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
 endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
@@ -365,6 +393,10 @@ string(STRIP "${LIBPLAYERGSTINTERFACE_DEPENDS}" LIBPLAYERGSTINTERFACE_DEPENDS)
 message("Building middleware support libraries")
 add_subdirectory(gst-plugins)
 
+if (CMAKE_RDK_SVP)
+	target_link_libraries(playergstinterface gstsvpext)
+endif()
+
 target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 
 target_link_libraries(playergstinterface ${GST_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
@@ -374,8 +406,8 @@ target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINT
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
 install(TARGETS playergstinterface
-    LIBRARY DESTINATION lib
-    PUBLIC_HEADER DESTINATION lib/include
+	LIBRARY DESTINATION lib
+	PUBLIC_HEADER DESTINATION lib/include
 )
 target_link_libraries(subtec playerlogmanager)
 target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
@@ -386,5 +418,5 @@ set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} {LIBPLAYERGST
 
 # Optionally build pi-cli for l2
 if(BUILD_PICLI)
-    add_subdirectory(test/pi-cli)
+	add_subdirectory(test/pi-cli)
 endif()

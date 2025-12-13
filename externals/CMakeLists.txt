@@ -46,6 +46,23 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager/IFirebolt)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IIarm)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IFirebolt)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IFirebolt)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Remove any pkg-config based GStreamer link libraries
+    set(GSTREAMER_LINK_LIBRARIES "")
+    set(GST_LIBRARIES "")
+    set(GSTREAMERBASE_LINK_LIBRARIES "")
+    set(GSTVIDEO_LINK_LIBRARIES "")
+    # Add GStreamer.framework to linker flags
+    set(OS_LD_FLAGS)
+    list(APPEND OS_LD_FLAGS -F/Library/Frameworks "-framework GStreamer")
+    list(APPEND LIB_EXT_DEPENDS ${OS_LD_FLAGS})
+else()
+    list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+endif()
 
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
@@ -106,6 +123,9 @@ if(CMAKE_IARM_MGR)
     message("PLAYER IARM_MGR set")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
+    set(EXT_SOURCES "${EXT_SOURCES}" rdk/IIarm/DeviceIARMInterface.cpp)
+    set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
+    set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
     list(APPEND LIB_EXT_DEPENDS -lIARMBus -lds -ldshalcli)
 endif()
 
@@ -135,7 +155,7 @@ endif()
 
 # Set initial public headers for the library
 set_target_properties(playerfbinterface PROPERTIES PUBLIC_HEADER 
-  "PlayerThunderInterface.h;PlayerThunderAccessBase.h;PlayerExternalsInterfaceBase.h;PlayerExternalsInterface.h;PlayerRfc.h;contentsecuritymanager/ContentSecurityManagerSession.h;contentsecuritymanager/PlayerSecInterface.h;contentsecuritymanager/ContentSecurityManager.h;PlayerExternalUtils.h;contentsecuritymanager/PlayerMemoryUtils.h;Module.h")
+  "PlayerThunderInterface.h;PlayerThunderAccessBase.h;PlayerExternalsInterfaceBase.h;PlayerExternalsInterface.h;PlayerRfc.h;contentsecuritymanager/ContentSecurityManagerSession.h;contentsecuritymanager/PlayerSecInterface.h;contentsecuritymanager/ContentSecurityManager.h;contentsecuritymanager/PlayerMemoryUtils.h;Module.h;PlayerExternalUtils.h")
 
 if(CMAKE_IARM_MGR)
     # Append additional header(s) for IARM_MGR
