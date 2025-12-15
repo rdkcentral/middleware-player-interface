@@ -9,7 +9,10 @@ ScopedTimer::ScopedTimer(const std::string& funcName, const std::string& fileNam
 ScopedTimer::~ScopedTimer() {
     auto end = std::chrono::high_resolution_clock::now();
     long long duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "[PERF] " << name << " (Thread " << std::this_thread::get_id()
-              << ") took " << duration << " µs\n";
+	MW_LOG_INFO(MW_LOG_PERF, "[PERF] %s (Thread %zu) took %lld us",
+        name.c_str(),
+        std::hash<std::thread::id>{}(std::this_thread::get_id()),
+        duration
+    );
 }
 

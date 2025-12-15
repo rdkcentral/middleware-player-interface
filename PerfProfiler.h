@@ -3,6 +3,7 @@
 
 #include <string>
 #include <chrono>
+#include "PlayerLogManager.h"
 
 #ifdef ENABLE_MW_PROFILING
 
