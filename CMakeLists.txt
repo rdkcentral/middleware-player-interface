@@ -28,12 +28,6 @@ if(DISABLE_SECURITY_TOKEN)
 	add_definitions(-DDISABLE_SECURITY_TOKEN)
 endif()
 
-option(ENABLE_MW_PROFILING "Enable middleware profiling" ON)
-
-if(ENABLE_MW_PROFILING)
-  add_definitions(-DENABLE_MW_PROFILING)
-endif()
-
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
 
@@ -168,10 +162,9 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/default/DefaultSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	PerfProfiler.h
 )
-if(ENABLE_MW_PROFILING)
-    list(APPEND LIBPLAYERGSTINTERFACE_HEADERS PerfProfiler.h)
-endif()
+
 
 install(FILES closedcaptions/CCTrackInfo.h
 	PlayerScheduler.h
@@ -208,11 +201,8 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	PerfProfiler.h
 	DESTINATION include)
-
-if(ENABLE_MW_PROFILING)
-    install(FILES PerfProfiler.h DESTINATION include)
-endif()
 
 set(SOURCES
 	InterfacePlayerRDK.cpp
@@ -226,11 +216,8 @@ set(SOURCES
 	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
+	PerfProfiler.cpp
 )
-
-if(ENABLE_MW_PROFILING)
-    list(APPEND SOURCES PerfProfiler.cpp)
-endif()
 
 if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 	list(APPEND SOURCES
