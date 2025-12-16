@@ -135,9 +135,12 @@ public:
      */
     PlayerExternalsInterface& operator=(const PlayerExternalsInterface&) = delete;
 
-    void Initialize();	 
-	 
+    void Initialize();
 
+    /**
+     * @brief Gets the version of the InterfacePlayerRDK.
+     */
+    std::string GetVersion(); 
 
 
     char * GetTR181PlayerConfig(const char * paramName, size_t & iConfigLen);
