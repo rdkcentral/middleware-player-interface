@@ -68,7 +68,8 @@ set(TEST_SOURCES DrmTestsRun.cpp
 	PlayerHlsDrmSessionInterfaceBaseTests.cpp
 	DrmInfo.cpp
 	DrmUtilsTests.cpp
-	PlayerHlsOcdmTests.cpp)
+	PlayerHlsOcdmTests.cpp
+	HlsOcdmBridgeInterfaceTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
 				 ${PLAYER_ROOT}/test/utests/fakes/FakeCrypto.cpp)
@@ -88,6 +89,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/drm/ocdm/OcdmGstSessionAdapter.cpp
 					${PLAYER_ROOT}/drm/PlayerHlsDrmSessionInterface.cpp
 					${PLAYER_ROOT}/drm/HlsOcdmBridge.cpp
+					${PLAYER_ROOT}/drm/HlsOcdmBridgeInterface.cpp
 					${PLAYER_ROOT}/drm/HlsDrmSessionManager.cpp
 					${PLAYER_ROOT}/drm/processProtectionHls.cpp
 					${PLAYER_ROOT}/drm/helper/ClearKeyHelper.cpp
