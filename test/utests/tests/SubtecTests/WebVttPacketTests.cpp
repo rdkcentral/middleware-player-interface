@@ -48,7 +48,7 @@ TEST(WebVttChannel, ValidDataPacketDefault) {
     std::cout << "Entering ValidDataPacketDefault test" << std::endl;
     
     // Create a WebVttChannel object using default constructor
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         WebVttChannel channel;
         std::cout << "WebVttChannel object created using default constructor." << std::endl;
         
@@ -64,8 +64,7 @@ TEST(WebVttChannel, ValidDataPacketDefault) {
         // Invoke SendDataPacket method using EXPECT_NO_THROW
         std::cout << "Invoking SendDataPacket with default time offset." << std::endl;
         EXPECT_NO_THROW(channel.SendDataPacket(std::move(data), time_offset_ms));
-        std::cout << "SendDataPacket invoked successfully with default time offset." << std::endl;
-    });
+    }));
     
     std::cout << "Exiting ValidDataPacketDefault test" << std::endl;
 }
@@ -92,7 +91,7 @@ TEST(WebVttChannel, ValidDataPacketDefault) {
 TEST(WebVttChannel, ValidDataPacketPositiveTimeOffset) {
     std::cout << "Entering ValidDataPacketPositiveTimeOffset test" << std::endl;
     
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         WebVttChannel channel;
         std::cout << "WebVttChannel object created using default constructor." << std::endl;
         
@@ -108,8 +107,7 @@ TEST(WebVttChannel, ValidDataPacketPositiveTimeOffset) {
         // Invoke SendDataPacket method with positive time offset
         std::cout << "Invoking SendDataPacket with positive time offset." << std::endl;
         EXPECT_NO_THROW(channel.SendDataPacket(std::move(data), time_offset_ms));
-        std::cout << "SendDataPacket invoked successfully with positive time offset." << std::endl;
-    });
+    }));
     
     std::cout << "Exiting ValidDataPacketPositiveTimeOffset test" << std::endl;
 }
@@ -136,7 +134,7 @@ TEST(WebVttChannel, ValidDataPacketPositiveTimeOffset) {
 TEST(WebVttChannel, ValidDataPacketNegativeTimeOffset) {
     std::cout << "Entering ValidDataPacketNegativeTimeOffset test" << std::endl;
     
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         WebVttChannel channel;
         std::cout << "WebVttChannel object created using default constructor." << std::endl;
         
@@ -152,8 +150,7 @@ TEST(WebVttChannel, ValidDataPacketNegativeTimeOffset) {
         // Invoke SendDataPacket method with negative time offset
         std::cout << "Invoking SendDataPacket with negative time offset." << std::endl;
         EXPECT_NO_THROW(channel.SendDataPacket(std::move(data), time_offset_ms));
-        std::cout << "SendDataPacket invoked successfully with negative time offset." << std::endl;
-    });
+    }));
     
     std::cout << "Exiting ValidDataPacketNegativeTimeOffset test" << std::endl;
 }
@@ -264,7 +261,7 @@ TEST(WebVttChannel, LargeDataPacketDefaultTimeOffset) {
 TEST(WebVttChannel, ValidDataPacketMaxTimeOffset) {
     std::cout << "Entering ValidDataPacketMaxTimeOffset test" << std::endl;
     
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         WebVttChannel channel;
         std::cout << "WebVttChannel object created using default constructor." << std::endl;
         
@@ -280,8 +277,7 @@ TEST(WebVttChannel, ValidDataPacketMaxTimeOffset) {
         // Invoke SendDataPacket method with maximum time offset
         std::cout << "Invoking SendDataPacket with maximum int64_t time offset." << std::endl;
         EXPECT_NO_THROW(channel.SendDataPacket(std::move(data), time_offset_ms));
-        std::cout << "SendDataPacket invoked successfully with maximum int64_t time offset." << std::endl;
-    });
+    }));
     
     std::cout << "Exiting ValidDataPacketMaxTimeOffset test" << std::endl;
 }
@@ -308,7 +304,7 @@ TEST(WebVttChannel, ValidDataPacketMaxTimeOffset) {
 TEST(WebVttChannel, ValidDataPacketMinTimeOffset) {
     std::cout << "Entering ValidDataPacketMinTimeOffset test" << std::endl;
     
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         WebVttChannel channel;
         std::cout << "WebVttChannel object created using default constructor." << std::endl;
         
@@ -324,8 +320,7 @@ TEST(WebVttChannel, ValidDataPacketMinTimeOffset) {
         // Invoke SendDataPacket method with minimum time offset
         std::cout << "Invoking SendDataPacket with minimum int64_t time offset." << std::endl;
         EXPECT_NO_THROW(channel.SendDataPacket(std::move(data), time_offset_ms));
-        std::cout << "SendDataPacket invoked successfully with minimum int64_t time offset." << std::endl;
-    });
+    }));
     
     std::cout << "Exiting ValidDataPacketMinTimeOffset test" << std::endl;
 }
@@ -1373,9 +1368,4 @@ TEST(WebVttSelectionPacket, MaxHeight) {
                 << ", width=" << width 
                 << ", height=" << height << " (MAX)" << std::endl;
     std::cout << "Exiting MaxHeight test" << std::endl;
-}
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }

@@ -38,7 +38,8 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 set(TEST_SOURCES PlayerCCManagerTests.cpp
                 PlayerCCManagerFunctions.cpp
-	        PlayerCCTrackInfoTests.cpp)
+	        PlayerCCTrackInfoTests.cpp
+            SubtecConnectorTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSubtecConnecter.cpp)
 
@@ -48,7 +49,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
         ${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp
 		${PLAYER_ROOT}/PlayerUtils.cpp
         ${PLAYER_ROOT}/baseConversion/_base64.cpp)
-
+   
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
                ${FAKE_SOURCES}

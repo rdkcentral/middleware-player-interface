@@ -23,6 +23,7 @@ include_directories(${PLAYER_ROOT})
 include_directories(${PLAYER_ROOT}/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/closedcaptions/subtec)
+include_directories(${PLAYER_ROOT}/closedcaptions/rialto)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerJsonObject)
 include_directories(${PLAYER_ROOT}/playerLogManager)
@@ -36,13 +37,26 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 
 set(TEST_SOURCES PlayerSubtecCCManagerTests.cpp
-	         PlayerSubtecTests.cpp)
+	         PlayerSubtecTests.cpp
+			 SubtecPacketTests.cpp
+			 TtmlPacketTests.cpp
+			 WebVttPacketTests.cpp
+			 #ClosedCaptionsPacketTests.cpp
+			 #PacketSenderTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/closedcaptions/subtec/PlayerSubtecCCManager.cpp
 		${PLAYER_ROOT}/closedcaptions/PlayerCCManager.cpp
 		${PLAYER_ROOT}/PlayerUtils.cpp
-		${PLAYER_ROOT}/closedcaptions/subtec/SubtecConnector.cpp)
+		${PLAYER_ROOT}/subtec/libsubtec/SubtecChannel.cpp
+		${PLAYER_ROOT}/subtec/libsubtec/PacketSender.cpp
+		${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp
+		${PLAYER_ROOT}/PlayerUtils.cpp
+		${PLAYER_ROOT}/baseConversion/_base64.cpp)
+
+if (CMAKE_PLATFORM_UBUNTU)
+	add_definitions(-DUBUNTU)
+endif()
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}

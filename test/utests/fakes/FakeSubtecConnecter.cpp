@@ -35,7 +35,12 @@ namespace subtecConnector {
     void close() 
     {
     }
-
+    
+    void ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType /*ccType*/)
+    {
+    
+    }
+    
     namespace ccMgrAPI {
     
         mrcc_Error ccSetDigitalChannel(unsigned int)
@@ -57,5 +62,22 @@ namespace subtecConnector {
         { 
             return CC_VL_OS_API_RESULT_SUCCESS; 
         }
+        
+        mrcc_Error ccSetAttributes(gsw_CcAttributes * attrib, short type, gsw_CcType ccType)
+        {
+            return {};
+        }
+        
+        mrcc_Error ccGetCapability(gsw_CcAttribType attribType, gsw_CcType ccType, void **values, unsigned int *size)
+        {
+            return {};
+        }
+        
+        mrcc_Error ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType ccType)
+        {
+            return {};
+        }
     };
+   
+    
 }
