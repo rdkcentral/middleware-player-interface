@@ -19,12 +19,12 @@
 
 #include <assert.h>
 #include "SocInterface.h"
+#include "vendor/default/DefaultSocInterface.h"
 
 #if !defined(__APPLE__) && !defined(UBUNTU)
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
-#include "vendor/default/DefaultSocInterface.h"
 #endif
 
 /**
