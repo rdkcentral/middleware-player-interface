@@ -312,7 +312,7 @@ TEST(VerimatrixHelper, OverwriteInitData) {
     std::cout << "Entering OverwriteInitData test" << std::endl;
     
     // Creating VerimatrixHelper object using default constructor
-    EXPECT_NO_THROW({
+    EXPECT_NO_THROW(({
         DrmInfo drmInfo;
         VerimatrixHelper helper(drmInfo);
         std::cout << "Created VerimatrixHelper object using default constructor" << std::endl;
@@ -341,7 +341,7 @@ TEST(VerimatrixHelper, OverwriteInitData) {
         // Check that the new DRM initialization data has overwritten the old data.
         EXPECT_GT(initData.size(), 0u);
         EXPECT_NE(initData, std::vector<uint8_t>({0xAA, 0xBB, 0xCC}));
-    });
+    }));
     
     std::cout << "Exiting OverwriteInitData test" << std::endl;
 }
@@ -392,8 +392,6 @@ TEST(VerimatrixHelper, VerifyFriendlyName) {
         // Verify that the returned string is non-empty
         EXPECT_FALSE(friendlyNameValue.empty());
         std::cout << "Verified that the returned friendly name is non-empty" << std::endl;
-
-        std::cout << "Verified that the returned friendly name does not equal '" << incorrectName << "'" << std::endl;
     });
 
     std::cout << "Exiting VerifyFriendlyName test" << std::endl;
@@ -1346,9 +1344,4 @@ TEST(VerimatrixHelper, DestructorInvocationTest) {
     });
     
     std::cout << "Exiting DestructorInvocationTest test" << std::endl;
-}
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }
