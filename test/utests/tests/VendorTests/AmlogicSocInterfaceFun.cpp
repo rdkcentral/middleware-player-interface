@@ -715,9 +715,8 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioDecoderNameRialtoTrue) {
         std::cout << "Assigning name value using strncpy for audio_decoder" << std::endl;
         strncpy(name, "audio_decoder", sizeof(name));
         name[sizeof(name)-1] = '\0';
-        bool isRialto = true;
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
     });
 
@@ -750,9 +749,8 @@ TEST_F(AmlogicSocInterfaceTest, ValidVideoDecoderNameRialtoTrue_IsAudioOrViddeo)
         std::cout << "Assigning name value using strncpy for video_decoder" << std::endl;
         strncpy(name, "video_decoder", sizeof(name));
         name[sizeof(name)-1] = '\0';
-        bool isRialto = true;
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
     });
 
@@ -785,9 +783,8 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioDecoderNameRialtoFalse) {
         std::cout << "Assigning name value using strncpy for audio_decoder" << std::endl;
         strncpy(name, "audio_decoder", sizeof(name));
         name[sizeof(name)-1] = '\0';
-        bool isRialto = false;
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name <<  std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
     });
 
@@ -820,9 +817,8 @@ TEST_F(AmlogicSocInterfaceTest, ValidVideoDecoderNameRialtoFalse) {
         std::cout << "Assigning name value using strncpy for video_decoder" << std::endl;
         strncpy(name, "video_decoder", sizeof(name));
         name[sizeof(name)-1] = '\0';
-        bool isRialto = false;
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name  << std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
     });
 
@@ -852,9 +848,8 @@ TEST_F(AmlogicSocInterfaceTest, NullNameRialtoTrue) {
 
     AmlogicSocInterface amlogicObj;
     const char* name = nullptr;
-    bool isRialto = true;
-    std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr and isRialto: " << isRialto << std::endl;
-    bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+    std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr and " << std::endl;
+    bool result = amlogicObj.IsAudioOrVideoDecoder(name);
     std::cout << "Method returned: " << result << std::endl;
     EXPECT_FALSE(result);
 
@@ -883,9 +878,8 @@ TEST_F(AmlogicSocInterfaceTest, NullNameRialtoFalse) {
 
     AmlogicSocInterface amlogicObj;
     const char* name = nullptr;
-    bool isRialto = false;
-    std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr and isRialto: " << isRialto << std::endl;
-    bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+    std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr" << std::endl;
+    bool result = amlogicObj.IsAudioOrVideoDecoder(name);
     std::cout << "Method returned: " << result << std::endl;
     EXPECT_FALSE(result);
 
@@ -918,9 +912,8 @@ TEST_F(AmlogicSocInterfaceTest, EmptyNameRialtoTrue) {
         std::cout << "Assigning empty string to name using strncpy" << std::endl;
         strncpy(name, "", sizeof(name));
         name[sizeof(name)-1] = '\0';
-        bool isRialto = true;
-        std::cout << "Invoking IsAudioOrVideoDecoder with empty name and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with empty name" << std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
         EXPECT_FALSE(result);
     });
@@ -955,8 +948,8 @@ TEST_F(AmlogicSocInterfaceTest, EmptyNameRialtoFalse) {
         strncpy(name, "", sizeof(name));
         name[sizeof(name)-1] = '\0';
         bool isRialto = false;
-        std::cout << "Invoking IsAudioOrVideoDecoder with empty name and isRialto: " << isRialto << std::endl;
-        bool result = amlogicObj.IsAudioOrVideoDecoder(name, isRialto);
+        std::cout << "Invoking IsAudioOrVideoDecoder with empty name: " << std::endl;
+        bool result = amlogicObj.IsAudioOrVideoDecoder(name);
         std::cout << "Method returned: " << result << std::endl;
         EXPECT_FALSE(result);
     });
@@ -992,10 +985,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioSinkFalse) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "audio_sink", sizeof(name) - 1);
         bool isRialto = false;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name  << std::endl;
         
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1030,11 +1022,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioSinkTrue) {
         char name[50];
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "audio_sink", sizeof(name) - 1);
-        bool isRialto = true;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name << std::endl;
         
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1071,10 +1061,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioDecoderFalse) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "audio_decoder", sizeof(name) - 1);
         bool isRialto = false;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name << std::endl;
         
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         EXPECT_TRUE(result == true || result == false);
     });
@@ -1108,10 +1097,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidAudioDecoderTrue) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "audio_decoder", sizeof(name) - 1);
         bool isRialto = true;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name  << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1146,10 +1134,9 @@ TEST_F(AmlogicSocInterfaceTest, InvalidVideoSinkFalse) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "video_sink", sizeof(name) - 1);
         bool isRialto = false;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
@@ -1187,10 +1174,9 @@ TEST_F(AmlogicSocInterfaceTest, InvalidVideoSinkTrue) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "video_sink", sizeof(name) - 1);
         bool isRialto = true;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: " << name << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
@@ -1224,10 +1210,9 @@ TEST_F(AmlogicSocInterfaceTest, NullNameFalse) {
         AmlogicSocInterface socInterface;
         const char* name = nullptr;
         bool isRialto = false;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: nullptr"
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: nullptr" << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
@@ -1260,10 +1245,9 @@ TEST_F(AmlogicSocInterfaceTest, NullNameTrue) {
         AmlogicSocInterface socInterface;
         const char* name = nullptr;
         bool isRialto = true;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: nullptr"
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with name: nullptr" << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
@@ -1302,10 +1286,9 @@ TEST_F(AmlogicSocInterfaceTest, EmptyStringFalse) {
         // Use strncpy to set empty string
         std::strncpy(name, "", sizeof(name) - 1);
         bool isRialto = false;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with empty name"
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with empty name" << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
@@ -1341,53 +1324,15 @@ TEST_F(AmlogicSocInterfaceTest, EmptyStringTrue) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "", sizeof(name) - 1);
         bool isRialto = true;
-        std::cout << "Invoking IsAudioSinkOrAudioDecoder with empty name"
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsAudioSinkOrAudioDecoder with empty name" << std::endl;
                   
-        bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+        bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
         std::cout << "Returned result: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result);
     });
     
     std::cout << "Exiting EmptyStringTrue test" << std::endl;
-}
-/**
- * @brief Test the IsPlatformSegmentReady() method functionality of AmlogicSocInterface
- *
- * This test validates that the IsPlatformSegmentReady() method returns true when called on an instance
- * of AmlogicSocInterface. It verifies that no exceptions are thrown during the operation and the API behaves as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 033@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                     | Test Data                                                                                       | Expected Result                                                                                  | Notes       |
- * | :--------------: | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------- |
- * | 01               | Create an AmlogicSocInterface instance and invoke the IsPlatformSegmentReady() method.            | Constructor: default, Method: IsPlatformSegmentReady() called with no input, Output: result = true | The IsPlatformSegmentReady() method returns true and no exceptions are thrown.                    | Should Pass |
- */
-TEST_F(AmlogicSocInterfaceTest, IsPlatformSegmentReady_start) {
-    std::cout << "Entering IsPlatformSegmentReady_start test" << std::endl;
-
-    // Create AmlogicSocInterface instance and invoke IsPlatformSegmentReady()
-    EXPECT_NO_THROW({
-        AmlogicSocInterface amlInterface; 
-        std::cout << "AmlogicSocInterface object created via default constructor." << std::endl;
-        
-        std::cout << "Invoking IsPlatformSegmentReady() method." << std::endl;
-        bool result = amlInterface.IsPlatformSegmentReady();
-        std::cout << "Method IsPlatformSegmentReady() returned value: " << std::boolalpha << result << std::endl;
-        
-        // Since the method specification indicates a return of 'true', we verify this.
-        EXPECT_TRUE(result) << "Expected IsPlatformSegmentReady() to return true.";
-    });
-
-    std::cout << "Exiting IsPlatformSegmentReady_start test" << std::endl;
 }
 /**
  * @brief Verify that the IsVideoDecoder API correctly processes a valid video decoder name with Rialto flag set to true
@@ -1415,11 +1360,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidVideoDecoderNameRialtoTrue) {
         std::cout << "AmlogicSocInterface object constructed successfully." << std::endl;
         
         const char* name = "H264Decoder";
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name  << std::endl;
         
-        bool result = obj.IsVideoDecoder(name, isRialto);
+        bool result = obj.IsVideoDecoder(name);
         std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         EXPECT_TRUE(result == true || result == false);
     });
@@ -1455,11 +1398,9 @@ TEST_F(AmlogicSocInterfaceTest, ValidVideoDecoderNameRialtoFalse_IsVideoDecoder)
         std::cout << "AmlogicSocInterface object constructed successfully." << std::endl;
         
         const char* name = "H264Decoder";
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoDecoder with name: " << name 
-                  << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
         
-        bool result = obj.IsVideoDecoder(name, isRialto);
+        bool result = obj.IsVideoDecoder(name);
         std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         EXPECT_TRUE(result == true || result == false);
     });
@@ -1493,11 +1434,9 @@ TEST_F(AmlogicSocInterfaceTest, NullNameParameter) {
     std::cout << "AmlogicSocInterface object constructed successfully." << std::endl;
     
     const char* name = nullptr;
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoDecoder with name: nullptr and isRialto: " 
-              << std::boolalpha << isRialto << std::endl;
+    std::cout << "Invoking IsVideoDecoder with name: nullptr and " << std::endl;
     
-    bool result = obj.IsVideoDecoder(name, isRialto);
+    bool result = obj.IsVideoDecoder(name);
     std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
     
     // Expected output: false
@@ -1536,11 +1475,9 @@ TEST_F(AmlogicSocInterfaceTest, EmptyNameParameter) {
     char name[50] = {0};
     // Use strncpy to assign an empty string to name
     strncpy(name, "", sizeof(name)-1);
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoDecoder with an empty name and isRialto: " 
-              << std::boolalpha << isRialto << std::endl;
+    std::cout << "Invoking IsVideoDecoder with an empty name and: " << std::endl;
     
-    bool result = obj.IsVideoDecoder(name, isRialto);
+    bool result = obj.IsVideoDecoder(name);
     std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     std::cout << "Exiting EmptyNameParameter test" << std::endl;
@@ -1576,11 +1513,9 @@ TEST_F(AmlogicSocInterfaceTest, NonVideoDecoderNameAudio) {
     char name[50] = {0};
     // Use strncpy to assign value "audio_decoder" to name
     strncpy(name, "audio_decoder", sizeof(name)-1);
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+    std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
     
-    bool result = obj.IsVideoDecoder(name, isRialto);
+    bool result = obj.IsVideoDecoder(name);
     std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     std::cout << "Exiting NonVideoDecoderNameAudio test" << std::endl;
@@ -1617,53 +1552,12 @@ TEST_F(AmlogicSocInterfaceTest, NonVideoDecoderNameRandom) {
     char name[50] = {0};
     // Use strncpy to assign value "random" to name
     strncpy(name, "random", sizeof(name)-1);
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << isRialto << std::endl;
+    std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
     
-    bool result = obj.IsVideoDecoder(name, isRialto);
+    bool result = obj.IsVideoDecoder(name);
     std::cout << "Method IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     std::cout << "Exiting NonVideoDecoderNameRandom test" << std::endl;
-}
-/**
- * @brief Verify that the IsVideoMaster() method returns false on normal call
- *
- * This test verifies that the IsVideoMaster() method of the AmlogicSocInterface class returns false when invoked on a default constructed object.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 040@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                     | Test Data                                                                       | Expected Result                                                            | Notes               |
- * | :--------------: | --------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------- |
- * | 01               | Construct AmlogicSocInterface object using default constructor    | No input arguments; output: object constructed successfully                     | Object is created without throwing exceptions                             | Should be successful|
- * | 02               | Invoke IsVideoMaster() method on the constructed object            | No input parameters; output: result variable expected to be false               | API returns false                                                          | Should Pass         |
- * | 03               | Verify that the returned value is false through an assertion       | Input: result, Expected: false                                                  | EXPECT_EQ(result, false) check passes                                      | Should be successful|
- */
-TEST_F(AmlogicSocInterfaceTest, VerifyIsVideoMasterReturnsFalseOnNormalCall) {
-    std::cout << "Entering VerifyIsVideoMasterReturnsFalseOnNormalCall test" << std::endl;
-    // Constructing AmlogicSocInterface object using default constructor.
-    EXPECT_NO_THROW({
-        AmlogicSocInterface amlogicSocInterface;
-        std::cout << "AmlogicSocInterface object constructed successfully." << std::endl;
-        // Invocation of IsVideoMaster method.
-        std::cout << "Invoking IsVideoMaster() method." << std::endl;
-        bool result = false;
-        EXPECT_NO_THROW({
-            result = amlogicSocInterface.IsVideoMaster();
-            std::cout << "IsVideoMaster() returned: " << std::boolalpha << result << std::endl;
-        });
-        // Verifying that the returned value is false.
-        EXPECT_EQ(result, false);
-        std::cout << "Verified that IsVideoMaster() returned false as expected." << std::endl;
-    });
-    std::cout << "Exiting VerifyIsVideoMasterReturnsFalseOnNormalCall test" << std::endl;
 }
 /**
  * @brief Verifies that a valid video sink name with Rialto set to false is handled correctly by IsVideoSink.
@@ -1694,12 +1588,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_ValidVideoSink_RialtoFalse)
     AmlogicSocInterface interfaceObj;
 
     const char testName[] = "video_sink";
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << std::endl;
 
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     
@@ -1741,12 +1634,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_ValidVideoSink_RialtoTrue)
 
     char testName[32];
     std::strncpy(testName, "video_sink", sizeof(testName));
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << testName  <<  std::endl;
     
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
 
@@ -1786,12 +1678,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_NonVideoSink_RialtoFalse)
 
     char testName[32];
     std::strncpy(testName, "audio_sink", sizeof(testName));
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << std::endl;
     
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     
@@ -1829,12 +1720,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_NonVideoSink_RialtoTrue)
 
     char testName[32];
     std::strncpy(testName, "audio_sink", sizeof(testName));
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << std::endl;
     
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     
@@ -1873,12 +1763,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_InvalidName_RialtoFalse)
 
     char testName[32];
     std::strncpy(testName, "unknown", sizeof(testName));
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << testName << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << testName <<  std::endl;
     
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     
@@ -1914,12 +1803,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_NullName_RialtoFalse)
     AmlogicSocInterface interfaceObj;
 
     const char* testName = nullptr;
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with parameters: name = " << "nullptr" << ", isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = " << "nullptr"<< std::endl;
     
     bool result = false;
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     
@@ -1957,12 +1845,11 @@ TEST_F(AmlogicSocInterfaceTest, IsVideoSink_EmptyString_RialtoFalse)
 
     char testName[32];
     std::strncpy(testName, "", sizeof(testName));
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with parameters: name = \"\" (empty string), isRialto = " << isRialto << std::endl;
+    std::cout << "Invoking IsVideoSink with parameters: name = \"\" (empty string)" << std::endl;
     
     bool result = true; // preset value to check below
     EXPECT_NO_THROW({
-        result = interfaceObj.IsVideoSink(testName, isRialto);
+        result = interfaceObj.IsVideoSink(testName);
     });
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     

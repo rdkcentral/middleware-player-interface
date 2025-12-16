@@ -564,6 +564,7 @@ TEST(ContentProtectionFirebolt, PositiveTestWithValidParameters) {
         std::string initData = "initDataPayload";
         int64_t sessionId = 0;
         std::string response = "";
+        int32_t err = 0;
       
         // Log input parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
@@ -575,7 +576,7 @@ TEST(ContentProtectionFirebolt, PositiveTestWithValidParameters) {
         std::cout << "  sessionId: " << sessionId << std::endl;
       
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, err, response);
       
         // Log the returned value and modified clientId and response.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -626,6 +627,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyClientId) {
         std::string initData = "initDataPayload";
         int64_t sessionId = 0;
         std::string response = "";
+        int32_t err = 0;
   
         // Log input parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
@@ -637,7 +639,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyClientId) {
         std::cout << "  sessionId: " << sessionId << std::endl;
   
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, err, response);
   
         // Log the returned value.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -685,7 +687,8 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyAppId) {
         std::string initData = "initDataPayload";
         int64_t sessionId = 0;
         std::string response = "";
-  
+        int32_t err = 0;
+
         // Log input parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
         std::cout << "  clientId: " << clientId << std::endl;
@@ -696,7 +699,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyAppId) {
         std::cout << "  sessionId: " << sessionId << std::endl;
   
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, err, response);
   
         // Log the returned value.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -748,6 +751,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyKeySystem) {
         std::string initData = "initDataPayload";
         int64_t sessionId = 0;
         std::string response = "";
+        int32_t err = 0;
   
         // Log input parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
@@ -759,7 +763,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyKeySystem) {
         std::cout << "  sessionId: " << sessionId << std::endl;
   
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, err,response);
   
         // Log the returned value.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -807,6 +811,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyLicenseRequest) {
         std::string initData = "initDataPayload";
         int64_t sessionId = 0;
         std::string response = "";
+        int32_t err = 0;
   
         // Log input parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
@@ -818,7 +823,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyLicenseRequest) {
         std::cout << "  sessionId: " << sessionId << std::endl;
   
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId,err,response);
   
         // Log the returned value.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -865,8 +870,9 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyInitData) {
         std::string initData = "";
         int64_t sessionId = 0;
         std::string response = "";
+        int32_t err = 0;
   
-        // Log input parameters.
+        // Log inputNullPsshDataPositiveLength parameters.
         std::cout << "Invoking OpenDrmSession with parameters:" << std::endl;
         std::cout << "  clientId: " << clientId << std::endl;
         std::cout << "  appId: " << appId << std::endl;
@@ -876,7 +882,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyInitData) {
         std::cout << "  sessionId: " << sessionId << std::endl;
   
         // Invoke the method.
-        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, response);
+        bool result = cp.OpenDrmSession(clientId, appId, keySystem, licenseRequest, initData, sessionId, err, response);
   
         // Log the returned value.
         std::cout << "Method OpenDrmSession returned: " << std::boolalpha << result << std::endl;
@@ -1557,7 +1563,8 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_ValidInputs_ReturnsSuccess)
               << ", initData: " << initData << std::endl;
 
     bool result = false;
-    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, licenseRequest, initData, response); });
+    int32_t retCode = 0;
+    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, retCode, licenseRequest, initData, response); });
     std::cout << "Method UpdateDrmSession invoked. Returned value: " << std::boolalpha << result << std::endl;
     std::cout << "Response received: " << response << std::endl;
 
@@ -1611,7 +1618,8 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_NegativeSessionId_ReturnsFailur
               << ", initData: " << initData << std::endl;
 
     bool result = false;
-    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, licenseRequest, initData, response); });
+    int32_t retCode = 0;
+    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId,retCode, licenseRequest, initData, response); });
     std::cout << "Method UpdateDrmSession invoked. Returned value: " << std::boolalpha << result << std::endl;
     std::cout << "Response received: " << response << std::endl;
 
@@ -1663,7 +1671,8 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyLicenseRequest_ReturnsFail
               << ", initData: " << initData << std::endl;
 
     bool result = false;
-    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, licenseRequest, initData, response); });
+    int32_t errorCode = 0;
+    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, errorCode, licenseRequest, initData, response); });
     std::cout << "Method UpdateDrmSession invoked. Returned value: " << std::boolalpha << result << std::endl;
     std::cout << "Response received: " << response << std::endl;
 
@@ -1715,7 +1724,8 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyInitData_ReturnsFailure)
               << ", initData: <empty>" << std::endl;
 
     bool result = false;
-    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, licenseRequest, initData, response); });
+    int32_t errorCode = 0;
+    EXPECT_NO_THROW({ result = cp.UpdateDrmSession(sessionId, errorCode, licenseRequest, initData, response); });
     std::cout << "Method UpdateDrmSession invoked. Returned value: " << std::boolalpha << result << std::endl;
     std::cout << "Response received: " << response << std::endl;
 

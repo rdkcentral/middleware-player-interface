@@ -64,6 +64,7 @@ add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
 	       ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
+
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)

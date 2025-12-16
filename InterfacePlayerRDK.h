@@ -41,8 +41,8 @@ class InterfacePlayerPriv;
 
 struct MonitorAVState
 {
-	long long tLastReported;
-	long long tLastSampled;
+	int64_t tLastReported;
+	int64_t tLastSampled;
 	const char *description;
 	signed long av_position[2];
 	bool happy;
@@ -154,7 +154,8 @@ class InterfacePlayerRDK
 		bool trickTeardown;
 		std::mutex mMutex;
 		std::map<std::string, int> configMap;
-        public:
+
+	public:
 		Configs *m_gstConfigParam;
 		char *mDrmSystem;
 		void *mEncrypt;
@@ -329,10 +330,8 @@ class InterfacePlayerRDK
         	 * @brief Configures the GStreamer pipeline.
         	 * @param format Video format.
         	 * @param audioFormat Audio format.
-        	 * @param auxFormat Auxiliary format.
         	 * @param subFormat Whether subtitle format is enabled.
         	 * @param bESChangeStatus Whether ES change status is enabled.
-        	 * @param forwardAudioToAux Whether audio should be forwarded to the auxiliary output.
         	 * @param setReadyAfterPipelineCreation Whether to set the player as ready after pipeline creation.
         	 * @param isSubEnable Whether subtitles are enabled.
         	 * @param trackId Track ID.
@@ -340,18 +339,12 @@ class InterfacePlayerRDK
         	 * @param pipelineName Pipeline name.
         	 * @param PipelinePriority Pipeline priority.
         	 */
-        	void ConfigurePipeline(int, int, int, int, bool, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url);
+        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url);
         	/**
         	 * @brief Enables or disables pausing on playback start.
         	 * @param enable True to enable pausing, false to disable.
         	 */
         	void SetPauseOnStartPlayback(bool enable);
-        	/**
-        	 * @fn ForwardAudioBuffersToAux
-        	 *
-        	 * @return bool - true if audio to be forwarded
-        	 */
-        	bool ForwardAudioBuffersToAux();
         	/**
         	 * @brief Flush the track playbin
         	 * @param[in] pos - position to seek to after flush
@@ -509,6 +502,10 @@ class InterfacePlayerRDK
         	 */
         	void InitializeSourceForPlayer(void *PlayerInstance, void *source, int mediaType);
         	/**
+        	 * @brief Setup a Closed Caption control stream.
+        	 */
+        	void SetupClosedCaptionControlStream();
+        	/**
         	 * @brief Sets up the stream.
         	 * @param[in] streamId The ID of the stream to set up.
         	 * @param[in] _this The instance of the player.
@@ -618,12 +615,6 @@ class InterfacePlayerRDK
         	 * @param[in] event The event to trigger.
         	 */
         	void TriggerEvent(InterfaceCB event);
-        	/**
-        	 * @brief Checks if a codec is supported.
-        	 * @param[in] codecName The name of the codec to check.
-        	 * @return True if the codec is supported, false otherwise.
-        	 */
-        	static bool IsCodecSupported(const std::string &codecName);
         	/**
         	 * @brief Disables the decoder handle notification.
         	 */

@@ -19,11 +19,11 @@
 
 /**
  * @file PlayerExternalsInterfaceBase.h
- * @brief Base class for player interface with IARM
+ * @brief Base class for player interface with Externals
  */
 
-#ifndef PLAYER_IARM_INTERFACE_BASE_H
-#define PLAYER_IARM_INTERFACE_BASE_H
+#ifndef PLAYER_EXTERNALS_INTERFACE_BASE_H
+#define PLAYER_EXTERNALS_INTERFACE_BASE_H
 
 
 #include <stddef.h>
@@ -36,7 +36,7 @@
 #define UHD_WIDTH   3840
 #define UHD_HEIGHT  2160
 
-//base class for iarm interface
+//base class for externals interface
 class PlayerExternalsInterfaceBase
 {
     protected:
@@ -47,7 +47,6 @@ class PlayerExternalsInterfaceBase
         int m_sourceWidth;
         int m_sourceHeight;
 
-
         GstElement* m_gstElement;
 
 
@@ -55,16 +54,17 @@ class PlayerExternalsInterfaceBase
 
         PlayerExternalsInterfaceBase():m_sourceWidth(0),m_sourceHeight(0),m_gstElement(nullptr){}
 
+        virtual void Initialize() = 0;
         /**
         * @fn IsSourceUHD
         * @brief Finds out if source is of UHD resolution
         * @return True if UHD. False if not UHD.
         */
         bool IsSourceUHD()
-	{
+	    {
             bool retVal = false;
 
-        //    DEBUG_FUNC;
+            //    DEBUG_FUNC;
             static gint     sourceHeight    = 0;
             static gint     sourceWidth     = 0;
 
@@ -109,25 +109,6 @@ class PlayerExternalsInterfaceBase
         GstElement* getgstElement() const { return m_gstElement; }
 
         /**
-         * @fn IARMInit
-         * @brief Initialize IARM
-         * @param[in] processName string of the name of the process initializing IARM
-         */
-        static void IARMInit(const char* processName){}
-
-        /**
-         * @fn IARMRegisterDsMgrEventHandler
-         * @brief Register Display Settings Mgr event handlers
-         */
-        virtual void IARMRegisterDsMgrEventHandler(){}
-
-        /**
-         * @fn IARMRemoveDsMgrEventHandler
-         * @brief Remove Display Settings Mgr event handlers
-         */
-        virtual void IARMRemoveDsMgrEventHandler(){}
-
-        /**
          * @fn GetDisplayResolution
          * @brief Get current resolution's display width and height
          * @param[out] width width of current resolution
@@ -140,14 +121,7 @@ class PlayerExternalsInterfaceBase
          * @brief Checks Display Settings and sets HDMI parameters like video output resolution, HDCP protocol
          */
         virtual void SetHDMIStatus(){}
-	
-	/**
-         * @fn IsActiveStreamingInterfaceWifi
-         * @brief Checks if current active interface is wifi and also sets up NET_SRV_MGR event to handles active interface change
-         * @return True if current active is wifi. False if not.
-         */
-        bool IsActiveStreamingInterfaceWifi(){return false;}
-
+        
         /**
          * @fn GetTR181Config
          * @brief Gets appropriate TR181 Config
@@ -172,6 +146,9 @@ class PlayerExternalsInterfaceBase
         virtual bool GetActiveInterface(){return false;}
 
         virtual ~PlayerExternalsInterfaceBase(){}
+
+        virtual void SetUseFireBoltSDK(bool t_use_firebolt_sdk) = 0; 
+
 };
 
 #endif

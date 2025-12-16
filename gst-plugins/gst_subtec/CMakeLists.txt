@@ -37,11 +37,13 @@ else()
     set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES})
 endif()
 
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
 
 
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
 
+message(STATUS "GSTSUBTEC_DEPENDENCIES: ${GSTSUBTEC_DEPENDENCIES}")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../middleware/subtec/libsubtec)
 target_link_libraries(gstsubtecsink PRIVATE subtec ${GSTSUBTEC_DEPENDENCIES})
 

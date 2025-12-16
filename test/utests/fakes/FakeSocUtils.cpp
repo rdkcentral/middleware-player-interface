@@ -49,11 +49,6 @@ namespace SocUtils
 		return false;
 	}
 
-	bool IsSupportedAC3()
-	{
-		return false;
-	}
-
 	int RequiredQueuedFrames( void )
 	{
 		return 0;

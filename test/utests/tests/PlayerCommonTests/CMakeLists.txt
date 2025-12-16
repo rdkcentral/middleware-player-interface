@@ -87,6 +87,14 @@ if (CMAKE_PLATFORM_UBUNTU)
     add_definitions(-DUBUNTU)
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES}) 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GST REQUIRED
+    gstreamer-1.0
+    gstreamer-base-1.0
+    gstreamer-app-1.0
+)
+
+target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GST_LIBRARIES}) 
 
 player_utest_run_add(${EXEC_NAME})

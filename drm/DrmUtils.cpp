@@ -52,9 +52,7 @@ DrmData::DrmData() : data("")
  */
 DrmData::DrmData(const char *dataPtr, size_t dataLength) : data("")
 {
-		if (dataPtr != nullptr && dataLength > 0) {
-        data.assign(dataPtr, dataLength);
-    }
+		data.assign(dataPtr,dataLength);
 }
 
 /**
@@ -95,11 +93,8 @@ void DrmData::setData(const char *dataPtr, size_t dataLength)
 	{
 		data.clear();
 	}
-	if(dataPtr != nullptr && dataLength > 0) {
-		data.assign(dataPtr,dataLength);
-	}	
+	data.assign(dataPtr,dataLength);
 }
-	
 
 /**
  *  @brief  Appends DrmData with given data.
@@ -137,12 +132,6 @@ static void swapBytes(unsigned char *bytes, int pos1, int pos2)
  */
 void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidBytes)
 {
-	if (guidBytes == nullptr || original == nullptr) {
-        MW_LOG_WARN("convertEndianness called with null pointer(s): guidBytes=%p, original=%p",
-                    (void*)guidBytes, (void*)original);
-        return;
-    }
-
 	memcpy(guidBytes, original, 16);
 	swapBytes(guidBytes, 0, 3);
 	swapBytes(guidBytes, 1, 2);
@@ -157,34 +146,30 @@ void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidByt
  */
 std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int dataLength)
 {
+	if(!psshData)
+	{
+		MW_LOG_WARN("psshData pointer is NULL");
+		return std::string();
+	}
 	//WV PSSH format 4+4+4+16(system id)+4(data size)
 	uint32_t header = 28;
 	std::string metadata;
-
-	if (psshData == nullptr) {
-		MW_LOG_WARN("extractWVContentMetadataFromPssh called with nullptr psshData");
-	}
-	else if (dataLength <= 0) {
-		MW_LOG_WARN("extractWVContentMetadataFromPssh called with invalid dataLength: %d", dataLength);
-	}
-	else {
-		uint32_t  content_id_size =
-                    	(uint32_t)((psshData[header] & 0x000000FFu) << 24 |
+	uint32_t  content_id_size =
+                    (uint32_t)((psshData[header] & 0x000000FFu) << 24 |
                                (psshData[header+1] & 0x000000FFu) << 16 |
                                (psshData[header+2] & 0x000000FFu) << 8 |
                                (psshData[header+3] & 0x000000FFu));
 
-		MW_LOG_INFO("content meta data length  : %d",content_id_size);
-		if ((header + 4 + content_id_size) <= dataLength)
-		{
-			metadata = std::string(psshData + header + 4, content_id_size);
-		}
-		else
-		{
-			MW_LOG_WARN("psshData : %d bytes in length, metadata would read past end of buffer", dataLength);
-		}
+	MW_LOG_INFO("content meta data length  : %d",content_id_size);
+	if ((header + 4 + content_id_size) <= dataLength)
+	{
+		metadata = std::string(psshData + header + 4, content_id_size);
+	}
+	else
+	{
+		MW_LOG_WARN("psshData : %d bytes in length, metadata would read past end of buffer", dataLength);
 	}
 
 	return metadata;
 }
-
+//End of special for Widevine

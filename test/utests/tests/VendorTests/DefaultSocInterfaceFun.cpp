@@ -487,9 +487,8 @@ TEST(DefaultSocInterface, ValidAudioDecoder_RialtoTrue)
     char name[64] = {0};
     std::cout << "Assigning name 'audioDecoder' using strncpy" << std::endl;
     std::strncpy(name, "audioDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << true << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, true);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: true" << std::endl;
     EXPECT_TRUE(result);
@@ -523,9 +522,8 @@ TEST(DefaultSocInterface, ValidAudioDecoder_RialtoFalse)
     char name[64] = {0};
     std::cout << "Assigning name 'audioDecoder' using strncpy" << std::endl;
     std::strncpy(name, "audioDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << false << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, false);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name  << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: true" << std::endl;
     EXPECT_TRUE(result);
@@ -559,9 +557,8 @@ TEST(DefaultSocInterface, ValidVideoDecoder_RialtoTrue)
     char name[64] = {0};
     std::cout << "Assigning name 'videoDecoder' using strncpy" << std::endl;
     std::strncpy(name, "videoDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << true << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, true);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: true" << std::endl;
     EXPECT_TRUE(result);
@@ -595,9 +592,8 @@ TEST(DefaultSocInterface, ValidVideoDecoder_RialtoFalse)
     char name[64] = {0};
     std::cout << "Assigning name 'videoDecoder' using strncpy" << std::endl;
     std::strncpy(name, "videoDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << false << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, false);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: true" << std::endl;
     EXPECT_TRUE(result);
@@ -634,9 +630,8 @@ TEST(DefaultSocInterface, InvalidDecoderName_RialtoTrue)
     char name[64] = {0};
     std::cout << "Assigning name 'XYZDecoder' using strncpy" << std::endl;
     std::strncpy(name, "XYZDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << true << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, true);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -667,9 +662,8 @@ TEST(DefaultSocInterface, InvalidDecoderName_RialtoFalse)
     char name[64] = {0};
     std::cout << "Assigning name 'XYZDecoder' using strncpy" << std::endl;
     std::strncpy(name, "XYZDecoder", sizeof(name)-1);
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name 
-              << " and isRialto: " << std::boolalpha << false << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, false);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: " << name << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -699,9 +693,8 @@ TEST(DefaultSocInterface, NullName_RialtoTrue)
     std::cout << "Entering NullName_RialtoTrue test" << std::endl;
     DefaultSocInterface soc;
     const char *name = nullptr;
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: nullptr"
-              << " and isRialto: " << std::boolalpha << true << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, true);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: nullptr" << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -732,9 +725,8 @@ TEST(DefaultSocInterface, NullName_RialtoFalse)
     std::cout << "Entering NullName_RialtoFalse test" << std::endl;
     DefaultSocInterface soc;
     const char *name = nullptr;
-    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: nullptr"
-              << " and isRialto: " << std::boolalpha << false << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, false);
+    std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with name: nullptr" << std::endl;
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -767,7 +759,7 @@ TEST(DefaultSocInterface, EmptyString_RialtoTrue)
     std::strncpy(name, "", sizeof(name)-1);
     std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with an empty name"
               << " and isRialto: " << std::boolalpha << true << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, true);
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -802,7 +794,7 @@ TEST(DefaultSocInterface, EmptyString_RialtoFalse)
     std::strncpy(name, "", sizeof(name)-1);
     std::cout << "Invoking DefaultSocInterface::IsAudioOrVideoDecoder with an empty name"
               << " and isRialto: " << std::boolalpha << false << std::endl;
-    bool result = soc.IsAudioOrVideoDecoder(name, false);
+    bool result = soc.IsAudioOrVideoDecoder(name);
     std::cout << "Returned: " << result << std::endl;
     std::cout << "Expected: false" << std::endl;
     EXPECT_FALSE(result);
@@ -843,7 +835,7 @@ TEST(DefaultSocInterface, ValidAudioSinkInputRialtoTrue) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << true << std::endl;
         
         bool result = false;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, true));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -885,7 +877,7 @@ TEST(DefaultSocInterface, ValidAudioSinkInputRialtoFalse) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << false << std::endl;
         
         bool result = false;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, false));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output can be either true or false.
@@ -923,7 +915,7 @@ TEST(DefaultSocInterface, ValidAudioDecoderInputRialtoTrue) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << true << std::endl;
         
         bool result = false;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, true));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output can be either true or false.
@@ -961,7 +953,7 @@ TEST(DefaultSocInterface, ValidAudioDecoderInputRialtoFalse) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << false << std::endl;
         
         bool result = false;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, false));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output can be either true or false.
@@ -1004,7 +996,7 @@ TEST(DefaultSocInterface, NonAudioElementInputRialtoTrue) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << true << std::endl;
         
         bool result = true;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, true));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result) << "Expected false for non-audio element name input.";
@@ -1044,7 +1036,7 @@ TEST(DefaultSocInterface, NonAudioElementInputRialtoFalse) {
         std::cout << "Prepared input name: " << name << ", isRialto: " << std::boolalpha << false << std::endl;
         
         bool result = true;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, false));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result) << "Expected false for non-audio element name input.";
@@ -1083,7 +1075,7 @@ TEST(DefaultSocInterface, NullPointerInputRialtoTrue) {
         std::cout << "Prepared input name: NULL, isRialto: " << std::boolalpha << true << std::endl;
         
         bool result = true;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, true));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result) << "Expected false for NULL pointer name input.";
@@ -1125,7 +1117,7 @@ TEST(DefaultSocInterface, EmptyStringInputRialtoFalse) {
         std::cout << "Prepared input name: (empty string), isRialto: " << std::boolalpha << false << std::endl;
         
         bool result = true;
-        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name, false));
+        EXPECT_NO_THROW(result = socInterface.IsAudioSinkOrAudioDecoder(name));
         std::cout << "Method IsAudioSinkOrAudioDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_FALSE(result) << "Expected false for empty string name input.";
@@ -1292,9 +1284,8 @@ TEST(DefaultSocInterface, ValidVideoDecoderInput_RialtoTrue)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
 
-        bool isRialto = true;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: Assuming "video_decoder" returns true.
@@ -1339,9 +1330,8 @@ TEST(DefaultSocInterface, ValidVideoDecoderInput_RialtoFalse)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
 
-        bool isRialto = false;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: Assuming "video_decoder" returns true.
@@ -1383,9 +1373,8 @@ TEST(DefaultSocInterface, NonVideoDecoderInput_RialtoTrue)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
 
-        bool isRialto = true;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: "audio_decoder" is not a video decoder.
@@ -1430,9 +1419,8 @@ TEST(DefaultSocInterface, NonVideoDecoderInput_RialtoFalse)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
         
-        bool isRialto = false;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: "audio_decoder" is not a video decoder.
@@ -1474,9 +1462,8 @@ TEST(DefaultSocInterface, NullNameInput_RialtoTrue)
         const char* elementName = NULL;
         std::cout << "Prepared element name: NULL" << std::endl;
         
-        bool isRialto = true;
-        std::cout << "Calling IsVideoDecoder with name: NULL, isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: NULL, "  << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: NULL name returns false.
@@ -1522,9 +1509,8 @@ TEST(DefaultSocInterface, EmptyStringNameInput_RialtoFalse)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name (empty string): '" << elementName << "'" << std::endl;
 
-        bool isRialto = false;
-        std::cout << "Calling IsVideoDecoder with empty name, isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with empty name" << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: empty string is not a video decoder.
@@ -1566,9 +1552,8 @@ TEST(DefaultSocInterface, RandomNonMatchingNameInput_RialtoTrue)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
       
-        bool isRialto = true;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: random name is not a video decoder.
@@ -1611,9 +1596,8 @@ TEST(DefaultSocInterface, RandomNonMatchingNameInput_RialtoFalse)
         std::strncpy(elementName, inputStr, sizeof(elementName)-1);
         std::cout << "Prepared element name: " << elementName << std::endl;
         
-        bool isRialto = false;
-        std::cout << "Calling IsVideoDecoder with name: " << elementName << ", isRialto: " << isRialto << std::endl;
-        bool result = socInterface.IsVideoDecoder(elementName, isRialto);
+        std::cout << "Calling IsVideoDecoder with name: " << elementName << std::endl;
+        bool result = socInterface.IsVideoDecoder(elementName);
         std::cout << "Method IsVideoDecoder returned: " << result << std::endl;
         
         // Expected behavior: random name is not a video decoder.
@@ -1653,10 +1637,8 @@ TEST(DefaultSocInterface, ValidVideoSinkNameWithRialtoFalse)
     char nameBuffer[64] = {0};
     const char* inputName = "videosink";
     std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with name: " << nameBuffer << ", isRialto: " << isRialto << std::endl;
     
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     // Assuming a valid video sink name should return true.
@@ -1692,11 +1674,8 @@ TEST(DefaultSocInterface, ValidVideoSinkNameWithRialtoTrue)
     
     char nameBuffer[64] = {0};
     const char* inputName = "videosink";
-    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with name: " << nameBuffer << ", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);    
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     // Assuming a valid video sink name should return true.
@@ -1733,10 +1712,7 @@ TEST(DefaultSocInterface, InvalidVideoSinkNameAudiosinkWithRialtoFalse)
     char nameBuffer[64] = {0};
     const char* inputName = "audiosink";
     std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with name: " << nameBuffer << ", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     // Expected to be false for an invalid video sink name.
@@ -1774,11 +1750,8 @@ TEST(DefaultSocInterface, InvalidVideoSinkNameAudiosinkWithRialtoTrue)
     
     char nameBuffer[64] = {0};
     const char* inputName = "audiosink";
-    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with name: " << nameBuffer << ", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);    
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     EXPECT_FALSE(result);
@@ -1813,11 +1786,7 @@ TEST(DefaultSocInterface, NullNameWithRialtoFalse)
     DefaultSocInterface socInterface;
     
     const char* name = nullptr;
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with name: NULL"
-              << ", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(name, isRialto);
+    bool result = socInterface.IsVideoSink(name);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     EXPECT_FALSE(result);
@@ -1848,12 +1817,8 @@ TEST(DefaultSocInterface, NullNameWithRialtoTrue)
     EXPECT_NO_THROW(DefaultSocInterface socInterface);
     DefaultSocInterface socInterface;
     
-    const char* name = nullptr;
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with name: NULL"
-              << ", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(name, isRialto);
+    const char* name = nullptr;    
+    bool result = socInterface.IsVideoSink(name);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     EXPECT_FALSE(result);
@@ -1888,12 +1853,8 @@ TEST(DefaultSocInterface, EmptyNameWithRialtoFalse)
     char nameBuffer[64] = {0};
     // Empty string assignment using strncpy
     const char* inputName = "";
-    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsVideoSink with name: \"" << nameBuffer 
-              << "\", isRialto: " << isRialto << std::endl;
-    
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);    
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     EXPECT_FALSE(result);
@@ -1930,11 +1891,8 @@ TEST(DefaultSocInterface, EmptyNameWithRialtoTrue)
     char nameBuffer[64] = {0};
     const char* inputName = "";
     std::strncpy(nameBuffer, inputName, sizeof(nameBuffer) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsVideoSink with name: \"" << nameBuffer 
-              << "\", isRialto: " << isRialto << std::endl;
     
-    bool result = socInterface.IsVideoSink(nameBuffer, isRialto);
+    bool result = socInterface.IsVideoSink(nameBuffer);
     std::cout << "Method IsVideoSink returned: " << (result ? "true" : "false") << std::endl;
     
     EXPECT_FALSE(result);

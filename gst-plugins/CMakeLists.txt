@@ -32,8 +32,6 @@ pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
 pkg_check_modules(CURL REQUIRED libcurl)
-pkg_check_modules(UUID REQUIRED uuid)
-
 
 # Mac OS X
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
@@ -52,7 +50,9 @@ include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${CURL_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${MW_ROOT}/closedcaptions)
-include_directories(${MW_ROOT})
+include_directories(${MW_ROOT}/)
+
+set(GST_COMMON_DEPENDENCIES ${OS_LD_FLAGS} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES} ${CURL_LIBRARIES} ${CLI_LD_FLAGS} -ldl -luuid ${SEC_CLIENT_LIB})
 
 set(GST_COMMON_DEPENDENCIES ${OS_LD_FLAGS} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES} ${CURL_LIBRARIES} ${CLI_LD_FLAGS} -ldl -luuid ${SEC_CLIENT_LIB})
 
@@ -75,10 +75,10 @@ message("AAMP consolidated build, enabling gst_subtec")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGST_SUBTEC_ENABLED")
 add_subdirectory(gst_subtec)
 
-add_library(gstplugin SHARED ${GST_MIDDLEWARE_SOURCES})
+add_library(gstaamp SHARED ${GST_MIDDLEWARE_SOURCES})
 
 if(CMAKE_CDM_DRM)
-	target_include_directories (gstplugin PRIVATE drm/gst)
+	target_include_directories (gstaamp PRIVATE drm/gst)
 	if(CMAKE_USE_OPENCDM_ADAPTER)
 		message("CMAKE_USE_OPENCDM_ADAPTER set")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_OPENCDM_ADAPTER")
@@ -93,32 +93,32 @@ else()
     message("CMAKE_CDM_DRM not set")
 endif()
 
-target_link_libraries (gstplugin playergstinterface ${GST_COMMON_DEPENDENCIES})
-target_include_directories (gstplugin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../ ${CMAKE_CURRENT_SOURCE_DIR}/../../drm ${CMAKE_CURRENT_SOURCE_DIR}/../../drm/helper ${CMAKE_CURRENT_SOURCE_DIR}/../../tsb/api ${CMAKE_CURRENT_SOURCE_DIR}/../../downloader ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/gst-plugins ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/vendor ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm/ocdm ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm/helper  ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/externals/contentsecuritymanager)
+target_link_libraries (gstaamp playergstinterface ${GST_COMMON_DEPENDENCIES})
+target_include_directories (gstaamp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../ ${CMAKE_CURRENT_SOURCE_DIR}/../../drm ${CMAKE_CURRENT_SOURCE_DIR}/../../drm/helper ${CMAKE_CURRENT_SOURCE_DIR}/../../tsb/api ${CMAKE_CURRENT_SOURCE_DIR}/../../downloader ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/gst-plugins ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/vendor ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm/ocdm ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/drm/helper  ${CMAKE_CURRENT_SOURCE_DIR}/../../middleware/externals/contentsecuritymanager)
 
 set(LIBPLUGIN_DEFINES "${PLUGIN_DEFINES}")
 
 if (CMAKE_AMLOGIC_SOC)
-        message("CMAKE_AMLOGIC_SOC set")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAMLOGIC")
-	target_link_libraries (gstplugin gstsvpext)
+    message("CMAKE_AMLOGIC_SOC set")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAMLOGIC")
+	target_link_libraries (gstaamp gstsvpext)
 endif()
 
 #TODO Remove once PrivateInstance_Player is compilation flag independent.
 #if(CMAKE_USE_SECCLIENT)
 #	message("CMAKE_USE_SECCLIENT set")
 #	set(LIBPLUGIN_DEFINES "${LIBPLUGIN_DEFINES} -DUSE_SECCLIENT")
-#elseif(CMAKE_USE_SECMANAGER)
+#else if(CMAKE_USE_SECMANAGER)
 #	message("CMAKE_USE_SECMANAGER set")
 #	set(LIBPLUGIN_DEFINES "${LIBPLUGIN_DEFINES} -DUSE_SECMANAGER")
 #endif()
 
-install(TARGETS gstplugin DESTINATION lib/gstreamer-1.0)
+install(TARGETS gstaamp DESTINATION lib/gstreamer-1.0)
 
 if(CMAKE_WPEWEBKIT_JSBINDINGS)
 	message("CMAKE_WPEWEBKIT_JSBINDINGS set")
-	#target_link_libraries (gstplugin aampjsbindings)
+	#target_link_libraries (gstaamp aampjsbindings)
 	#set(LIBPLUGIN_DEFINES "${LIBPLUGIN_DEFINES} -DAAMP_JSCONTROLLER_ENABLED")
 endif()
 
-set_target_properties(gstplugin PROPERTIES COMPILE_FLAGS "${LIBPLUGIN_DEFINES}")
+set_target_properties(gstaamp PROPERTIES COMPILE_FLAGS "${LIBPLUGIN_DEFINES}")

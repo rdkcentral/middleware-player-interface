@@ -537,9 +537,8 @@ TEST(BrcmSocInterface, ValidAudioDecoderTrue) {
         std::cout << "Input isRialto flag: true" << std::endl;
         
         // Invoke the method.
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: true" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, true);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         EXPECT_TRUE(result == true || result == false);
         std::cout << "Received result: " << result << std::endl;
     });
@@ -579,9 +578,8 @@ TEST(BrcmSocInterface, ValidAudioDecoderFalse) {
         std::cout << "Prepared input name: " << name << std::endl;
         std::cout << "Input isRialto flag: false" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: false" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, false);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         EXPECT_TRUE(result == true || result == false);
         std::cout << "Received result: " << result << std::endl;
     });
@@ -620,9 +618,8 @@ TEST(BrcmSocInterface, ValidVideoDecoderTrue) {
         std::cout << "Prepared input name: " << name << std::endl;
         std::cout << "Input isRialto flag: true" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: true" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, true);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         EXPECT_TRUE(result == true || result == false);
         std::cout << "Received result: " << result << std::endl;
     });
@@ -661,9 +658,8 @@ TEST(BrcmSocInterface, ValidVideoDecoderFalse) {
         std::cout << "Prepared input name: " << name << std::endl;
         std::cout << "Input isRialto flag: false" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: false" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, false);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         EXPECT_TRUE(result == true || result == false);
         std::cout << "Received result: " << result << std::endl;
     });
@@ -699,9 +695,8 @@ TEST(BrcmSocInterface, InvalidDecoderTrue) {
         std::cout << "Prepared input name: " << name << std::endl;
         std::cout << "Input isRialto flag: true" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: true" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, true);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         std::cout << "Received result: " << result << std::endl;
         EXPECT_FALSE(result);
         std::cout << "Verified that result is false for invalid decoder name." << std::endl;
@@ -738,9 +733,8 @@ TEST(BrcmSocInterface, InvalidDecoderFalse) {
         std::cout << "Prepared input name: " << name << std::endl;
         std::cout << "Input isRialto flag: false" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name 
-                  << " and isRialto: false" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, false);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << name  << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         std::cout << "Received result: " << result << std::endl;
         EXPECT_FALSE(result);
         std::cout << "Verified that result is false for invalid decoder name." << std::endl;
@@ -777,9 +771,8 @@ TEST(BrcmSocInterface, NullDecoderTrue) {
         std::cout << "Prepared input name: nullptr" << std::endl;
         std::cout << "Input isRialto flag: true" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr"
-                  << " and isRialto: true" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, true);
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr" << std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         std::cout << "Received result: " << result << std::endl;
         EXPECT_FALSE(result);
         std::cout << "Verified that result is false for null decoder name." << std::endl;
@@ -819,9 +812,8 @@ TEST(BrcmSocInterface, EmptyDecoderFalse) {
         std::cout << "Prepared input name: (empty string)" << std::endl;
         std::cout << "Input isRialto flag: false" << std::endl;
         
-        std::cout << "Invoking IsAudioOrVideoDecoder with an empty name"
-                  << " and isRialto: false" << std::endl;
-        bool result = brcm.IsAudioOrVideoDecoder(name, false);
+        std::cout << "Invoking IsAudioOrVideoDecoder with an empty name"<< std::endl;
+        bool result = brcm.IsAudioOrVideoDecoder(name);
         std::cout << "Received result: " << result << std::endl;
         EXPECT_FALSE(result);
         std::cout << "Verified that result is false for empty decoder name." << std::endl;
@@ -863,7 +855,7 @@ TEST(BrcmSocInterface, ValidAudioSinkWithRialtoTrue)
     std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << true << std::endl;
     
     bool result = false;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, true); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
     
     // Expect the valid audio sink to return true.
@@ -898,10 +890,10 @@ TEST(BrcmSocInterface, ValidAudioSinkWithRialtoFalse)
     char name[128];
     std::strncpy(name, "audio_sink", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << false << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << std::endl;
     
     bool result = false;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, false); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
 
     // Expect the valid audio sink to return true.
@@ -939,10 +931,10 @@ TEST(BrcmSocInterface, ValidAudioDecoderWithRialtoTrue)
     char name[128];
     std::strncpy(name, "audio_decoder", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << true << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << std::endl;
     
     bool result = false;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, true); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
 
     // Expect the valid audio decoder to return true.
@@ -982,10 +974,10 @@ TEST(BrcmSocInterface, ValidAudioDecoderWithRialtoFalse)
     char name[128];
     std::strncpy(name, "audio_decoder", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << false << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << std::endl;
     
     bool result = false;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, false); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
 
     // Expect the valid audio decoder to return true.
@@ -1021,10 +1013,10 @@ TEST(BrcmSocInterface, InvalidElementNameWithRialtoTrue)
     char name[128];
     std::strncpy(name, "video_sink", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << true << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << std::endl;
     
     bool result = true;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, true); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
     
     // Expect an invalid element name to return false.
@@ -1058,10 +1050,10 @@ TEST(BrcmSocInterface, InvalidElementNameWithRialtoFalse)
     char name[128];
     std::strncpy(name, "audio_source", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << ", isRialto = " << std::boolalpha << false << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = " << name << std::endl;
     
     bool result = true;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, false); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
     
     // Expect an invalid element name to return false.
@@ -1098,7 +1090,7 @@ TEST(BrcmSocInterface, NullNameInputWithRialtoTrue)
     std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = nullptr, isRialto = " << std::boolalpha << true << std::endl;
     
     bool result = true;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, true); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
     
     // Expect a null name input to return false.
@@ -1136,55 +1128,15 @@ TEST(BrcmSocInterface, EmptyStringNameWithRialtoFalse)
     char name[128];
     std::strncpy(name, "", sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = \"" << name << "\", isRialto = " << std::boolalpha << false << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name = \"" << name << std::endl;
     
     bool result = true;
-    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name, false); });
+    EXPECT_NO_THROW({ result = socInterface.IsAudioSinkOrAudioDecoder(name); });
     std::cout << "Method returned: " << std::boolalpha << result << std::endl;
     
     // Expect an empty string input to return false.
     EXPECT_FALSE(result);
     std::cout << "Exiting EmptyStringNameWithRialtoFalse test" << std::endl;
-}
-/**
- * @brief Verify the default behavior of the IsSupportedAC4() method in BrcmSocInterface
- *
- * This test verifies that when a BrcmSocInterface object is created using the default constructor, the IsSupportedAC4() method returns a valid boolean value. It ensures that the functionality regarding AC4 support is correctly implemented and that no exceptions are thrown during object instantiation.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 027@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                                                     | Expected Result                                                 | Notes          |
- * | :---------------:| ------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- | -------------- |
- * | 01               | Invoke the default constructor of BrcmSocInterface                 | No input, output: object instance created                     | Object is instantiated without any exception                    | Should be successful |
- * | 02               | Invoke the IsSupportedAC4() method on the BrcmSocInterface object     | Object instance created, method call, output: boolean value     | Returns a boolean value indicating AC4 support                    | Should Pass    |
- * | 03               | Validate that the returned boolean value is either true or false      | ac4Supported = result of IsSupportedAC4()                       | The assertion confirms the boolean result is valid (true/false)    | Should Pass    |
- */
-TEST(BrcmSocInterface, VerifyAC4SupportReturnsTrueByDefault) {
-    std::cout << "Entering VerifyAC4SupportReturnsTrueByDefault test" << std::endl;
-    
-    // Create a BrcmSocInterface object using the default constructor
-    EXPECT_NO_THROW({
-        BrcmSocInterface objTemp;
-    });
-    BrcmSocInterface obj;
-    std::cout << "BrcmSocInterface object created using default constructor" << std::endl;
-    
-    // Invoke the IsSupportedAC4() method and log the invocation details
-    std::cout << "Calling IsSupportedAC4() method on BrcmSocInterface object" << std::endl;
-    bool ac4Supported = obj.IsSupportedAC4();
-    std::cout << "IsSupportedAC4() returned: " << (ac4Supported ? "true" : "false") << std::endl;
-    
-    // Validate that the AC4 support is indeed true
-    EXPECT_TRUE(ac4Supported == true || ac4Supported == false);
-    
-    std::cout << "Exiting VerifyAC4SupportReturnsTrueByDefault test" << std::endl;
 }
 /**
  * @brief Verify IsVideoDecoder returns a valid boolean for a valid video decoder name with isRialto set to true
@@ -1212,8 +1164,8 @@ TEST(BrcmSocInterface, ValidVideoDecoderNameWithIsRialtoTrue) {
         BrcmSocInterface obj;
         char name[50] = {0};
         strncpy(name, "H264Decoder", sizeof(name) - 1);
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: true" << std::endl;
-        bool ret = obj.IsVideoDecoder(name, true);
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
+        bool ret = obj.IsVideoDecoder(name);
         std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
         EXPECT_TRUE(ret == true || ret == false);
     });
@@ -1246,8 +1198,8 @@ TEST(BrcmSocInterface, ValidVideoDecoderNameWithIsRialtoFalse) {
         BrcmSocInterface obj;
         char name[50] = {0};
         strncpy(name, "H264Decoder", sizeof(name) - 1);
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: false" << std::endl;
-        bool ret = obj.IsVideoDecoder(name, false);
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
+        bool ret = obj.IsVideoDecoder(name);
         std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
         EXPECT_TRUE(ret == true || ret == false);
     });
@@ -1279,8 +1231,8 @@ TEST(BrcmSocInterface, NonVideoDecoderNameWithIsRialtoTrue) {
     BrcmSocInterface obj;
     char name[50] = {0};
     strncpy(name, "AudioProcessor", sizeof(name) - 1);
-    std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: true" << std::endl;
-    bool ret = obj.IsVideoDecoder(name, true);
+    std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
+    bool ret = obj.IsVideoDecoder(name);
     std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
     EXPECT_FALSE(ret);
 
@@ -1312,8 +1264,8 @@ TEST(BrcmSocInterface, NonVideoDecoderNameWithIsRialtoFalse) {
     BrcmSocInterface obj;
     char name[50] = {0};
     strncpy(name, "AudioProcessor", sizeof(name) - 1);
-    std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: false" << std::endl;
-    bool ret = obj.IsVideoDecoder(name, false);
+    std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
+    bool ret = obj.IsVideoDecoder(name);
     std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
     EXPECT_FALSE(ret);
 
@@ -1346,8 +1298,8 @@ TEST(BrcmSocInterface, NullNamePointerWithIsRialtoTrue) {
 
     BrcmSocInterface obj;
     const char* name = nullptr;
-    std::cout << "Invoking IsVideoDecoder with name: nullptr and isRialto: true" << std::endl;
-    bool ret = obj.IsVideoDecoder(name, true);
+    std::cout << "Invoking IsVideoDecoder with name: nullptr" << std::endl;
+    bool ret = obj.IsVideoDecoder(name);
     std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
     EXPECT_FALSE(ret);
 
@@ -1380,8 +1332,8 @@ TEST(BrcmSocInterface, EmptyStringNameWithIsRialtoFalse) {
     BrcmSocInterface obj;
     char name[1];
     name[0] = '\0';
-    std::cout << "Invoking IsVideoDecoder with empty string name and isRialto: false" << std::endl;
-    bool ret = obj.IsVideoDecoder(name, false);
+    std::cout << "Invoking IsVideoDecoder with empty string name" << std::endl;
+    bool ret = obj.IsVideoDecoder(name);
     std::cout << "Returned value from IsVideoDecoder: " << ret << std::endl;
     EXPECT_FALSE(ret);
 
@@ -1417,7 +1369,7 @@ TEST(BrcmSocInterface, ValidVideoSinkNonRialto) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "video_sink", bufferSize - 1);
         std::cout << "Invoking IsVideoSink with name: " << name << " and isRialto: false" << std::endl;
-        bool result = obj.IsVideoSink(name, false);
+        bool result = obj.IsVideoSink(name);
         std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
         EXPECT_TRUE(result == true || result == false);
     });
@@ -1453,7 +1405,7 @@ TEST(BrcmSocInterface, ValidVideoSinkRialto) {
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "video_sink", bufferSize - 1);
         std::cout << "Invoking IsVideoSink with name: " << name << " and isRialto: true" << std::endl;
-        bool result = obj.IsVideoSink(name, true);
+        bool result = obj.IsVideoSink(name);
         std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
         EXPECT_TRUE(result == true || result == false);
     });
@@ -1488,7 +1440,7 @@ TEST(BrcmSocInterface, InvalidVideoSinkNonRialto) {
     std::memset(name, 0, sizeof(name));
     std::strncpy(name, "audio_sink", bufferSize - 1);
     std::cout << "Invoking IsVideoSink with name: " << name << " and isRialto: false" << std::endl;
-    bool result = obj.IsVideoSink(name, false);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     
@@ -1525,7 +1477,7 @@ TEST(BrcmSocInterface, InvalidVideoSinkRialto) {
     std::memset(name, 0, sizeof(name));
     std::strncpy(name, "audio_sink", bufferSize - 1);
     std::cout << "Invoking IsVideoSink with name: " << name << " and isRialto: true" << std::endl;
-    bool result = obj.IsVideoSink(name, true);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     
@@ -1557,7 +1509,7 @@ TEST(BrcmSocInterface, NullNameNonRialto) {
     BrcmSocInterface obj;
     const char* name = nullptr;
     std::cout << "Invoking IsVideoSink with name: " << "nullptr" << " and isRialto: false" << std::endl;
-    bool result = obj.IsVideoSink(name, false);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     
@@ -1587,7 +1539,7 @@ TEST(BrcmSocInterface, NullNameRialto) {
     BrcmSocInterface obj;
     const char* name = nullptr;
     std::cout << "Invoking IsVideoSink with name: " << "nullptr" << " and isRialto: true" << std::endl;
-    bool result = obj.IsVideoSink(name, true);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     
@@ -1627,7 +1579,7 @@ TEST(BrcmSocInterface, EmptyNameNonRialto) {
     std::memset(name, 0, sizeof(name));
     std::strncpy(name, "", bufferSize - 1);
     std::cout << "Invoking IsVideoSink with name: \"" << name << "\" (empty string) and isRialto: false" << std::endl;
-    bool result = obj.IsVideoSink(name, false);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     
@@ -1660,7 +1612,7 @@ TEST(BrcmSocInterface, EmptyNameRialto) {
     std::memset(name, 0, sizeof(name));
     std::strncpy(name, "", bufferSize - 1);
     std::cout << "Invoking IsVideoSink with name: \"" << name << "\" (empty string) and isRialto: true" << std::endl;
-    bool result = obj.IsVideoSink(name, true);
+    bool result = obj.IsVideoSink(name);
     std::cout << "Returned value from IsVideoSink: " << std::boolalpha << result << std::endl;
     EXPECT_FALSE(result);
     

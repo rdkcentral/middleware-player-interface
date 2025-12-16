@@ -1,4 +1,3 @@
-
 /*
  * If not stated otherwise in this file or this component's LICENSE file the
  * following copyright and licenses apply:
@@ -1048,10 +1047,9 @@ TEST_F(RealtekSocInterfaceTests, ValidAudioDecoderIsRialtoTrue)
         const char* input = "audio_decoder";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: true" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, true);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         // For a valid audio decoder, we expect true.
@@ -1087,10 +1085,9 @@ TEST_F(RealtekSocInterfaceTests, ValidAudioDecoderIsRialtoFalse)
         const char* input = "audio_decoder";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: false" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, false);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1129,10 +1126,9 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoDecoderIsRialtoTrue)
         const char* input = "video_decoder";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: true" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, true);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1168,10 +1164,9 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoDecoderIsRialtoFalse)
         const char* input = "video_decoder";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: false" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer  << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, false);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1208,10 +1203,9 @@ TEST_F(RealtekSocInterfaceTests, InvalidDecoderNameIsRialtoTrue)
         const char* input = "graphics_decoder";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: true" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, true);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         // For an invalid decoder name, we expect false.
@@ -1247,10 +1241,9 @@ TEST_F(RealtekSocInterfaceTests, InvalidDecoderNameIsRialtoFalse)
         const char* input = "unsupported_component";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer 
-                  << " and isRialto: false" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: " << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, false);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         // For an invalid decoder name, we expect false.
@@ -1284,9 +1277,9 @@ TEST_F(RealtekSocInterfaceTests, NullNameParameterIsRialtoTrue)
         std::cout << "RealtekSocInterface instance created successfully." << std::endl;
         
         const char* nullName = nullptr;
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr and isRialto: true" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: nullptr" << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nullName, true);
+        bool result = socInterface.IsAudioOrVideoDecoder(nullName);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         // For a null name, we expect false.
@@ -1324,10 +1317,9 @@ TEST_F(RealtekSocInterfaceTests, EmptyStringNameIsRialtoFalse)
         const char* input = "";
         char nameBuffer[256] = {0};
         std::strncpy(nameBuffer, input, sizeof(nameBuffer) - 1);
-        std::cout << "Invoking IsAudioOrVideoDecoder with name: \"" << nameBuffer 
-                  << "\" and isRialto: false" << std::endl;
+        std::cout << "Invoking IsAudioOrVideoDecoder with name: \"" << nameBuffer << std::endl;
         
-        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer, false);
+        bool result = socInterface.IsAudioOrVideoDecoder(nameBuffer);
         std::cout << "Method returned: " << (result ? "true" : "false") << std::endl;
         
         // For an empty string input, we expect false.
@@ -1365,10 +1357,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_NameNull_RialtoFalse)
     RealtekSocInterface socInterface;
     
     const char* name = NULL;
-    bool isRialto = false;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=NULL, isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=NULL" << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1403,10 +1394,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_NameNull_RialtoTrue)
     RealtekSocInterface socInterface;
     
     const char* name = NULL;
-    bool isRialto = true;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=NULL, isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=NULL" << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1443,10 +1433,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_EmptyName_RialtoFalse
     // Create a fixed size array and assign an empty string using strncpy
     char name[50] = {0};
     strncpy(name, "", sizeof(name) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1482,10 +1471,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_EmptyName_RialtoTrue)
     
     char name[50] = {0};
     strncpy(name, "", sizeof(name) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1519,10 +1507,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_AudioSink_RialtoFalse
     
     char name[50] = {0};
     strncpy(name, "AudioSink", sizeof(name) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     // Expected output can be either true or false.
@@ -1562,10 +1549,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_AudioSink_RialtoTrue)
     
     char name[50] = {0};
     strncpy(name, "AudioSink", sizeof(name) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_TRUE(result == true || result == false);
@@ -1603,9 +1589,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_AudioDecoder_RialtoFa
     char name[50] = {0};
     strncpy(name, "AudioDecoder", sizeof(name) - 1);
     bool isRialto = false;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_TRUE(result == true || result == false);
@@ -1640,10 +1626,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_AudioDecoder_RialtoTr
     
     char name[50] = {0};
     strncpy(name, "AudioDecoder", sizeof(name) - 1);
-    bool isRialto = true;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_TRUE(result == true || result == false);
@@ -1679,10 +1664,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_VideoSink_RialtoFalse
     
     char name[50] = {0};
     strncpy(name, "VideoSink", sizeof(name) - 1);
-    bool isRialto = false;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1717,9 +1701,9 @@ TEST_F(RealtekSocInterfaceTests, IsAudioSinkOrAudioDecoder_RandomName_RialtoTrue
     char name[50] = {0};
     strncpy(name, "RandomName", sizeof(name) - 1);
     bool isRialto = true;
-    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << name << "\", isRialto=" << isRialto << std::endl;
+    std::cout << "Invoking IsAudioSinkOrAudioDecoder with parameters: name=\"" << std::endl;
     
-    bool result = socInterface.IsAudioSinkOrAudioDecoder(name, isRialto);
+    bool result = socInterface.IsAudioSinkOrAudioDecoder(name);
     std::cout << "Returned value: " << result << std::endl;
     
     EXPECT_FALSE(result);
@@ -1839,10 +1823,9 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoDecoderRialtoTrue) {
         char name[100];
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "VideoDecoder", sizeof(name) - 1);
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name << ":" << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1881,10 +1864,9 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoDecoderRialtoFalse) {
         char name[100];
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "VideoDecoder", sizeof(name) - 1);
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         EXPECT_TRUE(result == true || result == false);
@@ -1920,10 +1902,9 @@ TEST_F(RealtekSocInterfaceTests, InvalidVideoDecoderAudioNameRialtoTrue) {
         char name[100];
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "AudioDecoder", sizeof(name) - 1);
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for an audio decoder name, returns false.
@@ -1962,10 +1943,9 @@ TEST_F(RealtekSocInterfaceTests, InvalidVideoDecoderAudioNameRialtoFalse) {
         char name[100];
         std::memset(name, 0, sizeof(name));
         std::strncpy(name, "AudioDecoder", sizeof(name) - 1);
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoDecoder with name: " << name << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << name << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for an audio decoder name, returns false.
@@ -2000,10 +1980,9 @@ TEST_F(RealtekSocInterfaceTests, NullNameRialtoTrue) {
         std::cout << "Constructed RealtekSocInterface object successfully." << std::endl;
         
         const char* name = nullptr;
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoDecoder with name: " << "nullptr" << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << "nullptr" << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for null name, returns false.
@@ -2040,10 +2019,9 @@ TEST_F(RealtekSocInterfaceTests, NullNameRialtoFalse) {
         std::cout << "Constructed RealtekSocInterface object successfully." << std::endl;
         
         const char* name = nullptr;
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoDecoder with name: " << "nullptr" << " and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with name: " << "nullptr" << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for null name, returns false.
@@ -2083,10 +2061,9 @@ TEST_F(RealtekSocInterfaceTests, EmptyNameRialtoTrue) {
         std::memset(name, 0, sizeof(name));
         // Using empty string assignment.
         std::strncpy(name, "", sizeof(name) - 1);
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoDecoder with empty name and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with empty name:"  << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for empty string name, returns false.
@@ -2125,10 +2102,9 @@ TEST_F(RealtekSocInterfaceTests, EmptyNameRialtoFalse) {
         std::memset(name, 0, sizeof(name));
         // Using empty string assignment.
         std::strncpy(name, "", sizeof(name) - 1);
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoDecoder with empty name and isRialto: " << isRialto << std::endl;
+        std::cout << "Invoking IsVideoDecoder with empty name: " << std::endl;
         
-        bool result = socInterface.IsVideoDecoder(name, isRialto);
+        bool result = socInterface.IsVideoDecoder(name);
         std::cout << "IsVideoDecoder returned: " << std::boolalpha << result << std::endl;
         
         // Expected output: for empty string name, returns false.
@@ -2169,11 +2145,8 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoSinkWithRialtoTrue) {
         const char *name = nullptr;
         char localName[32] = {0}; 
         std::strncpy(localName, nameBuffer, sizeof(localName) - 1);
-        bool isRialto = true;
-        std::cout << "Invoking IsVideoSink with parameters: name = " << localName 
-                  << ", isRialto = " << std::boolalpha << isRialto << "\n";
-        
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        std::cout << "Invoking IsVideoSink with parameters: name = " << "\n";        
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         EXPECT_TRUE(result == true || result == false);
     });
@@ -2210,11 +2183,9 @@ TEST_F(RealtekSocInterfaceTests, ValidVideoSinkWithRialtoFalse) {
         const char nameBuffer[] = "videosink";
         char localName[32] = {0};
         std::strncpy(localName, nameBuffer, sizeof(localName) - 1);
-        bool isRialto = false;
-        std::cout << "Invoking IsVideoSink with parameters: name = " << localName 
-                  << ", isRialto = " << std::boolalpha << isRialto << "\n";
+        std::cout << "Invoking IsVideoSink with parameters: <<";
         
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         EXPECT_TRUE(result == true || result == false);
     });
@@ -2250,10 +2221,9 @@ TEST_F(RealtekSocInterfaceTests, NonVideoSinkWithRialtoTrue) {
         char localName[32] = {0};
         std::strncpy(localName, nameBuffer, sizeof(localName) - 1);
         bool isRialto = true;
-        std::cout << "Invoking IsVideoSink with parameters: name = " << localName 
-                  << ", isRialto = " << std::boolalpha << isRialto << "\n";
+        std::cout << "Invoking IsVideoSink with parameters: name = " << "\n";
         
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         
         EXPECT_FALSE(result);
@@ -2294,10 +2264,9 @@ TEST_F(RealtekSocInterfaceTests, NonVideoSinkWithRialtoFalse) {
         char localName[32] = {0};
         std::strncpy(localName, nameBuffer, sizeof(localName) - 1);
         bool isRialto = false;
-        std::cout << "Invoking IsVideoSink with parameters: name = " << localName 
-                  << ", isRialto = " << std::boolalpha << isRialto << "\n";
+        std::cout << "Invoking IsVideoSink with parameters: name = " << "\n";
         
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         
         EXPECT_FALSE(result);
@@ -2336,9 +2305,9 @@ TEST_F(RealtekSocInterfaceTests, NullNamePointerInput) {
         const char* localName = NULL;
         bool isRialto = true;
         std::cout << "Invoking IsVideoSink with parameters: name = " 
-                  << "NULL" << ", isRialto = " << std::boolalpha << isRialto << "\n";
+                  << "NULL" << "\n";
         
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         
         EXPECT_FALSE(result);
@@ -2375,10 +2344,9 @@ TEST_F(RealtekSocInterfaceTests, EmptyStringName) {
         char localName[32] = {0};
         // localName remains empty ("")
         bool isRialto = false;
-        std::cout << "Invoking IsVideoSink with parameters: name = \"" << localName 
-                  << "\", isRialto = " << std::boolalpha << isRialto << "\n";
+        std::cout << "Invoking IsVideoSink with parameters: name = \"" << localName  << "\n";
         
-        bool result = socInterface.IsVideoSink(localName, isRialto);
+        bool result = socInterface.IsVideoSink(localName);
         std::cout << "IsVideoSink returned: " << std::boolalpha << result << "\n";
         
         EXPECT_FALSE(result);
@@ -3147,95 +3115,7 @@ TEST_F(RealtekSocInterfaceTests, EdgeCaseSpecialCharsMute) {
     
     std::cout << "Exiting EdgeCaseSpecialCharsMute test" << std::endl;
 }
-/**
- * @brief Validate that SetAudioRoutingProperties does not throw when provided with a valid GstElement pointer.
- *
- * This test verifies that the RealtekSocInterface's SetAudioRoutingProperties function operates correctly when a valid GstElement pointer is passed. It covers the creation of the RealtekSocInterface object, the simulation of a valid GstElement pointer, and the invocation of the API to ensure that no exceptions are thrown.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 075@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |@n
- * | :----: | --------- | ---------- |-------------- | ----- |@n
- * | 01 | Create RealtekSocInterface instance using the default constructor | No input arguments; output: RealtekSocInterface object created | Object created successfully without throwing exceptions | Should be successful |@n
- * | 02 | Create a dummy GstElement pointer by simulating a valid memory block | GstElement dummyElement allocated; pDummyElement = &dummyElement | Dummy GstElement pointer is valid | Should be successful |@n
- * | 03 | Invoke SetAudioRoutingProperties with the valid GstElement pointer | input: pDummyElement pointer; output: none | API call completes without throwing exceptions; assertion check passes | Should Pass |
- */
-TEST_F(RealtekSocInterfaceTests, Valid_source_element_with_proper_GstElement_pointer) {
-    std::cout << "Entering Valid_source_element_with_proper_GstElement_pointer test" << std::endl;
-    
-    // Creating RealtekSocInterface object using default constructor.
-    EXPECT_NO_THROW({
-        RealtekSocInterface socInterface;
-        std::cout << "RealtekSocInterface object created successfully." << std::endl;
-        
-        // Creating a dummy GstElement instance to simulate a valid pointer.
-        // Here we allocate a dummy memory block of appropriate size.
-        // Since we do not have details of GstElement internals, we simply simulate a valid pointer.
-        GstElement dummyElement;
-        GstElement* pDummyElement = &dummyElement;
-        std::cout << "Created dummy GstElement at address: " << pDummyElement << std::endl;
-        
-        // Invoking SetAudioRoutingProperties with a valid GstElement pointer.
-        std::cout << "Invoking SetAudioRoutingProperties with GstElement pointer: " << pDummyElement << std::endl;
-        EXPECT_NO_THROW({
-            socInterface.SetAudioRoutingProperties(pDummyElement);
-        });
-        std::cout << "SetAudioRoutingProperties completed execution for valid GstElement pointer." << std::endl;
-    });
-    
-    std::cout << "Exiting Valid_source_element_with_proper_GstElement_pointer test" << std::endl;
-}
-/**
- * @brief Test RealtekSocInterface::SetAudioRoutingProperties with a NULL GstElement pointer.
- *
- * This test verifies that the RealtekSocInterface API correctly handles a NULL GstElement pointer input for the SetAudioRoutingProperties method. 
- * It ensures that no exception is thrown when passing a NULL pointer and that the method executes as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 076@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                         | Expected Result                                                                   | Notes          |
- * | :--------------: | --------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- | -------------- |
- * | 01               | Create RealtekSocInterface object using default constructor.                | input: none (default initialization)              | Object is created without throwing an exception (EXPECT_NO_THROW passes).         | Should be successful |
- * | 02               | Set GstElement pointer to NULL.                                             | input: pNullElement = nullptr                       | Variable pNullElement is correctly set to NULL.                                  | Should be successful |
- * | 03               | Invoke SetAudioRoutingProperties with the NULL GstElement pointer.           | input: pNullElement = nullptr, output: none         | Method completes without throwing an exception (EXPECT_NO_THROW passes).          | Should Pass     |
- */
-TEST_F(RealtekSocInterfaceTests, Null_source_element_pointer) {
-    GTEST_SKIP();
-    std::cout << "Entering Null_source_element_pointer test" << std::endl;
-    
-    // Creating RealtekSocInterface object using default constructor.
-    EXPECT_NO_THROW({
-        RealtekSocInterface socInterface;
-        std::cout << "RealtekSocInterface object created successfully." << std::endl;
-        
-        // Setting source as NULL
-        GstElement* pNullElement = nullptr;
-        std::cout << "Using NULL GstElement pointer: " << pNullElement << std::endl;
-        
-        // Invoking SetAudioRoutingProperties with a NULL pointer.
-        std::cout << "Invoking SetAudioRoutingProperties with NULL GstElement pointer." << std::endl;
-        EXPECT_NO_THROW({
-            socInterface.SetAudioRoutingProperties(pNullElement);
-        });
-        std::cout << "SetAudioRoutingProperties completed execution for NULL GstElement pointer." << std::endl;
-    });
-    
-    std::cout << "Exiting Null_source_element_pointer test" << std::endl;
-}
+
 /**
  * @brief Validate that a valid GstObject pointer sets the decode error flag
  *

@@ -38,19 +38,18 @@
 #undef __reserved
 
 
-//used for FakePlayerIarmInterface only, mimics dsmgr params
+//used for FakePlayerExternalsInterface only, mimics dsmgr params
 #define PLAYER_dsHDCP_VERSION_MAX 30
 #define PLAYER_dsHDCP_VERSION_2X 22
 #define PLAYER_dsHDCP_VERSION_1X 14
 typedef int playerDsHdcpProtocolVersion_t;
 
-class FakePlayerIarmInterface : public PlayerExternalsInterfaceBase
+class FakePlayerExternalsInterface : public PlayerExternalsInterfaceBase
 {
         playerDsHdcpProtocolVersion_t m_hdcpCurrentProtocol;
     public:
-        FakePlayerIarmInterface(){}
-
-                /**
+        FakePlayerExternalsInterface(){SetHDMIStatus();}
+                 /**
          * @brief Get the source video width.
          *
          * Returns the width of the source video stream.
@@ -157,25 +156,9 @@ class FakePlayerIarmInterface : public PlayerExternalsInterfaceBase
          * @param element Pointer to the GstElement.
          */
         void setGstElementFake(GstElement *element) { m_gstElement = element; }
-       
-        /**
-         * @fn IARMInit
-         * @brief Initialize IARM
-         * @param[in] processName string of the name of the process initializing IARM
-         */
-        static void IARMInit(const char* processName){}
 
-        /**
-         * @fn IARMRegisterDsMgrEventHandler
-         * @brief Register Display Settings Mgr event handlers
-         */
-        void IARMRegisterDsMgrEventHandler() override{}
 
-        /**
-         * @fn IARMRemoveDsMgrEventHandler
-         * @brief Remove Display Settings Mgr event handlers
-         */
-        void IARMRemoveDsMgrEventHandler() override{}
+        void Initialize() override {}
 
         /**
          * @fn GetDisplayResolution
@@ -193,14 +176,7 @@ class FakePlayerIarmInterface : public PlayerExternalsInterfaceBase
             m_hdcpCurrentProtocol = PLAYER_dsHDCP_VERSION_1X;
             m_isHDCPEnabled = true;
         }
-	
-	/**
-         * @fn IsActiveStreamingInterfaceWifi
-         * @brief Checks if current active interface is wifi and also sets up NET_SRV_MGR event to handles active interface change
-         * @return True if current active is wifi. False if not.
-         */
-        static bool IsActiveStreamingInterfaceWifi(){return false;}
-
+        
         /**
          * @fn GetTR181Config
          * @brief Gets appropriate TR181 Config
@@ -224,7 +200,9 @@ class FakePlayerIarmInterface : public PlayerExternalsInterfaceBase
          */
         bool GetActiveInterface()override{return false;}
 
-        ~FakePlayerIarmInterface(){}
+        void SetUseFireBoltSDK(bool t_use_firebolt_sdk) override {}
+        
+        ~FakePlayerExternalsInterface(){}
 };
 
 /**
@@ -237,16 +215,19 @@ class PlayerExternalsInterface
 private:
 
 
-    PlayerExternalsInterfaceBase* m_pIarmInterface;
+    std::shared_ptr<PlayerExternalsInterfaceBase> m_pIarmInterface;
 
     static std::shared_ptr<PlayerExternalsInterface> s_pPlayerOP;
-
-public:
 
     /**
      * @fn PlayerExternalsInterface
      */
     PlayerExternalsInterface();
+    
+
+    
+public:
+
     /**
      * @fn ~PlayerExternalsInterface
      */
@@ -261,13 +242,8 @@ public:
      *
      */
     PlayerExternalsInterface& operator=(const PlayerExternalsInterface&) = delete;
-    /**
-     * @brief Routine to check ActiveStreamingInterface
-     *
-     */
-	static bool IsActiveStreamingInterfaceWifi(void);
 
-
+    void Initialize();	 
 
     char * GetTR181PlayerConfig(const char * paramName, size_t & iConfigLen);
 
@@ -317,18 +293,21 @@ public:
     bool GetActiveInterface();
 
     /**
-     * @fn IARMInit
-     * @brief Initialize IARM
-     * @param[in] processName string of the name of the process initializing IARM
-     */
-    static void IARMInit(const char* processName);
-
-    /**
      * @fn IsConfigWifiCurlHeader
      * @brief Routine to find if IARM is supported in platform
      */
     bool IsConfigWifiCurlHeader();
 
+
+    void SetUseFireBoltSDK(bool t_use_firebolt_sdk);
+
+#ifdef UBUNTU
+    static std::shared_ptr<PlayerExternalsInterface> createInstance()
+    {
+        return std::shared_ptr<PlayerExternalsInterface>(
+            new PlayerExternalsInterface());
+    }
+#endif
 };
 
 #endif // PlayerExternalsInterface_h

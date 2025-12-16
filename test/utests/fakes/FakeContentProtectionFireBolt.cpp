@@ -11,8 +11,7 @@
 
 uint64_t ContentProtectionFirebolt::mSubscriptionId = 0;
 
-ContentProtectionFirebolt::ContentProtectionFirebolt()
-    : mInitialized(false), mIsConnected(false), mListenerId(0)
+ContentProtectionFirebolt:: ContentProtectionFirebolt() : mInitialized(false), mSpeedStateMutex(), mContentProtectionMutex(), mFireboltInitMutex()
 {
     // No real initialization in fake
 }
@@ -27,9 +26,6 @@ void ContentProtectionFirebolt::UnSubscribeEvents() {}
 void ContentProtectionFirebolt::HandleWatermarkEvent(const std::string&, const std::string&, const std::string&) {}
 void ContentProtectionFirebolt::Initialize() { mInitialized = true; }
 void ContentProtectionFirebolt::DeInitialize() { mInitialized = false; }
-bool ContentProtectionFirebolt::CreateFireboltInstance(const std::string&) { return true; }
-void ContentProtectionFirebolt::ConnectionChanged(const bool, int) {}
-void ContentProtectionFirebolt::DestroyFireboltInstance() {}
 bool ContentProtectionFirebolt::IsActive(bool) { return mInitialized; }
 
 bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate(
@@ -56,12 +52,12 @@ void ContentProtectionFirebolt::CloseDrmSession(int64_t) {}
 bool ContentProtectionFirebolt::SetDrmSessionState(int64_t, bool) { return true; }
 bool ContentProtectionFirebolt::SetPlaybackPosition(int64_t, float, int32_t) { return true; }
 void ContentProtectionFirebolt::ShowWatermark(bool, int64_t) {}
-bool ContentProtectionFirebolt::OpenDrmSession(std::string&, std::string, std::string, std::string, std::string, int64_t, std::string& response)
+bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, int64_t &sessionId, int32_t &errorCode, std::string &response)
 {
     response = "{\"license\":\"RkFLRV9MSUNFTlNF\"}"; // base64 for "FAKE_LICENSE"
     return true;
 }
-bool ContentProtectionFirebolt::UpdateDrmSession(int64_t, std::string, std::string, std::string& response)
+bool ContentProtectionFirebolt::UpdateDrmSession(int64_t sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response)
 {
     response = "{\"license\":\"RkFLRV9MSUNFTlNF\"}";
     return true;

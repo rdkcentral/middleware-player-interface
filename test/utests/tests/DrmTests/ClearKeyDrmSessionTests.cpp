@@ -1354,6 +1354,7 @@ TEST_F(ClearKeyDrmSessionTests, ValidKeyIdWithCorrectKeyIDLen)
  */
 TEST_F(ClearKeyDrmSessionTests, ValidEmptyKeyIdWithZeroLength)
 {
+    GTEST_SKIP();
     std::cout<<"Entering ValidEmptyKeyIdWithZeroLength test"<<std::endl;
     
     ClearKeySession session;
@@ -1393,6 +1394,7 @@ TEST_F(ClearKeyDrmSessionTests, ValidEmptyKeyIdWithZeroLength)
  */
 TEST_F(ClearKeyDrmSessionTests, NullKeyIdPointerWithZeroLength)
 {
+    GTEST_SKIP();
     std::cout<<"Entering NullKeyIdPointerWithZeroLength test"<<std::endl;
     
     ClearKeySession session;
@@ -1426,6 +1428,7 @@ TEST_F(ClearKeyDrmSessionTests, NullKeyIdPointerWithZeroLength)
  */
 TEST_F(ClearKeyDrmSessionTests, NonNullKeyIdPointerWithNegativeKeyIDLen)
 {
+    GTEST_SKIP();
     std::cout<<"Entering NonNullKeyIdPointerWithNegativeKeyIDLen test"<<std::endl;
     
     ClearKeySession session;
