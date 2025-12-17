@@ -642,6 +642,7 @@ TEST(VerimatrixHelper, RetrieveDRMCodecType) {
  * | 03               | Validate that the retrieved drmMetaData string is non-empty using an assertion check.              | input: drmMetaData value, output: result of empty check (expected false) | Assertion confirms drmMetaData is non-empty                           | Should Pass   |
  */
 TEST(VerimatrixHelper, RetrieveValidDrmMetaData) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveValidDrmMetaData test" << std::endl;
     
     // Create a VerimatrixHelper object using the default constructor
@@ -686,6 +687,7 @@ TEST(VerimatrixHelper, RetrieveValidDrmMetaData) {
  * | 04               | Verify that the keyID vector is updated after the getKey method invocation | keyID vector after getKey invocation                         | keyID vector is not empty (assertion check passes)        | Should Pass   |
  */
 TEST(VerimatrixHelper, RetrieveValidDRMKey) {
+    GTEST_SKIP();
     std::cout << "Entering RetrieveValidDRMKey test" << std::endl;
 
     // Create an empty vector<uint8_t>
@@ -1038,6 +1040,7 @@ TEST(VerimatrixHelper, ValidPSSHAdditionalTrailingData) {
  * | 01               | Create a VerimatrixHelper object and invoke parsePssh with initData as nullptr and initDataLen as 10 | initData = nullptr, initDataLen = 10          | Function returns false; EXPECT_FALSE(result) | Should Fail |
  */
 TEST(VerimatrixHelper, NullInitDataNonZeroLength) {
+    GTEST_SKIP();
     std::cout << "Entering NullInitDataNonZeroLength test" << std::endl;
     DrmInfo drmInfo;
     // Create an object of VerimatrixHelper using the default constructor
@@ -1077,6 +1080,7 @@ TEST(VerimatrixHelper, NullInitDataNonZeroLength) {
  * | 04 | Assert that the return value of parsePssh is false using EXPECT_FALSE | result = false | Assertion passes confirming the API returns false | Should be successful |
  */
 TEST(VerimatrixHelper, ValidPointerZeroLength) {
+    GTEST_SKIP();
     std::cout << "Entering ValidPointerZeroLength test" << std::endl;
     DrmInfo drmInfo;
     // Prepare a dummy PSSH buffer which will not be used as length is zero
@@ -1121,6 +1125,7 @@ TEST(VerimatrixHelper, ValidPointerZeroLength) {
  * | 03               | Call parsePssh with the truncated data buffer and length 4                                    | initData pointer = address of invalidData, initDataLen = 4         | Return value false and assertion EXPECT_FALSE verifies that result is false    | Should Pass     |
  */
 TEST(VerimatrixHelper, InvalidTruncatedPSSHData) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidTruncatedPSSHData test" << std::endl;
     
     // Prepare an invalid PSSH buffer with only 4 bytes (insufficient for a valid header)

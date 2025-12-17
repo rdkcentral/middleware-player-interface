@@ -57,7 +57,7 @@ set(TEST_SOURCES DrmHelperTestsRun.cpp
                 ClearKeyHelperTests.cpp
                 PlayReadyHelperTests.cpp
                 VanillaDrmHelperTests.cpp
-                #VerimatrixHelperTests.cpp
+                VerimatrixHelperTests.cpp
                 WidevineDrmHelperTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
@@ -85,6 +85,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/drm/helper/WidevineDrmHelper.cpp
 					${PLAYER_ROOT}/drm/helper/PlayReadyHelper.cpp
                     ${PLAYER_ROOT}/drm/ClearKeyDrmSession.cpp
+					${PLAYER_ROOT}/drm/helper/VerimatrixHelper.cpp
 					${UTESTS_ROOT}/drm/mocks/gstMocks.c
 					${PLAYER_ROOT}/ProcessHandler.cpp
 					${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
@@ -97,14 +98,16 @@ add_definitions(-DUSE_SHARED_MEMORY)
 add_definitions(-DUSE_OPENCDM -DUSE_OPENCDM_ADAPTER)
 add_definitions(-DUSE_THUNDER_OCDM_API_0_2)
 
+if(CMAKE_PLATFORM_UBUNTU)
+	add_definitions(-DUBUNTU)
+endif()
+
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
 			   ${PLAYER_SOURCES}
 			   ${FAKE_SOURCES})
 
-
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
-
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target

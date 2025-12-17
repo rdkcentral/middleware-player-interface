@@ -17,7 +17,7 @@
 
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
-set(EXEC_NAME PlayerSubtecCCTests)
+set(EXEC_NAME PlayerSubtecTests)
 
 include_directories(${PLAYER_ROOT})
 include_directories(${PLAYER_ROOT}/subtitle)
@@ -41,8 +41,8 @@ set(TEST_SOURCES PlayerSubtecCCManagerTests.cpp
 			 SubtecPacketTests.cpp
 			 TtmlPacketTests.cpp
 			 WebVttPacketTests.cpp
-			 #ClosedCaptionsPacketTests.cpp
-			 #PacketSenderTests.cpp)
+			 ClosedCaptionsPacketTests.cpp
+			 PacketSenderTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/closedcaptions/subtec/PlayerSubtecCCManager.cpp
