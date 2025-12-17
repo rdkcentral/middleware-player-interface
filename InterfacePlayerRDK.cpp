@@ -1742,10 +1742,11 @@ static void gst_need_data(void *source, guint size, void *_this)
 static void gst_enough_data(GstElement *source, void *_this)
 {
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	if(pInterfacePlayerRDK)
 	{
+		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		
 		if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
 		{
 			GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
