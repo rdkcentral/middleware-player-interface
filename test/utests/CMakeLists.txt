@@ -19,8 +19,6 @@ cmake_minimum_required(VERSION 3.10.3)
 
 project(UnitTests)
 
-option(COVERAGE_ENABLED "Enable coverage build" OFF)
-
 # Don't include CTestDashboardTargets in GUI projects
 set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
 include(CTest)
@@ -29,11 +27,13 @@ set(PLAYER_ROOT "../../")
 
 find_package(PkgConfig REQUIRED)
 
+pkg_check_modules(OPENSSL REQUIRED openssl)
+include_directories(${OPENSSL_INCLUDE_DIRS})
+
 pkg_check_modules(GTEST REQUIRED gtest)
 pkg_check_modules(GMOCK REQUIRED gmock)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
-pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LibXml2 REQUIRED libxml-2.0)
 pkg_check_modules(LIBCJSON REQUIRED libcjson)
@@ -57,8 +57,6 @@ STRING(REPLACE " -Werror=effc++" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}) #disabli
 
 add_definitions(-DENABLE_LOGGING)
 
-include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})
-
 add_subdirectory(fakes)
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # ARM64 will fail to build utest schemes in XCode unless this is set
@@ -71,7 +69,9 @@ enable_testing()
 # common CMake test functionality, like the CodeCoverage.cmake module.
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/../common")
 
-link_directories(${GTEST_LIBRARY_DIRS} ${GMOCK_LIBRARY_DIRS})
+if (CMAKE_PLATFORM_UBUNTU)
+        link_directories(${GTEST_LIBRARY_DIRS} ${GMOCK_LIBRARY_DIRS})
+endif()
 
 function(player_utest_run_add test_suite)
 	if (CMAKE_RDKE_TEST_RUN)
@@ -89,15 +89,4 @@ function(player_utest_run_add test_suite)
 		gtest_discover_tests(${test_suite} DISCOVERY_TIMEOUT 10 TEST_PREFIX ${test_suite}:)
 	endif()
 endfunction()
-
-function(player_utest_add_cov TARGET)
-  # gcov doesn't work that well with Apple build tools, but the alternatives are not attractive:
-  #  * use llvm (doesn't work with Apple clang)
-  #  * use xcodebuild (there is no HTML report and very different tool chain)
-
-  target_compile_options(${TARGET} PRIVATE --coverage)
-  target_link_options(${TARGET} PRIVATE --coverage)
-
-endfunction()
-
 add_subdirectory(tests)
