@@ -2,7 +2,7 @@
  * If not stated otherwise in this file or this component's license file the
  * following copyright and licenses apply:
  *
- * Copyright 2018 RDK Management
+ * Copyright 2025 RDK Management
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,31 +15,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-
-#ifndef BASE64_H
-#define BASE64_H
-
-/**
- * @file _base64.h
- * @brief base64 source Encoder/Decoder
  */
 
-#include <stddef.h>
+#include <gtest/gtest.h>
 
-/**
- * @fn base64_Encode
- * @param src pointer to first byte of binary data to be encoded
- * @param len number of bytes to encode
- */
-char *base64_Encode(const unsigned char *src, size_t len);
-
-/**
- * @fn base64_Decode
- * @param src pointer to cstring containing base64-encoded data
- * @param len receives byte length of returned pointer, or zero upon failure
- * @param srcLen string length of src
- */
-unsigned char *base64_Decode(const char *src, size_t *len, size_t srcLen);
-
-#endif // BASE64_H
+int main(int argc, char **argv)
+{
+	testing::InitGoogleTest(&argc, argv);
+	return RUN_ALL_TESTS();
+}
