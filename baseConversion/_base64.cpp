@@ -35,26 +35,37 @@
  */
 char *base64_Encode(const unsigned char *src, size_t len)
 {
+	if( src == NULL) {
+		//invalid parameters
+		return NULL;
+	}
+	/* handle empty input */
+	if (len == 0)
+	{
+		char *rc = (char*)malloc(1);
+		if (rc) rc[0] = '\0';
+		return rc;
+	}
 	const unsigned char *fin = &src[len];
 	const static char *encode = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // base64
 	char *rc = (char *)malloc(((len+2)/3)*4+1);
-	if( rc )
-	{
-		char *dst = rc;
-		unsigned int temp;
-		int pad = 0;
-		for( int i=0; i<len; i+=3 )
-		{
-			temp = (*src++) << 16;
-			if( src<fin ) temp |= (*src++) << 8; else pad++;
-			if( src<fin ) temp |= (*src++); else pad++;
-			*dst++ = encode[(temp & 0x00FC0000) >> 18];
-			*dst++ = encode[(temp & 0x0003F000) >> 12];
-			*dst++ = (pad>=2)?'=':encode[(temp & 0x00000FC0) >> 6 ];
-			*dst++ = (pad>=1)?'=':encode[(temp & 0x0000003F)];
-		}
-		*dst++ = 0x00;
+	if(rc == NULL) {
+		return NULL;
 	}
+	char *dst = rc;
+	unsigned int temp;
+	int pad = 0;
+	for( int i=0; i<len; i+=3 )
+	{
+		temp = (*src++) << 16;
+		if( src<fin ) temp |= (*src++) << 8; else pad++;
+		if( src<fin ) temp |= (*src++); else pad++;
+		*dst++ = encode[(temp & 0x00FC0000) >> 18];
+		*dst++ = encode[(temp & 0x0003F000) >> 12];
+		*dst++ = (pad>=2)?'=':encode[(temp & 0x00000FC0) >> 6 ];
+		*dst++ = (pad>=1)?'=':encode[(temp & 0x0000003F)];
+	}
+	*dst++ = 0x00;
 	return rc;
 }
 
@@ -64,6 +75,32 @@ char *base64_Encode(const unsigned char *src, size_t len)
  */
 unsigned char *base64_Decode(const char *src, size_t *outLen, size_t srcLen)
 {
+	if (outLen == NULL) 
+	{
+        // invalid parameter
+        return NULL;
+    }
+	*outLen = 0; // default
+
+	if (src == NULL)
+	{
+        // invalid parameter or nothing to decode
+        return NULL;
+    }
+	
+	if (srcLen == 0) 
+	{
+		// Empty input: return valid empty buffer
+		unsigned char *emptyBuf = (unsigned char *)malloc(1);
+		if (!emptyBuf) 
+		{
+			return NULL; // malloc failure
+		}
+		*outLen = 0;
+		emptyBuf[0] = '\0';  // optional, for safety
+		return emptyBuf;
+	}
+	
 	static const signed char decode[256] =
 	{
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -84,45 +121,49 @@ unsigned char *base64_Decode(const char *src, size_t *outLen, size_t srcLen)
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	};
 	unsigned char *rc = (unsigned char *)malloc(srcLen*3/4);
+	if (rc == NULL) {
+		// malloc failed
+        return NULL;
+    }
 	*outLen = 0; // default
-	if( rc )
-	{
-		unsigned char *dst = rc;
-		while( srcLen>0 && src[srcLen-1] == '=' )
-		{ // strip padding
-			srcLen--;
-		}
-		const char *fin = &src[srcLen];
-		while( src<fin )
-		{
-			unsigned int buf = 0;
-			int count = 0;
-			for( int i=0; i<4; i++ )
-			{
-				buf<<=6;
-				if( src<fin )
-				{
-					unsigned char c = (unsigned char)*src++;
-					int digit64 = decode[c];
-					if( digit64<0 )
-					{ // invalid character
-						free( rc );
-						return NULL;
-					}
-					buf |= digit64;
-					count++;
-				}
-			}
-			if( count>=2 ) *dst++ = (buf>>(8*2))&0xff;
-			if( count>=3 ) *dst++ = (buf>>(8*1))&0xff;
-			if( count>=4 ) *dst++ = (buf>>(8*0))&0xff;
-		}
-		*outLen = dst-rc;
+	unsigned char *dst = rc;
+	while( srcLen>0 && src[srcLen-1] == '=' )
+	{ // strip padding
+		srcLen--;
 	}
+	const char *fin = &src[srcLen];
+	while( src<fin )
+	{
+		unsigned int buf = 0;
+		int count = 0;
+		for( int i=0; i<4; i++ )
+		{
+			buf<<=6;
+			if( src<fin )
+			{
+				unsigned char c = (unsigned char)*src++;
+				int digit64 = decode[c];
+				if( digit64<0 )
+				{ // invalid character
+					free( rc );
+					return NULL;
+				}
+				buf |= digit64;
+				count++;
+			}
+		}
+		if( count>=2 ) *dst++ = (buf>>(8*2))&0xff;
+		if( count>=3 ) *dst++ = (buf>>(8*1))&0xff;
+		if( count>=4 ) *dst++ = (buf>>(8*0))&0xff;
+	}
+	*outLen = dst-rc;
 	return rc;
 }
 
 unsigned char *base64_Decode(const char *src, size_t *len)
 {
+	if (src == NULL || len == NULL) {
+        return NULL;
+    }
 	return base64_Decode(src, len, strlen(src));
 }

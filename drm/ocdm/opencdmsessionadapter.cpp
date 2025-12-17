@@ -424,11 +424,12 @@ void OCDMSessionAdapter:: clearDecryptContext()
 
 	m_eKeyState = KEY_INIT;
 }
-
+#if defined(USE_OPENCDM_ADAPTER)
 void OCDMSessionAdapter::setKeyId(const std::vector<uint8_t>& keyId)
 {
 	m_keyId = keyId;
 }
+#endif
 
 bool OCDMSessionAdapter::verifyOutputProtection()
 {

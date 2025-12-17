@@ -79,9 +79,6 @@ mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSys
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
 	// start Scheduler Worker for task handling
 	mScheduler.StartScheduler();
-
-	printf("InterfacePlayerRDK created in seperated repo\n");
-	fflush(stdout);
 }
 
 /* InterfacePlayerRDK destructor*/
@@ -1745,24 +1742,27 @@ static void gst_need_data(void *source, guint size, void *_this)
 static void gst_enough_data(GstElement *source, void *_this)
 {
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	if(pInterfacePlayerRDK)
 	{
-		if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
-		{
-			GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
-			if (mediaType != eGST_MEDIATYPE_DEFAULT)
+		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		if(privatePlayer)
+		{	
+			HANDLER_CONTROL_HELPER_CALLBACK_VOID();	
+			if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
 			{
-				struct gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
-				if(stream)
+				GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
+				if (mediaType != eGST_MEDIATYPE_DEFAULT)
 				{
-					int media = static_cast<int>(mediaType);
-					pInterfacePlayerRDK->EnoughDataCb(media);
-				}
-				else
-				{
-					MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					struct gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+					if(stream)
+					{
+						int media = static_cast<int>(mediaType);
+						pInterfacePlayerRDK->EnoughDataCb(media);
+					}
+					else
+					{
+						MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					}
 				}
 			}
 		}
@@ -2906,7 +2906,7 @@ bool InterfacePlayerRDK::HandleVideoBufferSent()
 
 void InterfacePlayerRDK::SetPlayerName(std::string name)
 {
-	interfacePlayerPriv->mPlayerName = name;
+	interfacePlayerPriv->mPlayerName = std::move(name);
 }
 
 /**
@@ -4063,6 +4063,7 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
+	MW_LOG_ERR("Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
 	if (privatePlayer->socInterface->IsVideoSinkHandleErrors())

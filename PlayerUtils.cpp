@@ -150,6 +150,10 @@ long long GetCurrentTimeMS(void)
         return (long long)(t.tv_sec*1e3 + t.tv_usec*1e-3);
 }
 
+// Expose for testing
+const char* Test_ParseUriProtocol(const char* uri) {
+    return ParseUriProtocol(uri);
+} 
 /**
  * @brief parse leading protocol from uri if present
  * @param[in] uri manifest/ fragment uri
@@ -184,6 +188,7 @@ static const char * ParseUriProtocol(const char *uri)
 	}
 	return NULL;
 }
+
 /**
  * @brief Resolve file URL from the base and file path
  */
@@ -262,7 +267,7 @@ void trim(std::string& src)
 	{
 		size_t last = src.find_last_not_of(" \n\r\t\f\v");
 		std::string dst = src.substr(first, (last - first + 1));
-		src = dst;
+		src = std::move(dst);
 	}
 }
 

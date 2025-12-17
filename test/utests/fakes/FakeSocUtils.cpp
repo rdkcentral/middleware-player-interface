@@ -49,11 +49,6 @@ namespace SocUtils
 		return false;
 	}
 
-	bool IsSupportedAC3()
-	{
-		return false;
-	}
-
 	int RequiredQueuedFrames( void )
 	{
 		return 0;
@@ -66,5 +61,16 @@ namespace SocUtils
 	bool ResetNewSegmentEvent()
 	{
 		return false;
+	}
+	/**
+	 *	@brief Check if GST Subtec is enabled
+	 */
+	bool isGstSubtecEnabled()
+	{
+#ifdef GST_SUBTEC_ENABLED
+		return true;
+#else
+		return false;
+#endif
 	}
 }

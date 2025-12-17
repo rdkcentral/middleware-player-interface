@@ -60,6 +60,11 @@ GstHandlerControl::ScopeHelper GstHandlerControl::getScopeHelper()
 
 bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string name)
 {
+	if (MaximumDelayMilliseconds < 0)
+	{
+		MW_LOG_ERR("Invalid MaximumDelayMilliseconds: %d", MaximumDelayMilliseconds);
+		return false;
+	}
 	const std::chrono::steady_clock::time_point end =
 	std::chrono::milliseconds{MaximumDelayMilliseconds} + std::chrono::steady_clock::now();
 

@@ -73,13 +73,7 @@ if (CMAKE_PLATFORM_UBUNTU OR APPLE)
 	add_definitions(-DUBUNTU)
 endif()
 
-set(PLAYER_SOURCES
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstcdmidecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstclearkeydecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstplayreadydecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstverimatrixdecryptor.cpp
-				${PLAYER_ROOT}/gst-plugins/drm/gst/gstwidevinedecryptor.cpp
-				${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
+set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
 
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}

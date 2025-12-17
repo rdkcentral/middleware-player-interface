@@ -52,14 +52,13 @@ set(TEST_SOURCES PauseOnPlaybackTests.cpp
               )
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
+    ${PLAYER_ROOT}/GstUtils.cpp
 		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp
-	${UTESTS_ROOT}fakes/FakeGLib.cpp
-	${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
-	${UTESTS_ROOT}/fakes/FakeSocInterface.cpp)
+	${UTESTS_ROOT}fakes/FakeGLib.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}

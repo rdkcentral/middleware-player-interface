@@ -83,7 +83,10 @@ bool DefaultSocInterface::IsVideoDecoder(const char* name)
  */
 bool DefaultSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
-	return StartsWith(name,"rialtomsevideosink") || StartsWith(name,"rialtomseaudiosink");
+        return name && (
+					StartsWith(name,"rialtomsevideosink") ||
+					StartsWith(name,"rialtomseaudiosink") ||
+					StartsWith(name, "westerossink") );
 }
 /**
  * @brief Set playback flags.

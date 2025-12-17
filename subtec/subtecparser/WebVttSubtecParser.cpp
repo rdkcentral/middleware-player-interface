@@ -22,6 +22,9 @@
 
 WebVTTSubtecParser::WebVTTSubtecParser(SubtitleMimeType type, int width, int height) : SubtitleParser(type, width, height), m_channel(nullptr)
 {
+	if (width <= 0 || height <= 0) {
+            throw std::invalid_argument("Width and height must be greater than zero");
+    }
 	m_channel = SubtecChannel::SubtecChannelFactory(SubtecChannel::ChannelType::WEBVTT);
 	if (!m_channel->InitComms())
 	{
@@ -54,24 +57,31 @@ void WebVTTSubtecParser::reset()
 
 bool WebVTTSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 {
+	if( startPosSeconds < 0.0 )
+	{
+		MW_LOG_WARN("Invalid start position %f", startPosSeconds);
+		return false;
+	}
 	MW_LOG_INFO("startPos %f basePTS %lld",  startPosSeconds, basePTS);
 
 	m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds*1000.0));
- 	if(playerResumeTrackDownloads_CB)
- 	{
+	if(playerResumeTrackDownloads_CB)
+	{
 		playerResumeTrackDownloads_CB();
- 	}
-
+	}
 	return true;
 }
 
 bool WebVTTSubtecParser::processData(const char* buffer, size_t bufferLen, double position, double duration)
 {
+	if(buffer == nullptr || bufferLen == 0 || position < 0.0 || duration < 0.0 || duration < position) {
+		MW_LOG_WARN("Invalid arguments");
+		return false;
+	}
 	std::string str(const_cast<const char*>(buffer), bufferLen);
 	std::vector<uint8_t> data(str.begin(), str.end());
-
+	
 	m_channel->SendDataPacket(std::move(data), 0);
-
 	return true;
 }
 
