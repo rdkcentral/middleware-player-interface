@@ -1742,25 +1742,27 @@ static void gst_need_data(void *source, guint size, void *_this)
 static void gst_enough_data(GstElement *source, void *_this)
 {
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
-	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	if(pInterfacePlayerRDK)
 	{
 		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-		
-		if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
-		{
-			GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
-			if (mediaType != eGST_MEDIATYPE_DEFAULT)
+		if(privatePlayer)
+		{	
+			HANDLER_CONTROL_HELPER_CALLBACK_VOID();	
+			if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
 			{
-				struct gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
-				if(stream)
+				GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
+				if (mediaType != eGST_MEDIATYPE_DEFAULT)
 				{
-					int media = static_cast<int>(mediaType);
-					pInterfacePlayerRDK->EnoughDataCb(media);
-				}
-				else
-				{
-					MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					struct gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+					if(stream)
+					{
+						int media = static_cast<int>(mediaType);
+						pInterfacePlayerRDK->EnoughDataCb(media);
+					}
+					else
+					{
+						MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					}
 				}
 			}
 		}
