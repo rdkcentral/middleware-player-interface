@@ -179,7 +179,7 @@ void AmlogicSocInterface::SvpGetContext(void **svpCtx, int flags)
 {
 #ifdef USE_SVP
 	gst_svp_ext_get_context(svpCtx, Server, flags);
-#endif	
+#endif
 }
 
 /**

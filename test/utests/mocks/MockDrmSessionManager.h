@@ -2,7 +2,7 @@
 * If not stated otherwise in this file or this component's license file the
 * following copyright and licenses apply:
 *
-* Copyright 2022 RDK Management
+* Copyright 2024 RDK Management
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -16,17 +16,18 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-
-#ifndef PLAYER_MOCK_DRM_CALLBACKS
-#define PLAYER_MOCK_DRM_CALLBACKS
+#ifndef PLAYER_MOCK_DRM_SESSION_MANAGER_H
+#define PLAYER_MOCK_DRM_SESSION_MANAGER_H
 
 #include <gmock/gmock.h>
-#include <gmock/gmock.h>
-#include "MockDrmCallbacks.h"
+#include "DrmSessionManager.h"
 
-class MockDrmCallbacks : public DrmCallbacks {
+class MockDRMSessionManager
+{
 public:
-    MOCK_METHOD(void, Individualization, (const std::string& payload), (override));
-    MOCK_METHOD(void, LicenseRenewal, (DrmHelperPtr drmHelper, void* userData), (override));
+    MOCK_METHOD(void, setVideoWindowSize, (int width, int height));
 };
-#endif // PLAYER_MOCK_DRM_CALLBACKS
+
+extern MockDRMSessionManager *g_mockDRMSessionManager;
+
+#endif /* PLAYER_MOCK_DRM_SESSION_MANAGER_H */

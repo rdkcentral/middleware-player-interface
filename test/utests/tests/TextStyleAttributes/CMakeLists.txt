@@ -25,7 +25,6 @@ include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerJsonObject)
 include_directories(${PLAYER_ROOT}/playerLogManager)
-include_directories(${PLAYER_ROOT}/mp4demux)
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
@@ -44,10 +43,11 @@ add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
                ${PLAYER_SOURCES})
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
-if (COVERAGE_ENABLED)
-    player_utest_add_cov(${EXEC_NAME})
+if (CMAKE_XCODE_BUILD_SYSTEM)
+    include(CodeCoverage)
+    APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-target_link_libraries(${EXEC_NAME} PRIVATE fakes ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} -lpthread)
+target_link_libraries(${EXEC_NAME} fakes ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} -lpthread)
 
 player_utest_run_add(${EXEC_NAME})
