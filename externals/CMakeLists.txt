@@ -35,6 +35,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
 
 include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${MW_ROOT}/playerLogManager)
