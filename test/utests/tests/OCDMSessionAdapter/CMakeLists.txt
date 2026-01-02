@@ -46,6 +46,7 @@ include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 
 set(TEST_SOURCES FunctionalTests.cpp
+		 KeyUpdateTests.cpp
 		 OCDMSessionAdapterTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/opencdmsessionadapter.cpp
