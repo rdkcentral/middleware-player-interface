@@ -78,13 +78,16 @@ protected:
 		// Set default return value for getMemorySystem()
 		ON_CALL(*drmHelper, getMemorySystem()).WillByDefault(Return(nullptr));
 
-		m_ocdmbasicsessionadapter = new OCDMBasicSessionAdapter(drmHelper,nullptr);
+		// Create mocks before using them
 		g_mockOpenCdmSessionAdapter = new NiceMock<MockOpenCdmSessionAdapter>();
-
-		// Set default return value for getUsableKeys() to return an empty vector
-		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys()).WillByDefault(testing::ReturnRef(g_emptyKeys));
-
+		g_mockopencdm = new NiceMock<MockOpenCdm>();
 		g_mockMemorySystem = new NiceMock<MockDrmMemorySystem>();
+
+		// Now set up expectations on the created mocks
+		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys()).WillByDefault(testing::ReturnRef(g_emptyKeys));
+		
+		m_ocdmbasicsessionadapter = new OCDMBasicSessionAdapter(drmHelper,nullptr);
+
 	}
 
 	void TearDown() override
