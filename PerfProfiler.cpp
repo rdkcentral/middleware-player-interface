@@ -12,5 +12,5 @@ ScopedTimer::~ScopedTimer() {
     MW_LOG_INFO( "[PERF] %s (Thread %zu) took %lld us",
         name.c_str(),
         std::hash<std::thread::id>{}(std::this_thread::get_id()),
-        duration);
+        duration)
 }
