@@ -160,6 +160,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/default/DefaultSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	PerfProfiler.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -197,6 +198,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	PerfProfiler.h
 	DESTINATION include)
 
 set(SOURCES
@@ -211,6 +213,7 @@ set(SOURCES
 	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
+	PerfProfiler.cpp
 )
 
 if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
