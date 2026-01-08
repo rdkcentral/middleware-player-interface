@@ -2,6 +2,8 @@
 #include <iostream>
 #include <thread>
 
+#ifdef ENABLE_MW_PROFILING
+
 ScopedTimer::ScopedTimer(const std::string& funcName, const std::string& fileName, int line)
     : name(funcName + " [" + fileName + ":" + std::to_string(line) + "]"),
       start(std::chrono::high_resolution_clock::now()) {}
@@ -12,5 +14,7 @@ ScopedTimer::~ScopedTimer() {
     MW_LOG_INFO( "[PERF] %s (Thread %zu) took %lld us",
         name.c_str(),
         std::hash<std::thread::id>{}(std::this_thread::get_id()),
-        duration)
+        duration);
 }
+
+#endif // ENABLE_MW_PROFILING
