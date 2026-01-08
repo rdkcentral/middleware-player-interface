@@ -23,6 +23,10 @@ if [[ -z "${MAKEFLAGS}" ]]; then
     export MAKEFLAGS=-j$(nproc)
 fi
 
+# Set the CMAKE_POLICY_VERSION_MINIMUM to 3.5
+# Mostly required for OSX builds
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+
 # Fail the script should any step fail. To override this behavior use "|| true" on those statements
 set -eo pipefail
 
@@ -130,6 +134,7 @@ INSTALL_STATUS_ARR+=("install_build_googletest check passed.")
 install_build_libcjson_fn "${OPTION_CLEAN}"
 INSTALL_STATUS_ARR+=("install_build_libcjson check passed.")
 
+
 # Build subtec
 #
 CLEAN=false
@@ -156,6 +161,7 @@ INSTALL_STATUS_ARR+=("rialto_install_build_fn check passed.")
 #
 player_install_build_fn "${CLEAN}"
 INSTALL_STATUS_ARR+=("player_install_build check passed.")
+
 
 tools_print_summary_fn
 

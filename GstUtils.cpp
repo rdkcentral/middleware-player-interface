@@ -120,3 +120,4 @@ void PlayerCliGstTerm()
 {
 	gst_deinit();
 }
+

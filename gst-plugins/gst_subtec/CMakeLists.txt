@@ -15,6 +15,7 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
+
 cmake_minimum_required (VERSION 3.5)
 project (gst_subtec)
 set(CMAKE_CXX_STANDARD 11)
@@ -36,19 +37,26 @@ else()
     set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES})
 endif()
 
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
 
+
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
+
+message(STATUS "GSTSUBTEC_DEPENDENCIES: ${GSTSUBTEC_DEPENDENCIES}")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../middleware/subtec/libsubtec)
 target_link_libraries(gstsubtecsink PRIVATE subtec ${GSTSUBTEC_DEPENDENCIES})
 
 add_library(gstsubtecbin SHARED gstsubtecbin.cpp)
+
 target_link_libraries(gstsubtecbin ${GSTSUBTEC_DEPENDENCIES})
 
 add_library(gstsubtecmp4transform SHARED gstsubtecmp4transform.cpp)
+
 target_link_libraries(gstsubtecmp4transform ${GSTSUBTEC_DEPENDENCIES})
 
 add_library(gstvipertransform SHARED gstvipertransform.cpp)
+
 target_link_libraries(gstvipertransform ${GSTSUBTEC_DEPENDENCIES})
 
 install (TARGETS gstsubtecsink

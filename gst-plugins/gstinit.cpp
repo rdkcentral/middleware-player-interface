@@ -31,6 +31,11 @@
 #include "gstverimatrixdecryptor.h"
 #endif
 
+#define PLAYER_PLAYREADYDECRYPTOR_VERSION "1.0.0"
+#define PLAYER_WIDEVINEDECRYPTOR_VERSION "1.0.0"
+#define PLAYER_CLEARKEYDECRYPTOR_VERSION "1.0.0"
+#define PLAYER_VERIMATRIXDECRYPTOR_VERSION "1.0.0"
+
 
 /**
  * @brief plugin_init , invoked by gstreamer core on load. Registers player gstreamer elements.
@@ -45,41 +50,41 @@ static gboolean plugin_init(GstPlugin * plugin)
 			GST_RANK_PRIMARY, GST_TYPE_PLAYREADYDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNamePR);
+		printf("player plugin_init registered %s element, version %s\n", GstPluginNamePR, PLAYER_PLAYREADYDECRYPTOR_VERSION);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNamePR);
+		printf("player plugin_init FAILED to register %s element, version %s\n", GstPluginNamePR, PLAYER_PLAYREADYDECRYPTOR_VERSION);
 	}
 	ret = gst_element_register(plugin, GstPluginNameWV,
 			GST_RANK_PRIMARY, GST_TYPE_WIDEVINEDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameWV);
+		printf("player plugin_init registered %s element, version %s\n", GstPluginNameWV, PLAYER_WIDEVINEDECRYPTOR_VERSION);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameWV);
+		printf("player plugin_init FAILED to register %s element, version %s\n", GstPluginNameWV, PLAYER_WIDEVINEDECRYPTOR_VERSION);
 	}
 	ret = gst_element_register(plugin, GstPluginNameCK,
 			GST_RANK_PRIMARY, GST_TYPE_CLEARKEYDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameCK);
+		printf("player plugin_init registered %s element, version %s\n", GstPluginNameCK, PLAYER_CLEARKEYDECRYPTOR_VERSION);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameCK);
+		printf("player plugin_init FAILED to register %s element, version %s\n", GstPluginNameCK, PLAYER_CLEARKEYDECRYPTOR_VERSION);
 	}
 	ret = gst_element_register(plugin, GstPluginNameVMX,
 			GST_RANK_PRIMARY, GST_TYPE_VERIMATRIXDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameVMX);
+		printf("player plugin_init registered %s element, version %s\n", GstPluginNameVMX, PLAYER_VERIMATRIXDECRYPTOR_VERSION);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameVMX);
+		printf("player plugin_init FAILED to register %s element, version %s\n", GstPluginNameVMX, PLAYER_VERIMATRIXDECRYPTOR_VERSION);
 	}
 #else
 #endif
@@ -93,7 +98,7 @@ static gboolean plugin_init(GstPlugin * plugin)
 #define PACKAGE "RDK"
 #endif
 #ifndef PACKAGE_NAME
-#define PACKAGE_NAME "plugin"
+#define PACKAGE_NAME "aamp"
 #endif
 #ifndef GST_PACKAGE_ORIGIN
 #define GST_PACKAGE_ORIGIN "https://rdkcentral.com/"
@@ -101,6 +106,6 @@ static gboolean plugin_init(GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
 		GST_VERSION_MINOR,
-		plugin,
+		aamp,
 		"Interface Player",
 		plugin_init, VERSION, "LGPL", PACKAGE_NAME, GST_PACKAGE_ORIGIN)
