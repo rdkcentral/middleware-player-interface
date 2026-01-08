@@ -22,6 +22,11 @@ pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
+pkg_check_modules(GST REQUIRED IMPORTED_TARGET
+    gstreamer-1.0
+    gstreamer-base-1.0
+    gstreamer-app-1.0
+)
 
 set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
@@ -59,6 +64,8 @@ if (JSC_INCDIR)
 endif()
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
+set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp)
+
 set(TEST_SOURCES PlayerClearKeyDecryptorTests.cpp
 				PlayerPlayReadyDecryptorTests.cpp
 				PlayerVeriMatrixDecryptorTests.cpp
@@ -84,6 +91,7 @@ set(PLAYER_SOURCES
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
 			   ${MOCK_SOURCES}
+			   ${FAKE_SOURCES}
 			   ${PLAYER_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
@@ -97,9 +105,23 @@ if (COVERAGE_ENABLED)
     player_utest_add_cov(${EXEC_NAME})
 endif()
 
-link_directories(${GSTREAMER_LIBRARY_DIRS})
+# ---- Includes (compiler) ----
+target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
 
+# ---- Libraries (actual linking) ----
+target_link_libraries(${EXEC_NAME} PRIVATE
+    PkgConfig::GST 
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
 if(APPLE)
+    find_package(PkgConfig REQUIRED)
+    set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+    set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+    set(CMAKE_BUILD_RPATH "/usr/local/lib")
+    set(CMAKE_MACOSX_RPATH ON)
+
     target_link_options(${EXEC_NAME} PRIVATE -F/Library/Frameworks -Wl,-rpath,/Library/Frameworks)
 
     target_link_libraries(${EXEC_NAME} PRIVATE
@@ -108,8 +130,7 @@ if(APPLE)
         -lpthread
         ${LIBCJSON_LINK_LIBRARIES}
         ${GMOCK_LINK_LIBRARIES}
-        ${GTEST_LINK_LIBRARIES}
-    )
+        ${GTEST_LINK_LIBRARIES})
     target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
 
 else()
