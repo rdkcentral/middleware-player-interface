@@ -993,72 +993,150 @@ GstPad * gst_ghost_pad_new (const gchar * name, GstPad * target)
 	return NULL;
 }
 
-GstCaps *gst_app_src_get_caps(GstAppSrc *appsrc)
+GType gst_app_sink_get_type(void)
+{
+	return false;
+}
+
+GstSample* gst_app_sink_pull_sample(GstAppSink *appsink)
+{
+	return NULL;
+}
+
+void gst_app_sink_set_caps(GstAppSink *appsink, const GstCaps *caps)
+{
+	TRACE_FUNC();	
+}
+
+GstStructure* gst_caps_get_structure(const GstCaps *caps, guint index)
 {
 	TRACE_FUNC();
 	return NULL;
 }
 
-GstSample *gst_sample_new (GstBuffer * buffer, GstCaps * caps, const GstSegment * segment, GstStructure * info)
+GstBuffer* gst_sample_get_buffer(GstSample *sample)
 {
-	TRACE_FUNC();
 	return NULL;
 }
 
-GstFlowReturn gst_app_src_push_sample (GstAppSrc * appsrc, GstSample * sample)
+GstCaps* gst_sample_get_caps(GstSample *sample)
 {
-	TRACE_FUNC();
-	return GST_FLOW_OK;
+	return NULL;
 }
 
-GstMeta * gst_buffer_get_meta (GstBuffer * buffer, GType api){ return NULL; }
-GstStructure * gst_caps_get_structure ( const GstCaps *caps , guint index ){ return NULL; }
-void gst_structure_set_name (GstStructure * structure, const gchar * name){}
-const gchar * gst_structure_nth_field_name (const GstStructure * structure, guint index){ return NULL; }
-gboolean gst_structure_has_field (const GstStructure * structure, const gchar * fieldname){ return FALSE; }
-gboolean gst_buffer_remove_meta(GstBuffer *buffer, GstMeta *meta){ return FALSE; }
-void gst_caps_append_structure(GstCaps *caps, GstStructure  *structure){}
-guint gst_caps_get_size(const GstCaps *caps){ return 0; }
-GstCaps *gst_caps_intersect_full(GstCaps *caps1, GstCaps *caps2, GstCapsIntersectMode mode){ return NULL; }
-gboolean gst_caps_is_empty(const GstCaps *caps){ return FALSE; }
-gboolean gst_caps_is_subset(const GstCaps *subset,const GstCaps *superset){ return FALSE; }
-GstCaps * gst_caps_new_empty(void){ return NULL; }
-void gst_element_class_add_static_pad_template (GstElementClass *klass, GstStaticPadTemplate *static_templ){}
-void gst_element_class_set_static_metadata( GstElementClass *klass, const gchar *longname, const gchar     *classification, const gchar *description, const gchar *author){}
-gboolean gst_element_post_message(GstElement * element, GstMessage * message){ return FALSE; }
-void gst_event_parse_protection(GstEvent * event, const gchar ** system_id, GstBuffer ** data, const gchar ** origin){}
-GstMessage *gst_message_new_application(GstObject * src, GstStructure * structure){ return NULL; }
-GstMessage *gst_message_new_error(GstObject * src, GError * error, const gchar * debug){ return NULL; }
-gboolean gst_pad_peer_query_position(GstPad *pad, GstFormat format, gint64 *cur){ return FALSE; }
-gboolean gst_pad_peer_query(GstPad *pad, GstQuery *query){ return FALSE; }
-GstCaps * gst_pad_query_caps(GstPad *pad, GstCaps *filter){ return NULL; }
-const GstStructure * gst_query_get_structure(GstQuery *query){ return NULL; }
-GstQuery * gst_query_new_custom(GstQueryType type, GstStructure *structure){ return NULL; }
-GstStructure *gst_structure_copy(const GstStructure  * structure){ return NULL; }
-gboolean gst_structure_get_boolean(const GstStructure  * structure, const gchar         * fieldname, gboolean * value){ return FALSE; }
-const gchar *gst_structure_get_name(const GstStructure  * structure){ return NULL; }
-const gchar *gst_structure_get_string(const GstStructure  * structure, const gchar * fieldname){ return NULL; }
-gboolean gst_structure_get_uint(const GstStructure  * structure, const gchar * fieldname, guint * value){ return FALSE; }
-gboolean gst_structure_is_equal(const GstStructure * structure1, const GstStructure * structure2){ return FALSE; }
-gint gst_structure_n_fields(const GstStructure  * structure){ return 0; }
-void gst_structure_remove_field(GstStructure * structure, const gchar * fieldname){}
-GstMiniObject * gst_mini_object_copy (const GstMiniObject * mini_object){ return NULL; }
-GType gst_protection_meta_api_get_type (void){ return 0; }
-GQuark gst_stream_error_quark( void ){ return 0; }
-GstDebugCategory *_gst_debug_category_new(const gchar * name, guint color, const gchar * description){ return NULL; }
-void _gst_debug_register_funcptr(GstDebugFuncPtr func, const gchar * ptrname){}
-const gchar * _gst_debug_nameof_funcptr(GstDebugFuncPtr func){ return NULL; }
+gboolean gst_structure_get_int(const GstStructure *structure, const gchar *field, gint *value)
+{
+	return false;
+}
 
-#ifdef __cplusplus
+void* g_memdup2(const void* mem, size_t n_bytes) {
+    void* p = g_malloc(n_bytes);
+    return memcpy(p, mem, n_bytes);
+}
+
+GstDebugCategory* _gst_debug_category_new(const gchar *name,
+                                         GstDebugColorFlags color,
+                                         const gchar *description)
+{
+	return NULL;
+}
+
+void gst_element_class_set_static_metadata(GstElementClass *element_class,
+                                           const gchar *long_name,
+                                           const gchar *klass_name,
+                                           const gchar *description,
+                                           const gchar *author)
+{
+	TRACE_FUNC();
+}
+
+void gst_element_class_add_static_pad_template(GstElementClass *klass,
+                                               const GstStaticPadTemplate *templ)
+{
+	TRACE_FUNC();
+}
+
+GType gst_base_transform_get_type(void)
+{
+	return false;
+}
+
+const gchar* g_intern_static_string(const gchar *string)
+{
+	return string;
+}
+
+gpointer g_type_class_peek_parent(gpointer g_class)
+{
+	return NULL;
+}
+
+GType g_type_register_static_simple(GType parent_type,
+                                    const gchar *type_name,
+                                    guint class_size,
+                                    GClassInitFunc class_init,
+                                    guint instance_size,
+                                    GInstanceInitFunc instance_init,
+                                    GTypeFlags flags)
+{
+	return NULL;
+}
+
+void g_log(const gchar *log_domain,
+           GLogLevelFlags log_level,
+           const gchar *format,
+           ...)
+{
+	TRACE_FUNC();
+}
+// _gst_debug_category_new
+GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorMode color, const gchar *description) {
+    static GstDebugCategory dummy;
+    (void)name; (void)color; (void)description;
+    return &dummy;
+}
+
+// Avoid GLib macro expansion conflicts
+#ifdef g_once_init_enter_pointer
+#undef g_once_init_enter_pointer
+#endif
+
+#ifdef g_once_init_leave_pointer
+#undef g_once_init_leave_pointer
+#endif
+
+#if 0
 extern "C" {
-#endif
+gboolean g_once_init_enter_pointer(gpointer *location) {
+    (void)location;
+    return TRUE; // always "first call"
+}
 
-typedef struct _GstBaseTransform GstBaseTransform;
-GType gst_base_transform_get_type(void){ return 0; }
-void gst_base_transform_set_gap_aware(GstBaseTransform *trans, gboolean gap_aware){}
-void gst_base_transform_set_in_place(GstBaseTransform *trans, gboolean in_place){}
-void gst_base_transform_set_passthrough(GstBaseTransform *trans, gboolean passthrough){}
-
-#ifdef __cplusplus
+// g_once_init_leave_pointer
+void g_once_init_leave_pointer(gpointer *location, gpointer init_value) {
+    (void)location; (void)init_value;
+}
 }
 #endif
+
+// g_type_check_class_cast
+gpointer g_type_check_class_cast(gpointer g_class, gsize type) {
+    (void)g_class; (void)type;
+    return nullptr;
+}
+
+// g_type_class_adjust_private_offset
+void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
+    (void)g_class; (void)offset;
+}
+
+// gst_element_class_add_static_pad_template
+void gst_element_class_add_static_pad_template(GstElementClass *klass, GstPadTemplate *templ) {
+    (void)klass; (void)templ;
+}
+
+void gst_element_class_set_static_metadata(GstElementClass *klass, const gchar *long_name,
+                                           const gchar *klass_name, const gchar *description)
+{
+    (void)klass; (void)long_name; (void)klass; (void)description;
+}
