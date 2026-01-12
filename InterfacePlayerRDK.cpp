@@ -2562,6 +2562,7 @@ void InterfacePlayerRDK::SetSubtitlePtsOffset(std::uint64_t pts_offset)
  */
 void InterfacePlayerRDK::ResetFirstFrame(void)
 {
+	MW_PROFILE_FUNCTION();
 	MW_LOG_WARN("Reset first frame");
 	interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
 }
@@ -3468,6 +3469,7 @@ bool InterfacePlayerRDK::IsCacheEmpty(int Type)
  */
 void InterfacePlayerRDK::ResetEOSSignalledFlag()
 {
+	MW_PROFILE_FUNCTION();
 	interfacePlayerPriv->gstPrivateContext->eosSignalled = false;
 }
 
