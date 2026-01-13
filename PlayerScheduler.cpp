@@ -36,6 +36,22 @@ PlayerScheduler::PlayerScheduler() : mTaskQueue(), mQMutex(), mQCond(),
 }
 
 /**
+ * @brief IsTaskIdInUse returns true if task id is in use
+ */
+bool PlayerScheduler::IsTaskIdInUse(int id)
+{
+    if (id == mCurrentTaskId)
+        return true;
+
+    for (const auto& task : mTaskQueue)
+    {
+        if (task.mId == id)
+            return true;
+    }
+    return false;
+}
+
+/**
  * @brief PlayerScheduler Destructor
  */
 PlayerScheduler::~PlayerScheduler()
@@ -82,9 +98,15 @@ int PlayerScheduler::ScheduleTask(PlayerAsyncTaskObj obj)
 			{
 				mNextTaskId = PLAYER_SCHEDULER_ID_DEFAULT;
 			}
-			obj.mId = id;
-			mTaskQueue.push_back(obj);
-			mQCond.notify_one();
+			if(!IsTaskIdInUse(id))
+			{
+				obj.mId = id;
+				mTaskQueue.push_back(obj);
+				mQCond.notify_one();
+			}
+			else{
+				MW_LOG_DEBUG("task id %d is already in use task dropped: %s", id, obj.mTaskName.c_str());
+			}
 		}
 		else
 		{

@@ -145,6 +145,13 @@ public:
 	 */
 	void EnableScheduleTask();
 
+	/**
+	 * @fn IsTaskIdInUse
+	 * @param int id: task id
+	 * @return bool true/false
+	 */
+	bool IsTaskIdInUse(int id);
+
 protected:
 	/**
 	 * @fn ExecuteAsyncTask
