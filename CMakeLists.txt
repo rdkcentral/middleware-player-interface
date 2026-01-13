@@ -160,6 +160,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/default/DefaultSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	DemuxDataTypes.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -197,6 +198,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	DemuxDataTypes.h
 	DESTINATION include)
 
 set(SOURCES

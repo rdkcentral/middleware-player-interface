@@ -24,4 +24,11 @@ GstCaps *GetCaps(GstStreamOutputFormat format)
 	return nullptr;
 }
 
-
+GstBuffer* CreateGstBufferWithData(gconstpointer data, gsize size)
+{
+       if (g_mockGstUtils)
+       {
+               return g_mockGstUtils->CreateGstBufferWithData(data, size);
+       }
+       return nullptr;
+}
