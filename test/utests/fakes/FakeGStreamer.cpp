@@ -1134,21 +1134,18 @@ void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
 void gst_element_class_add_static_pad_template(GstElementClass *klass, GstPadTemplate *templ) {
     (void)klass; (void)templ;
 }
-
 void gst_element_class_set_static_metadata(GstElementClass *klass, const gchar *long_name,
                                            const gchar *klass_name, const gchar *description)
 {
     (void)klass; (void)long_name; (void)klass; (void)description;
 }
-void gst_buffer_fill(GstBuffer *buffer,
-                     uint64_t offset,
-                     const void *src,
-                     uint64_t size)
+extern "C" gsize gst_buffer_fill(GstBuffer *buffer,
+                                 gsize offset,
+                                 gconstpointer src,
+                                 gsize size)
 {
-    if (!buffer || !src) return;
-   
+    return size;
 }
-
 void gst_buffer_add_protection_meta(GstBuffer *buffer,
                                     const char *system_id,
                                     const uint8_t *data,
