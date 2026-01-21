@@ -105,7 +105,7 @@ function install_gstpluginsgoodfn()
             PKG_CONFIG+=":$(install_pkgs_pkgconfig_darwin_fn jpeg-turbo)"
 
             PKG_CONFIG+=":/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/pkgconfig"
-            export CXXFLAGS="$CXXFLAGS -include ${REPO_PATH}/scripts/taglib_compat.h"
+            export CXXFLAGS="$CXXFLAGS -include ../../scripts/taglib_compat.h"
             if [[ $ARCH == "x86_64" ]]; then
                 PKG_CONFIG+=":/usr/local/lib/pkgconfig"
             elif [[ $ARCH == "arm64" ]]; then
