@@ -75,7 +75,6 @@ set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 # ---- Includes (compiler) ----
 target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
- 
 # ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
     PkgConfig::GST
