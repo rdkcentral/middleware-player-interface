@@ -110,7 +110,7 @@ target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
 
 # ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
-    PkgConfig::GST 
+    PkgConfig::GST
     ${LIBCJSON_LINK_LIBRARIES}
     ${GMOCK_LINK_LIBRARIES}
     ${GTEST_LINK_LIBRARIES}
