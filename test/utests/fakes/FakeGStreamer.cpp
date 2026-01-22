@@ -1169,7 +1169,9 @@ const char *gst_structure_get_name(const GstStructure *structure)
 
 void gst_structure_set_name(GstStructure *structure, const char *name)
 {
-    
+    /* NO-OP: fake implementation */
+    (void)structure;
+    (void)name;
 }
 
 GstSample *gst_sample_new(GstBuffer *buffer,
