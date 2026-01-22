@@ -110,7 +110,7 @@ add_executable(${EXEC_NAME}
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if(APPLE)
-    set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl@1.1")
+    set(OPENSSL_ROOT_DIR "${DETECTED_OPENSSL_ROOT}")
 endif()
 
 find_package(OpenSSL REQUIRED)
