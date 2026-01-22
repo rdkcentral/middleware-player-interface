@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
 
+#!/usr/bin/env bash
 
 function subtec_install_fn() {
 
@@ -34,29 +34,48 @@ function subtec_install_fn() {
     git apply -p1 ${1}/OSX/patches/subttxrend-app-ubuntu_24_04_build.patch
     git apply -p1 ${1}/OSX/patches/websocket-ipplayer2-ubuntu_24_04_build.patch --directory websocket-ipplayer2-utils
 
-
-    echo "Patching subtec-app CMakeLists.txt with '$2'"
+    echo "Patching subtec-app CMakeLists.txt (use Homebrew gdbus-codegen)"
     if [[ "$OSTYPE" == "darwin"* ]] ; then
-        SED_ARG="''"     # MacOS -i has different -i argument
+        SED_ARG="''"     # macOS sed: -i ''
+    else
+        SED_ARG=""       # GNU sed: -i
     fi
-    sed -i ${SED_ARG} 's:COMMAND gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code SubtitleDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/SubtitleDbusInterface.xml:COMMAND '"${2}"'/glib/build/gio/gdbus-2.0/codegen/gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code SubtitleDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/SubtitleDbusInterface.xml:g' subttxrend-dbus/CMakeLists.txt
 
-    sed -i ${SED_ARG} 's:COMMAND gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/TeletextDbusInterface.xml:COMMAND '"${2}"'/glib/build/gio/gdbus-2.0/codegen/gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface ${CMAKE_CURRENT_SOURCE_DIR}/api/dbus/TeletextDbusInterface.xml:g' subttxrend-dbus/CMakeLists.txt
+    # Use Homebrew GLib gdbus-codegen (standard DBus XML -> C generator) [1](https://github.com/taglib/taglib/releases)[2](https://reviews.llvm.org/D154997)
+    export GDBUS_CODEGEN="$(brew --prefix glib)/bin/gdbus-codegen"
+    export PATH="$(brew --prefix glib)/bin:$PATH"
+
+    if [ ! -x "${GDBUS_CODEGEN}" ]; then
+        echo "ERROR: gdbus-codegen not found at ${GDBUS_CODEGEN}"
+        echo "Run: brew install glib"
+        popd >/dev/null
+        return 1
+    fi
+
+    # Escape path for safe sed replacement
+    GDBUS_ESCAPED="$(printf '%s\n' "${GDBUS_CODEGEN}" | sed 's/[\/&]/\\&/g')"
+
+    # Replace the COMMAND lines to use the absolute Homebrew path
+    sed -i ${SED_ARG} "s:COMMAND gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code SubtitleDbusInterface:COMMAND ${GDBUS_ESCAPED} --interface-prefix com.libertyglobal.rdk --generate-c-code SubtitleDbusInterface:g" subttxrend-dbus/CMakeLists.txt
+
+    sed -i ${SED_ARG} "s:COMMAND gdbus-codegen --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface:COMMAND ${GDBUS_ESCAPED} --interface-prefix com.libertyglobal.rdk --generate-c-code TeletextDbusInterface:g" subttxrend-dbus/CMakeLists.txt
+
+    # Also handle case where it was previously patched to a local glib/build path
+    sed -i ${SED_ARG} "s:COMMAND .*glib/build/gio/gdbus-2.0/codegen/gdbus-codegen:COMMAND ${GDBUS_ESCAPED}:g" subttxrend-dbus/CMakeLists.txt
 
     echo "subtec-app source prepared"
-    popd
+    popd >/dev/null
 }
 
 function subtec_install_build_fn() {
 
-    cd $LOCAL_DEPS_BUILD_DIR
+    cd "$LOCAL_DEPS_BUILD_DIR" || return 1
 
     # OPTION_CLEAN == true
-    if [ $1 = true ] ; then
+    if [ "$1" = true ] ; then
         echo "subtec clean"
         rm -rf subtec-app
     fi
-
 
     # Install
     if [ -d "subtec-app" ]; then
@@ -64,11 +83,11 @@ function subtec_install_build_fn() {
         INSTALL_STATUS_ARR+=("subtec-app was already installed.")
     else
         # Tell installer where DEPs are so cmake can be patched
-        subtec_install_fn ${PLAYER_DIR} ${LOCAL_DEPS_BUILD_DIR}
+        subtec_install_fn "${PLAYER_DIR}" "${LOCAL_DEPS_BUILD_DIR}" || return 1
     fi
 
     # Build
-    cd subtec-app/subttxrend-app/x86_builder/
+    cd subtec-app/subttxrend-app/x86_builder/ || return 1
 
     if [ ! -d build/install ] ; then
         PKG_CONFIG_PATH=/usr/local/opt/libffi/lib/pkgconfig:/usr/local/ssl/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH ./build.sh fast
@@ -82,3 +101,4 @@ function subtec_install_build_fn() {
         fi
     fi
 }
+

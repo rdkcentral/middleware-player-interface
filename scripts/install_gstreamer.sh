@@ -105,7 +105,6 @@ function install_gstpluginsgoodfn()
             PKG_CONFIG+=":$(install_pkgs_pkgconfig_darwin_fn jpeg-turbo)"
 
             PKG_CONFIG+=":/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/pkgconfig"
-            export CXXFLAGS="$CXXFLAGS -include ../../scripts/taglib_compat.h"
             if [[ $ARCH == "x86_64" ]]; then
                 PKG_CONFIG+=":/usr/local/lib/pkgconfig"
             elif [[ $ARCH == "arm64" ]]; then
@@ -113,9 +112,16 @@ function install_gstpluginsgoodfn()
             fi
 
             echo "Building gst-plugins-good with --pkg-config path $PKG_CONFIG..."
-            meson --pkg-config-path="${PKG_CONFIG}" build
-            ninja -C build
-            sudo ninja -C build install
+
+            BUILD_DIR=".libs/gst-plugins-good-1.18.6/build"
+            ABS_COMPAT="$(pwd)/scripts/taglib_compat.h"
+
+            echo "Building gst-plugins-good in ${BUILD_DIR}"
+            meson setup "${BUILD_DIR}" --wipe --pkg-config-path="${PKG_CONFIG}" \
+               -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
+                
+            ninja -C "${BUILD_DIR}" -v
+            sudo ninja -C "${BUILD_DIR}" install
 
             # ARM vs x86 have different installation directories
             if [ -d /usr/local/lib/gstreamer-1.0 ]; then
