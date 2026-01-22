@@ -1134,11 +1134,6 @@ void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
 void gst_element_class_add_static_pad_template(GstElementClass *klass, GstPadTemplate *templ) {
     (void)klass; (void)templ;
 }
-void gst_element_class_set_static_metadata(GstElementClass *klass, const gchar *long_name,
-                                           const gchar *klass_name, const gchar *description)
-{
-    (void)klass; (void)long_name; (void)klass_name; (void)description;
-}
 extern "C" gsize gst_buffer_fill(GstBuffer *buffer,
                                  gsize offset,
                                  gconstpointer src,
