@@ -41,9 +41,29 @@ function subtec_install_fn() {
     fi
 
     # Use Homebrew GLib gdbus-codegen (standard D-Bus XML -> C generator). Documentation: https://developer.gnome.org/gio/stable/gdbus-codegen.html
-    export GDBUS_CODEGEN="$(brew --prefix glib)/bin/gdbus-codegen"
-    export PATH="$(brew --prefix glib)/bin:$PATH"
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "ERROR: Homebrew (brew) is not installed or not in PATH."
+        echo "Install Homebrew and then run: brew install glib"
+        popd >/dev/null
+        return 1
+    fi
 
+    if ! GLIB_PREFIX="$(brew --prefix glib 2>/dev/null)"; then
+        echo "ERROR: Failed to determine Homebrew prefix for glib."
+        echo "Run: brew install glib"
+        popd >/dev/null
+        return 1
+    fi
+
+    if [ -z "${GLIB_PREFIX}" ]; then
+        echo "ERROR: Homebrew reported an empty prefix for glib."
+        echo "Run: brew install glib"
+        popd >/dev/null
+        return 1
+    fi
+
+    export GDBUS_CODEGEN="${GLIB_PREFIX}/bin/gdbus-codegen"
+    export PATH="${GLIB_PREFIX}/bin:$PATH"
     if [ ! -x "${GDBUS_CODEGEN}" ]; then
         echo "ERROR: gdbus-codegen not found at ${GDBUS_CODEGEN}"
         echo "Run: brew install glib"
