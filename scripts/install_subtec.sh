@@ -40,7 +40,7 @@ function subtec_install_fn() {
         SED_ARG=""       # GNU sed: -i
     fi
 
-    # Use Homebrew GLib gdbus-codegen (standard DBus XML -> C generator) [1](https://github.com/taglib/taglib/releases)[2](https://reviews.llvm.org/D154997)
+    # Use Homebrew GLib gdbus-codegen (standard D-Bus XML -> C generator). Documentation: https://developer.gnome.org/gio/stable/gdbus-codegen.html
     export GDBUS_CODEGEN="$(brew --prefix glib)/bin/gdbus-codegen"
     export PATH="$(brew --prefix glib)/bin:$PATH"
 
