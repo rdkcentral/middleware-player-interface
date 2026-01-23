@@ -1171,10 +1171,15 @@ void gst_structure_set_name(GstStructure *structure, const char *name)
 
 GstSample *gst_sample_new(GstBuffer *buffer,
                           GstCaps *caps,
-                          void *segment,
-                          void *info)
+                          const GstSegment *segment,
+                          GstStructure *info)
 {
-	return NULL;
+    /* NO-OP: fake implementation */
+    (void)buffer;
+    (void)caps;
+    (void)segment;
+    (void)info;
+    return NULL;
 }
 void g_print(const gchar *format, ...)
 {
