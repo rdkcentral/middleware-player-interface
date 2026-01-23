@@ -1120,7 +1120,7 @@ void g_once_init_leave_pointer(gpointer *location, gpointer init_value) {
 #endif
 
 // g_type_check_class_cast
-gpointer g_type_check_class_cast(gpointer g_class, gsize type) {
+gpointer g_type_check_class_cast(gpointer g_class, GType type) {
     (void)g_class; (void)type;
     return nullptr;
 }
