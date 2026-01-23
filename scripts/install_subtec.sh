@@ -64,7 +64,7 @@ function subtec_install_fn() {
     sed -i ${SED_ARG} "s:COMMAND .*glib/build/gio/gdbus-2.0/codegen/gdbus-codegen:COMMAND ${GDBUS_ESCAPED}:g" subttxrend-dbus/CMakeLists.txt
 
     echo "subtec-app source prepared"
-    popd >/dev/null
+    popd >/dev/null || return 1
 }
 
 function subtec_install_build_fn() {
