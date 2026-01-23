@@ -117,9 +117,14 @@ function install_gstpluginsgoodfn()
             ABS_COMPAT="$(pwd)/scripts/taglib_compat.h"
 
             echo "Building gst-plugins-good in ${BUILD_DIR}"
-            meson setup "${BUILD_DIR}" --wipe --pkg-config-path="${PKG_CONFIG}" \
-               -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
-                
+            if [ -d "${BUILD_DIR}" ]; then
+                echo "Existing build directory ${BUILD_DIR} detected; running 'meson setup' with --wipe (this will reset the build directory)."
+                meson setup "${BUILD_DIR}" --wipe --pkg-config-path="${PKG_CONFIG}" \
+                   -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
+            else
+                meson setup "${BUILD_DIR}" --pkg-config-path="${PKG_CONFIG}" \
+                   -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
+            fi
             ninja -C "${BUILD_DIR}" -v
             sudo ninja -C "${BUILD_DIR}" install
 
