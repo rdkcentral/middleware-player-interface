@@ -1005,7 +1005,7 @@ GstSample* gst_app_sink_pull_sample(GstAppSink *appsink)
 
 void gst_app_sink_set_caps(GstAppSink *appsink, const GstCaps *caps)
 {
-	TRACE_FUNC();	
+	TRACE_FUNC();
 }
 
 GstStructure* gst_caps_get_structure(const GstCaps *caps, guint index)
