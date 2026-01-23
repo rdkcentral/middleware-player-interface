@@ -1058,7 +1058,7 @@ void gst_element_class_add_static_pad_template(GstElementClass *klass,
 
 GType gst_base_transform_get_type(void)
 {
-	return false;
+	return 0;
 }
 
 const gchar* g_intern_static_string(const gchar *string)
