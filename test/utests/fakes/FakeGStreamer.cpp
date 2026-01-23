@@ -1090,7 +1090,7 @@ void g_log(const gchar *log_domain,
 	TRACE_FUNC();
 }
 // _gst_debug_category_new
-GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorMode color, const gchar *description) {
+GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorFlags color, const gchar *description) {
     static GstDebugCategory dummy;
     (void)name; (void)color; (void)description;
     return &dummy;
