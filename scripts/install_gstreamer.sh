@@ -114,7 +114,8 @@ function install_gstpluginsgoodfn()
             echo "Building gst-plugins-good with --pkg-config path $PKG_CONFIG..."
 
             BUILD_DIR=".libs/gst-plugins-good-${DEFAULT_GSTVERSION}/build"
-            ABS_COMPAT="$(pwd)/scripts/taglib_compat.h"
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            ABS_COMPAT="${SCRIPT_DIR}/taglib_compat.h"
 
             echo "Building gst-plugins-good in ${BUILD_DIR}"
             if [ -d "${BUILD_DIR}" ]; then
