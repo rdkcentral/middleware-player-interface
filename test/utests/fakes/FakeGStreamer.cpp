@@ -1029,9 +1029,13 @@ gboolean gst_structure_get_int(const GstStructure *structure, const gchar *field
 	return false;
 }
 
-void* g_memdup2(const void* mem, size_t n_bytes) {
+void* g_memdup2(const void* mem, size_t n_bytes)
+{
+    if (mem == nullptr || n_bytes == 0)
+        return nullptr;
+
     void* p = g_malloc(n_bytes);
-    return memcpy(p, mem, n_bytes);
+    return p ? memcpy(p, mem, n_bytes) : nullptr;
 }
 
 GstDebugCategory* _gst_debug_category_new(const gchar *name,
