@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 function subtec_install_fn() {
