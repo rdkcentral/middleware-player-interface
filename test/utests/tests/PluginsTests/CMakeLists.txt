@@ -19,9 +19,6 @@ include(GoogleTest)
 
 pkg_check_modules(UUID REQUIRED uuid)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
 pkg_check_modules(GST REQUIRED IMPORTED_TARGET
     gstreamer-1.0
     gstreamer-base-1.0
@@ -53,16 +50,14 @@ include_directories(${GLIB_INCLUDE_DIRS})
 include_directories(${DRM_ROOT}/ocdm)
 include_directories(${UTESTS_ROOT}/mocks)
 include_directories(${UTESTS_ROOT}/drm/mocks)
-include_directories(${GSTREAMER_INCLUDE_DIRS})
-include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
-include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
+include_directories(${GST_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(${UUID_INCLUDE_DIRS})
 
 if (JSC_INCDIR)
 	include_directories(${JSC_INCDIR})
 endif()
-message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
+message(GST_INCLUDE_DIRS=${GST_INCLUDE_DIRS})
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp)
 
@@ -145,9 +140,7 @@ else()
         ${GMOCK_LINK_LIBRARIES}
         ${GTEST_LINK_LIBRARIES}
         ${GOBJECT_LINK_LIBRARIES}
-        ${GSTREAMERAPP_LINK_LIBRARIES}
-        ${GSTREAMERBASE_LINK_LIBRARIES}
-        ${GSTREAMER_LINK_LIBRARIES} # This should resolve to -lgstreamer-1.0 etc.
+        PkgConfig::GST
     )
 endif()
 
