@@ -110,7 +110,6 @@ target_link_libraries(${EXEC_NAME} PRIVATE
     ${GTEST_LINK_LIBRARIES}
 )
 if(APPLE)
-    find_package(PkgConfig REQUIRED)
     set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
     set(CMAKE_INSTALL_RPATH "/usr/local/lib")
     set(CMAKE_BUILD_RPATH "/usr/local/lib")
