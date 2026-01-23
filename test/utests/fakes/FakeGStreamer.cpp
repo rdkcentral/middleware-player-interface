@@ -995,7 +995,7 @@ GstPad * gst_ghost_pad_new (const gchar * name, GstPad * target)
 
 GType gst_app_sink_get_type(void)
 {
-	return false;
+	return G_TYPE_INVALID;
 }
 
 GstSample* gst_app_sink_pull_sample(GstAppSink *appsink)
