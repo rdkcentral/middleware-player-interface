@@ -22,11 +22,6 @@ pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
-pkg_check_modules(GST REQUIRED IMPORTED_TARGET
-    gstreamer-1.0
-    gstreamer-base-1.0
-    gstreamer-app-1.0
-)
 
 set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
@@ -110,7 +105,6 @@ target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
 
 # ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
-    PkgConfig::GST
     ${LIBCJSON_LINK_LIBRARIES}
     ${GMOCK_LINK_LIBRARIES}
     ${GTEST_LINK_LIBRARIES}
@@ -130,7 +124,10 @@ if(APPLE)
         -lpthread
         ${LIBCJSON_LINK_LIBRARIES}
         ${GMOCK_LINK_LIBRARIES}
-        ${GTEST_LINK_LIBRARIES})
+        ${GTEST_LINK_LIBRARIES}
+		${GSTREAMERAPP_LINK_LIBRARIES}
+        ${GSTREAMERBASE_LINK_LIBRARIES}
+        ${GSTREAMER_LINK_LIBRARIES})
     target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
 
 else()
