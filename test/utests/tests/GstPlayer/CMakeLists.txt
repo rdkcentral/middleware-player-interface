@@ -24,11 +24,6 @@ set(EXEC_NAME PlayerGstPlayer)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
-pkg_check_modules(GST REQUIRED IMPORTED_TARGET
-    gstreamer-1.0
-    gstreamer-base-1.0
-    gstreamer-app-1.0
-)
 
 include_directories(${PLAYER_ROOT})
 include_directories(${PLAYER_ROOT}/playerLogManager)
@@ -77,7 +72,6 @@ set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
 # ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
-    PkgConfig::GST
     ${LIBCJSON_LINK_LIBRARIES}
     ${GMOCK_LINK_LIBRARIES}
     ${GTEST_LINK_LIBRARIES}
@@ -94,7 +88,6 @@ endif()
 
 link_directories(${GSTREAMER_LIBRARY_DIRS})
 if(APPLE)
-  find_package(PkgConfig REQUIRED)
   set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
   set(CMAKE_INSTALL_RPATH "/usr/local/lib")
   set(CMAKE_BUILD_RPATH "/usr/local/lib")
@@ -107,7 +100,7 @@ if(APPLE)
   )
   target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
   target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
-  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 else()
   target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 endif()
