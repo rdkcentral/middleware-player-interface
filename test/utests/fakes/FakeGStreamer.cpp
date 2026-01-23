@@ -1130,10 +1130,6 @@ void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
     (void)g_class; (void)offset;
 }
 
-// gst_element_class_add_static_pad_template
-void gst_element_class_add_static_pad_template(GstElementClass *klass, GstPadTemplate *templ) {
-    (void)klass; (void)templ;
-}
 extern "C" gsize gst_buffer_fill(GstBuffer *buffer,
                                  gsize offset,
                                  gconstpointer src,
