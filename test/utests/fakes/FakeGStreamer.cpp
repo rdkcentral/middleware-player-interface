@@ -1184,6 +1184,4 @@ void g_print(const gchar *format, ...)
     vprintf(format, args);
     va_end(args);
 }
-extern GType _gst_buffer_type;
-extern GType _gst_fraction_type;
 
