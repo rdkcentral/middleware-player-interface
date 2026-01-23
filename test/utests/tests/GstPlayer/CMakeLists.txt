@@ -69,7 +69,7 @@ add_executable(${EXEC_NAME}
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 # ---- Includes (compiler) ----
-target_include_directories(${EXEC_NAME} PRIVATE ${GST_INCLUDE_DIRS})
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
 # ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
     ${LIBCJSON_LINK_LIBRARIES}
