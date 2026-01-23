@@ -113,7 +113,7 @@ function install_gstpluginsgoodfn()
 
             echo "Building gst-plugins-good with --pkg-config path $PKG_CONFIG..."
 
-            BUILD_DIR=".libs/gst-plugins-good-1.18.6/build"
+            BUILD_DIR=".libs/gst-plugins-good-${DEFAULT_GSTVERSION}/build"
             ABS_COMPAT="$(pwd)/scripts/taglib_compat.h"
 
             echo "Building gst-plugins-good in ${BUILD_DIR}"
