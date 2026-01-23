@@ -1125,8 +1125,8 @@ extern "C" gsize gst_buffer_fill(GstBuffer *buffer,
 }
 void gst_buffer_add_protection_meta(GstBuffer *buffer,
                                     const char *system_id,
-                                    const uint8_t *data,
-                                    uint32_t size)
+                                    const guint8 *data,
+                                    guint size)
 {
     /* NO-OP: fake implementation */
     (void)buffer;
