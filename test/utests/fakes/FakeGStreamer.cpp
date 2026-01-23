@@ -1105,20 +1105,6 @@ GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorMode co
 #undef g_once_init_leave_pointer
 #endif
 
-#if 0
-extern "C" {
-gboolean g_once_init_enter_pointer(gpointer *location) {
-    (void)location;
-    return TRUE; // always "first call"
-}
-
-// g_once_init_leave_pointer
-void g_once_init_leave_pointer(gpointer *location, gpointer init_value) {
-    (void)location; (void)init_value;
-}
-}
-#endif
-
 // g_type_check_class_cast
 gpointer g_type_check_class_cast(gpointer g_class, GType type) {
     (void)g_class; (void)type;
