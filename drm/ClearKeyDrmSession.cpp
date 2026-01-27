@@ -416,6 +416,12 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 						cbData = 0;
 						break;
 					}
+					if(iCurrSource + nBytesEncrypted > bufferMap.size)
+					{
+						MW_LOG_ERR("ClearKeySession: Source buffer overflow detected");
+						cbData = 0;
+						break;
+					}
 					// Skip the clear byte range from source buffer.
 					iCurrSource += nBytesClear;
 
