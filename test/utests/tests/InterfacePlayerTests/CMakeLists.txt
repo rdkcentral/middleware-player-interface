@@ -1,7 +1,7 @@
 # If not stated otherwise in this file or this component's license file the
 # following copyright and licenses apply:
 #
-# Copyright 2024 RDK Management
+# Copyright 2025 RDK Management
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,55 +19,48 @@ include(GoogleTest)
 
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
-set(EXEC_NAME PlayerGstPlayer)
+set(EXEC_NAME InterfacePlayerTest)
 
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/subtec/libsubtec)
 
-include_directories(${PLAYER_ROOT})
-include_directories(${PLAYER_ROOT}/playerLogManager)
-include_directories(${PLAYER_ROOT}/subtec/subtecparser)
-include_directories(${PLAYER_ROOT}/subtec/libsubtec)
-include_directories(${PLAYER_ROOT}/vendor)
-include_directories(${UTESTS_ROOT}/fakes)
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
-include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
-include_directories(${UTESTS_ROOT}/mocks)
+include_directories(${PLAYER_ROOT}/tsb/api)
+include_directories(${PLAYER_ROOT}/playerLogManager)
+include_directories(${PLAYER_ROOT}/vendor)
 include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/../test/gstTestHarness)
 include_directories(${PLAYER_ROOT}/mp4demux)
 
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
-set(TEST_SOURCES PauseOnPlaybackTests.cpp
-              FunctionalTests.cpp
-              GstPlayerTests.cpp
-              )
+set(TEST_SOURCES InterfacePlayerFunctionTests.cpp
+		InterfacePlayerTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
 		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
-set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp
-                  ${UTESTS_ROOT}fakes/FakeGLib.cpp)
+set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeGStreamer.cpp
+		 ${PLAYER_ROOT}/test/utests/fakes/FakeGLib.cpp
+${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
+                 ${PLAYER_ROOT}/test/utests/fakes/FakePlayerScheduler.cpp)
+
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
-	       ${PLAYER_SOURCES}
+               ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
+
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
-# ---- Includes (compiler) ----
 target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
-# ---- Libraries (actual linking) ----
 target_link_libraries(${EXEC_NAME} PRIVATE
     ${LIBCJSON_LINK_LIBRARIES}
     ${GMOCK_LINK_LIBRARIES}
@@ -84,7 +77,6 @@ if (COVERAGE_ENABLED)
     APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-link_directories(${GSTREAMER_LIBRARY_DIRS})
 if(APPLE)
   set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
   set(CMAKE_INSTALL_RPATH "/usr/local/lib")
@@ -93,11 +85,11 @@ if(APPLE)
   set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
   set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
   set_target_properties(${EXEC_NAME} PROPERTIES
-    INSTALL_RPATH "${GSTREAMER_FRAMEWORK_LIB};${GSTREAMER_FRAMEWORK_DIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
+@@ -87,7 +100,7 @@ if(APPLE)
   )
   target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
   target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
   target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 else()
   target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
