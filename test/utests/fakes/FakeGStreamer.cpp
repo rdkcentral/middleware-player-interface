@@ -243,7 +243,6 @@ void gst_structure_set(GstStructure *structure, const gchar *fieldname, ...)
 void gst_element_set_context(GstElement *element, GstContext *context)
 {
 	TRACE_FUNC();
-	
 }
 
 GstElement *gst_pipeline_new(const gchar *name)

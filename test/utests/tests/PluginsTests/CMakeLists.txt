@@ -19,9 +19,6 @@ include(GoogleTest)
 
 pkg_check_modules(UUID REQUIRED uuid)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
 
 set(PLAYER_ROOT "../../../..")
 set(UTESTS_ROOT "../..")
@@ -49,7 +46,6 @@ include_directories(${DRM_ROOT}/ocdm)
 include_directories(${UTESTS_ROOT}/mocks)
 include_directories(${UTESTS_ROOT}/drm/mocks)
 include_directories(${GSTREAMER_INCLUDE_DIRS})
-include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(${UUID_INCLUDE_DIRS})
@@ -59,19 +55,17 @@ if (JSC_INCDIR)
 endif()
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
-set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp)
+set(FAKE_SOURCE ${UTEST_ROOT}/fakes/FakeDRMSessionManager.cpp)
 
 set(TEST_SOURCES PlayerClearKeyDecryptorTests.cpp
 				PlayerPlayReadyDecryptorTests.cpp
 				PlayerVeriMatrixDecryptorTests.cpp
 				PlayerWidevineDecryptorTests.cpp
-				PluginsRun.cpp )
+				PluginsRun.cpp)
 				
 add_definitions(-DUSE_OPENCDM_ADAPTER)
 
-# This is a misnomer, it has nothing to do with Ubuntu, but causes a workaround to be enabled in 
-# gst-plugins/drm/gst/gstcdmidecryptor.cpp. Should rename the ifdef there and here.
-if (CMAKE_PLATFORM_UBUNTU OR APPLE)
+if (CMAKE_PLATFORM_UBUNTU)
 	add_definitions(-DUBUNTU)
 endif()
 
@@ -88,7 +82,7 @@ add_executable(${EXEC_NAME}
 			   ${MOCK_SOURCES}
 			   ${FAKE_SOURCES}
 			   ${PLAYER_SOURCES})
-
+	  
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
@@ -97,7 +91,8 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-    player_utest_add_cov(${EXEC_NAME})
+	include(CodeCoverage)
+	APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
 # ---- Includes (compiler) ----

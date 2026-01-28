@@ -141,7 +141,7 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigurePauseOnPlayback)
 	// Enable PauseOnPlayback
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 }
 
 // Test configuration of pipeline with PauseOnPlayback not enabled
@@ -176,7 +176,7 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigureNormalPlayback)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 }
 
 // Test bus_message callback when PauseOnPlayback has been enabled, and sink
@@ -188,7 +188,7 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigureNormalPlayback)
 // "first-video-frame-callback" callback from gstreamer when the frame is displayed
 TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 {
-	// this feature not implemented across all devices
+	// this feature covered in L3 test, but not implemented on all SoCs
 	GstElement gst_element_pipeline = {.object = {.name = (gchar *)"Pipeline"}};
 	GstElement gst_element_video_sink = {.object = {.name = (gchar *)"brcmvideosink0"}};
 	GstElement gst_element_bin = {.object = {.name = (gchar *)"bin"}};
@@ -196,6 +196,9 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 	GstPipeline *pipeline = GST_PIPELINE(&gst_element_pipeline);
 	GstBusFunc bus_message_func = nullptr;
 	GstBusSyncHandler bus_sync_func = nullptr;
+	InterfacePlayerPriv* privatePlayer = nullptr;
+	privatePlayer = mInterfaceGstPlayer->GetPrivatePlayer();
+	privatePlayer->gstPrivateContext->video_sink = &gst_element_video_sink;
 
 	// Expectations
 	// CreatePipeline()
@@ -233,7 +236,7 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
     ASSERT_TRUE(bus_sync_func != nullptr);
     ASSERT_TRUE(bus_message_func != nullptr);
@@ -265,10 +268,11 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 			SetArgPointee<3>(GST_STATE_NULL)));
 
 	GParamSpec spec = {};
-    // Property available
-    EXPECT_CALL(*g_mockGLib, g_object_class_find_property(_,StrEq("frame-step-on-preroll")))
-		.WillOnce(Return(&spec));
-
+	// Property available
+	privatePlayer->gstPrivateContext->video_sink = &gst_element_video_sink;
+	EXPECT_CALL(*g_mockGLib, g_object_class_find_property(_, StrEq("frame-step-on-preroll")))
+		.WillOnce(Return(reinterpret_cast<GParamSpec*>(0x1)));
+	
     // No simple solution to mock variadic functions, so cannot check calls to g_object_set
 
     EXPECT_CALL(*g_mockGStreamer, gst_event_new_step(GST_FORMAT_BUFFERS, 1, 1.0, FALSE, FALSE))
@@ -288,7 +292,8 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 TEST_F(PauseOnPlaybackTests, bus_message_FrameStepPropertyNotAvailable)
 {
 	GstElement gst_element_pipeline = {.object = {.name = (gchar *)"Pipeline"}};
-	GstElement gst_element_video_sink = {.object = {.name = (gchar *)"brcmvideosink0"}};
+	GstElement gst_element_video_sink = {.object = {.name = (gchar *)"rialtomsevideosink0"}};
+	//GstElement gst_element_video_sink = {.object = {.name = (gchar *)"brcmvideosink0"}};
 	GstElement gst_element_bin = {.object = {.name = (gchar *)"bin"}};
 	GstBus bus = {};
 	GstPipeline *pipeline = GST_PIPELINE(&gst_element_pipeline);
@@ -333,7 +338,7 @@ TEST_F(PauseOnPlaybackTests, bus_message_FrameStepPropertyNotAvailable)
 
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
     ASSERT_TRUE(bus_sync_func != nullptr);
     ASSERT_TRUE(bus_message_func != nullptr);
