@@ -33,42 +33,71 @@ function subtec_install_fn() {
     git apply -p1 ${1}/OSX/patches/subttxrend-app-ubuntu_24_04_build.patch
     git apply -p1 ${1}/OSX/patches/websocket-ipplayer2-ubuntu_24_04_build.patch --directory websocket-ipplayer2-utils
 
-    echo "Patching subtec-app CMakeLists.txt (use Homebrew gdbus-codegen)"
+    echo "Patching subtec-app CMakeLists.txt (use gdbus-codegen)"
     if [[ "$OSTYPE" == "darwin"* ]] ; then
         SED_ARG="''"     # macOS sed: -i ''
     else
         SED_ARG=""       # GNU sed: -i
     fi
 
-    # Use Homebrew GLib gdbus-codegen (standard D-Bus XML -> C generator). Documentation: https://developer.gnome.org/gio/stable/gdbus-codegen.html
-    if ! command -v brew >/dev/null 2>&1; then
-        echo "ERROR: Homebrew (brew) is not installed or not in PATH."
-        echo "Install Homebrew and then run: brew install glib"
-        popd >/dev/null
-        return 1
-    fi
+    # Setup gdbus-codegen based on OS (standard D-Bus XML -> C generator). Documentation: https://developer.gnome.org/gio/stable/gdbus-codegen.html
+    if [[ "$OSTYPE" == "darwin"* ]] ; then
+        # macOS: Use Homebrew GLib gdbus-codegen
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "ERROR: Homebrew (brew) is not installed or not in PATH."
+            echo "Install Homebrew and then run: brew install glib"
+            popd >/dev/null
+            return 1
+        fi
 
-    if ! GLIB_PREFIX="$(brew --prefix glib 2>/dev/null)"; then
-        echo "ERROR: Failed to determine Homebrew prefix for glib."
-        echo "Run: brew install glib"
-        popd >/dev/null
-        return 1
-    fi
+        if ! GLIB_PREFIX="$(brew --prefix glib 2>/dev/null)"; then
+            echo "ERROR: Failed to determine Homebrew prefix for glib."
+            echo "Run: brew install glib"
+            popd >/dev/null
+            return 1
+        fi
 
-    if [ -z "${GLIB_PREFIX}" ]; then
-        echo "ERROR: Homebrew reported an empty prefix for glib."
-        echo "Run: brew install glib"
-        popd >/dev/null
-        return 1
-    fi
+        if [ -z "${GLIB_PREFIX}" ]; then
+            echo "ERROR: Homebrew reported an empty prefix for glib."
+            echo "Run: brew install glib"
+            popd >/dev/null
+            return 1
+        fi
 
-    export GDBUS_CODEGEN="${GLIB_PREFIX}/bin/gdbus-codegen"
-    export PATH="${GLIB_PREFIX}/bin:$PATH"
-    if [ ! -x "${GDBUS_CODEGEN}" ]; then
-        echo "ERROR: gdbus-codegen not found at ${GDBUS_CODEGEN}"
-        echo "Run: brew install glib"
-        popd >/dev/null
-        return 1
+        export GDBUS_CODEGEN="${GLIB_PREFIX}/bin/gdbus-codegen"
+        export PATH="${GLIB_PREFIX}/bin:$PATH"
+        if [ ! -x "${GDBUS_CODEGEN}" ]; then
+            echo "ERROR: gdbus-codegen not found at ${GDBUS_CODEGEN}"
+            echo "Run: brew install glib"
+            popd >/dev/null
+            return 1
+        fi
+    else
+        # Linux: Install and use system gdbus-codegen
+        if ! command -v gdbus-codegen >/dev/null 2>&1; then
+            echo "Installing gdbus-codegen via package manager..."
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update && sudo apt-get install -y libglib2.0-dev
+            elif command -v yum >/dev/null 2>&1; then
+                sudo yum install -y glib2-devel
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y glib2-devel
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S glib2
+            else
+                echo "ERROR: Could not detect package manager. Please install libglib2.0-dev or equivalent manually."
+                popd >/dev/null
+                return 1
+            fi
+        fi
+
+        if ! command -v gdbus-codegen >/dev/null 2>&1; then
+            echo "ERROR: gdbus-codegen not found after installation."
+            popd >/dev/null
+            return 1
+        fi
+
+        export GDBUS_CODEGEN="gdbus-codegen"
     fi
 
     # Escape path for safe sed replacement
@@ -120,4 +149,3 @@ function subtec_install_build_fn() {
         fi
     fi
 }
-
