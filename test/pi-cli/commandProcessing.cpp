@@ -208,8 +208,8 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
         std::string url = params[13];
 
         player.ConfigurePipeline(
-            format, audioFormat, auxFormat, subFormat,
-            bESChangeStatus, forwardAudioToAux, setReadyAfterPipelineCreation, isSubEnable,
+            format, audioFormat, subFormat,
+            bESChangeStatus, setReadyAfterPipelineCreation, isSubEnable,
             trackId, rate, pipelineName, PipelinePriority, subBool, url
         );
         std::cout << "ConfigurePipeline executed.\n";
@@ -277,6 +277,19 @@ void pauseCommand(InterfacePlayerRDK& player, const std::vector<std::string>& pa
     }
     bool result = player.Pause(pauseVal, forceStop);
     std::cout << "Pause executed. Result: " << (result ? "true" : "false") << "\n";
+}
+
+void resumeCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
+    if (!params.empty()) {
+        std::cout << "Usage: resume\n";
+        return;
+    }
+    bool result = player.Pause(false, false);
+    std::cout << "Resume executed. Success: " << (result ? "true" : "false") << "\n";
+    if (result) {
+        std::cout << "Pipeline state: " << (player.IsPipelinePaused() ? "Paused" : "Playing") << "\n";
+        std::cout << "Current position: " << player.GetPositionMilliseconds() << " ms\n";
+    }
 }
 
 void resumeInjectorCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
@@ -601,6 +614,7 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("setaudiovolume", Command("setaudiovolume", "Set audio volume. Usage: setaudiovolume <volume>", [&player](const std::vector<std::string>& params) { setAudioVolumeCommand(player, params); }));
     commands.emplace("setupstream", Command("setupstream", "Setup stream. Usage: setupstream <streamId> <playerInstance(int)> <url>", [&player](const std::vector<std::string>& params) { setupStreamCommand(player, params); }));
     commands.emplace("pause", Command("pause", "Pause the pipeline. Usage: pause [pause(bool)] [forceStop(bool)]", [&player](const std::vector<std::string>& params) { pauseCommand(player, params); }));
+    commands.emplace("resume", Command("resume", "Resume playback.\nUsage: resume", [&player](const std::vector<std::string>& params) { resumeCommand(player, params); }));
     commands.emplace("resumeinjector", Command("resumeinjector", "Resume injector.", [&player](const std::vector<std::string>& params) { resumeInjectorCommand(player, params); }));
     commands.emplace("stop", Command("stop", "Stop playback.", [&player](const std::vector<std::string>& params) { stopCommand(player, params); }));
     commands.emplace("flush", Command("flush", "Flush pipeline.", [&player](const std::vector<std::string>& params) { flushCommand(player, params); }));
