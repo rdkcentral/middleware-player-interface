@@ -11,6 +11,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 include_directories(${PI_ROOT})
 
+# Find GStreamer packages
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+
+include_directories(${GSTREAMER_INCLUDE_DIRS})
+include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
+
 # Add the executable (now includes commandProcessing.cpp)
 add_executable(pi-cli
     main.cpp
@@ -29,7 +37,15 @@ else()
     message(FATAL_ERROR "Readline library not found. Please install it.")
 endif()
 
-target_link_libraries(pi-cli playergstinterface)
+# Add OpenSSL requirement so we can link crypto/ssl symbols
+find_package(OpenSSL REQUIRED)
+
+target_link_libraries(pi-cli playergstinterface OpenSSL::Crypto OpenSSL::SSL)
+if(BUILD_WITH_COVERAGE)
+    target_compile_options(pi-cli PRIVATE --coverage)
+    target_link_options(pi-cli PRIVATE --coverage)
+    message(STATUS "pi-cli: Building with coverage instrumentation")
+endif()
 
 # Additional warnings and flags for development
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
