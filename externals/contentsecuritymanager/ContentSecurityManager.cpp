@@ -25,6 +25,7 @@
 #include "ContentProtectionFirebolt.h"
 #include "ContentSecurityManager.h"
 #include "PlayerLogManager.h"
+#include "PerfProfiler.h"
 #include <string.h>
 #include "_base64.h"
 #include <inttypes.h> // For PRId64
