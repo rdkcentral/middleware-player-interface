@@ -24,6 +24,7 @@
 
 #include "PlayerExternalsInterface.h"
 #include "PlayerExternalUtils.h"
+#include "PerfProfiler.h"
 
 #ifdef IARM_MGR
 #include "PlayerExternalsRdkInterface.h"
