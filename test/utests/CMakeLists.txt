@@ -141,17 +141,14 @@ if (NOT TARGET OpenSSL::Crypto OR NOT TARGET OpenSSL::SSL)
       "Tip: configure with -DOPENSSL_ROOT_DIR=<brew keg> and explicit *_LIBRARY paths."
     )
 	endif()
-	# The following code is taken from TileDB-Inc/TileDB/1.3.0, under the MIT license:
-	# See https://github.com/TileDB-Inc/TileDB/archive/refs/tags/1.3.0.tar.gz
-	# Original file: cmake/Modules/FindOpenSSL_EP.cmake
-	# Copyright (c) [YEAR] TileDB, Inc.
-	# Released under the MIT license.
-	# [Include the MIT license text if required by your legal department.]
-  add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
-  set_target_properties(OpenSSL::Crypto PROPERTIES
-    IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
-  )
+	# Create OpenSSL::Crypto imported target if it does not already exist
+	if(NOT TARGET OpenSSL::Crypto)
+	add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
+	set_target_properties(OpenSSL::Crypto PROPERTIES
+		IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+		INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+	)
+	endif()
 
   add_library(OpenSSL::SSL UNKNOWN IMPORTED)
   set_target_properties(OpenSSL::SSL PROPERTIES
