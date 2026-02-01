@@ -992,6 +992,81 @@ GstPad * gst_ghost_pad_new (const gchar * name, GstPad * target)
 	return NULL;
 }
 
+extern "C" {
+void* g_type_class_peek_parent(void*) 
+{ 
+	return nullptr; 
+}
+
+void g_type_class_adjust_private_offset(void*, int*) 
+{
+
+}
+
+/**
+ * @brief Get type of clearkey decryptor
+ * @retval Type of clearkey decryptor
+ */
+GType gst_clearkeydecryptor_get_type (void)
+{
+	return 0;
+}
+
+/**
+ * @brief Get type of CDMI decryptor
+ * @retval Type of CDMI decryptor
+ */
+GType gst_cdmidecryptor_get_type(void)
+{
+	return 0;
+}
+
+/**
+ * @brief Get type of playready decryptor
+ * @retval Type of playready decryptor
+ */
+GType gst_playreadydecryptor_get_type(void)
+{
+	return 0;
+}
+
+/**
+ * @brief Get type of verimatrix decryptor
+ * @retval Type of verimatrix decryptor
+ */
+GType gst_verimatrixdecryptor_get_type(void)
+{
+	return 0;
+}
+
+/**
+ * @brief Get type of widevine decryptor
+ * @retval Type of widevine decryptor
+ */
+GType gst_widevinedecryptor_get_type(void)
+{
+	return 0;
+}
+
+GType gst_subtecbin_get_type(void)
+{
+	return 0;
+}
+
+GType gst_subtecmp4transform_get_type(void)
+{
+	return 0;
+}
+
+void gst_subtecsink_get_type(void)
+{
+}
+
+void gst_vipertransform_get_type(void)
+{
+}
+}
+
 GstCaps *gst_app_src_get_caps(GstAppSrc *appsrc)
 {
 	TRACE_FUNC();

@@ -1,3 +1,4 @@
+
 /*
  * If not stated otherwise in this file or this component's license file the
  * following copyright and licenses apply:
@@ -97,8 +98,9 @@ public:
 		mInterfacePrivatePlayer  = mInterfaceGstPlayer->GetPrivatePlayer();
 
 		mPlayerContext = mInterfacePrivatePlayer->gstPrivateContext;
-		
 		mPlayerConfigParams = mInterfaceGstPlayer->m_gstConfigParam;
+		
+		mPlayerConfigParams->useMp4Demux = false;
 		//init callback to avoid bad_function_call error
 		mInterfaceGstPlayer->TearDownCallback([this](bool status, int mediaType) {
 		if (status) {
@@ -2533,3 +2535,4 @@ TEST_F(InterfacePlayerTests, SetVolumeOrMuteUnMute_UsingRialtoSink)
 
 	mInterfaceGstPlayer->SetVolumeOrMuteUnMute();
 }
+

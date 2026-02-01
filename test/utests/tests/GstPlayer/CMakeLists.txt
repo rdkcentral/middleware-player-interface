@@ -21,6 +21,10 @@ set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
 set(EXEC_NAME PlayerGstPlayer)
 
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
+
 include_directories(${PLAYER_ROOT})
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
@@ -30,6 +34,7 @@ include_directories(${UTESTS_ROOT}/fakes)
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
+include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
@@ -47,17 +52,19 @@ set(TEST_SOURCES PauseOnPlaybackTests.cpp
               )
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
+    ${PLAYER_ROOT}/GstUtils.cpp
 		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp
-                  ${UTESTS_ROOT}fakes/FakeGLib.cpp)
+	${UTESTS_ROOT}fakes/FakeGLib.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
 	       ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
+
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
@@ -66,10 +73,22 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-    include(CodeCoverage)
-    APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+link_directories(${GSTREAMER_LIBRARY_DIRS})
+if(APPLE)
+  set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
+  set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
+  set_target_properties(${EXEC_NAME} PROPERTIES
+    INSTALL_RPATH "${GSTREAMER_FRAMEWORK_LIB};${GSTREAMER_FRAMEWORK_DIR}"
+    BUILD_WITH_INSTALL_RPATH TRUE
+  )
+  target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
+  target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+else()
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+endif()
 
 player_utest_run_add(${EXEC_NAME})

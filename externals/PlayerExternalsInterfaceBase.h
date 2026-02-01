@@ -97,6 +97,17 @@ class PlayerExternalsInterfaceBase
          */
         void setGstElement(GstElement *element) { m_gstElement = element;  }
 
+
+        /**
+         * @brief Get the associated GstElement pointer.
+         *
+         * Returns the internal GstElement pointer used by this player interface.
+         * This element is typically the video decoder element in the GStreamer pipeline.
+         *
+         * @return GstElement* Pointer to the GstElement.
+         */
+        GstElement* getgstElement() const { return m_gstElement; }
+
         /**
          * @fn GetDisplayResolution
          * @brief Get current resolution's display width and height

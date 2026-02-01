@@ -23,6 +23,7 @@
 #include "VerimatrixHelper.h"
 #include "DrmUtils.h"
 #include "DrmConstants.h"
+#include "PlayerLogManager.h"
 
 #define KEYURL_TAG_START "<KeyUrl><![CDATA["
 #define KEYURL_TAG_END "]]></KeyUrl>"
@@ -121,12 +122,14 @@ void VerimatrixHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo
 
 void VerimatrixHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
 {
+#ifndef UBUNTU
 	if(mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
 		licenseResponse->setData((unsigned char*)mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
 	else if(mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)
 		licenseResponse->setData((unsigned char*)mKeyID.data(), mKeyID.size());
 	else
 		MW_LOG_WARN("unknown mediaFormat %d", mDrmInfo.mediaFormat);
+#endif
 }
 
 bool VerimatrixHelperFactory::isDRM(const struct DrmInfo& drmInfo) const

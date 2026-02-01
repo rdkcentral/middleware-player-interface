@@ -16,14 +16,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "MockGstUtils.h"
 #include "GstUtils.h"
-MockGstUtils *g_mockGstUtils = nullptr;
-GstCaps *GetCaps(GstStreamOutputFormat format)
+#include "InterfacePlayerPriv.h"
+
+
+/**
+ * @brief Sets a flag indicating that pipeline transition to PLAYING state is pending
+ */
+const char *gstGetMediaTypeName(GstMediaType mediaType)
 {
-	if(g_mockGstUtils)
+	static const char *name[] =
 	{
-		return g_mockGstUtils->GetCaps(format);
+		"video",//eMEDIATYPE_VIDEO
+		"audio",//eMEDIATYPE_AUDIO
+		"text",//eMEDIATYPE_SUBTITLE
+		"aux_audio",//eMEDIATYPE_AUX_AUDIO
+		"manifest",//eMEDIATYPE_MANIFEST
+		"licence",//eMEDIATYPE_LICENCE
+		"iframe",//eMEDIATYPE_IFRAME
+		"init_video",//eMEDIATYPE_INIT_VIDEO
+		"init_audio",//eMEDIATYPE_INIT_AUDIO
+		"init_text",//eMEDIATYPE_INIT_SUBTITLE
+		"init_aux_audio",//eMEDIATYPE_INIT_AUX_AUDIO
+		"playlist_video",//eMEDIATYPE_PLAYLIST_VIDEO
+		"playlist_audio",//eMEDIATYPE_PLAYLIST_AUDIO
+		"playlist_text",//eMEDIATYPE_PLAYLIST_SUBTITLE
+		"playlist_aux_audio",//eMEDIATYPE_PLAYLIST_AUX_AUDIO
+		"playlist_iframe",//eMEDIATYPE_PLAYLIST_IFRAME
+		"init_iframe",//eMEDIATYPE_INIT_IFRAME
+		"dsm_cc",//eMEDIATYPE_DSM_CC
+		"image",//eMEDIATYPE_IMAGE
+	};
+	if( mediaType < eGST_MEDIATYPE_DEFAULT )
+	{
+		return name[mediaType];
 	}
-	return nullptr;
+	else
+	{
+		return "UNKNOWN";
+	}
 }

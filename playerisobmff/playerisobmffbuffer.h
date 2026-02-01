@@ -99,10 +99,10 @@ public:
 	 */
 	player_isobmff::IsoBmffBox* getChunkedfBox() const;
 
-	/**
+	/**	
 	 * @fn UpdateBufferData
-	 * @return true if parsed or false
-	 */
+	 * @return true if parsed or false	
+	 */	
 	int UpdateBufferData(size_t parsedBoxCount, char* &unParsedBuffer, size_t &unParsedBufferSize, size_t & parsedBufferSize);
 
 	/**
@@ -149,11 +149,54 @@ public:
 	bool parseMdatBox(uint8_t *buf, size_t &size);
 
 	/**
-	 * @fn getMdatBoxSize
-	 * @param[out] size - size of mdat buffer
-	 * @return true if buffer size available. false otherwise
-	 */
+	* @fn getMdatBoxSize
+	* @param[out] size - size of mdat buffer
+	* @return true if buffer size available. false otherwise
+	*/
 	bool getMdatBoxSize(size_t &size);
+
+
+	/** 
+     * @brief Get the vector of ISOBMFF boxes
+     * @return Constant reference to the vector of boxes
+     */
+    const std::vector<player_isobmff::IsoBmffBox*>& getBoxes() const {
+        return boxes;
+    }
+
+    /**
+     * @brief Get the raw buffer pointer
+     * @return Pointer to the buffer
+     */
+    uint8_t* getBuffer() const {
+        return buffer;
+    }
+
+    /**
+     * @brief Get the buffer size
+     * @return Size of the buffer in bytes
+     */
+    size_t getBufferSize() const {
+        return bufSize;
+    }
+
+    /**
+     * @brief Get the chunked box pointer
+     * @return Pointer to the chunked box
+     */
+    player_isobmff::IsoBmffBox* getChunkedBox() const {
+        return chunkedBox;
+    }
+
+    /**
+     * @brief Get the count of 'mdat' boxes
+     * @return Number of 'mdat' boxes
+     */
+    size_t getMdatCount() const {
+        return mdatCount;
+    }
+
+
 };
 
 #endif /* __PLAYERISOBMFFBUFFER_H__ */

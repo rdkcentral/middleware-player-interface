@@ -146,6 +146,11 @@ void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidByt
  */
 std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int dataLength)
 {
+	if(!psshData)
+	{
+		MW_LOG_WARN("psshData pointer is NULL");
+		return std::string();
+	}
 	//WV PSSH format 4+4+4+16(system id)+4(data size)
 	uint32_t header = 28;
 	std::string metadata;
