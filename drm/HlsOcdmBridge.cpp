@@ -46,15 +46,23 @@ DrmReturn HlsOcdmBridge::SetDecryptInfo( const struct DrmInfo *drmInfo,  int acq
 {
 	DrmReturn result  = eDRM_ERROR;
 
-	std::lock_guard<std::mutex> guard(m_Mutex);
-	m_drmInfo = drmInfo;
-	KeyState eKeyState = m_drmSession->getState();
-	if (eKeyState == KEY_READY)
+	if(!drmInfo)
 	{
-		m_drmState = eDRM_KEY_ACQUIRED;
-		result = eDRM_SUCCESS; //frag_collector ignores the return
+		MW_LOG_ERR("SetDecryptInfo: drmInfo is NULL");
 	}
-	MW_LOG_TRACE("DecryptInfo Set");
+	
+	else
+	{
+		std::lock_guard<std::mutex> guard(m_Mutex);
+		m_drmInfo = drmInfo;
+		KeyState eKeyState = m_drmSession->getState();
+		if (eKeyState == KEY_READY)
+		{
+			m_drmState = eDRM_KEY_ACQUIRED;
+			result = eDRM_SUCCESS; //frag_collector ignores the return
+		}
+		MW_LOG_TRACE("DecryptInfo Set");
+	}
 
 	return result;
 }

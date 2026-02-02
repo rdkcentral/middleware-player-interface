@@ -79,7 +79,7 @@ bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string na
 	if(mInstanceCount)
 	{
 		MW_LOG_ERR("GstPlayer: %d instance%s of %s running", 
-		mInstanceCount, mInstanceCount?"s":"", name.c_str());
+		mInstanceCount, mInstanceCount > 1 ?"s":"", name.c_str());
 		return false;
 	}
 	else
