@@ -109,6 +109,11 @@ add_executable(${EXEC_NAME}
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
+if(APPLE)
+    set(OPENSSL_ROOT_DIR "${DETECTED_OPENSSL_ROOT}")
+endif()
+
+find_package(OpenSSL REQUIRED)
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target
@@ -119,6 +124,6 @@ if (COVERAGE_ENABLED)
     player_utest_add_cov(${EXEC_NAME})
 endif()
 
-target_link_libraries(${EXEC_NAME} ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes)
+target_link_libraries(${EXEC_NAME} PRIVATE OpenSSL::Crypto ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} pthread -ldl ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} fakes)
 
 player_utest_run_add(${EXEC_NAME})
