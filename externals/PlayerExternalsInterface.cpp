@@ -24,6 +24,7 @@
 
 #include "PlayerExternalsInterface.h"
 #include "PlayerExternalUtils.h"
+#include "PlayerVersion.h"
 
 #ifdef IARM_MGR
 #include "PlayerExternalsRdkInterface.h"
@@ -37,6 +38,7 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP 
  */
 PlayerExternalsInterface::PlayerExternalsInterface()
 {
+    MW_PRE_LOGGER_LOG("Version: %d.%d.%d\n", PLAYER_IF_VERSION_MAJOR, PLAYER_IF_VERSION_MINOR, PLAYER_IF_VERSION_PATCH);
 #ifdef IARM_MGR
     MW_PRE_LOGGER_LOG("Device API IARM/Firebolt\n");
     m_pIarmInterface = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
@@ -67,6 +69,13 @@ void PlayerExternalsInterface::Initialize()
     {
         MW_PRE_LOGGER_LOG("PlayerExternalsInterface not found to initialize\n");
     }
+}
+
+std::string PlayerExternalsInterface::GetVersion()
+{
+    return std::to_string(PLAYER_IF_VERSION_MAJOR) + "." +
+           std::to_string(PLAYER_IF_VERSION_MINOR) + "." +
+           std::to_string(PLAYER_IF_VERSION_PATCH);
 }
 
 /**

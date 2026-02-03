@@ -35,6 +35,7 @@
 #include "player-xternal-stats.h"
 #endif
 #include "PlayerUtils.h"
+#include "PlayerVersion.h"
 
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
@@ -80,7 +81,7 @@ mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSys
 	// start Scheduler Worker for task handling
 	mScheduler.StartScheduler();
 
-	printf("InterfacePlayerRDK created in seperated repo\n");
+	printf("InterfacePlayerRDK created in seperated repo Version: %d.%d.%d\n", PLAYER_IF_VERSION_MAJOR, PLAYER_IF_VERSION_MINOR, PLAYER_IF_VERSION_PATCH);
 	fflush(stdout);
 }
 
@@ -184,6 +185,16 @@ static GstFlowReturn InterfacePlayerRDK_OnVideoSample(GstElement *object, void *
 InterfacePlayerPriv* InterfacePlayerRDK::GetPrivatePlayer()
 {
 	return interfacePlayerPriv;
+}
+
+/*
+ * @brief Gets the version of the InterfacePlayerRDK.
+*/
+std::string InterfacePlayerRDK::GetVersion()
+{
+	return std::to_string(PLAYER_IF_VERSION_MAJOR) + "." +
+		   std::to_string(PLAYER_IF_VERSION_MINOR) + "." +
+		   std::to_string(PLAYER_IF_VERSION_PATCH);
 }
 
 /**

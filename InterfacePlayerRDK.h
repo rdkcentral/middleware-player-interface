@@ -172,6 +172,11 @@ class InterfacePlayerRDK
 		 * @param[in] taskDetails The details of the task to clear flags for.
 		 */
 		void IdleTaskClearFlags(GstTaskControlData &taskDetails);
+
+		/**
+		 * @brief Gets the version of the InterfacePlayerRDK.
+		 */
+		std::string GetVersion();
 		/**
 		 * @brief Removes an idle task from the GStreamer pipeline.
 		 * @param[in] taskDetails The details of the task to be removed.
