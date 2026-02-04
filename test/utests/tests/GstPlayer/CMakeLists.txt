@@ -57,16 +57,22 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
 set(FAKE_SOURCES ${UTESTS_ROOT}/fakes/FakeGStreamer.cpp
-	${UTESTS_ROOT}fakes/FakeGLib.cpp
-	${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
-	${UTESTS_ROOT}/fakes/FakeSocInterface.cpp)
+                  ${UTESTS_ROOT}fakes/FakeGLib.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
 	       ${PLAYER_SOURCES}
                ${FAKE_SOURCES})
-
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
+
+# ---- Includes (compiler) ----
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+# ---- Libraries (actual linking) ----
+target_link_libraries(${EXEC_NAME} PRIVATE
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target
@@ -74,11 +80,16 @@ if (CMAKE_XCODE_BUILD_SYSTEM)
 endif()
 
 if (COVERAGE_ENABLED)
-    player_utest_add_cov(${EXEC_NAME})
+    include(CodeCoverage)
+    APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
 link_directories(${GSTREAMER_LIBRARY_DIRS})
 if(APPLE)
+  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+  set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+  set(CMAKE_BUILD_RPATH "/usr/local/lib")
+  set(CMAKE_MACOSX_RPATH ON)
   set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
   set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
   set_target_properties(${EXEC_NAME} PROPERTIES
@@ -87,7 +98,7 @@ if(APPLE)
   )
   target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
   target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
-  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 else()
   target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 endif()

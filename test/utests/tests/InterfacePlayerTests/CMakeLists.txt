@@ -1,0 +1,98 @@
+# If not stated otherwise in this file or this component's license file the
+# following copyright and licenses apply:
+#
+# Copyright 2025 RDK Management
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+include(GoogleTest)
+
+set(PLAYER_ROOT "../../../../")
+set(UTESTS_ROOT "../../")
+set(EXEC_NAME InterfacePlayerTest)
+
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/subtec/libsubtec)
+
+include_directories(${GTEST_INCLUDE_DIRS})
+include_directories(${GMOCK_INCLUDE_DIRS})
+include_directories(${GLIB_INCLUDE_DIRS})
+include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
+include_directories(${GSTREAMER_INCLUDE_DIRS})
+include_directories(${LIBCJSON_INCLUDE_DIRS})
+include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
+include_directories(${PLAYER_ROOT}/tsb/api)
+include_directories(${PLAYER_ROOT}/playerLogManager)
+include_directories(${PLAYER_ROOT}/vendor)
+include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/../test/gstTestHarness)
+include_directories(${PLAYER_ROOT}/mp4demux)
+
+message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
+
+set(TEST_SOURCES InterfacePlayerFunctionTests.cpp
+		InterfacePlayerTests.cpp)
+
+set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
+		${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
+		${PLAYER_ROOT}/externals/PlayerExternalsInterface.cpp
+		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
+
+set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeGStreamer.cpp
+		 ${PLAYER_ROOT}/test/utests/fakes/FakeGLib.cpp
+${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
+                 ${PLAYER_ROOT}/test/utests/fakes/FakePlayerScheduler.cpp)
+
+
+add_executable(${EXEC_NAME}
+               ${TEST_SOURCES}
+               ${PLAYER_SOURCES}
+               ${FAKE_SOURCES})
+
+set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
+
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+target_link_libraries(${EXEC_NAME} PRIVATE
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
+
+if (CMAKE_XCODE_BUILD_SYSTEM)
+  # XCode schema target
+  xcode_define_schema(${EXEC_NAME})
+endif()
+
+if (COVERAGE_ENABLED)
+    include(CodeCoverage)
+    APPEND_COVERAGE_COMPILER_FLAGS()
+endif()
+
+if(APPLE)
+  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+  set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+  set(CMAKE_BUILD_RPATH "/usr/local/lib")
+  set(CMAKE_MACOSX_RPATH ON)
+  set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
+  set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
+  set_target_properties(${EXEC_NAME} PROPERTIES
+@@ -87,7 +100,7 @@ if(APPLE)
+  )
+  target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
+  target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+else()
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+endif()
+
+player_utest_run_add(${EXEC_NAME})

@@ -37,10 +37,7 @@
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
-/**
- * @brief KeyIdEntries constructor.
- */
-KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPrimaryKeyId(false), data()
+KeyID::KeyID() : creationTime(0), isFailedKeyId(false), isPrimaryKeyId(false), data()
 {
 }
 
@@ -63,7 +60,7 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mPlayerSendWatermarkSessionUpdateEventCB(watermarkSessionUpdateCallback)
 {
 	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
-	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
+	cachedKeyIDs		= new KeyID[mMaxDRMSessions];
 	m_drmConfigParam = new configs();
 	playerSecInstance = new PlayerSecInterface();
 
@@ -117,7 +114,7 @@ void DrmSessionManager::clearSessionData()
 			std::lock_guard<std::mutex> guard(cachedKeyMutex);
 			if (cachedKeyIDs != NULL)
 			{
-				cachedKeyIDs[i] = KeyIdEntries();
+				cachedKeyIDs[i] = KeyID();
 			}
 		}
 	}
@@ -147,13 +144,13 @@ void DrmSessionManager::clearFailedKeyIds()
 	std::lock_guard<std::mutex> guard(cachedKeyMutex);
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
-		if(cachedKeyIDs[i].isFailedKeyEntries)
+		if(cachedKeyIDs[i].isFailedKeyId)
 		{
 			if(!cachedKeyIDs[i].data.empty())
 			{
 				cachedKeyIDs[i].data.clear();
 			}
-			cachedKeyIDs[i].isFailedKeyEntries = false;
+			cachedKeyIDs[i].isFailedKeyId = false;
 			cachedKeyIDs[i].creationTime = 0;
 		}
 		cachedKeyIDs[i].isPrimaryKeyId = false;
@@ -178,12 +175,11 @@ void DrmSessionManager::clearAccessToken()
  */
 bool DrmSessionManager::getFailedKeyIdStatus(int sessionIndex)
 {
-
 	bool rc = false;
 	std::lock_guard<std::mutex> guard(cachedKeyMutex);
 	if (sessionIndex >= 0 && sessionIndex < mMaxDRMSessions && cachedKeyIDs)
 	{
-		rc = cachedKeyIDs[sessionIndex].isFailedKeyEntries;
+		rc = cachedKeyIDs[sessionIndex].isFailedKeyId;
 	}
 	return rc;
 }
@@ -196,7 +192,7 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
 		// Clear the session data if license key acquisition failed or if forceClearSession is true in the case of LicenseCaching is false.
-		if((cachedKeyIDs[i].isFailedKeyEntries || forceClearSession) && drmSessionContexts != NULL)
+		if((cachedKeyIDs[i].isFailedKeyId || forceClearSession) && drmSessionContexts != NULL)
 		{
 			std::lock_guard<std::mutex> guard(drmSessionContexts[i].sessionMutex);
 			if (drmSessionContexts[i].drmSession != NULL)
@@ -341,17 +337,11 @@ bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &
 	for (int sessionSlot = 0; sessionSlot < mMaxDRMSessions; sessionSlot++)
 	{
 		auto keyIDSlot = cachedKeyIDs[sessionSlot].data;
-		// Check if keyId is already cached or marked as failed
-		auto it = std::find_if(keyIDSlot.begin(), keyIDSlot.end(),
-			[&](const KeyIdEntry &entry)
-			{
-				return entry.keyId == keyIdArray;
-			});
-		if (it != keyIDSlot.end())
+		if (!keyIDSlot.empty() && keyIDSlot.end() != std::find(keyIDSlot.begin(), keyIDSlot.end(), keyIdArray))
 		{
 			std::string debugStr = PlayerLogManager::getHexDebugStr(keyIdArray);
-			status = !it->isFailedKeyId;
-			MW_LOG_INFO("Session created/in progress with same keyID %s at slot %d, status=%d", debugStr.c_str(), sessionSlot, status);
+			MW_LOG_INFO("Session created/in progress with same keyID %s at slot %d", debugStr.c_str(), sessionSlot);
+			status = !cachedKeyIDs[sessionSlot].isFailedKeyId;
 			ret = true;
 			break;
 		}
@@ -480,7 +470,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	std::vector<uint8_t> keyId;
 	drmHelper->getKey(keyId);
 	/* callback to initiate content protection data update */
-	mCustomData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
+	mCustomData = ContentUpdateCb(drmHelper, streamType, std::move(keyId), isContentProcess);
 	if (code == KEY_READY)
 	{
 		return drmSessionContexts[selectedSlot].drmSession;
@@ -498,7 +488,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
 		if (cachedKeyIDs)
 		{
-			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+			cachedKeyIDs[selectedSlot].isFailedKeyId = true;
 		}
 		return nullptr;
 	}
@@ -509,7 +499,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
 		if (cachedKeyIDs)
 		{
-			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+			cachedKeyIDs[selectedSlot].isFailedKeyId = true;
 		}
 		return nullptr;
 	}
@@ -520,27 +510,9 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
 		if (cachedKeyIDs)
 		{
-			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+			cachedKeyIDs[selectedSlot].isFailedKeyId = true;
 		}
 		return nullptr;
-	}
-
-	bool isMultiKeySession = false;
-	{
-		std::lock_guard<std::mutex> guard(cachedKeyMutex);
-		isMultiKeySession = (cachedKeyIDs[selectedSlot].data.size() > 1);
-	}
-	if (code == KEY_READY && isMultiKeySession)
-	{
-		// Multiple KeyIDs present for this session, validate them
-		if(!ValidateMultiKeySlot(keyId, selectedSlot))
-		{
-			// Validation failed as current keyId is marked as failed
-			std::lock_guard<std::mutex> guard(cachedKeyMutex);
-			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
-			MW_LOG_WARN("ValidateMultiKeySlot failed for slot %d", selectedSlot);
-			return nullptr;
-		}
 	}
 
 	// License acquisition was done, so mContentSecurityManagerSession will be populated now
@@ -552,122 +524,6 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	}
 
 	return drmSessionContexts[selectedSlot].drmSession;
-}
-
-/**
- * @fn Validate multiple key IDs for a given DRM session slot using the usable keys from the DrmSession
- *
- * @param[in] keyId The key ID to validate
- * @param[in] selectedSlot The DRM session slot to validate
- *
- * @return true if validation is successful, false otherwise
- */
-bool DrmSessionManager::ValidateMultiKeySlot(const std::vector<uint8_t> &keyId, int selectedSlot)
-{
-	if (selectedSlot < 0 || selectedSlot >= mMaxDRMSessions)
-	{
-		MW_LOG_ERR("invalid slot %d", selectedSlot);
-		return false;
-	}
-
-	MW_LOG_INFO("Multiple KeyIDs present for the session at slot %d, validating each", selectedSlot);
-
-	// Acquire usable keys from the DrmSession (under its mutex)
-	std::vector<std::vector<uint8_t>> usableKeyIds;
-	{
-		std::lock_guard<std::mutex> sessionGuard(drmSessionContexts[selectedSlot].sessionMutex);
-		if (drmSessionContexts[selectedSlot].drmSession)
-		{
-			usableKeyIds = drmSessionContexts[selectedSlot].drmSession->getUsableKeys();
-		}
-		else
-		{
-			MW_LOG_ERR("No drmSession present at slot %d", selectedSlot);
-			return false;
-		}
-	}
-
-	// Normalize key to binary format (handles binary, hex string with/without dashes)
-	auto normalizeKeyToBinary = [](const std::vector<uint8_t> &key) -> std::vector<uint8_t>
-	{
-		// Check if key is already binary or if it's a hex string
-		bool isHexString = true;
-		for (auto c : key)
-		{
-			if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || (c == '-')))
-			{
-				isHexString = false;
-				break;
-			}
-		}
-
-		// If not hex string, assume it's already binary
-		if (!isHexString)
-		{
-			return key;
-		}
-
-		// Remove dashes (for UUID format: "abcdef1-2345-6789-abcd-ef01234567")
-		std::string hexStr;
-		hexStr.reserve(key.size());
-		for (auto c : key)
-		{
-			if (c != '-')
-			{
-				hexStr.push_back(static_cast<char>(c));
-			}
-		}
-
-		// Convert hex string to binary
-		std::vector<uint8_t> binary;
-		for (size_t i = 0; i + 1 < hexStr.length(); i += 2)
-		{
-			std::string byteStr = hexStr.substr(i, 2);
-			uint8_t byte = static_cast<uint8_t>(std::stoul(byteStr, nullptr, 16));
-			binary.push_back(byte);
-		}
-		return binary;
-	};
-
-	auto keysMatch = [&](const std::vector<uint8_t> &cachedKey, const std::vector<uint8_t> &usableKey) -> bool
-	{
-		MW_LOG_DEBUG("Comparing cachedKey: %s with usableKey: %s",
-					 PlayerLogManager::getHexDebugStr(cachedKey).c_str(),
-					 PlayerLogManager::getHexDebugStr(usableKey).c_str());
-
-		return normalizeKeyToBinary(cachedKey) == normalizeKeyToBinary(usableKey);
-	};
-
-	// Update cachedKeyIDs under its mutex
-	std::lock_guard<std::mutex> cacheGuard(cachedKeyMutex);
-	for (auto &keyIdEntry : cachedKeyIDs[selectedSlot].data)
-	{
-		std::string debugStr = PlayerLogManager::getHexDebugStr(keyIdEntry.keyId);
-
-		auto it = std::find_if(
-			usableKeyIds.begin(),
-			usableKeyIds.end(),
-			[&](const std::vector<uint8_t> &usableKey)
-			{
-				return keysMatch(keyIdEntry.keyId, usableKey);
-			});
-
-		if (it == usableKeyIds.end())
-		{
-			MW_LOG_WARN("KeyID %s not found in usable keys, marking as failed for session at slot %d", debugStr.c_str(), selectedSlot);
-			keyIdEntry.isFailedKeyId = true;
-			if (keysMatch(keyId, keyIdEntry.keyId))
-			{
-				MW_LOG_ERR("KeyID %s matches primary key for session at slot %d, Exiting", debugStr.c_str(), selectedSlot);
-				return false;
-			}
-		}
-		else
-		{
-			MW_LOG_INFO("KeyID %s is usable for session at slot %d", debugStr.c_str(), selectedSlot);
-		}
-	}
-	return true;
 }
 
 /**
@@ -713,13 +569,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 		for (; sessionSlot < mMaxDRMSessions; sessionSlot++)
 		{
 			auto keyIDSlot = cachedKeyIDs[sessionSlot].data;
-			// Check if keyId is already cached
-			auto it = std::find_if(keyIDSlot.begin(), keyIDSlot.end(),
-								   [&](const KeyIdEntry &entry)
-								   {
-									   return entry.keyId == keyIdArray;
-								   });
-			if (it != keyIDSlot.end())
+			if (!keyIDSlot.empty() && keyIDSlot.end() != std::find(keyIDSlot.begin(), keyIDSlot.end(), keyIdArray))
 			{
 				MW_LOG_INFO("Session created/in progress with same keyID %s at slot %d", keyIdDebugStr.c_str(), sessionSlot);
 				keySlotFound = true;
@@ -764,7 +614,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 		else
 		{
 			// Already same session Slot is marked failed , not to proceed again .
-			if(cachedKeyIDs[sessionSlot].isFailedKeyEntries)
+			if(cachedKeyIDs[sessionSlot].isFailedKeyId)
 			{
 				MW_LOG_WARN(" Found FailedKeyId at sesssionSlot :%d, return key error",sessionSlot);
 				return KEY_ERROR;
@@ -779,16 +629,14 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				cachedKeyIDs[sessionSlot].data.clear();
 			}
 
-			cachedKeyIDs[sessionSlot].isFailedKeyEntries = false;
+			cachedKeyIDs[sessionSlot].isFailedKeyId = false;
 
-			std::vector<KeyIdEntry> data;
+			std::vector<std::vector<uint8_t>> data;
 			for(auto& keyId : keyIdArrays)
 			{
-				KeyIdEntry keyIdEntry;
-				keyIdEntry.keyId = keyId.second;
 				std::string debugStr = PlayerLogManager::getHexDebugStr(keyId.second);
 				MW_LOG_INFO("Insert[%d] - slot:%d keyID %s", keyId.first, sessionSlot, debugStr.c_str());
-				data.push_back(std::move(keyIdEntry));
+				data.push_back(keyId.second);
 			}
 
 			cachedKeyIDs[sessionSlot].data = data;
@@ -806,73 +654,53 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 		{
 			MW_LOG_WARN("changing DRM session for %s to %s", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), drmHelper->ocdmSystemId().c_str());
 		}
-		else
+		else if (cachedKeyIDs[sessionSlot].data.end() != std::find(cachedKeyIDs[sessionSlot].data.begin(), cachedKeyIDs[sessionSlot].data.end() ,drmSessionContexts[sessionSlot].data))
 		{
-			bool isKeyIdFound = false;
+			KeyState existingState = drmSessionContexts[sessionSlot].drmSession->getState();
+			if (existingState == KEY_READY)
 			{
-				// Protect access to cachedKeyIDs
-				std::lock_guard<std::mutex> guard(cachedKeyMutex);
-				auto &keyIDSlot = cachedKeyIDs[sessionSlot].data;
-				const auto &keyIdToFind = drmSessionContexts[sessionSlot].data;
-
-				auto it = std::find_if(
-					keyIDSlot.begin(),
-					keyIDSlot.end(),
-					[&](const KeyIdEntry &entry)
-					{
-						return entry.keyId == keyIdToFind;
-					});
-				isKeyIdFound = (it != keyIDSlot.end());
-			}
-
-			if (isKeyIdFound)
-			{
-				KeyState existingState = drmSessionContexts[sessionSlot].drmSession->getState();
-				if (existingState == KEY_READY)
+				MW_LOG_INFO("Found drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
+				auto slotSession = drmSessionContexts[sessionSlot].drmSession->getSecManagerSession();
+				if (slotSession.isSessionValid() && (!mContentSecurityManagerSession.isSessionValid()) )
 				{
-					MW_LOG_INFO("Found drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
-					auto slotSession = drmSessionContexts[sessionSlot].drmSession->getSecManagerSession();
-					if (slotSession.isSessionValid() && (!mContentSecurityManagerSession.isSessionValid()))
-					{
-						// Set the drmSession's ID as mContentSecurityManagerSession so that this code will not be repeated for multiple calls for createDrmSession
-						mContentSecurityManagerSession = slotSession;
-						bool videoMuteState = mIsVideoOnMute.load();
-						MW_LOG_WARN("Activating re-used DRM, sessionId[%" PRId64 "], with video mute = %d", slotSession.getSessionID(), videoMuteState);
-						ContentSecurityManager::GetInstance()->UpdateSessionState(slotSession.getSessionID(), true);
-					}
+					// Set the drmSession's ID as mContentSecurityManagerSession so that this code will not be repeated for multiple calls for createDrmSession					
+					mContentSecurityManagerSession = slotSession;
+					bool videoMuteState = mIsVideoOnMute.load();
+					MW_LOG_WARN("Activating re-used DRM, sessionId[%" PRId64 "], with video mute = %d", slotSession.getSessionID(), videoMuteState);
+					ContentSecurityManager::GetInstance()->UpdateSessionState(slotSession.getSessionID(), true);
+				}
+				return KEY_READY;
+			}
+			if (existingState == KEY_INIT)
+			{
+				MW_LOG_WARN("Found drm session in INIT state with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
+				return KEY_INIT;
+			}
+			else if (existingState <= KEY_READY)
+			{
+				if (drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout()))
+				{
+					MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 					return KEY_READY;
 				}
-				if (existingState == KEY_INIT)
-				{
-					MW_LOG_WARN("Found drm session in INIT state with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
-					return KEY_INIT;
-				}
-				else if (existingState <= KEY_READY)
-				{
-					if (drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout()))
-					{
-						MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
-						return KEY_READY;
-					}
-					MW_LOG_WARN("key was never ready for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
-					// CID-164094 : Added the mutex lock due to overriding the isFailedKeyEntries variable
-					std::lock_guard<std::mutex> guard(cachedKeyMutex);
-					cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
-					return KEY_ERROR;
-				}
-				else
-				{
-					MW_LOG_WARN("existing DRM session for %s has error state %d", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), existingState);
-					// CID-164094 : Added the mutex lock due to overriding the isFailedKeyEntries variable
-					std::lock_guard<std::mutex> guard(cachedKeyMutex);
-					cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
-					return KEY_ERROR;
-				}
+				MW_LOG_WARN("key was never ready for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
+				//CID-164094 : Added the mutex lock due to overriding the isFailedKeyId variable
+				std::lock_guard<std::mutex> guard(cachedKeyMutex);
+				cachedKeyIDs[selectedSlot].isFailedKeyId = true;
+				return KEY_ERROR;
 			}
 			else
 			{
-				MW_LOG_WARN("existing DRM session for %s has different key in slot %d", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), sessionSlot);
+				MW_LOG_WARN("existing DRM session for %s has error state %d", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), existingState);
+				//CID-164094 : Added the mutex lock due to overriding the isFailedKeyId variable
+				std::lock_guard<std::mutex> guard(cachedKeyMutex);
+				cachedKeyIDs[selectedSlot].isFailedKeyId = true;
+				return KEY_ERROR;
 			}
+		}
+		else
+		{
+			MW_LOG_WARN("existing DRM session for %s has different key in slot %d", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), sessionSlot);
 		}
 		MW_LOG_WARN("deleting existing DRM session for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
 		MW_SAFE_DELETE(drmSessionContexts[sessionSlot].drmSession);
@@ -972,7 +800,7 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 		//Update to new session count
 		mMaxDRMSessions = maxSessions;
 		drmSessionContexts      = new DrmSessionContext[mMaxDRMSessions];
-		cachedKeyIDs            = new KeyIdEntries[mMaxDRMSessions];
+		cachedKeyIDs            = new KeyID[mMaxDRMSessions];
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }
