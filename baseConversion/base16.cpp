@@ -63,6 +63,11 @@ char *base16_Encode(const unsigned char *src, size_t len)
  */
 unsigned char *base16_Decode( const char *srcPtr, size_t srcLen, size_t *len )
 {
+	if(srcLen % 2 !=0 )
+	{	//Hex decoding requires even-length input; odd length would cause out-of-bounds access
+		*len =0;
+		return NULL;
+	}
 	static const signed char mBase16CharToIndex[256] = {
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,

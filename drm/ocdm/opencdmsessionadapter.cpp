@@ -106,9 +106,7 @@ OCDMSessionAdapter::~OCDMSessionAdapter()
 	clearDecryptContext();
 
 	if (m_pOpenCDMSystem) {
-#ifdef USE_THUNDER_OCDM_API_0_2
 		opencdm_destruct_system(m_pOpenCDMSystem);
-#endif
 		m_pOpenCDMSystem = NULL;
 	}
 
@@ -131,23 +129,44 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		memset(&m_OCDMSessionCallbacks, 0, sizeof(m_OCDMSessionCallbacks));
 		timeBeforeCallback = GetCurrentTimeMS();
 		m_OCDMSessionCallbacks.process_challenge_callback = [](OpenCDMSession* session, void* userData, const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize) {
-			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
-			userSession->timeBeforeCallback = ((GetCurrentTimeMS())-(userSession->timeBeforeCallback));
-			MW_LOG_WARN( "Duration for process_challenge_callback %lld",(userSession->timeBeforeCallback));
-			userSession->processOCDMChallenge(destUrl, challenge, challengeSize);
+			if(!userData)
+			{
+				MW_LOG_ERR("process_challenge_callback: userData is NULL");
+			}
+			else
+			{
+				OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+				userSession->timeBeforeCallback = ((GetCurrentTimeMS())-(userSession->timeBeforeCallback));
+				MW_LOG_WARN( "Duration for process_challenge_callback %lld",(userSession->timeBeforeCallback));
+				userSession->processOCDMChallenge(destUrl, challenge, challengeSize);
+			}
 		};
 
 		m_OCDMSessionCallbacks.key_update_callback = [](OpenCDMSession* session, void* userData, const uint8_t key[], const uint8_t keySize) {
-			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
-			userSession->keyUpdateOCDM(key, keySize);
+			if(!userData)
+			{
+				MW_LOG_ERR("key_update_callback: userData is NULL");
+			}
+			else
+			{
+				OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+				userSession->keyUpdateOCDM(key, keySize);
+			}
 		};
 
 		m_OCDMSessionCallbacks.error_message_callback = [](OpenCDMSession* session, void* userData, const char message[]) {
 		};
 
 		m_OCDMSessionCallbacks.keys_updated_callback = [](const OpenCDMSession* session, void* userData) {
-			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
-			userSession->keysUpdatedOCDM();
+			if(!userData)
+			{
+				MW_LOG_ERR("keys_updated_callback: userData is NULL");
+			}
+			else
+			{
+				OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+				userSession->keysUpdatedOCDM();
+			}
 		};
 		const unsigned char *customDataMessage = customData.empty() ? nullptr:reinterpret_cast<const unsigned char *>(customData.c_str()) ;
 		const uint16_t customDataMessageLength = customData.length();
