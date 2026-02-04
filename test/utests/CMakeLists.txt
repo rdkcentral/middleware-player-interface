@@ -27,13 +27,11 @@ set(PLAYER_ROOT "../../")
 
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(OPENSSL REQUIRED openssl)
-include_directories(${OPENSSL_INCLUDE_DIRS})
-
 pkg_check_modules(GTEST REQUIRED gtest)
 pkg_check_modules(GMOCK REQUIRED gmock)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LibXml2 REQUIRED libxml-2.0)
 pkg_check_modules(LIBCJSON REQUIRED libcjson)
@@ -89,4 +87,79 @@ function(player_utest_run_add test_suite)
 		gtest_discover_tests(${test_suite} DISCOVERY_TIMEOUT 10 TEST_PREFIX ${test_suite}:)
 	endif()
 endfunction()
+
+function(player_utest_add_cov TARGET)
+  # gcov doesn't work that well with Apple build tools, but the alternatives are not attractive:
+  #  * use llvm (doesn't work with Apple clang)
+  #  * use xcodebuild (there is no HTML report and very different tool chain)
+
+  target_compile_options(${TARGET} PRIVATE --coverage)
+  target_link_options(${TARGET} PRIVATE --coverage)
+
+endfunction()
+
+
+# ---- Make find_package(OpenSSL) use a Homebrew keg, not /lib & /include ----
+# Honor *Root variables* for find_package (e.g., OpenSSL_ROOT):
+if (POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
+# If the user hasn't provided a root, pick one Homebrew keg.
+if (APPLE AND NOT OPENSSL_ROOT_DIR AND NOT DEFINED ENV{OPENSSL_ROOT_DIR})
+  foreach(_ossl_ver "3.5" "3.4" "3")
+    if (EXISTS "/opt/homebrew/opt/openssl@${_ossl_ver}")
+      set(OPENSSL_ROOT_DIR "/opt/homebrew/opt/openssl@${_ossl_ver}" CACHE PATH "" FORCE)
+      break()
+    elseif (EXISTS "/usr/local/opt/openssl@${_ossl_ver}")
+      set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl@${_ossl_ver}" CACHE PATH "" FORCE)
+      break()
+    endif()
+  endforeach()
+endif()
+
+# Help CMake search that prefix first
+if (OPENSSL_ROOT_DIR)
+  list(PREPEND CMAKE_PREFIX_PATH "${OPENSSL_ROOT_DIR}")
+  # Also set OpenSSL_ROOT (recognized due to CMP0074 NEW)
+  set(OpenSSL_ROOT "${OPENSSL_ROOT_DIR}" CACHE PATH "" FORCE)
+endif()
+
+# Ask for components so CMake tries to form imported targets
+find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
+
+# --- Fallback: if imported targets are still missing, create them explicitly ---
+if (NOT TARGET OpenSSL::Crypto OR NOT TARGET OpenSSL::SSL)
+  message(WARNING "FindOpenSSL did not define imported targets; creating fallback targets.")
+  if (NOT OPENSSL_INCLUDE_DIR OR NOT OPENSSL_CRYPTO_LIBRARY OR NOT OPENSSL_SSL_LIBRARY)
+    message(FATAL_ERROR
+      "OpenSSL variables are incomplete.\n"
+      "OPENSSL_ROOT_DIR='${OPENSSL_ROOT_DIR}'\n"
+      "OPENSSL_INCLUDE_DIR='${OPENSSL_INCLUDE_DIR}'\n"
+      "OPENSSL_CRYPTO_LIBRARY='${OPENSSL_CRYPTO_LIBRARY}'\n"
+      "OPENSSL_SSL_LIBRARY='${OPENSSL_SSL_LIBRARY}'\n"
+      "Tip: configure with -DOPENSSL_ROOT_DIR=<brew keg> and explicit *_LIBRARY paths."
+    )
+	endif()
+	# Create OpenSSL::Crypto imported target if it does not already exist
+	if(NOT TARGET OpenSSL::Crypto)
+	add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
+	set_target_properties(OpenSSL::Crypto PROPERTIES
+		IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+		INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+	)
+	endif()
+
+  add_library(OpenSSL::SSL UNKNOWN IMPORTED)
+  set_target_properties(OpenSSL::SSL PROPERTIES
+    IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+  )
+endif()
+
+# Diagnostics (helpful while debugging)
+message(STATUS "OpenSSL include: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL crypto : ${OPENSSL_CRYPTO_LIBRARY}")
+message(STATUS "OpenSSL ssl    : ${OPENSSL_SSL_LIBRARY}")
+
 add_subdirectory(tests)

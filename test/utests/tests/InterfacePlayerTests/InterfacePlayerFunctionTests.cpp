@@ -1474,10 +1474,13 @@ TEST_F(InterfacePlayerTests, Queue_and_ClearProtectionEvent)
 	GstEvent gst_event = {};
 
 	// Mock the necessary GStreamer functions and objects
-	EXPECT_CALL(*g_mockGStreamer, gst_buffer_new_wrapped(NotNull(), initDataSize))
+	// The gst_buffer_new_wrapped will be called with data from g_memdup (real call, not mocked)
+	EXPECT_CALL(*g_mockGStreamer, gst_buffer_new_wrapped(_, initDataSize))
 		.WillRepeatedly(Return(&gst_buffer));
 	EXPECT_CALL(*g_mockGStreamer, gst_event_new_protection(StrEq(protSystemId), &gst_buffer, StrEq(formatType.c_str())))
 		.WillRepeatedly(Return(&gst_event));
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_))
+		.WillRepeatedly(Return());
 
 	mInterfaceGstPlayer->QueueProtectionEvent(formatType, protSystemId, initData, initDataSize, mediaType);
 

@@ -95,6 +95,48 @@ if (COVERAGE_ENABLED)
 	APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes ${UUID_LINK_LIBRARIES} ${OS_LD_FLAGS} -lpthread ${GLIB_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GOBJECT_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+# ---- Includes (compiler) ----
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+
+# ---- Libraries (actual linking) ----
+target_link_libraries(${EXEC_NAME} PRIVATE
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
+if(APPLE)
+    set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+    set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+    set(CMAKE_BUILD_RPATH "/usr/local/lib")
+    set(CMAKE_MACOSX_RPATH ON)
+
+    target_link_options(${EXEC_NAME} PRIVATE -F/Library/Frameworks -Wl,-rpath,/Library/Frameworks)
+
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        fakes
+        ${UUID_LINK_LIBRARIES}
+        -lpthread
+        ${GSTREAMERAPP_LINK_LIBRARIES}
+        ${GSTREAMERBASE_LINK_LIBRARIES}
+        ${GSTREAMER_LINK_LIBRARIES})
+    target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+
+else()
+    # Linux: Use .so (dylib) linking
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        fakes
+        ${UUID_LINK_LIBRARIES}
+        ${OS_LD_FLAGS}
+        -lpthread
+        ${GLIB_LINK_LIBRARIES}
+        ${LIBCJSON_LINK_LIBRARIES}
+        ${GMOCK_LINK_LIBRARIES}
+        ${GTEST_LINK_LIBRARIES}
+        ${GOBJECT_LINK_LIBRARIES}
+        ${GSTREAMERAPP_LINK_LIBRARIES}
+        ${GSTREAMERBASE_LINK_LIBRARIES}
+        ${GSTREAMER_LINK_LIBRARIES} # This should resolve to -lgstreamer-1.0 etc.
+    )
+endif()
 
 player_utest_run_add(${EXEC_NAME})

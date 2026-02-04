@@ -21,9 +21,18 @@
 MockGstUtils *g_mockGstUtils = nullptr;
 GstCaps *GetCaps(GstStreamOutputFormat format)
 {
-	if(g_mockGstUtils)
+	if (g_mockGstUtils)
 	{
 		return g_mockGstUtils->GetCaps(format);
+	}
+	return nullptr;
+}
+
+GstBuffer* CreateGstBufferWithData(gconstpointer data, gsize size)
+{
+	if (g_mockGstUtils)
+	{
+		return g_mockGstUtils->CreateGstBufferWithData(data, size);
 	}
 	return nullptr;
 }

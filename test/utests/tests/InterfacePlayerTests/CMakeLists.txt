@@ -48,6 +48,8 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
 		${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeGStreamer.cpp
+		 ${PLAYER_ROOT}/test/utests/fakes/FakeGLib.cpp
+${UTESTS_ROOT}/fakes/FakeGstUtils.cpp
                  ${PLAYER_ROOT}/test/utests/fakes/FakePlayerScheduler.cpp)
 
 
@@ -57,6 +59,13 @@ add_executable(${EXEC_NAME}
                ${FAKE_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
+
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+target_link_libraries(${EXEC_NAME} PRIVATE
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target
@@ -68,6 +77,22 @@ if (COVERAGE_ENABLED)
     APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+if(APPLE)
+  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+  set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+  set(CMAKE_BUILD_RPATH "/usr/local/lib")
+  set(CMAKE_MACOSX_RPATH ON)
+  set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
+  set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
+  set_target_properties(${EXEC_NAME} PROPERTIES
+@@ -87,7 +100,7 @@ if(APPLE)
+  )
+  target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
+  target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+else()
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+endif()
 
 player_utest_run_add(${EXEC_NAME})
