@@ -10,6 +10,8 @@
 #
 # http://www.apache.org/licenses/LICENSE-2.0
 #
+#
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,6 +26,12 @@ option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
 if(DISABLE_SECURITY_TOKEN)
 	add_definitions(-DDISABLE_SECURITY_TOKEN)
+endif()
+
+option(ENABLE_MW_PROFILING "Enable middleware profiling" ON)
+
+if(ENABLE_MW_PROFILING)
+  add_definitions(-DENABLE_MW_PROFILING)
 endif()
 
 # Option for building pi-cli
@@ -162,6 +170,9 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	ProcessHandler.h
 	DemuxDataTypes.h
 )
+if(ENABLE_MW_PROFILING)
+    list(APPEND LIBPLAYERGSTINTERFACE_HEADERS PerfProfiler.h)
+endif()
 
 install(FILES closedcaptions/CCTrackInfo.h
 	PlayerScheduler.h
@@ -201,6 +212,10 @@ install(FILES closedcaptions/CCTrackInfo.h
 	DemuxDataTypes.h
 	DESTINATION include)
 
+if(ENABLE_MW_PROFILING)
+    install(FILES PerfProfiler.h DESTINATION include)
+endif()
+
 set(SOURCES
 	InterfacePlayerRDK.cpp
 	SocUtils.cpp
@@ -214,6 +229,10 @@ set(SOURCES
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
 )
+
+if(ENABLE_MW_PROFILING)
+    list(APPEND SOURCES PerfProfiler.cpp)
+endif()
 
 if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 	list(APPEND SOURCES
