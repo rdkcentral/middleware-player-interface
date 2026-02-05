@@ -1004,22 +1004,65 @@ GstPad * gst_ghost_pad_new (const gchar * name, GstPad * target)
 	return NULL;
 }
 
-GstCaps *gst_app_src_get_caps(GstAppSrc *appsrc)
+GType gst_app_sink_get_type(void)
+{
+	return G_TYPE_INVALID;
+}
+
+GstSample* gst_app_sink_pull_sample(GstAppSink *appsink)
+{
+	return NULL;
+}
+
+void gst_app_sink_set_caps(GstAppSink *appsink, const GstCaps *caps)
+{
+	TRACE_FUNC();
+}
+
+GstStructure* gst_caps_get_structure(const GstCaps *caps, guint index)
 {
 	TRACE_FUNC();
 	return NULL;
 }
 
-GstSample *gst_sample_new (GstBuffer * buffer, GstCaps * caps, const GstSegment * segment, GstStructure * info)
+GstBuffer* gst_sample_get_buffer(GstSample *sample)
 {
-	TRACE_FUNC();
 	return NULL;
 }
 
-GstFlowReturn gst_app_src_push_sample (GstAppSrc * appsrc, GstSample * sample)
+GstCaps* gst_sample_get_caps(GstSample *sample)
+{
+	return NULL;
+}
+
+gboolean gst_structure_get_int(const GstStructure *structure, const gchar *field, gint *value)
+{
+	return false;
+}
+
+void* g_memdup2(const void* mem, size_t n_bytes)
+{
+    if (mem == nullptr || n_bytes == 0)
+        return nullptr;
+
+    void* p = g_malloc(n_bytes);
+    return p ? memcpy(p, mem, n_bytes) : nullptr;
+}
+
+GstDebugCategory* _gst_debug_category_new(const gchar *name,
+                                         GstDebugColorFlags color,
+                                         const gchar *description)
+{
+	return NULL;
+}
+
+void gst_element_class_set_static_metadata(GstElementClass *element_class,
+                                           const gchar *long_name,
+                                           const gchar *klass_name,
+                                           const gchar *description,
+                                           const gchar *author)
 {
 	TRACE_FUNC();
-	return GST_FLOW_OK;
 }
 
 GstStructure * gst_caps_get_structure ( const GstCaps *caps , guint index )
@@ -1080,4 +1123,119 @@ void gst_base_transform_set_passthrough(GstBaseTransform *trans, gboolean passth
 
 #ifdef __cplusplus
 }
+
+GType gst_base_transform_get_type(void)
+{
+	return 0;
+}
+
+const gchar* g_intern_static_string(const gchar *string)
+{
+	return string;
+}
+
+gpointer g_type_class_peek_parent(gpointer g_class)
+{
+	return NULL;
+}
+
+GType g_type_register_static_simple(GType parent_type,
+                                    const gchar *type_name,
+                                    guint class_size,
+                                    GClassInitFunc class_init,
+                                    guint instance_size,
+                                    GInstanceInitFunc instance_init,
+                                    GTypeFlags flags)
+{
+	return NULL;
+}
+
+void g_log(const gchar *log_domain,
+           GLogLevelFlags log_level,
+           const gchar *format,
+           ...)
+{
+	TRACE_FUNC();
+}
+// _gst_debug_category_new
+GstDebugCategory* gst_debug_category_new(const gchar *name, GstDebugColorFlags color, const gchar *description) {
+    static GstDebugCategory dummy;
+    (void)name; (void)color; (void)description;
+    return &dummy;
+}
+
+// Avoid GLib macro expansion conflicts
+#ifdef g_once_init_enter_pointer
+#undef g_once_init_enter_pointer
 #endif
+
+#ifdef g_once_init_leave_pointer
+#undef g_once_init_leave_pointer
+#endif
+
+// g_type_check_class_cast
+gpointer g_type_check_class_cast(gpointer g_class, GType type) {
+    (void)g_class; (void)type;
+    return nullptr;
+}
+
+// g_type_class_adjust_private_offset
+void g_type_class_adjust_private_offset(gpointer g_class, gsize offset) {
+    (void)g_class; (void)offset;
+}
+
+extern "C" gsize gst_buffer_fill(GstBuffer *buffer,
+                                 gsize offset,
+                                 gconstpointer src,
+                                 gsize size)
+{
+    return size;
+}
+void gst_buffer_add_protection_meta(GstBuffer *buffer,
+                                    const char *system_id,
+                                    const guint8 *data,
+                                    guint size)
+{
+    /* NO-OP: fake implementation */
+    (void)buffer;
+    (void)system_id;
+    (void)data;
+    (void)size;
+}
+struct _GstSample {
+    GstBuffer *buffer;
+    GstCaps   *caps;
+};
+
+const char *gst_structure_get_name(const GstStructure *structure)
+{
+   return NULL;
+}
+
+void gst_structure_set_name(GstStructure *structure, const char *name)
+{
+    /* NO-OP: fake implementation */
+    (void)structure;
+    (void)name;
+}
+
+GstSample *gst_sample_new(GstBuffer *buffer,
+                          GstCaps *caps,
+                          const GstSegment *segment,
+                          GstStructure *info)
+{
+    /* NO-OP: fake implementation */
+    (void)buffer;
+    (void)caps;
+    (void)segment;
+    (void)info;
+    return NULL;
+}
+void g_print(const gchar *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+

@@ -87,7 +87,13 @@ public:
 	MOCK_METHOD(void, gst_caps_set_simple, (GstCaps *, const char *));
 	MOCK_METHOD(GstBuffer*, gst_buffer_new_allocate, (GstAllocator *allocator, gsize size, GstAllocationParams *params));
 	MOCK_METHOD(void, gst_structure_set, (GstStructure * structure, const char * fieldname));
+	MOCK_METHOD(void, gst_structure_set_impl, (GstStructure *structure, const char *fieldname));
 
+	template <typename... Args>
+	void gst_structure_set(GstStructure *structure, const char *fieldname, Args&&... /*args*/)
+	{
+		gst_structure_set_impl(structure, fieldname);
+	}
 	/*
 gst_app_sink_get_type
 gst_app_sink_pull_sample

@@ -68,6 +68,15 @@ add_executable(${EXEC_NAME}
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 
+# ---- Includes (compiler) ----
+target_include_directories(${EXEC_NAME} PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+# ---- Libraries (actual linking) ----
+target_link_libraries(${EXEC_NAME} PRIVATE
+    ${LIBCJSON_LINK_LIBRARIES}
+    ${GMOCK_LINK_LIBRARIES}
+    ${GTEST_LINK_LIBRARIES}
+)
+
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target
   xcode_define_schema(${EXEC_NAME})
@@ -79,6 +88,10 @@ endif()
 
 link_directories(${GSTREAMER_LIBRARY_DIRS})
 if(APPLE)
+  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+  set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+  set(CMAKE_BUILD_RPATH "/usr/local/lib")
+  set(CMAKE_MACOSX_RPATH ON)
   set(GSTREAMER_FRAMEWORK_DIR "/Library/Frameworks")
   set(GSTREAMER_FRAMEWORK_LIB "${GSTREAMER_FRAMEWORK_DIR}/GStreamer.framework/Versions/1.0/lib")
   set_target_properties(${EXEC_NAME} PROPERTIES
@@ -87,7 +100,7 @@ if(APPLE)
   )
   target_link_options(${EXEC_NAME} PRIVATE -F${GSTREAMER_FRAMEWORK_DIR})
   target_link_libraries(${EXEC_NAME} PRIVATE "-framework GStreamer")
-  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+  target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${OS_LD_FLAGS} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 else()
   target_link_libraries(${EXEC_NAME} PRIVATE fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 endif()
