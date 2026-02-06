@@ -19,10 +19,13 @@
 
 #include <assert.h>
 #include "SocInterface.h"
+#include "vendor/default/DefaultSocInterface.h"
+#if !defined(__APPLE__) && !defined(UBUNTU)
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
-#include "vendor/default/DefaultSocInterface.h"
+#endif
+
 
 /**
  * @brief Checks if the input string starts with the given prefix.
@@ -158,6 +161,7 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 		{
 			platformType = InferPlatformFromPluginScan();
 		}
+#if !defined(__APPLE__) && !defined(UBUNTU)
 		switch (platformType)
 		{
 			case SOC_PLATFORM_AMLOGIC:
@@ -173,6 +177,9 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 				socInterface = std::make_shared<DefaultSocInterface>();
 				break;
 		}
+#else
+		socInterface = std::make_shared<DefaultSocInterface>();
+#endif
 	}
 	return socInterface;
 }
