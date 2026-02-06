@@ -30,4 +30,4 @@ public:
     MOCK_METHOD(GstBuffer*, CreateGstBufferWithData, (gconstpointer data, gsize size), (override));
 };
 extern MockGstUtils *g_mockGstUtils;
-#endif  // MOCK_GST_UTILS_H
+#endif // MOCK_GST_UTILS_H

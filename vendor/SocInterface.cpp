@@ -19,14 +19,10 @@
 
 #include <assert.h>
 #include "SocInterface.h"
-#include "vendor/default/DefaultSocInterface.h"
-
-#if !defined(__APPLE__) && !defined(UBUNTU)
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
-#endif
-
+#include "vendor/default/DefaultSocInterface.h"
 
 /**
  * @brief Checks if the input string starts with the given prefix.
@@ -162,7 +158,6 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 		{
 			platformType = InferPlatformFromPluginScan();
 		}
-#if !defined(__APPLE__) && !defined(UBUNTU)
 		switch (platformType)
 		{
 			case SOC_PLATFORM_AMLOGIC:
@@ -178,9 +173,6 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 				socInterface = std::make_shared<DefaultSocInterface>();
 				break;
 		}
-#else
-		socInterface = std::make_shared<DefaultSocInterface>();
-#endif
 	}
 	return socInterface;
 }
@@ -255,4 +247,22 @@ void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_cla
     if (accept_caps_func) {
         base_transform_class->accept_caps = GST_DEBUG_FUNCPTR(accept_caps_func);
     }
+}
+
+/**
+ * @brief Set AC4 tracks.
+ * @param src Source element.
+ * @param trackId Track ID.
+ */
+void SocInterface::SetAC4Tracks(GstElement *src, int trackId)
+{
+	MW_LOG_INFO("Selecting AC4 Track Id : %d", trackId);
+	if(src)
+	{
+		g_object_set(src, "ac4-presentation-group-index", trackId, NULL);
+	}
+	else
+	{
+		MW_LOG_ERR("No valid src to set ac4-presentation-group-index");
+	}
 }

@@ -42,6 +42,8 @@ source scripts/install_options.sh
 source scripts/install_dependencies.sh
 # gtest install and build
 source scripts/install_gtest.sh
+# glib install and build
+source scripts/install_glib.sh
 # libdash install and build
 source scripts/install_libdash.sh
 # libcjson install and build
@@ -54,7 +56,6 @@ source scripts/install_subtec.sh
 source scripts/install_rialto.sh
 # player interface install and build
 source scripts/install_player.sh
-#
 
 
 # VARIABLES
@@ -134,6 +135,10 @@ INSTALL_STATUS_ARR+=("install_build_googletest check passed.")
 install_build_libcjson_fn "${OPTION_CLEAN}"
 INSTALL_STATUS_ARR+=("install_build_libcjson check passed.")
 
+# Build glib
+#
+install_build_glib_fn "${OPTION_CLEAN}"
+INSTALL_STATUS_ARR+=("install_build_glib check passed.")
 
 # Build subtec
 #
