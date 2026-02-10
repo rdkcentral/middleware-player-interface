@@ -1,6 +1,6 @@
 name: Middleware Player Interface Change Request
 description: Change Request for Middleware Player Interface
-title: "<JIRA TICKET>:<Ticket Title> "
+title: "<JIRA TICKET>:<Ticket Title>"
 labels: ["MW Change Request"]
 body:
   - type: markdown
@@ -67,7 +67,7 @@ body:
           - Details: Provide details on Integration testing done within Middleware layer
           
         - [ ] **E2E Testing**
-          - Details: Provide details on end to end testing done across all layers
+          - Details: Provide details on end-to-end testing done across all layers
 
         - [ ] **Performance Testing**
           - Details: Provide details on performance testing done
