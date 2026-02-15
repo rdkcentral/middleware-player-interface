@@ -176,13 +176,13 @@ def main():
     interface_file = sys.argv[1]
     output_file = "api_server.cpp"
     
-    print(f"🔍 Parsing interface: {interface_file}")
+    print(f"Parsing interface: {interface_file}")
     functions = parse_interface(interface_file)
     
-    print(f"🔨 Generating API server...")
+    print(f"Generating API server...")
     generate_api_server(functions, output_file)
     
-    print(f"\n✨ Done! Now run: make")
+    print(f"\nDone! Now run: make")
     print(f"Dependencies: httplib.h and json.hpp (included)")
 
 
