@@ -68,6 +68,7 @@ add_subdirectory(baseConversion)
 add_subdirectory(playerLogManager)
 add_subdirectory(playerJsonObject)
 add_subdirectory(externals)
+add_subdirectory(test/mediaEngineAdapter)
 
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/PlayerCCManager.cpp PlayerUtils.cpp)
 

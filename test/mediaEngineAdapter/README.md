@@ -2,11 +2,7 @@
 
 **Automatic HTTP API Layer Generator for C++ Business Logic**
 
-## 🎯 Problem Solved
-
-Developer sirf business logic likhta hai (pure C++), aur HTTP API layer automatically generate ho jata hai. No repetitive boilerplate code!
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 api_generator/
@@ -14,11 +10,10 @@ api_generator/
 ├── business_logic.cpp    # Developer writes this (pure C++ logic)
 ├── api_generator.py      # Auto-generates HTTP layer
 ├── api_server.cpp        # AUTO-GENERATED - Don't edit!
-├── Makefile              # Simple build system
-└── CMakeLists.txt        # Alternative build system
+└── CMakeLists.txt        # build system
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Step 1: Define Your API Interface
 
@@ -68,16 +63,16 @@ make run
 **cURL:**
 ```bash
 # Test all endpoints quickly
-curl -X POST http://localhost:8080/hello -H "Content-Type: application/json" -d '{"name":"Tanuj"}'
+curl -X POST http://localhost:8080/hello -H "Content-Type: application/json" -d '{"name":"thisisparam"}'
 curl -X POST http://localhost:8080/calculate -H "Content-Type: application/json" -d '{"a":10,"b":20}'
-curl -X POST http://localhost:8080/bye -H "Content-Type: application/json" -d '{"name":"Tanuj"}'
+curl -X POST http://localhost:8080/bye -H "Content-Type: application/json" -d '{"name":"ThisIsParam"}'
 ```
 
 **JavaScript:**
 ```javascript
 fetch('http://localhost:8080/hello', {
     method: 'POST',
-    body: JSON.stringify({name: 'Tanuj'})
+    body: JSON.stringify({name: 'parameter'})
 }).then(r => r.json()).then(console.log);
 ```
 
@@ -85,27 +80,18 @@ fetch('http://localhost:8080/hello', {
 ```dart
 final response = await http.post(
   Uri.parse('http://localhost:8080/hello'),
-  body: jsonEncode({'name': 'Tanuj'}),
+  body: jsonEncode({'name': 'parameter'}),
 );
 ```
 
-## ✨ Features
-
-✅ **Zero Boilerplate** - Write only business logic  
-✅ **Auto HTTP Layer** - JSON parsing/response automatically generated  
-✅ **UI Independent** - Any client can call (JS/Flutter/Mobile/etc)  
-✅ **Pure C++ Logic** - No JSON in business code  
-✅ **Type Safe** - Automatic parameter extraction  
-✅ **Error Handling** - Built-in exception handling  
-
-## 📝 Supported Types
+## Supported Types
 
 - `int`, `float`, `double`, `bool`
 - `std::string`, `string`
 - Multiple parameters
 - `void` return type
 
-## 🔧 How It Works
+##  How It Works
 
 ```
 1. Developer: Write api_interface.h (mark functions with MIDDLEWARE_API)
@@ -114,7 +100,7 @@ final response = await http.post(
 4. Build: Compile everything → Ready to use!
 ```
 
-## 📦 Dependencies
+## Dependencies
 
 ```bash
 # Install Crow (header-only HTTP library)
@@ -124,7 +110,7 @@ sudo apt-get install libcrow-dev
 git clone https://github.com/CrowCpp/Crow.git
 ```
 
-## 🎨 Example Output
+## Example Output
 
 ```json
 // Success response
@@ -140,7 +126,7 @@ git clone https://github.com/CrowCpp/Crow.git
 }
 ```
 
-## 🔄 Workflow
+## Workflow
 
 ```
 Developer adds new API:
@@ -150,14 +136,7 @@ Developer adds new API:
   4. Done! New endpoint automatically available
 ```
 
-## 🎯 Design Philosophy
-
-- **Separation of Concerns**: Business logic ≠ HTTP handling
-- **DRY Principle**: Don't repeat HTTP boilerplate
-- **Developer Friendly**: Focus on logic, not plumbing
-- **UI Agnostic**: Any frontend can consume
-
-## 🐛 Debugging
+## Debugging
 
 ```bash
 # Clean build
@@ -170,20 +149,10 @@ make generate
 cat api_server.cpp
 ```
 
-## 📌 Notes
+## Notes
 
 - Only functions marked with `MIDDLEWARE_API` are exposed
 - Private functions remain private (not exposed as APIs)
 - Generated file has "DO NOT EDIT" warning
 - All APIs are POST endpoints on port 8080
-
-## 🚀 Production Tips
-
-1. Add authentication middleware
-2. Enable CORS for web clients
-3. Add rate limiting
-4. Use environment variables for port/config
-5. Add logging for all requests
-
----
 
