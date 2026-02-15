@@ -1,4 +1,5 @@
 #include "api_interface.h"
+#include "InterfacePlayerRDK.h"
 #include <sstream>
 
 // Pure C++ Business Logic Implementation

@@ -167,11 +167,6 @@ int main() {
     with open(output_file, 'w') as f:
         f.write(code)
     
-    print(f"✅ Generated: {output_file}")
-    print(f"📝 Found {len(functions)} API endpoints:")
-    for func in functions:
-        print(f"   - {func}")
-
 
 def main():
     if len(sys.argv) < 2:
