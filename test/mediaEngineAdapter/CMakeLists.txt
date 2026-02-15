@@ -8,33 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 
 # Check if dependencies exist in third_party/
-set(HTTPLIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/httplib.h")
-set(JSON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/json.hpp")
 
-if(NOT EXISTS ${HTTPLIB_PATH})
-    message(FATAL_ERROR 
-        "httplib.h not found!\n"
-        "Please download it to third_party/:\n"
-        "  mkdir -p third_party\n"
-        "  curl -L -o third_party/httplib.h https://raw.githubusercontent.com/yhirose/cpp-httplib/master/httplib.h"
-    )
-endif()
-
-if(NOT EXISTS ${JSON_PATH})
-    message(FATAL_ERROR 
-        "json.hpp not found!\n"
-        "Please download it to third_party/:\n"
-        "  mkdir -p third_party\n"
-        "  curl -L -o third_party/json.hpp https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp"
-    )
-endif()
-
-message(STATUS "Found httplib.h")
-message(STATUS "Found json.hpp")
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})              # ← Source root
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party)  # ← Third party libs
+
+add_library(mongoose STATIC third_party/mongoose.c)
 
 # Custom target to auto-generate API server
 add_custom_command(
@@ -51,7 +31,7 @@ add_executable(server
 )
 
 # Link the server executable to the playergstinterface shared library
-target_link_libraries(server PRIVATE playergstinterface)
+target_link_libraries(server PRIVATE playergstinterface mongoose)
 
 # Ensure Threads::Threads is linked to the server executable
 target_link_libraries(server PRIVATE Threads::Threads)
