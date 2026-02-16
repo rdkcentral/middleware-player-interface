@@ -207,7 +207,7 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
 
         player.ConfigurePipeline(
             format, audioFormat, subFormat,
-            bESChangeStatus, forwardAudioToAux, setReadyAfterPipelineCreation,
+            bESChangeStatus, setReadyAfterPipelineCreation, isSubEnable,
             trackId, rate, pipelineName, PipelinePriority, subBool, url
         );
         std::cout << "ConfigurePipeline executed.\n";
@@ -534,15 +534,10 @@ void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::st
     bool resetTrickUTC = false;
     bool firstBufferPushed = false;
 
+    MediaSample sample(buffer.data(), buffer.size(), pts, dts, duration, fragmentPTSoffset);
     bool ok = player.SendHelper(
         mediaType,
-        buffer.data(),
-        buffer.size(),
-        pts,
-        dts,
-        duration,
-        fragmentPTSoffset,
-        copy,
+        std::move(sample),
         initFragment,
         discontinuity,
         notifyFirstBufferProcessed,
