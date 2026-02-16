@@ -207,7 +207,7 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
 
         player.ConfigurePipeline(
             format, audioFormat, subFormat,
-            bESChangeStatus, setReadyAfterPipelineCreation, isSubEnable,
+            bESChangeStatus, setReadyAfterPipelineCreation, forwardAudioToAux,
             trackId, rate, pipelineName, PipelinePriority, subBool, url
         );
         std::cout << "ConfigurePipeline executed.\n";
