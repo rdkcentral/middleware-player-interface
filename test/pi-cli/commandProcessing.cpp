@@ -536,15 +536,15 @@ void injectFragmentCommand(InterfacePlayerRDK& player, const std::vector<std::st
     bool resetTrickUTC = false;
     bool firstBufferPushed = false;
 
+    // Convert char vector to uint8_t vector for MediaSample
+    std::vector<uint8_t> uint8Buffer(buffer.begin(), buffer.end());
+    
+    // Create MediaSample with the buffer data and timestamps
+    MediaSample sample(std::move(uint8Buffer), pts, dts, duration, fragmentPTSoffset);
+
     bool ok = player.SendHelper(
         mediaType,
-        buffer.data(),
-        buffer.size(),
-        pts,
-        dts,
-        duration,
-        fragmentPTSoffset,
-        copy,
+        std::move(sample),
         initFragment,
         discontinuity,
         notifyFirstBufferProcessed,
