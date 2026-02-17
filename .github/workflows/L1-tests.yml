@@ -19,9 +19,9 @@ jobs:
         run: yes | ./install-middleware.sh -s subtec
 
       # Run L1 tests
-      - name: Run unit tests - L1
+      - name: Run unit tests with coverage - L1
         working-directory: ./test/utests
-        run: ./run.sh
+        run: ./run.sh -c
 
       # Publish test results
       - name: Publish L1 test results
