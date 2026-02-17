@@ -8,7 +8,7 @@ on:
 
 jobs:
   execute-unit-tests-on-pr:
-    name: Runs all unit tests
+    name: Runs all unit tests - L1
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +19,7 @@ jobs:
         run: yes | ./install-middleware.sh -s subtec
 
       # Run L1 tests
-      - name: Run unit tests with coverage
+      - name: Run unit tests - L1
         working-directory: ./test/utests
         run: ./run.sh
 
