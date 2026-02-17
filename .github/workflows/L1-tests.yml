@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [develop, main]
     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
+  workflow_dispatch:
 
 jobs:
   execute-unit-tests-on-pr:
@@ -20,7 +21,7 @@ jobs:
       # Run L1 tests
       - name: Run unit tests with coverage
         working-directory: ./test/utests
-        run: ./run.sh -c
+        run: ./run.sh
 
       # Publish test results
       - name: Publish L1 test results
