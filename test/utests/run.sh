@@ -50,9 +50,6 @@ cat << EOF > test_details.json
 EOF
 }
 
-# "corrupt arc tag"
-(find . -name "*.gcda" -print0 | xargs -0 rm) || true
-
 build_coverage=0
 halt_on_error=0
 rdke_build=0
@@ -76,21 +73,20 @@ done
 TEST_DIR=$PWD
 PLAYERDIR=$(realpath ${TEST_DIR}/../..)
 
-PLAYER_BUILD_GCNO=""
-
-if [ "$build_coverage" -eq "1" ]; then
-    #Find where player .gcno files get put when player-cli is built via install-middleware.sh -c
-    A_GCNO=$(find ${PLAYERDIR}/build -name 'AampConfig*gcno' -print -quit)
-
-    if [ -z "$A_GCNO" ]; then
-        echo "ERROR need to run 'install-middleware.sh -c' first to get baseline list of middleware files for coverage"
-        exit 1
-    fi
-    PLAYER_BUILD_GCNO=$(dirname $A_GCNO)
-fi
+echo "====== DIAGNOSTICS: GCC, G++, gcov, lcov, geninfo Versions ======"
+gcc --version || true
+g++ --version || true
+gcov --version || true
+lcov --version || true
+geninfo --version || true
 
 # Build and run microtests:
 set -e
+
+# Insure no old artifacts
+rm -rf build
+find . -name '*.gcda' -delete
+find . -name '*.gcno' -delete
 
 mkdir -p build
 
@@ -179,29 +175,9 @@ else
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
-#We are in utests/build
-
-LCOV=lcov
-
-#Get initial baseline of files from player-cli build
-$LCOV --initial $IGNORE --directory ${PLAYER_BUILD_GCNO} -b $PLAYERDIR --capture --output-file baseline.info
-
-#Get a list of dirs which contain coverage data for player source files.
-TEST_DIRS=$(find tests -name '*.dir' -type d | grep -v _coverage.dir )
-COMBINE=""
-for DIR in $TEST_DIRS; do
-  info_file=$DIR/TEST.info
-  cmd="$LCOV --directory $DIR -b $TESTDIR --capture --output-file ${info_file}"
-  echo $cmd
-  $cmd
-  COMBINE=$COMBINE" -a $info_file"
-done
-HTML_OUT=$(realpath ../CombinedCoverage)
-XML_OUT=$(realpath ../coverage.xml)
-$LCOV $COMBINE -a baseline.info --output-file all.info.1
-$LCOV --remove all.info.1 --output-file all.info "*/aamp/tsb/test/*" "*/aamp/.libs/*" "*/aamp/test/*" "*/aamp/Linux/*" "*/aamp/subtec/subtecparser/*" "/usr/*"
-genhtml --demangle-cpp -o ${HTML_OUT} all.info
-# Generate coverage.xml
-lcov_cobertura all.info -b ${PLAYERDIR} --demangle -o ${XML_OUT} || true
-echo "Coverage written to ${HTML_OUT}"
+    lcov --ignore-errors mismatch --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
+    lcov --ignore-errors mismatch --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
+    genhtml --demangle-cpp -o CombinedCoverage all.cleaned.info
+    echo "Checking for CombinedCoverage directory in $(pwd):"
+    ls -l CombinedCoverage || echo "No CombinedCoverage directory in $(pwd)"
 fi
