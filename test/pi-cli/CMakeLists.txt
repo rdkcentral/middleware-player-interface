@@ -43,7 +43,12 @@ find_package(OpenSSL REQUIRED)
 target_link_libraries(pi-cli playergstinterface OpenSSL::Crypto OpenSSL::SSL)
 if(BUILD_WITH_COVERAGE)
     target_compile_options(pi-cli PRIVATE --coverage)
-    target_link_options(pi-cli PRIVATE --coverage)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13")
+        target_link_options(pi-cli PRIVATE --coverage)
+    else()
+        # Fallback for older CMake versions that do not support target_link_options
+        set_target_properties(pi-cli PROPERTIES LINK_FLAGS "--coverage")
+    endif()
     message(STATUS "pi-cli: Building with coverage instrumentation")
 endif()
 
