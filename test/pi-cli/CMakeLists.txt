@@ -26,7 +26,6 @@ add_executable(pi-cli
 )
 
 # Use pkg-config to locate the readline library
-find_package(PkgConfig REQUIRED)
 pkg_check_modules(READLINE REQUIRED readline)
 
 if (READLINE_FOUND)

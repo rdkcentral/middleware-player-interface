@@ -184,7 +184,7 @@ void initializeSourceForPlayerCommand(InterfacePlayerRDK& player, const std::vec
 
 void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
     // The signature from InterfacePlayerRDK.h:
-    // void ConfigurePipeline(int, int, int, int, bool, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url);
+    
     if (params.size() != 12) {
         std::cout << "Usage: configurepipeline <int> <int> <int> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>\n";
         return;
@@ -193,19 +193,17 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
     try {
         int format = std::stoi(params[0]);
         int audioFormat = std::stoi(params[1]);
-        int auxFormat = std::stoi(params[2]);
-        int subFormat = std::stoi(params[3]);
-        bool bESChangeStatus = (params[4] == "1" || params[4] == "true");
-        bool forwardAudioToAux = (params[5] == "1" || params[5] == "true");
-        bool setReadyAfterPipelineCreation = (params[6] == "1" || params[6] == "true");
-        bool isSubEnable = (params[7] == "1" || params[7] == "true");
-        int32_t trackId = std::stoi(params[8]);
-        gint rate = std::stoi(params[9]);
-        std::string pipelineNameStr = params[10];
+        int subFormat = std::stoi(params[2]);
+        bool bESChangeStatus = (params[3] == "1" || params[3] == "true");
+        bool setReadyAfterPipelineCreation = (params[4] == "1" || params[4] == "true");
+        bool isSubEnable = (params[5] == "1" || params[5] == "true");
+        int32_t trackId = std::stoi(params[6]);
+        gint rate = std::stoi(params[7]);
+        std::string pipelineNameStr = params[8];
         const char* pipelineName = pipelineNameStr.c_str();
-        int PipelinePriority = std::stoi(params[11]);
-        bool subBool = (params[12] == "1" || params[12] == "true");
-        std::string url = params[13];
+        int PipelinePriority = std::stoi(params[9]);
+        bool subBool = (params[10] == "1" || params[10] == "true");
+        std::string url = params[11];
 
         player.ConfigurePipeline(
             format, audioFormat, subFormat,
