@@ -185,8 +185,8 @@ void initializeSourceForPlayerCommand(InterfacePlayerRDK& player, const std::vec
 void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params) {
     // The signature from InterfacePlayerRDK.h:
     // void ConfigurePipeline(int, int, int, int, bool, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url);
-    if (params.size() != 14) {
-        std::cout << "Usage: configurepipeline <int> <int> <int> <int> <bool> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>\n";
+    if (params.size() != 12) {
+        std::cout << "Usage: configurepipeline <int> <int> <int> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>\n";
         return;
     }
 
@@ -215,7 +215,7 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
         std::cout << "ConfigurePipeline executed.\n";
     } catch (const std::exception& e) {
         std::cout << "Error parsing parameters: " << e.what() << "\n";
-        std::cout << "Usage: configurepipeline <int> <int> <int> <int> <bool> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>\n";
+        std::cout << "Usage: configurepipeline <int> <int> <int> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>\n";
     }
 }
 
@@ -608,7 +608,7 @@ std::map<std::string, Command> initializeCommands(CommandExecutor& executor, Int
     commands.emplace("setplayername", Command("setplayername", "Set player name. Usage: setplayername <name>", [&player](const std::vector<std::string>& params) { setPlayerNameCommand(player, params); }));
     commands.emplace("setpreferreddrm", Command("setpreferreddrm", "Set preferred DRM. Usage: setpreferreddrm <drmID>", [&player](const std::vector<std::string>& params) { setPreferredDRMCommand(player, params); }));
     commands.emplace("initializesourceforplayer", Command("initializesourceforplayer", "Initialize source. Usage: initializesourceforplayer <playerInstance(int)> <source(int)> <mediaType>", [&player](const std::vector<std::string>& params) { initializeSourceForPlayerCommand(player, params); }));
-    commands.emplace("configurepipeline", Command("configurepipeline", "Configure pipeline. Usage: configurepipeline <int> <int> <int> <int> <bool> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>", [&player](const std::vector<std::string>& params) { configurePipelineCommand(player, params); }));
+    commands.emplace("configurepipeline", Command("configurepipeline", "Configure pipeline. Usage: configurepipeline <int> <int> <int> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>", [&player](const std::vector<std::string>& params) { configurePipelineCommand(player, params); }));
     commands.emplace("setpauseonstart", Command("setpauseonstart", "Enable/disable pause on start playback. Usage: setpauseonstart [true|false]", [&player](const std::vector<std::string>& params) { setPauseOnStartCommand(player, params); }));
     commands.emplace("setplaybackrate", Command("setplaybackrate", "Set playback rate. Usage: setplaybackrate <rate>", [&player](const std::vector<std::string>& params) { setPlayBackRateCommand(player, params); }));
     commands.emplace("setaudiovolume", Command("setaudiovolume", "Set audio volume. Usage: setaudiovolume <volume>", [&player](const std::vector<std::string>& params) { setAudioVolumeCommand(player, params); }));
