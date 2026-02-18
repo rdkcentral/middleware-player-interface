@@ -50,6 +50,7 @@ void setPlayBackRateCommand(InterfacePlayerRDK& player, const std::vector<std::s
 void setAudioVolumeCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
 void setupStreamCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
 void pauseCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
+void resumeCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params)
 void resumeInjectorCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
 void stopCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
 void flushCommand(InterfacePlayerRDK& player, const std::vector<std::string>& params);
