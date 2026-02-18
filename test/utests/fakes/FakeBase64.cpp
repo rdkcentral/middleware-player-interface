@@ -2,7 +2,7 @@
 * If not stated otherwise in this file or this component's license file the
 * following copyright and licenses apply:
 *
-* Copyright 2022 RDK Management
+* Copyright 2025 RDK Management
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -17,10 +17,16 @@
 * limitations under the License.
 */
 
-#include <gtest/gtest.h>
+#include "_base64.h"
+#include <cstdlib>
 
-int main(int argc, char** argv)
+/**
+ * @brief Fake implementation of base64_Encode
+ * @param src Source buffer
+ * @param len Length of source
+ * @return Encoded string (stub returns NULL)
+ */
+char* base64_Encode(const unsigned char* src, size_t len)
 {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    return NULL;
 }

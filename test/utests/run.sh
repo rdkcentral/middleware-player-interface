@@ -71,7 +71,7 @@ while getopts "ceh" opt; do
 done
 
 TEST_DIR=$PWD
-PLAYER_DIR=$(realpath ${TEST_DIR}/../..)
+PLAYERDIR=$(realpath ${TEST_DIR}/../..)
 
 echo "====== DIAGNOSTICS: GCC, G++, gcov, lcov, geninfo Versions ======"
 gcc --version || true
@@ -87,16 +87,17 @@ set -e
 rm -rf build
 find . -name '*.gcda' -delete
 find . -name '*.gcno' -delete
+
 mkdir -p build
 
 cd build
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    cmake -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_RDKE_TEST_RUN=$rdke_build ../
+    PKG_CONFIG_PATH=/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/pkgconfig:${PLAYERDIR}/.libs/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH cmake -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON ../
 elif [[ "$OSTYPE" == "linux"* ]]; then
-    echo "PLAYER DIR[${PLAYER_DIR}]"
-    PKG_CONFIG_PATH=${PLAYER_DIR}/.libs/lib/pkgconfig cmake --no-warn-unused-cli -DCMAKE_INSTALL_PREFIX=${PLAYER_DIR}/.libs -DCMAKE_PLATFORM_UBUNTU=1 -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LIBRARY_PATH=${PLAYER_DIR}/.libs/lib -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++ -DCMAKE_RDKE_TEST_RUN=$rdke_build -S../ -B$PWD -G "Unix Makefiles"
-    export LD_LIBRARY_PATH=${PLAYER_DIR}/.libs/lib
+    echo "PLAYER DIR[${PLAYERDIR}]"
+    PKG_CONFIG_PATH=${PLAYERDIR}/.libs/lib/pkgconfig cmake --no-warn-unused-cli -DCMAKE_INSTALL_PREFIX=${PLAYERDIR}/.libs -DCMAKE_PLATFORM_UBUNTU=1 -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LIBRARY_PATH=${PLAYERDIR}/.libs/lib -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++ -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON -S../ -B$PWD -G "Unix Makefiles"
+    export LD_LIBRARY_PATH=${PLAYERDIR}/.libs/lib
 else
     #abort the script if its not macOS or linux
     echo "Aborting unsupported OS detected"
@@ -167,10 +168,10 @@ EOF
 
   cd ..
 
-  find . -name test_detail\*.json | xargs cat |  jq -s '{test_cases_results: {tests: map(.tests) | add,failures: map(.failures) | add,disabled: map(.disabled) | add,errors: map(.errors) | add,time: ((map(.time | rtrimstr("s") | tonumber) | add) | tostring + "s"),name: .[0].name,testsuites: map(.testsuites[])}}' > L1Report.json
+	find . -name test_detail\*.json | xargs cat |  jq -s '{test_cases_results: {tests: map(.tests) | add,failures: map(.failures) | add,disabled: map(.disabled) | add,errors: map(.errors) | add,time: ((map(.time | rtrimstr("s") | tonumber) | add) | tostring + "s"),name: .[0].name,testsuites: map(.testsuites[])}}' > L1Report.json
 
 else
-  ctest -j 4 --output-on-failure --no-compress-output -T Test $CT_TESTDIR --output-junit ctest-results.xml
+    ctest -j 4 --output-on-failure --no-compress-output -T Test $CT_TESTDIR --output-junit ctest-results.xml
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
@@ -180,4 +181,3 @@ if [ "$build_coverage" -eq "1" ]; then
     echo "Checking for CombinedCoverage directory in $(pwd):"
     ls -l CombinedCoverage || echo "No CombinedCoverage directory in $(pwd)"
 fi
-
