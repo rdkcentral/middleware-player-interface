@@ -2889,6 +2889,7 @@ unsigned long InterfacePlayerRDK::GetCCDecoderHandle()
  */
 bool InterfacePlayerRDK::WaitForSourceSetup(int mediaType)
 {
+	MW_PROFILE_FUNCTION();
 	bool ret = false;
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];

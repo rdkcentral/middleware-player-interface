@@ -131,6 +131,7 @@ void PlayerExternalsRdkInterface::Initialize()
 
 PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 {
+    MW_PROFILE_FUNCTION();
     m_pDeviceInterfaceBase = nullptr;
     s_pPlayerIarmRdkOP = nullptr;
 }
