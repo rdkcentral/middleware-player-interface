@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <iostream>
 #include <cstring>
+#include <cstdint>
 
 /**
  * @brief Callback for writing downloaded data
@@ -20,7 +21,7 @@ size_t HttpClient::WriteCallback(void* contents, size_t size, size_t nmemb, void
 /**
  * @brief Callback for download progress
  */
-int HttpClient::ProgressCallback(void* clientp, double dltotal, double dlnow, double ultotal, double ulnow)
+int HttpClient::ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
 {
     if (clientp) {
         auto callback = static_cast<std::function<void(size_t, size_t)>*>(clientp);
@@ -65,8 +66,8 @@ int HttpClient::DownloadWithProgress(
     
     if (progressCallback) {
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-        curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, ProgressCallback);
-        curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &progressCallback);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progressCallback);
     }
     
     CURLcode res = curl_easy_perform(curl);

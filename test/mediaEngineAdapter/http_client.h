@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 /**
  * @brief Simple HTTP client for downloading manifests and fragments
@@ -46,7 +47,7 @@ public:
 
 private:
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
-    static int ProgressCallback(void* clientp, double dltotal, double dlnow, double ultotal, double ulnow);
+    static int ProgressCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
 };
 
 #endif // HTTP_CLIENT_H

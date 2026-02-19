@@ -107,7 +107,8 @@ private:
     std::atomic<bool> aborted;
     
     std::queue<MediaFragment>& GetQueue(int mediaType);
-    std::mutex& GetMutex(int mediaType);
+    const std::queue<MediaFragment>& GetQueue(int mediaType) const;
+    std::mutex& GetMutex(int mediaType) const;
     std::condition_variable& GetCondVar(int mediaType);
 };
 

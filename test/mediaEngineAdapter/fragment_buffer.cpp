@@ -30,9 +30,22 @@ std::queue<MediaFragment>& FragmentBuffer::GetQueue(int mediaType)
 }
 
 /**
+ * @brief Get queue by media type (const version)
+ */
+const std::queue<MediaFragment>& FragmentBuffer::GetQueue(int mediaType) const
+{
+    switch (mediaType) {
+        case 0: return videoQueue;
+        case 1: return audioQueue;
+        case 2: return subtitleQueue;
+        default: return videoQueue;
+    }
+}
+
+/**
  * @brief Get mutex by media type
  */
-std::mutex& FragmentBuffer::GetMutex(int mediaType)
+std::mutex& FragmentBuffer::GetMutex(int mediaType) const
 {
     switch (mediaType) {
         case 0: return videoMutex;
