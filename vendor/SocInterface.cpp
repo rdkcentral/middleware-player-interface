@@ -27,7 +27,6 @@
 #include "vendor/realtek/RealtekSocInterface.h"
 #endif
 
-
 /**
  * @brief Checks if the input string starts with the given prefix.
  *
