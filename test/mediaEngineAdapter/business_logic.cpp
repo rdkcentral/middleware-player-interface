@@ -120,13 +120,13 @@ void BusinessLogic::RegisterCallbacks()
     });
     
     // Register NeedData callback - GStreamer needs more data
-    playerInstance->NeedDataCallback([this](int mediaType) {
+    playerInstance->RegisterNeedDataCb([this](int mediaType) {
         std::cout << "[DEBUG] NeedData callback for mediaType: " << mediaType << std::endl;
         // Our downloader thread is already pushing data continuously
     });
     
     // Register EnoughData callback - GStreamer has enough data
-    playerInstance->EnoughDataCallback([this](int mediaType) {
+    playerInstance->RegisterEnoughDataCb([this](int mediaType) {
         std::cout << "[DEBUG] EnoughData callback for mediaType: " << mediaType << std::endl;
         // Could throttle downloads here if needed
     });
@@ -430,20 +430,34 @@ void BusinessLogic::InjectFragment(const MediaFragment& fragment)
 bool BusinessLogic::InjectVideoSegment(const MediaFragment& fragment)
 {
     // Create MediaSample for InterfacePlayerRDK
-    MediaSample sample;
-    sample.data = const_cast<uint8_t*>(fragment.data.data());
-    sample.dataLength = fragment.data.size();
-    sample.pts = fragment.pts;
-    sample.dts = fragment.dts;
-    sample.duration = fragment.duration;
-    sample.isInitSeg = fragment.isInitSegment;
+    // MediaSample uses mData (std::vector), mPts, mDts, mDuration, mPtsOffset
+    MediaSample sample(
+        std::vector<uint8_t>(fragment.data),  // Copy fragment data
+        fragment.pts,                          // mPts
+        fragment.dts,                          // mDts
+        fragment.duration,                     // mDuration
+        0.0                                    // mPtsOffset
+    );
     
     // Inject via SendHelper (mediaType: 0=Video, 1=Audio, 2=Subtitle)
     int mediaType = 0; // eMEDIATYPE_VIDEO
     bool initFragment = fragment.isInitSegment;
     bool discontinuity = fragment.isDiscontinuity;
+    bool notifyFirstBufferProcessed = false;
+    bool sendNewSegmentEvent = false;
+    bool resetTrickUTC = false;
+    bool firstBufferPushed = false;
     
-    bool success = playerInstance->SendHelper(mediaType, std::move(sample), initFragment, discontinuity);
+    bool success = playerInstance->SendHelper(
+        mediaType,
+        std::move(sample),
+        initFragment,
+        discontinuity,
+        notifyFirstBufferProcessed,
+        sendNewSegmentEvent,
+        resetTrickUTC,
+        firstBufferPushed
+    );
     
     if (success) {
         std::cout << "[INJECT] ✓ Video fragment injected successfully" << std::endl;
@@ -459,19 +473,33 @@ bool BusinessLogic::InjectVideoSegment(const MediaFragment& fragment)
  */
 bool BusinessLogic::InjectAudioSegment(const MediaFragment& fragment)
 {
-    MediaSample sample;
-    sample.data = const_cast<uint8_t*>(fragment.data.data());
-    sample.dataLength = fragment.data.size();
-    sample.pts = fragment.pts;
-    sample.dts = fragment.dts;
-    sample.duration = fragment.duration;
-    sample.isInitSeg = fragment.isInitSegment;
+    // Create MediaSample using constructor with move semantics
+    MediaSample sample(
+        std::vector<uint8_t>(fragment.data),  // Copy fragment data
+        fragment.pts,                          // mPts
+        fragment.dts,                          // mDts
+        fragment.duration,                     // mDuration
+        0.0                                    // mPtsOffset
+    );
     
     int mediaType = 1; // eMEDIATYPE_AUDIO
     bool initFragment = fragment.isInitSegment;
     bool discontinuity = fragment.isDiscontinuity;
+    bool notifyFirstBufferProcessed = false;
+    bool sendNewSegmentEvent = false;
+    bool resetTrickUTC = false;
+    bool firstBufferPushed = false;
     
-    bool success = playerInstance->SendHelper(mediaType, std::move(sample), initFragment, discontinuity);
+    bool success = playerInstance->SendHelper(
+        mediaType,
+        std::move(sample),
+        initFragment,
+        discontinuity,
+        notifyFirstBufferProcessed,
+        sendNewSegmentEvent,
+        resetTrickUTC,
+        firstBufferPushed
+    );
     
     if (success) {
         std::cout << "[INJECT] ✓ Audio fragment injected successfully" << std::endl;
