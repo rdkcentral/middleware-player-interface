@@ -5,6 +5,7 @@
 #include <vector>
 #include <functional>
 #include <cstdint>
+#include <curl/curl.h>
 
 /**
  * @brief Simple HTTP client for downloading manifests and fragments

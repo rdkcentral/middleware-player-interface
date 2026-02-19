@@ -85,6 +85,27 @@ static void send_json(struct mg_connection *c, int status, const char* json) {
     mg_http_reply(c, status, "Content-Type: application/json\\r\\n", "%s", json);
 }
 
+// Helper to JSON-escape a string
+static std::string json_escape(const std::string& input) {
+    std::string output;
+    output.reserve(input.size() * 2);  // Reserve extra space for escaping
+    
+    for (char c : input) {
+        switch (c) {
+            case '\\\\': output += "\\\\\\\\"; break;
+            case '"':  output += "\\\\\\""; break;
+            case '\\n':  output += "\\\\n"; break;
+            case '\\r':  output += "\\\\r"; break;
+            case '\\t':  output += "\\\\t"; break;
+            case '\\b':  output += "\\\\b"; break;
+            case '\\f':  output += "\\\\f"; break;
+            default:   output += c; break;
+        }
+    }
+    
+    return output;
+}
+
 '''
     
     # Generate handler for each function
@@ -116,10 +137,19 @@ static void handle_{func.name}(struct mg_connection *c, struct mg_http_message *
             code += '        char response[256];\n'
             code += f'        snprintf(response, sizeof(response), "{{\\"status\\":\\"success\\",\\"result\\":%g}}", (double)result);\n'
             code += '        send_json(c, 200, response);\n'
-        elif func.return_type in ["std::string", "string"]:
-            code += '        char response[1024];\n'
-            code += '        snprintf(response, sizeof(response), "{\\"status\\":\\"success\\",\\"message\\":\\"%s\\"}", result.c_str());\n'
+        elif func.return_type == "long":
+            code += '        char response[256];\n'
+            code += f'        snprintf(response, sizeof(response), "{{\\"status\\":\\"success\\",\\"result\\":%ld}}", result);\n'
             code += '        send_json(c, 200, response);\n'
+        elif func.return_type == "long long":
+            code += '        char response[256];\n'
+            code += f'        snprintf(response, sizeof(response), "{{\\"status\\":\\"success\\",\\"result\\":%lld}}", result);\n'
+            code += '        send_json(c, 200, response);\n'
+        elif func.return_type in ["std::string", "string"]:
+            code += '        // Use dynamic string to avoid buffer overflow\n'
+            code += '        std::string escaped = json_escape(result);\n'
+            code += '        std::string response = "{\\"status\\":\\"success\\",\\"message\\":\\"" + escaped + "\\"}";\n'
+            code += '        send_json(c, 200, response.c_str());\n'
         
         code += '    } catch (const std::exception& e) {\n'
         code += '        char error[512];\n'
