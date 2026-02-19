@@ -1287,6 +1287,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		switch(stateChangeReturn)
 		{
 			case GST_STATE_CHANGE_FAILURE:
+				{
 
 
 #ifdef PLAYER_TELEMETRY_SUPPORT
@@ -1301,10 +1302,13 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				// GstState is an enum; transmit numeric value (stable for decoding on the backend)
 				i["tgt"]  = static_cast<int>(targetState);
 
-				PlayerTelemetry2::send("MW_PIPELINE_STATE_CHANGE_FAILURE", i, s, f);
+				 PlayerTelemetry2 telemetry;
+				 telemetry.send("MW_PIPELINE_STATE_CHANGE_FAILURE", i, s, f);
+
 #endif
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in FAILURE state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				LogStatus(element);
+				}
 				break;
 			case GST_STATE_CHANGE_SUCCESS:
 				MW_LOG_DEBUG("InterfacePlayerRDK: %s is in success state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
@@ -4073,7 +4077,8 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 
 		f["rate"] = privatePlayer->gstPrivateContext->rate;
 
-		PlayerTelemetry2::send("MW_BUFFER_UNDERFLOW", i, s, f);
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_BUFFER_UNDERFLOW", i, s, f);
 #endif
 		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate > 0))
 		{
