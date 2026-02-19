@@ -3,14 +3,31 @@
 
 #include <string>
 #include <memory>
+#include <thread>
+#include <atomic>
 #include "InterfacePlayerRDK.h"
+#include "hls_parser.h"
+#include "fragment_buffer.h"
 
 // MIDDLEWARE_API macro marks functions to be exposed as HTTP endpoints
 #define MIDDLEWARE_API
 
 /**
- * @brief BusinessLogic class - Main player logic implementing basic playback functionality
- * This class provides a clean API for UI to control playback using InterfacePlayerRDK
+ * @brief Player state enum
+ */
+enum class PlayerState {
+    IDLE = 0,
+    INITIALIZING = 1,
+    READY = 2,
+    PLAYING = 3,
+    PAUSED = 4,
+    STOPPED = 5,
+    ERROR = 6
+};
+
+/**
+ * @brief BusinessLogic class - Complete streaming player with manifest parsing and fragment injection
+ * This class provides a standalone player architecture for testing middleware-player-interface
  */
 class BusinessLogic {
 public:
@@ -130,8 +147,7 @@ public:
     MIDDLEWARE_API std::string processUser(std::string username, int age, bool isActive);
     
 private:
-    // Private helper functions
-    void internalHelper();
+    // ========== Internal Methods ==========
     void InitializePlayer();
     void ConfigurePipeline();
     void RegisterCallbacks();
@@ -139,22 +155,52 @@ private:
     void HandleBufferUnderflow(int mediaType);
     void HandleDecodeError(int errorCount);
     
-    // Player state
-    enum class PlayerState {
-        IDLE,
-        INITIALIZING,
-        READY,
-        PLAYING,
-        PAUSED,
-        STOPPED,
-        ERROR
-    };
+    // Thread functions
+    void FragmentCollectorThreadFunc();
+    void FragmentInjectorThreadFunc();
+    void DownloadAndBufferSegments();
     
-    InterfacePlayerRDK *playerInstance;
+    // Injection helpers
+    void InjectFragment(const MediaFragment& fragment);
+    bool InjectVideoSegment(const MediaFragment& fragment);
+    bool InjectAudioSegment(const MediaFragment& fragment);
+    
+    // Manifest handling
+    bool DownloadManifest(const std::string& url, std::string& content, std::string& errorMsg);
+    bool ParseAndSelectVariant(const std::string& manifestUrl);
+    
+    // Thread management
+    void StartThreads();
+    void StopThreads();
+    
+    // Player instance
+    InterfacePlayerRDK* playerInstance;
+    
+    // Player state
     PlayerState currentState;
     std::string currentManifestUrl;
+    std::string currentMediaPlaylistUrl;
     bool isPipelineConfigured;
     int currentVolume;
+    
+    // HLS playlist data
+    HLSPlaylist currentPlaylist;
+    int currentSegmentIndex;
+    double currentPts;          // Current presentation timestamp
+    double currentDts;          // Current decode timestamp
+    
+    // Fragment buffer
+    std::unique_ptr<FragmentBuffer> fragmentBuffer;
+    
+    // Thread management
+    std::thread fragmentCollectorThread;
+    std::thread fragmentInjectorThread;
+    std::atomic<bool> threadsRunning;
+    std::atomic<bool> downloadEnabled;
+    std::atomic<bool> injectionEnabled;
+    
+    // Synchronization
+    std::mutex stateMutex;
 };
 
-#endif
+#endif // API_INTERFACE_H

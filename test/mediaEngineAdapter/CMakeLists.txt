@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
 
 # Check if dependencies exist in third_party/
 
@@ -13,6 +14,7 @@ find_package(Threads REQUIRED)
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})              # ← Source root
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party)  # ← Third party libs
+include_directories(${CURL_INCLUDE_DIRS})                     # ← cURL headers
 
 add_library(mongoose STATIC third_party/mongoose.c)
 
@@ -27,11 +29,14 @@ add_custom_command(
 # Build the server
 add_executable(server 
     api_server.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/business_logic.cpp    # ← Full path to source
+    ${CMAKE_CURRENT_SOURCE_DIR}/business_logic.cpp    # ← Main business logic
+    ${CMAKE_CURRENT_SOURCE_DIR}/http_client.cpp       # ← HTTP downloader
+    ${CMAKE_CURRENT_SOURCE_DIR}/hls_parser.cpp        # ← HLS manifest parser
+    ${CMAKE_CURRENT_SOURCE_DIR}/fragment_buffer.cpp   # ← Fragment buffer management
 )
 
 # Link the server executable to the playergstinterface shared library
-target_link_libraries(server PRIVATE playergstinterface mongoose)
+target_link_libraries(server PRIVATE playergstinterface mongoose ${CURL_LIBRARIES})
 
 # Ensure Threads::Threads is linked to the server executable
 target_link_libraries(server PRIVATE Threads::Threads)
