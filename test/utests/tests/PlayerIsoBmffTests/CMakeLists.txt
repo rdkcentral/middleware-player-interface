@@ -39,9 +39,9 @@ include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
-set(TEST_SOURCES PlayerIsoBmffRun.cpp
-		PlayerIsoBmffBoxFunctios.cpp
-		PlayerIsoBmffBufferFunctions.cpp)
+set(TEST_SOURCES PlayerIsoBmffTestRunner.cpp
+		PlayerIsoBmffTests.cpp
+		PlayerIsoBmffBufferTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 	         ${PLAYER_ROOT}/playerisobmff/playerisobmffbuffer.cpp
