@@ -95,6 +95,8 @@ int picli_main(int argc, char *argv[]) {
 
     // Main loop for user input
     while (true) {
+        // Flush output before printing prompt
+        std::cout << std::flush;
         // Print a prompt to the user
         char* input = readline("Please enter a command (type 'help' for available commands): ");
 
@@ -122,9 +124,11 @@ int picli_main(int argc, char *argv[]) {
         if (it != commands.end()) {
             // Add the command's action to the executor with parameters
             executor.addCommand(it->second.action, params);
+            // Small delay to ensure command output completes before next prompt
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         } else {
             // Command not found
-            std::cout << "Unknown command '" << commandInput << "'. Type 'help' to see available commands.\n";
+            std::cout << "Unknown command '" << commandInput << "'. Type 'help' to see available commands.\n" << std::flush;
         }
     }
     // Cleanly stop the command processing thread.
