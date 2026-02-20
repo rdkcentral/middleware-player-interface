@@ -120,10 +120,6 @@ typedef enum
 	eGST_STATE_BLOCKED               /**< 14 - Player has blocked and cant play content*/
 } GstPrivPlayerState;
 
-/**
- * @struct gst_media_stream
- * @brief Holds information about each media stream
- */
 struct gst_media_stream
 {
 	GstElement *sinkbin;              /**< Sink element to consume data */
@@ -230,6 +226,7 @@ struct GstPlayerPriv
 	bool firstAudioFrameReceived;                     /**< flag that denotes if first audio frame was notified */
 	int NumberOfTracks;                                               /**< Indicates the number of tracks */
 	GstPlaybackQualityStruct playbackQuality; /**< video playback quality info */
+	bool isMp4DemuxPlayback; /**< flag to denote mp4demux path needs BMFF-like semantics */
 	struct CallbackData
 	{
 		gpointer instance;

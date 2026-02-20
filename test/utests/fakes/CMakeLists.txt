@@ -27,6 +27,7 @@ include_directories(${PLAYER_ROOT}/playerJsonObject)
 include_directories(${PLAYER_ROOT}/vendor)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/externals/rdk)
 include_directories(${PLAYER_ROOT}/vendor)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/drm/helper)
@@ -63,6 +64,7 @@ add_library(fakes ${fakes_SRC})
 target_include_directories(fakes PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../)
 set_target_properties(fakes PROPERTIES FOLDER "utests")
 set_target_properties(fakes PROPERTIES COMPILE_FLAGS "-Wno-effc++ -Wno-varargs")
+
 # Build fakes with hidden symbol visibility to avoid exporting symbols
 # (e.g. g_object_set) into test executables' dynamic symbol table. Exporting
 # those symbols can clash with system GLib/GStreamer initializers and cause

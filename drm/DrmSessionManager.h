@@ -150,13 +150,14 @@ public:
     std::atomic<bool> mFirstFrameSeen;
 	std::atomic<bool> mIsVideoOnMute;
 	std::atomic<int> mCurrentSpeed;
-private:
+protected:
 	KeyIdEntries *cachedKeyIDs;
+	std::mutex cachedKeyMutex;
+private:
 	char* accessToken;
 	int accessTokenLen;
 	SessionMgrState sessionMgrState;
 	std::mutex accessTokenMutex;
-	std::mutex cachedKeyMutex;
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
@@ -328,6 +329,8 @@ public:
 	 * @return	void.
 	 */
 	void clearFailedKeyIds();
+
+
 	/**
 	 * @fn		getFailedKeyIdStatus
 	 *
@@ -335,22 +338,7 @@ public:
 	 * @return	bool - true if the key ID is marked as failed, false otherwise
 	 */
 	bool getFailedKeyIdStatus(int sessionIndex);
-	/**
-	 * @fn		testCacheKeyId
-	 * @brief	Test helper method to cache a keyId for testing purposes
-	 *
-	 * @param	keyId - key Id to cache
-	 * @param	isFailed - whether to mark the key as failed
-	 */
-	void testCacheKeyId(const std::vector<uint8_t>& keyId, bool isFailed = false)
-	{
-		std::lock_guard<std::mutex> guard(cachedKeyMutex);
-		KeyIdEntry entry;
-		entry.keyId = keyId;
-		entry.isFailedKeyId = isFailed;
-		cachedKeyIDs[0].data.push_back(entry);
-		cachedKeyIDs[0].isFailedKeyEntries = isFailed;
-	}
+
 	/**
 	 * @fn		clearDrmSession
 	 *

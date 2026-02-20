@@ -167,7 +167,7 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		if (ocdmRet != ERROR_NONE)
 		{
 			MW_LOG_ERR("Error constructing OCDM session. OCDM err=0x%x", ocdmRet);
-			m_eKeyState = KEY_ERROR;
+			m_eKeyState = KEY_ERROR_SESSION_CREATE_FAILED;
 		}
 	}
 }
@@ -215,32 +215,34 @@ void OCDMSessionAdapter::processOCDMChallenge(const char destUrl[], const uint8_
 
 void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySize) {
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
-	if (m_pOpenCDMSession) {
-		m_keyStatus = opencdm_session_status(m_pOpenCDMSession, key, keySize);
-		m_keyStateIndeterminate = false;
+	// Validate input parameters
+	if (key != nullptr && keySize > 0)
+	{
+		// Convert key to keyId - common for both branches
 		std::vector<uint8_t> keyData = RawKeyToKeyId(key, keySize);
+
+		if (m_pOpenCDMSession)
 		{
-			std::lock_guard<std::mutex> lock(m_usableKeysMutex);
-			// Check if this key already exists to avoid duplicates
-			if (std::find(m_usableKeys.begin(), m_usableKeys.end(), keyData) == m_usableKeys.end()) {
-				m_usableKeys.push_back(keyData);
-			}
+			m_keyStatus = opencdm_session_status(m_pOpenCDMSession, key, keySize);
+			m_keyStateIndeterminate = false;
 		}
-	} 
-	else {
-		m_keyStored.clear();
-		m_keyStored.assign(key, key+keySize);
-		m_keyStateIndeterminate = true;
-		std::vector<uint8_t> keyData = RawKeyToKeyId(key, keySize);
+		else
+		{
+			m_keyStored.clear();
+			m_keyStored.assign(key, key + keySize);
+			m_keyStateIndeterminate = true;
+		}
+
+		// Update usable keys list (common for both branches)
 		{
 			std::lock_guard<std::mutex> lock(m_usableKeysMutex);
 			// Check if this key already exists to avoid duplicates
-			if (std::find(m_usableKeys.begin(), m_usableKeys.end(), keyData) == m_usableKeys.end()) {
+			if (std::find(m_usableKeys.begin(), m_usableKeys.end(), keyData) == m_usableKeys.end())
+			{
 				m_usableKeys.push_back(keyData);
 			}
 		}
 	}
-  
 }
 
 void OCDMSessionAdapter::keysUpdatedOCDM() {
