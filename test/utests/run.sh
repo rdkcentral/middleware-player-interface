@@ -92,6 +92,11 @@ fi
 # Build and run microtests:
 set -e
 
+# Insure no old artifacts
+rm -rf build
+find . -name '*.gcda' -delete
+find . -name '*.gcno' -delete
+
 mkdir -p build
 
 cd build
@@ -179,6 +184,7 @@ else
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
+<<<<<<< HEAD
 #We are in utests/build
 
 LCOV=lcov
@@ -204,4 +210,11 @@ genhtml --demangle-cpp -o ${HTML_OUT} all.info
 # Generate coverage.xml
 lcov_cobertura all.info -b ${PLAYERDIR} --demangle -o ${XML_OUT} || true
 echo "Coverage written to ${HTML_OUT}"
+=======
+    lcov --ignore-errors mismatch --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
+    lcov --ignore-errors mismatch --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
+    genhtml --demangle-cpp -o CombinedCoverage all.cleaned.info
+    echo "Checking for CombinedCoverage directory in $(pwd):"
+    ls -l CombinedCoverage || echo "No CombinedCoverage directory in $(pwd)"
+>>>>>>> develop
 fi
