@@ -477,7 +477,7 @@ if should_execute_step $current_step; then
         filtered_patch_filename="${last_synced_aamp_srcrev}_${latest_aamp_commit}_mid.patch"
         
         # Check if filter script exists in middleware-player-interface/sync/
-        filter_script="./middleware-player-interface/sync/filter_middleware_patch.py"
+        filter_script="./filter_middleware_patch.py"
         if [ ! -f "$filter_script" ]; then
             handle_error $current_step "filter_middleware_patch.py not found in middleware-player-interface/sync/"
         fi
@@ -558,13 +558,16 @@ if should_execute_step $current_step; then
     
     if [ "$no_new_changes" = true ] || [ "$MID_PATCH_REQUIRED" = false ]; then
         print_status "Skipping patch move - no middleware changes to apply"
+        if ! cd ../; then
+            handle_error $current_step "Failed to enter middleware-player-interface directory"
+        fi
     else
         if [ -f "$filtered_patch_filename" ]; then
             if ! cd ../; then
                 handle_error $current_step "Failed to enter middleware-player-interface directory"
             fi
             
-            if ! mv ".sync/$filtered_patch_filename" ./; then
+            if ! mv "./sync/$filtered_patch_filename" ./; then
                 handle_error $current_step "Failed to move filtered patch file"
             fi
             
@@ -582,21 +585,19 @@ fi
 current_step=17
 if should_execute_step $current_step; then
     print_step $current_step "Apply filtered patch to middleware-player-interface"
-    
+
     if [ "$no_new_changes" = true ] || [ "$MID_PATCH_REQUIRED" = false ]; then
         print_status "Skipping patch application - no middleware changes to apply"
         # Still need to navigate to middleware-player-interface for subsequent steps
         if [ ! -f "aamp_sync_cid.txt" ]; then
-            cd ./middleware-player-interface
+            if ! cd ../; then
+                handle_error $current_step "Failed to navigate to middleware-player-interface directory"
+            fi
         fi
     else
         # Ensure we're in middleware-player-interface directory
         if [ ! -f "aamp_sync_cid.txt" ]; then
-            if [ -f "./middleware-player-interface/aamp_sync_cid.txt" ]; then
-                cd ./middleware-player-interface
-            else
-                handle_error $current_step "Not in middleware-player-interface directory"
-            fi
+            handle_error $current_step "Not in middleware-player-interface directory"
         fi
         
         if [ -f "$filtered_patch_filename" ]; then
@@ -622,8 +623,8 @@ if should_execute_step $current_step; then
         print_status "Skipping patch cleanup - no patch to remove"
     else
         # Ensure we're in middleware-player-interface directory
-        if [ ! -f "aamp_sync_cid.txt" ] && [ -d "../middleware-player-interface" ]; then
-            cd ./middleware-player-interface
+        if [ ! -f "aamp_sync_cid.txt" ]; then
+            handle_error $current_step "Not in middleware-player-interface directory"
         fi
         
         if [ -f "$filtered_patch_filename" ]; then
@@ -645,11 +646,7 @@ if should_execute_step $current_step; then
     
     # Ensure we're in middleware-player-interface directory
     if [ ! -f "aamp_sync_cid.txt" ]; then
-        if [ -d "../middleware-player-interface" ]; then
-            cd ./middleware-player-interface
-        else
-            handle_error $current_step "Cannot find middleware-player-interface directory"
-        fi
+        handle_error $current_step "Not in middleware-player-interface directory"
     fi
     
     if ! echo "$latest_aamp_commit" > aamp_sync_cid.txt; then
@@ -668,8 +665,8 @@ if should_execute_step $current_step; then
     print_step $current_step "Add all changes to git"
     
     # Ensure we're in middleware-player-interface directory
-    if [ ! -f "aamp_sync_cid.txt" ] && [ -d "../middleware-player-interface" ]; then
-        cd ./middleware-player-interface
+    if [ ! -f "aamp_sync_cid.txt" ]; then
+        handle_error $current_step "Not in middleware-player-interface directory"
     fi
     
     if ! git add --all; then
@@ -688,8 +685,8 @@ if should_execute_step $current_step; then
     print_step $current_step "Commit changes to git"
     
     # Ensure we're in middleware-player-interface directory
-    if [ ! -f "aamp_sync_cid.txt" ] && [ -d "../middleware-player-interface" ]; then
-        cd ./middleware-player-interface
+    if [ ! -f "aamp_sync_cid.txt" ]; then
+        handle_error $current_step "Not in middleware-player-interface directory"
     fi
     
     if ! git commit -m "$commit_message"; then
@@ -713,8 +710,8 @@ if should_execute_step $current_step; then
     print_step $current_step "Push changes to feature/dev_sprint_pli"
     
     # Ensure we're in middleware-player-interface directory
-    if [ ! -f "aamp_sync_cid.txt" ] && [ -d "../middleware-player-interface" ]; then
-        cd ./middleware-player-interface
+    if [ ! -f "aamp_sync_cid.txt" ]; then
+        handle_error $current_step "Not in middleware-player-interface directory"
     fi
     
     if ! git push origin feature/dev_sprint_pli; then
@@ -733,8 +730,8 @@ if should_execute_step $current_step; then
     print_step $current_step "Get final middleware commit ID"
     
     # Ensure we're in middleware-player-interface directory
-    if [ ! -f "aamp_sync_cid.txt" ] && [ -d "../middleware-player-interface" ]; then
-        cd ./middleware-player-interface
+    if [ ! -f "aamp_sync_cid.txt" ]; then
+        handle_error $current_step "Not in middleware-player-interface directory"
     fi
     
     middleware_final_commit=$(git log -1 --format="%H")
