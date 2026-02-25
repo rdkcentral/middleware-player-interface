@@ -40,9 +40,20 @@ PlayerScheduler::PlayerScheduler() : mTaskQueue(), mQMutex(), mQCond(),
  */
 PlayerScheduler::~PlayerScheduler()
 {
-	if (mSchedulerRunning)
+	// Stop the scheduler loop 
 	{
-		StopScheduler();
+		std::lock_guard<std::mutex> lock(mQMutex);
+		mSchedulerRunning = false;
+	}
+	
+	mQCond.notify_one();
+	
+	// Wait for scheduler thread to finish 
+	{
+		if (mSchedulerThread.joinable())
+		{
+			mSchedulerThread.join();
+		}
 	}
 }
 
@@ -71,30 +82,32 @@ void PlayerScheduler::StartScheduler()
 int PlayerScheduler::ScheduleTask(PlayerAsyncTaskObj obj)
 {
 	int id = PLAYER_TASK_ID_INVALID;
-	if (mSchedulerRunning)
 	{
 		std::lock_guard<std::mutex>lock(mQMutex);
-		if (!mLockOut)
+		if (mSchedulerRunning)
 		{
-			id = mNextTaskId++;
-			// Upper limit check
-			if (mNextTaskId >= PLAYER_SCHEDULER_ID_MAX_VALUE)
+			if (!mLockOut)
 			{
-				mNextTaskId = PLAYER_SCHEDULER_ID_DEFAULT;
+				id = mNextTaskId++;
+				// Upper limit check
+				if (mNextTaskId >= PLAYER_SCHEDULER_ID_MAX_VALUE)
+				{
+					mNextTaskId = PLAYER_SCHEDULER_ID_DEFAULT;
+				}
+				obj.mId = id;
+				mTaskQueue.push_back(obj);
+				mQCond.notify_one();
 			}
-			obj.mId = id;
-			mTaskQueue.push_back(obj);
-			mQCond.notify_one();
+			else
+			{
+				// Operation is skipped here, this might happen due to race conditions during normal operation, hence setting as info log
+				MW_LOG_INFO("Warning: Attempting to schedule a task when scheduler is locked out, skipping operation %s!!", obj.mTaskName.c_str());
+			}
 		}
 		else
 		{
-			// Operation is skipped here, this might happen due to race conditions during normal operation, hence setting as info log
-			MW_LOG_INFO("Warning: Attempting to schedule a task when scheduler is locked out, skipping operation %s!!", obj.mTaskName.c_str());
+			MW_LOG_ERR("Attempting to schedule a task when scheduler is not running, undefined behavior, task ignored:%s",obj.mTaskName.c_str());
 		}
-	}
-	else
-	{
-		MW_LOG_ERR("Attempting to schedule a task when scheduler is not running, undefined behavior, task ignored:%s",obj.mTaskName.c_str());
 	}
 	return id;
 }
@@ -173,23 +186,33 @@ void PlayerScheduler::RemoveAllTasks()
 void PlayerScheduler::StopScheduler()
 {
 	MW_LOG_WARN("Stopping Async Worker Thread");
-	// Clean up things in queue
-	mSchedulerRunning = false;
+	
+	bool wasLocked;
+	{
+		std::lock_guard<std::mutex> lock(mQMutex);
+		mSchedulerRunning = false;
+		wasLocked = mLockOut;
+	}
 
-	//allow StopScheduler() to be called without warning from a nonsuspended state and
-	//not cause an error in ResumeScheduler() below due to trying to unlock an unlocked lock
-	if(!mLockOut)
+	if(!wasLocked)
 	{
 		SuspendScheduler();
 	}
 
 	RemoveAllTasks();
 
-	//prevent possible deadlock where mSchedulerThread is waiting for mExLock/mExMutex
-	ResumeScheduler();
+	if(!wasLocked)
+	{
+		ResumeScheduler();
+	}
+	
 	mQCond.notify_one();
-    if (mSchedulerThread.joinable())
-        mSchedulerThread.join();
+	
+	{
+		std::lock_guard<std::mutex> lock(mQMutex);
+		if (mSchedulerThread.joinable())
+			mSchedulerThread.join();
+	}
 }
 
 /**
@@ -218,7 +241,8 @@ void PlayerScheduler::ResumeScheduler()
 bool PlayerScheduler::RemoveTask(int id)
 {
 	bool ret = false;
-	std::lock_guard<std::mutex>lock(mQMutex);
+	std::lock_guard<std::mutex> exLock(mExMutex);
+	std::lock_guard<std::mutex> qLock(mQMutex);
 	// Make sure its not currently executing/executed task
 	if (id != PLAYER_TASK_ID_INVALID && mCurrentTaskId != id)
 	{

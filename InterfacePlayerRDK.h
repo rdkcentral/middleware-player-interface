@@ -154,7 +154,7 @@ class InterfacePlayerRDK
 {
 	private:
 		bool trickTeardown;
-		std::mutex mMutex;
+		std::recursive_mutex mMutex;
 		std::map<std::string, int> configMap;
 
 	public:

@@ -98,6 +98,7 @@ SecManagerThunder::~SecManagerThunder()
 	/*Stop Scheduler used for handling RDKShell API invocation*/    
 	if(true == mSchedulerStarted)
 	{
+		SuspendScheduler();
 		StopScheduler();
 		mSchedulerStarted = false;
 	}
@@ -251,17 +252,21 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 								{
 									memcpy(*licenseResponse, licenseDecoded, licenseDecodedLen);
 									*licenseResponseLength = licenseDecodedLen;
+									ret = true;
 								}
 								else
 								{
 									MW_LOG_ERR("SecManager failed to allocate memory for license!");
 								}
-								free(licenseDecoded);
-								ret = true;
 							}
 							else
 							{
 								MW_LOG_ERR("SecManager license base64 decode failed!");
+							}
+							
+							if (licenseDecoded != nullptr)
+							{
+								free(licenseDecoded);
 							}
 						}
 					}

@@ -27,7 +27,8 @@
 #include <assert.h>
 #include <glib.h>
 #include <errno.h>
-
+#include <fcntl.h>
+#include <unistd.h>
 /**
  * @brief Creates shared memory and provides the key
  */
@@ -38,8 +39,28 @@ void * player_CreateSharedMem( size_t shmLen, key_t & shmKey)
 	{
 		for( int retryCount=0; retryCount<SHMGET_RETRY_MAX; retryCount++ )
 		{
-			// generate pseudo-random value to use as a unique key
-			shmKey = rand() + 1; // must be non-zero to allow access to non-child processes
+			// generate cryptographically secure random value to use as a unique key
+			int fd = open("/dev/urandom", O_RDONLY);
+			if( fd != -1 )
+			{
+				ssize_t bytesRead = read(fd, &shmKey, sizeof(key_t));
+                close(fd);
+    			if( bytesRead == sizeof(key_t) && shmKey != 0 )
+    	        {
+                	// ensure non-zero key to allow access to non-child processes
+                }
+            	else
+           	    {
+        			MW_LOG_ERR("Failed to read from /dev/urandom, bytesRead=%zd", bytesRead);
+        			continue;
+    		    }
+			}
+			else
+			{
+				MW_LOG_ERR("Failed to open /dev/urandom: %d", errno);
+				continue;
+			}
+			
 
 			// allocate memory segment and identifier
 			int shmId = shmget(shmKey, shmLen,
