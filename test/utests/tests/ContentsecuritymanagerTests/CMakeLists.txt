@@ -42,11 +42,13 @@ include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
-set(TEST_SOURCES PlayerContentSecurityRun.cpp
-		PlayerContentSecurityManagerFun.cpp
-		PlayerContentSecurityManagerSes.cpp
-	        PlayerMemoryUtilsFun.cpp
-		PlayerSecInterfaceFun.cpp)
+set(TEST_SOURCES 
+    PlayerContentSecurityRun.cpp
+    ContentSecurityManagerTests.cpp
+    ContentSecurityManagerSessionTests.cpp
+    PlayerSecInterfaceTests.cpp
+    PlayerMemoryUtilsTests.cpp
+)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		   ${PLAYER_ROOT}/externals/contentsecuritymanager/ContentSecurityManager.cpp

@@ -40,7 +40,7 @@ include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES PlayerIsoBmffTestRunner.cpp
-		PlayerIsoBmffTests.cpp
+		PlayerIsoBmffBoxTests.cpp
 		PlayerIsoBmffBufferTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
