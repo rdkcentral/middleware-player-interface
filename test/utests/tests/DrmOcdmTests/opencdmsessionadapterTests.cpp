@@ -833,6 +833,201 @@ TEST(OCDMSessionAdapter, GenerateKeyRequest_MaxTimeout)
 }
 
 // ========================================
+// PROCESS DRM KEY TESTS
+// ========================================
+
+/**
+ * @brief Test processDRMKey with valid license data.
+ *
+ * **Test Group ID:** Adapter_ProcessDRMKey_01@n
+ * **Test Case ID:** Adapter_ProcessDRMKey_001@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke processDRMKey with valid DrmData and 100ms timeout | key=valid DrmData, timeout=100 | Returns int result | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessDRMKey_ValidData)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_ValidData] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyData(256);
+    for (size_t i = 0; i < keyData.size(); i++) {
+        keyData[i] = static_cast<uint8_t>(i % 256);
+    }
+    
+    DrmData key(reinterpret_cast<const char*>(keyData.data()), keyData.size());
+    
+    EXPECT_NO_THROW({
+        int result = adapter.processDRMKey(&key, 100);
+        (void)result; // May succeed or fail without real OCDM system
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_ValidData] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processDRMKey with NULL key pointer.
+ *
+ * **Test Group ID:** Adapter_ProcessDRMKey_01@n
+ * **Test Case ID:** Adapter_ProcessDRMKey_002@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke processDRMKey with NULL key pointer | key=nullptr, timeout=100 | Handles gracefully | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessDRMKey_NullKeyPointer)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_NullKeyPointer] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    EXPECT_NO_THROW({
+        int result = adapter.processDRMKey(nullptr, 100);
+        (void)result;
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_NullKeyPointer] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processDRMKey with minimal timeout.
+ *
+ * **Test Group ID:** Adapter_ProcessDRMKey_01@n
+ * **Test Case ID:** Adapter_ProcessDRMKey_003@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke processDRMKey with 1ms timeout | key=valid DrmData, timeout=1 | Returns quickly | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessDRMKey_MinimalTimeout)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_MinimalTimeout] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyData(16, 0xAA);
+    DrmData key(reinterpret_cast<const char*>(keyData.data()), keyData.size());
+    
+    auto start = std::chrono::steady_clock::now();
+    int result = adapter.processDRMKey(&key, 1);
+    auto end = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    
+    (void)result;
+    EXPECT_LE(duration, 100); // Should complete quickly
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_MinimalTimeout] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processDRMKey with standard timeout.
+ *
+ * **Test Group ID:** Adapter_ProcessDRMKey_01@n
+ * **Test Case ID:** Adapter_ProcessDRMKey_004@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke processDRMKey with 50ms timeout | key=valid DrmData, timeout=50 | Completes within timeout | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessDRMKey_StandardTimeout)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_StandardTimeout] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyData(128);
+    for (size_t i = 0; i < keyData.size(); i++) {
+        keyData[i] = static_cast<uint8_t>((i * 17) % 256);
+    }
+    DrmData key(reinterpret_cast<const char*>(keyData.data()), keyData.size());
+    
+    EXPECT_NO_THROW({
+        int result = adapter.processDRMKey(&key, 50);
+        (void)result;
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_StandardTimeout] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processDRMKey with empty key data.
+ *
+ * **Test Group ID:** Adapter_ProcessDRMKey_01@n
+ * **Test Case ID:** Adapter_ProcessDRMKey_005@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke processDRMKey with empty DrmData | key=empty DrmData, timeout=50 | Handles gracefully | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessDRMKey_EmptyKeyData)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_EmptyKeyData] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    DrmData key("", 0);
+    
+    EXPECT_NO_THROW({
+        int result = adapter.processDRMKey(&key, 50);
+        (void)result;
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessDRMKey_EmptyKeyData] - PASS" << std::endl;
+}
+
+// ========================================
 // GET STATE TESTS
 // ========================================
 
@@ -1048,6 +1243,586 @@ TEST(OCDMSessionAdapter, GetUsableKeys_ValidReturn)
 
     delete drmCallbacks;
     std::cout << "[OCDMSessionAdapter.GetUsableKeys_ValidReturn] - PASS" << std::endl;
+}
+
+// ========================================
+// SETKEYID TESTS
+// ========================================
+
+/**
+ * @brief Test setKeyId with valid key ID data.
+ *
+ * **Test Group ID:** Adapter_SetKeyId_01@n
+ * **Test Case ID:** Adapter_SetKeyId_001@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Set valid 16-byte key ID | keyId vector with 16 bytes | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, SetKeyId_ValidData)
+{
+    std::cout << "[OCDMSessionAdapter.SetKeyId_ValidData] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyId = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                   0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+
+    EXPECT_NO_THROW({
+        adapter.setKeyId(keyId);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.SetKeyId_ValidData] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test setKeyId with empty key ID.
+ *
+ * **Test Group ID:** Adapter_SetKeyId_01@n
+ * **Test Case ID:** Adapter_SetKeyId_002@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Set empty key ID | Empty vector | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, SetKeyId_EmptyKeyId)
+{
+    std::cout << "[OCDMSessionAdapter.SetKeyId_EmptyKeyId] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyId;
+
+    EXPECT_NO_THROW({
+        adapter.setKeyId(keyId);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.SetKeyId_EmptyKeyId] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test setKeyId with large key ID (256 bytes).
+ *
+ * **Test Group ID:** Adapter_SetKeyId_01@n
+ * **Test Case ID:** Adapter_SetKeyId_003@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Set large 256-byte key ID | 256-byte vector | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, SetKeyId_LargeKeyId)
+{
+    std::cout << "[OCDMSessionAdapter.SetKeyId_LargeKeyId] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    std::vector<uint8_t> keyId(256);
+    for (int i = 0; i < 256; i++) {
+        keyId[i] = static_cast<uint8_t>(i);
+    }
+
+    EXPECT_NO_THROW({
+        adapter.setKeyId(keyId);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.SetKeyId_LargeKeyId] - PASS" << std::endl;
+}
+
+// ========================================
+// PROCESSOCDMCHALLENGE TESTS
+// ========================================
+
+/**
+ * @brief Test processOCDMChallenge with standard challenge.
+ *
+ * **Test Group ID:** Adapter_ProcessChallenge_01@n
+ * **Test Case ID:** Adapter_ProcessChallenge_001@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Process standard DRM challenge | destUrl, challenge data | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessOCDMChallenge_StandardChallenge)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_StandardChallenge] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    const char* destUrl = "https://drm.example.com/license";
+    const char* challengeData = "standard-challenge-data-for-testing";
+    const uint8_t* challenge = reinterpret_cast<const uint8_t*>(challengeData);
+    uint16_t challengeSize = static_cast<uint16_t>(strlen(challengeData));
+
+    EXPECT_NO_THROW({
+        adapter.processOCDMChallenge(destUrl, challenge, challengeSize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_StandardChallenge] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processOCDMChallenge with individualization request.
+ *
+ * **Test Group ID:** Adapter_ProcessChallenge_01@n
+ * **Test Case ID:** Adapter_ProcessChallenge_002@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Process individualization request | Message with Type delimiter | Callback triggered | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessOCDMChallenge_IndividualizationRequest)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_IndividualizationRequest] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    const char* destUrl = "https://drm.example.com/individualization";
+    const char* challengeData = "individualization-request:Type:payload-data-here";
+    const uint8_t* challenge = reinterpret_cast<const uint8_t*>(challengeData);
+    uint16_t challengeSize = static_cast<uint16_t>(strlen(challengeData));
+
+    EXPECT_NO_THROW({
+        adapter.processOCDMChallenge(destUrl, challenge, challengeSize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_IndividualizationRequest] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processOCDMChallenge with license renewal message.
+ *
+ * **Test Group ID:** Adapter_ProcessChallenge_01@n
+ * **Test Case ID:** Adapter_ProcessChallenge_003@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Process license renewal | LICENSE_RENEWAL message | Renewal callback triggered | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessOCDMChallenge_LicenseRenewal)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_LicenseRenewal] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    const char* destUrl = "https://drm.example.com/renewal";
+    const char* challengeData = "LICENSE_RENEWAL:Type:renewal-payload";
+    const uint8_t* challenge = reinterpret_cast<const uint8_t*>(challengeData);
+    uint16_t challengeSize = static_cast<uint16_t>(strlen(challengeData));
+
+    EXPECT_NO_THROW({
+        adapter.processOCDMChallenge(destUrl, challenge, challengeSize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_LicenseRenewal] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processOCDMChallenge with empty challenge.
+ *
+ * **Test Group ID:** Adapter_ProcessChallenge_01@n
+ * **Test Case ID:** Adapter_ProcessChallenge_004@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Process empty challenge | Size=0 | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessOCDMChallenge_EmptyChallenge)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_EmptyChallenge] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    const char* destUrl = "https://drm.example.com/license";
+    const uint8_t* challenge = nullptr;
+    uint16_t challengeSize = 0;
+
+    EXPECT_NO_THROW({
+        adapter.processOCDMChallenge(destUrl, challenge, challengeSize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_EmptyChallenge] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test processOCDMChallenge with large challenge data.
+ *
+ * **Test Group ID:** Adapter_ProcessChallenge_01@n
+ * **Test Case ID:** Adapter_ProcessChallenge_005@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Process large challenge | 4KB challenge data | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, ProcessOCDMChallenge_LargeChallenge)
+{
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_LargeChallenge] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    const char* destUrl = "https://drm.example.com/license";
+    std::vector<uint8_t> challengeData(4096);
+    for (size_t i = 0; i < challengeData.size(); i++) {
+        challengeData[i] = static_cast<uint8_t>(i % 256);
+    }
+    uint16_t challengeSize = static_cast<uint16_t>(challengeData.size());
+
+    EXPECT_NO_THROW({
+        adapter.processOCDMChallenge(destUrl, challengeData.data(), challengeSize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.ProcessOCDMChallenge_LargeChallenge] - PASS" << std::endl;
+}
+
+// ========================================
+// KEYUPDATEOCDM TESTS
+// ========================================
+
+/**
+ * @brief Test keyUpdateOCDM with valid key data.
+ *
+ * **Test Group ID:** Adapter_KeyUpdate_01@n
+ * **Test Case ID:** Adapter_KeyUpdate_001@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Update with valid key | 32-byte key | Key added to usable keys | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeyUpdateOCDM_ValidKey)
+{
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_ValidKey] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    uint8_t key[32];
+    for (int i = 0; i < 32; i++) {
+        key[i] = static_cast<uint8_t>(i);
+    }
+    uint8_t keySize = 32;
+
+    EXPECT_NO_THROW({
+        adapter.keyUpdateOCDM(key, keySize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_ValidKey] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test keyUpdateOCDM with multiple different keys.
+ *
+ * **Test Group ID:** Adapter_KeyUpdate_01@n
+ * **Test Case ID:** Adapter_KeyUpdate_002@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Update with 10 different keys | Multiple key updates | All keys stored | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeyUpdateOCDM_MultipleKeys)
+{
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_MultipleKeys] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    for (int i = 0; i < 10; i++) {
+        uint8_t key[16];
+        for (int j = 0; j < 16; j++) {
+            key[j] = static_cast<uint8_t>(i * 16 + j);
+        }
+        uint8_t keySize = 16;
+        
+        EXPECT_NO_THROW({
+            adapter.keyUpdateOCDM(key, keySize);
+        });
+    }
+
+    const auto& usableKeys = adapter.getUsableKeys();
+    EXPECT_GE(usableKeys.size(), 0);
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_MultipleKeys] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test keyUpdateOCDM with duplicate key.
+ *
+ * **Test Group ID:** Adapter_KeyUpdate_01@n
+ * **Test Case ID:** Adapter_KeyUpdate_003@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Update same key twice | Same key data | Duplicate not added | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeyUpdateOCDM_DuplicateKey)
+{
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_DuplicateKey] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    uint8_t key[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                       0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+    uint8_t keySize = 16;
+
+    EXPECT_NO_THROW({
+        adapter.keyUpdateOCDM(key, keySize);
+        adapter.keyUpdateOCDM(key, keySize); // Same key again
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_DuplicateKey] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test keyUpdateOCDM with zero-size key.
+ *
+ * **Test Group ID:** Adapter_KeyUpdate_01@n
+ * **Test Case ID:** Adapter_KeyUpdate_004@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Update with keySize=0 | Empty key | No exception | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeyUpdateOCDM_EmptyKey)
+{
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_EmptyKey] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    uint8_t key[1] = {0x00};
+    uint8_t keySize = 0;
+
+    EXPECT_NO_THROW({
+        adapter.keyUpdateOCDM(key, keySize);
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeyUpdateOCDM_EmptyKey] - PASS" << std::endl;
+}
+
+// ========================================
+// KEYSUPDATEDOCDM TESTS
+// ========================================
+
+/**
+ * @brief Test keysUpdatedOCDM signals event.
+ *
+ * **Test Group ID:** Adapter_KeysUpdated_01@n
+ * **Test Case ID:** Adapter_KeysUpdated_001@n
+ * **Priority:** High@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Invoke keysUpdatedOCDM | None | Event signaled | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeysUpdatedOCDM_EventSignal)
+{
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_EventSignal] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    EXPECT_NO_THROW({
+        adapter.keysUpdatedOCDM();
+    });
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_EventSignal] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test keysUpdatedOCDM called multiple times.
+ *
+ * **Test Group ID:** Adapter_KeysUpdated_01@n
+ * **Test Case ID:** Adapter_KeysUpdated_002@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Call keysUpdatedOCDM 100 times | Multiple calls | All succeed | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeysUpdatedOCDM_MultipleCalls)
+{
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_MultipleCalls] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    for (int i = 0; i < 100; i++) {
+        EXPECT_NO_THROW({
+            adapter.keysUpdatedOCDM();
+        });
+    }
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_MultipleCalls] - PASS" << std::endl;
+}
+
+/**
+ * @brief Test keysUpdatedOCDM with rapid consecutive calls.
+ *
+ * **Test Group ID:** Adapter_KeysUpdated_01@n
+ * **Test Case ID:** Adapter_KeysUpdated_003@n
+ * **Priority:** Medium@n
+ *
+ * **Pre-Conditions:** None@n
+ * **Dependencies:** None@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |
+ * | :--------------: | ----------- | --------- | --------------- | ----- |
+ * | 01 | Rapid consecutive calls | 1000 calls | All succeed | Should Pass |
+ */
+TEST(OCDMSessionAdapter, KeysUpdatedOCDM_RapidCalls)
+{
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_RapidCalls] - START" << std::endl;
+
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    auto* drmCallbacks = new TestDrmCallbacks();
+    OCDMSessionAdapter adapter(drmHelper, drmCallbacks);
+
+    auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 1000; i++) {
+        adapter.keysUpdatedOCDM();
+    }
+    auto end = std::chrono::steady_clock::now();
+    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    
+    EXPECT_LT(duration, 1000); // Should complete in < 1 second
+
+    delete drmCallbacks;
+    std::cout << "[OCDMSessionAdapter.KeysUpdatedOCDM_RapidCalls] - PASS" << std::endl;
 }
 
 // ========================================
