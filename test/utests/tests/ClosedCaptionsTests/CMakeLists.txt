@@ -38,8 +38,8 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 set(TEST_SOURCES PlayerCCManagerTests.cpp
                 PlayerCCManagerFunctions.cpp
-	        PlayerCCTrackInfoTests.cpp
-            SubtecConnectorTests.cpp)
+                PlayerCCTrackInfoTests.cpp
+                SubtecConnectorTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSubtecConnecter.cpp)
 
