@@ -1308,8 +1308,8 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 #endif
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in FAILURE state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				LogStatus(element);
-				}
 				break;
+				}
 			case GST_STATE_CHANGE_SUCCESS:
 				MW_LOG_DEBUG("InterfacePlayerRDK: %s is in success state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				break;
