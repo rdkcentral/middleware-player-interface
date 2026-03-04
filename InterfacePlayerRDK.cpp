@@ -4062,7 +4062,7 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 			return;
 		}
 
-		MW_LOG_WARN("## Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
+		MW_LOG_WARN("## GstPlayer_OnGstBufferUnderflowCb: Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
 		privatePlayer->gstPrivateContext->stream[type].bufferUnderrun = true;
 #ifdef PLAYER_TELEMETRY_SUPPORT
 		std::map<std::string, int> i;
@@ -4124,17 +4124,29 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
-	MW_LOG_ERR("Got PTS error message from %s", GST_ELEMENT_NAME(object));
+	MW_LOG_ERR("GstPlayer_OnGstPtsErrorCb: Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
-#if 0
-        PlayerTelemetry2::send("MW_PTS_ERROR",
-        GST_ELEMENT_NAME(object),
-        isVideo,
-        isAudioSink,
-        privatePlayer->gstPrivateContext->lastKnownPTS,
-        privatePlayer->gstPrivateContext->ptsUpdatedTimeMS);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> i;
+	std::map<std::string, std::string> s;
+	std::map<std::string, float> f;
+
+	// String values
+	s["elem"] = GST_ELEMENT_NAME(object);
+
+	// Integer values
+	i["vid"] = isVideo ? 1 : 0;
+	i["aud"] = isAudioSink ? 1 : 0;
+
+	// Float values
+	f["pts"] = static_cast<float>(privatePlayer->gstPrivateContext->lastKnownPTS);
+	f["ptsUpd"] = static_cast<float>(privatePlayer->gstPrivateContext->ptsUpdatedTimeMS);
+
+	PlayerTelemetry2 telemetry;
+	telemetry.send("MW_PTS_ERROR", i, s, f);
 #endif
+
 	if (privatePlayer->socInterface->IsVideoSinkHandleErrors())
 	{
 		isVideo = GstPlayer_isVideoSink(GST_ELEMENT_NAME(object), pInterfacePlayerRDK);
@@ -4164,12 +4176,24 @@ static void GstPlayer_OnGstDecodeErrorCb(GstElement* object, guint arg0, gpointe
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	long long deltaMS = NOW_STEADY_TS_MS - privatePlayer->gstPrivateContext->decodeErrorMsgTimeMS;
 	privatePlayer->gstPrivateContext->decodeErrorCBCount += 1;
-#if 0
-        PlayerTelemetry2::send("MW_DECODE_ERROR",
-        GST_ELEMENT_NAME(object),
-        privatePlayer->gstPrivateContext->decodeErrorCBCount,
-        deltaMS,
-        privatePlayer->gstPrivateContext->rate);
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> i;
+	std::map<std::string, std::string> s;
+	std::map<std::string, float> f;
+
+	// String values
+	s["elem"] = GST_ELEMENT_NAME(object);
+
+	// Integer values
+	i["cnt"] = privatePlayer->gstPrivateContext->decodeErrorCBCount;
+
+	// Float values
+	f["delta"] = static_cast<float>(deltaMS);
+	f["rate"]  = privatePlayer->gstPrivateContext->rate;
+
+	PlayerTelemetry2 telemetry;
+	telemetry.send("MW_DECODE_ERROR", i, s, f);
 #endif
 	if (deltaMS >= GST_MIN_DECODE_ERROR_INTERVAL)
 	{
@@ -4207,12 +4231,21 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 	{
 		case GST_MESSAGE_ERROR:
 			gst_message_parse_error(msg, &error, &dbg_info);
-#if 0
-                        PlayerTelemetry2::send("MW_GST_ERROR",
-                        GST_OBJECT_NAME(msg->src),
-                        error->message,
-                        dbg_info ? dbg_info : "",
-                        privatePlayer->gstPrivateContext->rate);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			std::map<std::string, int> i;
+			std::map<std::string, std::string> s;
+			std::map<std::string, float> f;
+
+			// String values
+			s["elem"] = GST_OBJECT_NAME(msg->src);
+			s["err"]  = error->message ? error->message : "";
+			s["dbg"]  = dbg_info ? dbg_info : "";
+
+			// Float values
+			f["rate"] = privatePlayer->gstPrivateContext->rate;
+
+			PlayerTelemetry2 telemetry;
+			telemetry.send("MW_GST_ERROR", i, s, f);
 #endif
 			MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
 			busEvent.msgType = MESSAGE_ERROR;
