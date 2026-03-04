@@ -168,6 +168,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/realtek/RealtekSocInterface.h
 	vendor/brcm/BrcmSocInterface.h
 	vendor/default/DefaultSocInterface.h
+	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
 )
@@ -229,6 +230,7 @@ if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 		vendor/amlogic/AmlogicSocInterface.cpp
 		vendor/realtek/RealtekSocInterface.cpp
 		vendor/brcm/BrcmSocInterface.cpp
+		vendor/mtk/MtkSocInterface.cpp
 	)
 endif()
 
