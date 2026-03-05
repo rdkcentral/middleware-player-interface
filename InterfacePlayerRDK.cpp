@@ -4230,40 +4230,41 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 	switch (GST_MESSAGE_TYPE(msg))
 	{
 		case GST_MESSAGE_ERROR:
-			gst_message_parse_error(msg, &error, &dbg_info);
+			{
+				gst_message_parse_error(msg, &error, &dbg_info);
 #ifdef PLAYER_TELEMETRY_SUPPORT
-			std::map<std::string, int> i;
-			std::map<std::string, std::string> s;
-			std::map<std::string, float> f;
+				std::map<std::string, int> i;
+				std::map<std::string, std::string> s;
+				std::map<std::string, float> f;
 
-			// String values
-			s["elem"] = GST_OBJECT_NAME(msg->src);
-			s["err"]  = error->message ? error->message : "";
-			s["dbg"]  = dbg_info ? dbg_info : "";
+				// String values
+				s["elem"] = GST_OBJECT_NAME(msg->src);
+				s["err"]  = error->message ? error->message : "";
+				s["dbg"]  = dbg_info ? dbg_info : "";
 
-			// Float values
-			f["rate"] = privatePlayer->gstPrivateContext->rate;
+				// Float values
+				f["rate"] = privatePlayer->gstPrivateContext->rate;
 
-			PlayerTelemetry2 telemetry;
-			telemetry.send("MW_GST_ERROR", i, s, f);
+				PlayerTelemetry2 telemetry;
+				telemetry.send("MW_GST_ERROR", i, s, f);
 #endif
-			MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
-			busEvent.msgType = MESSAGE_ERROR;
-			busEvent.msg = error->message;
-			if(dbg_info)
-			{
-				busEvent.dbg_info = dbg_info;
+				MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
+				busEvent.msgType = MESSAGE_ERROR;
+				busEvent.msg = error->message;
+				if(dbg_info)
+				{
+					busEvent.dbg_info = dbg_info;
+				}
+				else
+				{
+					busEvent.dbg_info[0] = '\0';
+				}
+				pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
+				MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
+				g_clear_error(&error);
+				g_free(dbg_info);
+				break;
 			}
-			else
-			{
-				busEvent.dbg_info[0] = '\0';
-			}
-			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
-			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
-			g_clear_error(&error);
-			g_free(dbg_info);
-			break;
-
 		case GST_MESSAGE_WARNING:
 			gst_message_parse_warning(msg, &error, &dbg_info);
 			MW_LOG_ERR("GST_MESSAGE_WARNING %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
