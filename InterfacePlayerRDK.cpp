@@ -1290,7 +1290,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				{
 
 
-#ifdef PLAYER_TELEMETRY_SUPPORT
+#if 0
 				std::map<std::string, int> i;
 				std::map<std::string, std::string> s;
 				std::map<std::string, float> f;
@@ -4127,7 +4127,7 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 	MW_LOG_ERR("GstPlayer_OnGstPtsErrorCb: Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
-#ifdef PLAYER_TELEMETRY_SUPPORT
+#if 0 
 	std::map<std::string, int> i;
 	std::map<std::string, std::string> s;
 	std::map<std::string, float> f;
@@ -4177,7 +4177,7 @@ static void GstPlayer_OnGstDecodeErrorCb(GstElement* object, guint arg0, gpointe
 	long long deltaMS = NOW_STEADY_TS_MS - privatePlayer->gstPrivateContext->decodeErrorMsgTimeMS;
 	privatePlayer->gstPrivateContext->decodeErrorCBCount += 1;
 
-#ifdef PLAYER_TELEMETRY_SUPPORT
+#if 0 
 	std::map<std::string, int> i;
 	std::map<std::string, std::string> s;
 	std::map<std::string, float> f;
@@ -4232,7 +4232,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 		case GST_MESSAGE_ERROR:
 			{
 				gst_message_parse_error(msg, &error, &dbg_info);
-#ifdef PLAYER_TELEMETRY_SUPPORT
+#if 0
 				std::map<std::string, int> i;
 				std::map<std::string, std::string> s;
 				std::map<std::string, float> f;
