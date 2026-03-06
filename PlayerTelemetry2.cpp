@@ -40,7 +40,7 @@ PlayerTelemetry2::PlayerTelemetry2( const std::string &appName) : appName(appNam
 }
 
 bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::string, int>& intData, const std::map<std::string, std::string>& stringData, const std::map<std::string, float>& floatData ) {
-        MW_LOG_ERR("[M] Marker Name: %s value:%s", markerName.c_str(),jsonString);
+        MW_LOG_ERR("[M] Marker Name: %s ", markerName.c_str());
     bool bRet = false;
     if(mInitializer.isInitialized()	)
     {
