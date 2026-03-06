@@ -31,6 +31,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <cstdint>
+
+#include "PerfProfiler.h"
+
 /**
  * @brief Log level's of Middleware
  */
