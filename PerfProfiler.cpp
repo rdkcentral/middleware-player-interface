@@ -1,6 +1,7 @@
 #include "PerfProfiler.h"
 #include <iostream>
 #include <thread>
+#include "PlayerLogManager.h"
 
 #ifdef ENABLE_MW_PROFILING
 
