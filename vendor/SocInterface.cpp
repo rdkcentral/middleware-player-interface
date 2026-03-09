@@ -27,7 +27,6 @@
 #include "vendor/mtk/MtkSocInterface.h"
 #endif
 
-
 /**
  * @brief Checks if the input string starts with the given prefix.
  *
@@ -39,6 +38,7 @@
 bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
 {
 	bool rc = true;
+	bool rc_check = true;
 	while( *prefix )
 	{
 		if( *inputStr++ != *prefix++ )
