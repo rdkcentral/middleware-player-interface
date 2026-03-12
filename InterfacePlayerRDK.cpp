@@ -3188,11 +3188,20 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
-			bool isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
-			if( !isVideoMaster )
+			bool isVideoMaster = true;
+			if (socInterface)
 			{
-				// set applied_rate to trickplay rate if video sink doesn't use vmaster
-				// so that it can correctly handle there being no audio
+				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
+			}
+			else
+			{
+				MW_LOG_WARN("socInterface is null, assuming video master");
+			}
+
+			// set applied_rate to trickplay rate if video sink doesn't use vmaster
+			// so that it can correctly handle there being no audio
+			if (!isVideoMaster)
+			{
 				segment.applied_rate = gstPrivateContext->rate;
 			}
 		}
