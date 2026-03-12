@@ -50,9 +50,6 @@ cat << EOF > test_details.json
 EOF
 }
 
-# "corrupt arc tag"
-(find . -name "*.gcda" -print0 | xargs -0 rm) || true
-
 build_coverage=0
 halt_on_error=0
 rdke_build=0
@@ -74,20 +71,14 @@ while getopts "ceh" opt; do
 done
 
 TEST_DIR=$PWD
-PLAYERDIR=$(realpath ${TEST_DIR}/../..)
+PLAYER_DIR=$(realpath ${TEST_DIR}/../..)
 
-PLAYER_BUILD_GCNO=""
-
-if [ "$build_coverage" -eq "1" ]; then
-    #Find where player .gcno files get put when player-cli is built via install-middleware.sh -c
-    A_GCNO=$(find ${PLAYERDIR}/build -name 'AampConfig*gcno' -print -quit)
-
-    if [ -z "$A_GCNO" ]; then
-        echo "ERROR need to run 'install-middleware.sh -c' first to get baseline list of middleware files for coverage"
-        exit 1
-    fi
-    PLAYER_BUILD_GCNO=$(dirname $A_GCNO)
-fi
+echo "====== DIAGNOSTICS: GCC, G++, gcov, lcov, geninfo Versions ======"
+gcc --version || true
+g++ --version || true
+gcov --version || true
+lcov --version || true
+geninfo --version || true
 
 # Build and run microtests:
 set -e
@@ -102,11 +93,11 @@ mkdir -p build
 cd build
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    PKG_CONFIG_PATH=/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/pkgconfig:${PLAYERDIR}/.libs/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH cmake -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON ../
+    PKG_CONFIG_PATH=/Library/Frameworks/GStreamer.framework/Versions/1.0/lib/pkgconfig:${PLAYER_DIR}/.libs/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH cmake -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON ../
 elif [[ "$OSTYPE" == "linux"* ]]; then
-    echo "PLAYER DIR[${PLAYERDIR}]"
-    PKG_CONFIG_PATH=${PLAYERDIR}/.libs/lib/pkgconfig cmake --no-warn-unused-cli -DCMAKE_INSTALL_PREFIX=${PLAYERDIR}/.libs -DCMAKE_PLATFORM_UBUNTU=1 -DCOVERAGE_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LIBRARY_PATH=${PLAYERDIR}/.libs/lib -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++ -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON -S../ -B$PWD -G "Unix Makefiles"
-    export LD_LIBRARY_PATH=${PLAYERDIR}/.libs/lib
+    echo "PLAYER DIR[${PLAYER_DIR}]"
+    PKG_CONFIG_PATH=${PLAYER_DIR}/.libs/lib/pkgconfig cmake --no-warn-unused-cli -DCMAKE_INSTALL_PREFIX=${PLAYER_DIR}/.libs -DCMAKE_PLATFORM_UBUNTU=1 -DCOVERAGE_ENABLED=ON -DCMAKE_LIBRARY_PATH=${PLAYER_DIR}/.libs/lib -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++ -DCMAKE_RDKE_TEST_RUN=$rdke_build -DUSE_DS_EVENT_SUPPORTED=ON -S../ -B$PWD -G "Unix Makefiles"
+    export LD_LIBRARY_PATH=${PLAYER_DIR}/.libs/lib
 else
     #abort the script if its not macOS or linux
     echo "Aborting unsupported OS detected"
@@ -184,8 +175,8 @@ else
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
-    lcov --ignore-errors mismatch --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
-    lcov --ignore-errors mismatch --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
+    lcov --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
+    lcov --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
     genhtml --demangle-cpp -o CombinedCoverage all.cleaned.info
     echo "Checking for CombinedCoverage directory in $(pwd):"
     ls -l CombinedCoverage || echo "No CombinedCoverage directory in $(pwd)"
