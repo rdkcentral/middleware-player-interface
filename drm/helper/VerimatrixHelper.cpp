@@ -122,12 +122,11 @@ void VerimatrixHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo
 
 void VerimatrixHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
 {
-	if() !licenseResponse || !licenseResponse->data || !licenseResponse->size)
+	if(!licenseResponse)
 	{
 		MW_LOG_WARN("invalid license response");
 		return;
 	}
-	
 	if (mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
 		licenseResponse->setData(mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
 	else if (mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)

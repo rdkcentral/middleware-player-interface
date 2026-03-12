@@ -35,7 +35,11 @@
  */
 char *base64_Encode(const unsigned char *src, size_t len)
 {
-	if( !src || !len )
+	if( !src )
+	{
+		return NULL;
+	}
+	if( !len )
 	{
 		return strdup("");
 	}
