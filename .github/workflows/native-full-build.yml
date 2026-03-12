@@ -19,8 +19,8 @@ jobs:
       - name: native build
         run: |
          apt-get update
-         DEBIAN_FRONTEND=noninteractive apt-get install -y sudo
-         DEBIAN_FRONTEND=noninteractive sudo apt-get install -y python3-pip
+         apt-get install -y sudo
+         sudo apt-get install -y python3-pip
          sudo apt remove -y meson || true
          sudo pip3 install --upgrade meson
          hash -r
