@@ -22,7 +22,7 @@ jobs:
          apt-get update
          DEBIAN_FRONTEND=noninteractive apt-get install -y sudo
          sudo -E apt-get install -y python3-pip
-         sudo -E apt remove -y meson || true
+         sudo -E apt-get remove -y meson || true
          sudo pip3 install --upgrade meson
          hash -r
          yes | ./install-middleware.sh -s subtec
