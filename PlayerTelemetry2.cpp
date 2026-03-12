@@ -40,51 +40,80 @@ PlayerTelemetry2::PlayerTelemetry2( const std::string &appName) : appName(appNam
 }
 
 bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::string, int>& intData, const std::map<std::string, std::string>& stringData, const std::map<std::string, float>& floatData ) {
-        MW_LOG_ERR("[M] Marker Name: %s ", markerName.c_str());
+        MW_LOG_ERR("[M] Marker Name: %s %d", markerName.c_str(), mInitializer.isInitialized());
     bool bRet = false;
-    if(mInitializer.isInitialized()	)
+
+    // Log entry and initializer status
+    MW_LOG_ERR("[M] Entered send() | marker: %s | initializer: %d",
+               markerName.c_str(), mInitializer.isInitialized());
+
+    bool init = mInitializer.isInitialized();
+    if(init)
     {
+        MW_LOG_ERR("[M] Inside initializer block");
+
         cJSON *root = cJSON_CreateObject();
+        if(!root)
+        {
+            MW_LOG_ERR("[M] cJSON_CreateObject failed");
+            return false;
+        }
+
+        MW_LOG_ERR("[M] JSON object created");
 
         cJSON_AddStringToObject(root, "app", appName.c_str());
+        MW_LOG_ERR("[M] appName added: %s", appName.c_str());
 
-        for (const auto& pair : intData) {
-            std::string key = pair.first;
-            int value = pair.second;
-            cJSON_AddNumberToObject(root, key.c_str(), value);
+        for (const auto& pair : intData)
+        {
+            MW_LOG_ERR("[M] int key=%s value=%d", pair.first.c_str(), pair.second);
+            cJSON_AddNumberToObject(root, pair.first.c_str(), pair.second);
         }
 
-        for (const auto& pair : stringData) {
-            std::string key = pair.first;
-            std::string value = pair.second;
-            cJSON_AddStringToObject(root, key.c_str(), value.c_str());
+        for (const auto& pair : stringData)
+        {
+            MW_LOG_ERR("[M] string key=%s value=%s", pair.first.c_str(), pair.second.c_str());
+            cJSON_AddStringToObject(root, pair.first.c_str(), pair.second.c_str());
         }
 
-        for (const auto& pair : floatData) {
-            std::string key = pair.first;
-            float value = pair.second;
-            cJSON_AddNumberToObject(root, key.c_str(), value);
+        for (const auto& pair : floatData)
+        {
+            MW_LOG_ERR("[M] float key=%s value=%f", pair.first.c_str(), pair.second);
+            cJSON_AddNumberToObject(root, pair.first.c_str(), pair.second);
         }
 
-        //lets use cJSON_PrintUnformatted , cJSON_Print is formated adds whitespace n hence takes more memory also eats up more logs if logged.
         char *jsonString = cJSON_PrintUnformatted(root);
+        if(!jsonString)
+        {
+            MW_LOG_ERR("[M] cJSON_PrintUnformatted failed");
+            cJSON_Delete(root);
+            return false;
+        }
 
-        MW_LOG_INFO("[M] Marker Name: %s value:%s", markerName.c_str(),jsonString);
+        MW_LOG_ERR("[M] Marker Name: %s | JSON: %s", markerName.c_str(), jsonString);
 
-        T2ERROR t2Error = t2_event_s( (char *)markerName.c_str(),jsonString);
+        T2ERROR t2Error = t2_event_s((char *)markerName.c_str(), jsonString);
+        MW_LOG_ERR("[M] t2_event_s returned: %d", t2Error);
 
         if(T2ERROR_SUCCESS == t2Error)
         {
+            MW_LOG_ERR("[M] Telemetry event sent successfully");
             bRet = true;
         }
         else
         {
-            MW_LOG_ERR("t2_event_s map failed:%d ", t2Error);
+            MW_LOG_ERR("[M] Telemetry event failed: %d", t2Error);
         }
+
         cJSON_free(jsonString);
         cJSON_Delete(root);
     }
+    else
+    {
+        MW_LOG_ERR("[M] Telemetry initializer not ready");
+    }
 
+    MW_LOG_ERR("[M] Exiting send() | marker: %s", markerName.c_str());
     return bRet;
 }
 
