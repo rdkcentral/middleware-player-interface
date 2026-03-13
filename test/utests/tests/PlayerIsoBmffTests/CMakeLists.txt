@@ -25,7 +25,7 @@ include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${P
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerLogManager)
-include_directories(${PLAYER_ROOT}/playerjsonobject)
+include_directories(${PLAYER_ROOT}/playerJsonObject)
 include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
 
