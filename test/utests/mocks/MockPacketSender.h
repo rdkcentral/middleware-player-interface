@@ -25,13 +25,9 @@
 
 class MockPacketSender : public PacketSender {
 public:
-    static MockPacketSender* instance;
-
     static PacketSender* Instance() {
-        if (!instance) {
-            instance = new MockPacketSender();
-        }
-        return instance;
+        static MockPacketSender instance;
+        return &instance;
     }
 
     bool initSocket(const char* socket_path) override {
@@ -44,8 +40,5 @@ public:
         return true;
     }
 };
-
-// define static
-MockPacketSender* MockPacketSender::instance = nullptr;
 
 #endif /* PLAYER_MOCK_PACKET_SENDER_H*/
