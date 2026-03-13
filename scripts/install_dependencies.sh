@@ -110,7 +110,6 @@ function pip_install_package_fn()
 
 function install_pkgs_linux_fn()
 {
-    sudo apt update
     install_package_fn git
     install_package_fn cmake
     install_package_fn gcc
