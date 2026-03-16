@@ -239,15 +239,7 @@ public:
 
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 			.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
-
-		/*mAAMPGstPlayer->Configure(FORMAT_VIDEO_ES_H264,
-								  FORMAT_AUDIO_ES_AAC,
-								  setup->auxFormat,
-								  FORMAT_SUBTITLE_WEBVTT,
-								  setup->bESChangeStatus,
-								  setup->forwardAudioToAux,
-								  setup->setReadyAfterPipelineCreation);*/
-
+		
 		mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264,
 										GST_FORMAT_AUDIO_ES_AAC,
 										GST_FORMAT_SUBTITLE_WEBVTT,
@@ -342,8 +334,9 @@ TEST_F(GstPlayerTests, Constructor)
 //	} Config_Params;
 
 static GstPlayerTests::Config_Params tbl[] = {
+	// focus on Rialto only
 	{false, false, false, false, true },
-// Need to revisit them when uncommenting the below tests
+	// Need to revisit them when uncommenting the below tests
 //	{false, false, false, true, false },
 //	{false, false, false, true, true  },
 //	{false, false, true,  true, false },

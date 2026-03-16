@@ -36,8 +36,11 @@
 #include <any>
 #include "SocUtils.h"
 #include "GstUtils.h"
+#include "DemuxDataTypes.h"
 
+// Forward declarations
 class InterfacePlayerPriv;
+class AampGrowableBuffer;
 
 struct MonitorAVState
 {
@@ -127,7 +130,6 @@ struct Configs
 	int monitorAvsyncThresholdPositiveMs;
 	int monitorAvsyncThresholdNegativeMs;
 	int monitorAvJumpThresholdMs;
-	bool useMp4Demux;
 };
 
 
@@ -434,24 +436,19 @@ class InterfacePlayerRDK
         	 */
         	bool WaitForSourceSetup(int mediaType);
         	/**
-        	 * @brief Send PTS/DTS to downstream elements.
-        	 * @param[in] type The type of event.
-        	 * @param[in] ptr Pointer to the event data.
-        	 * @param[in] len Length of the event data.
-        	 * @param[in] fpts First PTS value.
-        	 * @param[in] fdts First DTS value.
-        	 * @param[in] fDuration Duration of the event.
-        	 * @param[in] fragmentPTSoffset Offset PTS value.
-        	 * @param[in] copy True to copy the event data.
+        	 * @brief Send media sample to downstream elements.
+        	 * @param[in] type The media type.
+        	 * @param[in] sample The media sample. Ownership is transferred
         	 * @param[in] initFragment True if this is an initialization fragment.
-        	 * @param[out] discontinuity Indicates whether there is a discontinuity.
+        	 * @param[in,out] discontinuity Indicates whether there is a discontinuity.
         	 * @param[out] notifyFirstBufferProcessed Indicates whether the first buffer was processed.
         	 * @param[out] sendNewSegmentEvent Indicates whether to send a new segment event.
         	 * @param[out] resetTrickUTC Indicates whether to reset the trick UTC.
         	 * @param[out] firstBufferPushed Indicates whether the first buffer was pushed.
         	 * @return True if the event was sent successfully, false otherwise.
         	 */
-        	bool SendHelper(int type, const void *ptr, size_t len, double fpts, double fdts, double fDuration, double fragmentPTSoffset, bool copy, bool initFragment, bool &discontinuity, bool &notifyFirstBufferProcessed, bool &sendNewSegmentEvent, bool &resetTrickUTC, bool &firstBufferPushed);
+			bool SendHelper(int type, MediaSample&& sample, bool initFragment, bool &discontinuity, bool &notifyFirstBufferProcessed, bool &sendNewSegmentEvent, bool &resetTrickUTC, bool &firstBufferPushed);
+        	
         	/**
         	 * @brief Pauses the injector.
         	 */
@@ -759,6 +756,13 @@ class InterfacePlayerRDK
 		 * @return A pointer to the MonitorAVState structure containing the AV status or nullptr.
 		 */
 		const MonitorAVState& GetMonitorAVState();
+
+		/**
+		 * @brief Sets the stream capabilities.
+		 * @param[in] type The media type.
+		 * @param[in] codecInfo The codec information.
+		 */
+		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
 
 	private:
 		InterfacePlayerPriv *interfacePlayerPriv;

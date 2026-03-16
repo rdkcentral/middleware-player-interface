@@ -17,7 +17,12 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.5)
-project(Playergstinterface)
+project(Playergstinterface VERSION 0.1.0)
+
+# Set default install prefix
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
+endif()
 set(CMAKE_CXX_STANDARD 17)
 find_package(OpenSSL REQUIRED)
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
@@ -164,6 +169,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/realtek/RealtekSocInterface.h
 	vendor/brcm/BrcmSocInterface.h
 	vendor/default/DefaultSocInterface.h
+	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
 	PerfProfiler.h
@@ -201,6 +207,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/WebVttSubtecParser.hpp
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
+	DemuxDataTypes.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h
@@ -236,6 +243,7 @@ if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 		vendor/amlogic/AmlogicSocInterface.cpp
 		vendor/realtek/RealtekSocInterface.cpp
 		vendor/brcm/BrcmSocInterface.cpp
+		vendor/mtk/MtkSocInterface.cpp
 	)
 endif()
 
@@ -361,6 +369,18 @@ install (TARGETS subtec
 	PUBLIC_HEADER DESTINATION include
 )
 
+# Configure pkg-config file for subtec
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/pkgconfig/libsubtec.pc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/libsubtec.pc"
+    @ONLY
+)
+
+# Install pkg-config file for subtec
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libsubtec.pc"
+    DESTINATION lib/pkgconfig
+)
+
 if (CMAKE_GST_SUBTEC_ENABLED)
 	set(CMAKE_SUBTITLE_SUPPORT TRUE)
 	message("CMAKE_GST_SUBTEC_ENABLED set")
@@ -386,6 +406,19 @@ if (CMAKE_SUBTITLE_SUPPORT)
 	target_link_libraries(subtec_connector ${LIBSUBTECCONNECTOR_DEPENDS})
 	target_link_libraries(subtec_connector playerlogmanager)
 	install(TARGETS subtec_connector DESTINATION lib)
+
+	# Configure pkg-config file for subtec_connector
+	configure_file(
+	    "${CMAKE_CURRENT_SOURCE_DIR}/pkgconfig/libsubtec_connector.pc.in"
+	    "${CMAKE_CURRENT_BINARY_DIR}/libsubtec_connector.pc"
+	    @ONLY
+	)
+
+	# Install pkg-config file for subtec_connector
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libsubtec_connector.pc"
+	    DESTINATION lib/pkgconfig
+		)
+
 
 	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
 endif()
@@ -423,10 +456,24 @@ target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINT
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
+# Configure pkg-config file
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/pkgconfig/libplayergstinterface.pc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/libplayergstinterface.pc"
+    @ONLY
+)
+
+
 install(TARGETS playergstinterface
 	LIBRARY DESTINATION lib
 	PUBLIC_HEADER DESTINATION lib/include
 )
+
+# Install pkg-config file
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libplayergstinterface.pc"
+    DESTINATION lib/pkgconfig
+	)
+
 target_link_libraries(subtec playerlogmanager)
 target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface subtec)

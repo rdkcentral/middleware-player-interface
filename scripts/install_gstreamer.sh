@@ -112,9 +112,22 @@ function install_gstpluginsgoodfn()
             fi
 
             echo "Building gst-plugins-good with --pkg-config path $PKG_CONFIG..."
-            meson --pkg-config-path="${PKG_CONFIG}" build
-            ninja -C build
-            sudo ninja -C build install
+
+            BUILD_DIR=".libs/gst-plugins-good-${DEFAULT_GSTVERSION}/build"
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            ABS_COMPAT="${SCRIPT_DIR}/taglib_compat.h"
+
+            echo "Building gst-plugins-good in ${BUILD_DIR}"
+            if [ -d "${BUILD_DIR}" ]; then
+                echo "Existing build directory ${BUILD_DIR} detected; running 'meson setup' with --wipe (this will reset the build directory)."
+                meson setup "${BUILD_DIR}" --wipe --pkg-config-path="${PKG_CONFIG}" \
+                   -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
+            else
+                meson setup "${BUILD_DIR}" --pkg-config-path="${PKG_CONFIG}" \
+                   -Dcpp_args="-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST -include ${ABS_COMPAT}"
+            fi
+            ninja -C "${BUILD_DIR}" -v
+            sudo ninja -C "${BUILD_DIR}" install
 
             # ARM vs x86 have different installation directories
             if [ -d /usr/local/lib/gstreamer-1.0 ]; then
