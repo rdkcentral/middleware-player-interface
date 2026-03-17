@@ -31,6 +31,7 @@ pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
 
 include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/default)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(VENDOR_INTERFACE_SOURCES
     SocInterface.cpp
