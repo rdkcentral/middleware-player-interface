@@ -18,6 +18,7 @@
 */
 #include "SocInterface.h"
 #include "vendor/default/DefaultSocInterface.h"
+#include "PlayerLogManager.h"
 
 bool StartsWith( const char *inputStr, const char *prefix )
 {
