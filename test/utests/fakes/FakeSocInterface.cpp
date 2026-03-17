@@ -18,9 +18,21 @@
 */
 #include "SocInterface.h"
 #include "vendor/default/DefaultSocInterface.h"
-#include "vendor/amlogic/AmlogicSocInterface.h"
-#include "vendor/brcm/BrcmSocInterface.h"
-#include "vendor/realtek/RealtekSocInterface.h"
+
+bool StartsWith( const char *inputStr, const char *prefix )
+{
+        bool rc = true;
+        while( *prefix )
+        {
+                if( *inputStr++ != *prefix++ )
+                {
+                        rc = false;
+                        break;
+                }
+        }
+        return rc;
+}
+
 DefaultSocInterface::DefaultSocInterface()
 {
 }
@@ -198,19 +210,7 @@ long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_de
         }
         return (long long)currentPTS;
 }
-bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
-{
-        bool rc = true;
-        while( *prefix )
-        {
-                if( *inputStr++ != *prefix++ )
-                {
-                        rc = false;
-                        break;
-                }
-        }
-        return rc;
-}
+
 bool DefaultSocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync)
 {
         bool status = false;
