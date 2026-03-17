@@ -18,6 +18,29 @@
  */
 
 #include "DefaultSocInterface.h"
+#include "PlayerLogManager.h"
+
+/**
+ * @brief Checks if the input string starts with the given prefix.
+ *
+ * @param inputStr The input string to check.
+ * @param prefix The prefix to check for.
+ *
+ * @return True if the input string starts with the prefix, false otherwise.
+ */
+bool StartsWith( const char *inputStr, const char *prefix )
+{
+	bool rc = true;
+	while( *prefix )
+	{
+		if( *inputStr++ != *prefix++ )
+		{
+			rc = false;
+			break;
+		}
+	}
+	return rc;
+}
 
 /**
  @brief this interface implementation used with Rialto
