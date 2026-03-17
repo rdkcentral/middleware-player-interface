@@ -20,137 +20,10 @@
 #include <assert.h>
 #include "SocInterface.h"
 #include "vendor/default/DefaultSocInterface.h"
-#if !defined(__APPLE__) && !defined(UBUNTU)
-#include "vendor/amlogic/AmlogicSocInterface.h"
-#include "vendor/brcm/BrcmSocInterface.h"
-#include "vendor/realtek/RealtekSocInterface.h"
-#include "vendor/mtk/MtkSocInterface.h"
+#include "PlayerLogManager.h"
+#if defined(PLAYER_SOC_INTERFACE_IMPL)
+#include "SocInterfaceImpl.h"
 #endif
-
-
-/**
- * @brief Checks if the input string starts with the given prefix.
- *
- * @param inputStr The input string to check.
- * @param prefix The prefix to check for.
- *
- * @return True if the input string starts with the prefix, false otherwise.
- */
-bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
-{
-	bool rc = true;
-	while( *prefix )
-	{
-		if( *inputStr++ != *prefix++ )
-		{
-			rc = false;
-			break;
-		}
-	}
-	return rc;
-}
-
-/**
- *  @brief To enable certain player configs based upon platform check
- */
-SocPlatformType InferPlatformFromPluginScan()
-{
-	SocPlatformType platform = SOC_PLATFORM_DEFAULT;
-	// Ensure GST is initialized
-	if (!gst_init_check(nullptr, nullptr, nullptr)) {
-		MW_LOG_ERR("gst_init_check() failed");
-	}
-	static const std::pair<const char*, SocPlatformType> plugins[] = {
-		{"amlhalasink", SOC_PLATFORM_AMLOGIC},
-		{"omxeac3dec", SOC_PLATFORM_REALTEK},
-		{"brcmaudiodecoder", SOC_PLATFORM_BROADCOM},
-		{"mtkaudiosink", SOC_PLATFORM_MEDIATEK},
-	};
-	
-	GstRegistry* registry = gst_registry_get();
-	
-	for (const auto& plugin : plugins)
-	{
-		GstPluginFeature* pluginFeature = gst_registry_lookup_feature(registry, plugin.first);
-		if (pluginFeature)
-		{
-			gst_object_unref(pluginFeature);
-			MW_LOG_MIL("InterfacePlayerRDK: %s plugin found in registry", plugin.first);
-			platform = plugin.second;
-			break;
-		}
-	}
-	
-	if( platform == SOC_PLATFORM_DEFAULT )
-	{
-		MW_LOG_WARN("InterfacePlayerRDK: None of the plugins found in registry");
-	}
-	return platform;
-}
-
-/**
- * @brief Infers SoC platform type from device.properties.
- * @return Inferred SoC platform type.
- */
-SocPlatformType SocInterface::InferPlatformFromDeviceProperties( void )
-{
-	SocPlatformType platform = SOC_PLATFORM_DEFAULT;
-	FILE* fp = fopen("/etc/device.properties", "rb");
-	if (fp)
-	{
-		MW_LOG_MIL("opened /etc/device.properties");
-		char buf[4096];
-		while( fgets(buf, sizeof(buf), fp) )
-		{
-			if (strncmp(buf, "SOC=", 4) == 0)
-			{
-				char* socName = buf + 4;  // Start after "SOC="
-				for (int i = 0; socName[i] != '\0'; i++)
-				{
-					if (isspace(socName[i]))
-					{
-						socName[i] = '\0';  // Terminate at first whitespace
-						break;
-					}
-				}
-				if (*socName != '\0')  // If SOC name is not empty
-				{
-					MW_LOG_MIL("*** SOC %s ***", socName);
-					if (strcmp(socName, "AMLOGIC") == 0)
-					{
-						platform = SOC_PLATFORM_AMLOGIC;
-						break;
-					}
-					else if (strcmp(socName, "RTK") == 0)
-					{
-						platform = SOC_PLATFORM_REALTEK;
-						break;
-					}
-					else if (strcmp(socName, "BRCM") == 0)
-					{
-						platform = SOC_PLATFORM_BROADCOM;
-						break;
-					}
-					else if (strcmp(socName, "MEDIATEK") == 0)
-					{
-						platform = SOC_PLATFORM_MEDIATEK;
-						break;
-					}
-				}
-				else
-				{
-					MW_LOG_WARN("*** SOC not found ***");
-				}
-			}
-		}
-		fclose(fp);
-	}
-	else
-	{
-		MW_LOG_ERR("failed to open /etc/device.properties.");
-	}
-	return platform;
-}
 
 
 /**
@@ -162,36 +35,9 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 {
 	static std::shared_ptr<SocInterface> socInterface;
 	if( !socInterface)
-	{
-		SocPlatformType platformType = InferPlatformFromDeviceProperties();
-		if(platformType == SOC_PLATFORM_DEFAULT)
-		{
-			platformType = InferPlatformFromPluginScan();
-		}
-#if !defined(__APPLE__) && !defined(UBUNTU)
-		switch (platformType)
-		{
-			case SOC_PLATFORM_AMLOGIC:
-				MW_LOG_MIL("Setting up SoC Interface for AMLOGIC");
-				socInterface = std::make_shared<AmlogicSocInterface>();
-				break;
-			case SOC_PLATFORM_BROADCOM:
-				MW_LOG_MIL("Setting up SoC Interface for BROADCOM");
-				socInterface = std::make_shared<BrcmSocInterface>();
-				break;
-			case SOC_PLATFORM_REALTEK:
-				MW_LOG_MIL("Setting up SoC Interface for REALTEK");
-				socInterface = std::make_shared<RealtekSocInterface>();
-				break;
-			case SOC_PLATFORM_MEDIATEK:
-				MW_LOG_MIL("Setting up SoC Interface for MEDIATEK");
-				socInterface = std::make_shared<MtkSocInterface>();
-				break;
-			default:
-				MW_LOG_MIL("Setting up SoC Interface for Default");
-				socInterface = std::make_shared<DefaultSocInterface>();
-				break;
-		}
+	{		
+#if defined(PLAYER_SOC_INTERFACE_IMPL)
+		socInterface = std::make_shared<SocInterfaceImpl>();
 #else
 		socInterface = std::make_shared<DefaultSocInterface>();
 #endif

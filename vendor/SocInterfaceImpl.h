@@ -17,92 +17,43 @@
  * limitations under the License.
  */
 
-#ifndef SOC_INTERFACE_H
-#define SOC_INTERFACE_H
-#include <iostream>
-#include <gst/gst.h>
-#include <functional>
-#include <vector>
-#include <memory>
-#include <gst/base/gstbasesink.h>
-#include <gst/base/gstbasetransform.h>
+#ifndef SOC_INTERFACE_IMPL_H
+#define SOC_INTERFACE_IMPL_H
 
-#define REQUIRED_QUEUED_FRAMES_DEFAULT 4 // reduced from 6 to 4 to satisfy least common denominator
-
-typedef gboolean (*AcceptCapsFunc)(GstBaseTransform *, GstPadDirection, GstCaps *);
+#include "SocInterface.h"
 
 /**
- * @brief Enumeration for play flags.
- *
- * This enumeration defines flags used to control playback behavior.
- */
-typedef enum
-{
-	PLAY_FLAG_VIDEO = (1 << 0),                         /**< value is 0x001 */
-	PLAY_FLAG_AUDIO = (1 << 1),                         /**< value is 0x002 */
-	PLAY_FLAG_TEXT = (1 << 2),                          /**< value is 0x004 */
-	PLAY_FLAG_VIS = (1 << 3),                           /**< value is 0x008 */
-	PLAY_FLAG_SOFT_VOLUME = (1 << 4),           /**< value is 0x010 */
-	PLAY_FLAG_NATIVE_AUDIO = (1 << 5),          /**< value is 0x020 */
-	PLAY_FLAG_NATIVE_VIDEO = (1 << 6),          /**< value is 0x040 */
-	PLAY_FLAG_DOWNLOAD = (1 << 7),                      /**< value is 0x080 */
-	PLAY_FLAG_BUFFERING = (1 << 8),             /**< value is 0x100 */
-	PLAY_FLAG_DEINTERLACE = (1 << 9),           /**< value is 0x200 */
-	PLAY_FLAG_SOFT_COLORBALANCE = (1 << 10) /**< value is 0x400 */
-}playFlags;
-
-/**
- * @enum SocPlatformType
- * @brief Enumeration of supported SoC platforms.
- */
-enum SocPlatformType
-{
-	SOC_PLATFORM_DEFAULT,     /**< Ubuntu/OSX */
-	SOC_PLATFORM_AMLOGIC,     /**< Amlogic */
-	SOC_PLATFORM_REALTEK,     /**< Realtek */
-	SOC_PLATFORM_BROADCOM,    /**< Broadcom */
-	SOC_PLATFORM_MEDIATEK,	 /**< MediaTek */
-};
-
-/**
- * @class SocInterface
+ * @class SocInterfaceImplImpl
  * @brief Interface class for SoC-specific functionalities.
  */
-class SocInterface
+class SocInterfaceImpl : public SocInterface
 {
-protected:
-	/*config to indicate platforms using westeros sink*/
-	bool mUsingWesterosSink = false;
-	
-public:
-	SocInterface() {}
+	SocInterfaceImpl();
 
-	virtual SocPlatformType GetSocPlatformType() {return SOC_PLATFORM_DEFAULT;}
+public:
 
 	/**
-	 * @brief Sets the state of Westeros Sink usage.
-	 *
-	 * This function updates the internal flag to indicate whether
-	 * Westeros Sink is being used. It does not enable or disable
-	 * Westeros Sink itself, but merely informs the SocInterface
-	 * about its status.
-	 *
-	 * @param status Set to `true` if Westeros Sink is enabled, `false` otherwise.
+	 * @brief Creates an instance of the SoC-specific interface.
+	 * @return A pointer to the created SocInterfaceImpl object.
 	 */
-	void SetWesterosSinkState(bool status);
+	static std::shared_ptr<SocInterfaceImpl> CreateSocInterfaceImpl();
+
+	
+
+	SocPlatformType GetSocPlatformType() override;
 
 	/**
 	 * @brief Get SVP Context
 	 */
-	virtual void SvpGetContext(void **svpCtx, int flags){};
+	void SvpGetContext(void **svpCtx, int flags) override;
 
 	/**
 	 * @brief Free SVP Context
 	 */
-	virtual void SvpFreeContext(void *svpCtx){};
+	void SvpFreeContext(void *svpCtx) override;
 	
 	/*@brief returns true if video stats required from sink otherwise false*/
-	virtual bool IsPlaybackQualityFromSink(){return false;}
+	bool IsPlaybackQualityFromSink() override;
 	
 	/**
 	 * Sets buffer size and duration for the given GstElement.
@@ -110,7 +61,7 @@ public:
 	 * @param sink The GstElement to configure.
 	 * @param size The desired buffer size.
 	 */
-	virtual void SetVideoBufferSize(GstElement *sink, int size){};
+	void SetVideoBufferSize(GstElement *sink, int size) override;
 	
 	/**
 	 * Sets asynchronous mode for the given Sink.
@@ -118,34 +69,27 @@ public:
 	 * @param sink element.
 	 * @param status Enable (TRUE) or disable (FALSE) asynchronous mode.
 	 */
-	virtual void SetSinkAsync(GstElement *sink, gboolean status){}
+	void SetSinkAsync(GstElement *sink, gboolean status) override;
 	
-	/**
-	 * @brief Creates an instance of the SoC-specific interface.
-	 * @return A pointer to the created SocInterface object.
-	 */
-	static std::shared_ptr<SocInterface> CreateSocInterface();
-
+	
 	/**
 	 * @brief Configure the accept caps
 	 * @return void
 	 */
-	virtual void ConfigureAcceptCaps( GstBaseTransformClass* base_transform_class,
-						 AcceptCapsFunc accept_caps_func);
+	void ConfigureAcceptCaps( GstBaseTransformClass* base_transform_class,
+						 AcceptCapsFunc accept_caps_func) override;
 
 	/**
 	 * @brief Indicates whether transform capabilities are required.
 	 * @return true if transform capabilities are required; otherwise, false
 	 */
-	virtual bool IsTransformCapsRequired() const {
-		return false; }
+	bool IsTransformCapsRequired() const override;
 
 	/**
 	 * @brief Indicates whether decryption is required.
 	 * @return true if decryption are required; otherwise, false
 	 */
-	virtual bool IsDecryptRequired() const {
-		return false; }
+	bool IsDecryptRequired() const override;
 	
 	/**
 	 * @brief Check if AppSrc should be used.
@@ -154,7 +98,7 @@ public:
 	 *
 	 * @return True if AppSrc should be used, false otherwise.
 	 */
-	virtual bool UseAppSrc(){return false;}
+	bool UseAppSrc() override;
 	
 	/**
 	 * @brief Check if Westeros sink should be used.
@@ -163,7 +107,7 @@ public:
 	 *
 	 * @return True if platform uses Westeros sink, false otherwise.
 	 */
-	virtual bool UseWesterosSink(){return true;}
+	bool UseWesterosSink() override;
 	
 	/**
 	 * @brief Check if audio fragments should be synchronized.
@@ -172,7 +116,7 @@ public:
 	 *
 	 * @return True if audio fragments should be synchronized, false otherwise.
 	 */
-	virtual bool IsAudioFragmentSyncSupported(){return false;}
+	bool IsAudioFragmentSyncSupported() override;
 	
 	/**
 	 * @brief Check if live latency correction should be enabled.
@@ -181,7 +125,7 @@ public:
 	 *
 	 * @return True if live latency correction should be enabled, false otherwise.
 	 */
-	virtual bool EnableLiveLatencyCorrection(){return false;}
+	bool EnableLiveLatencyCorrection() override;
 	
 	/**
 	 * @brief Get the required number of queued frames.
@@ -190,7 +134,7 @@ public:
 	 *
 	 * @return The required number of queued frames.
 	 */
-	virtual int RequiredQueuedFrames(){return REQUIRED_QUEUED_FRAMES_DEFAULT;}
+	int RequiredQueuedFrames() override;
 	
 	/**
 	 * @brief Check if PTS restamping is supported by the platform.
@@ -199,26 +143,26 @@ public:
 	 *
 	 * @return True if PTS restamping is supported, false otherwise.
 	 */
-	virtual bool EnablePTSRestamp(){return false;}
+	bool EnablePTSRestamp() override;
 	
 	/**
 	 * Checks if this is the first tune with Westeros disabled.
 	 *
 	 * @return True if this is the first tune with Westeros disabled for the current platform, false otherwise.
 	 */
-	virtual bool IsFirstTuneWithWesteros(){return false;}
+	bool IsFirstTuneWithWesteros() override;
 	
 	/**
 	 * @brief Set SoC volume property name.
 	 */
-	virtual void SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume)=0;
+	void SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume) override;
 	
 	/**
 	 * @brief enables the seamless switch property
 	 * @param object The GStreamer element to configure.
 	 * @param value True to enable seamless switching, false to disable.
 	 */
-	virtual void SetSeamlessSwitch(GstElement* object,  gboolean value){}
+	void SetSeamlessSwitch(GstElement* object,  gboolean value) override;
 	
 	/**
 	 * @brief Sets the sinkbin to audio-only mode.
@@ -228,7 +172,7 @@ public:
 	 * @param sinkbin The GStreamer sinkbin to configure.
 	 * @param property The name of the property to set for audio-only mode.
 	 */
-	virtual bool AudioOnlyMode(GstElement *sinkbin){return false;}
+	bool AudioOnlyMode(GstElement *sinkbin) override;
 	
 	/**
 	 * @brief Sets the playback rate for the given GStreamer elements.
@@ -240,7 +184,7 @@ public:
 	 * @param audio_dec The audio decoder element.
 	 * @return True if the playback rate was set successfully, false otherwise.
 	 */
-	virtual bool SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec) = 0;
+	bool SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec) override;
 	
 	/**
 	 * @brief Retrieves the source pad of the given GStreamer element.
@@ -250,53 +194,53 @@ public:
 	 * @param element The GStreamer element to retrieve the source pad from.
 	 * @return A pointer to the source pad of the element, or NULL if not found.
 	 */
-	virtual GstPad* GetSourcePad(GstElement* element){return NULL;}
+	GstPad* GetSourcePad(GstElement* element) override;
 	
 	/**
 	 * @brief Get video sink from sinkbin.
 	 * @param sinkbin The GStreamer sinkbin.
 	 */
-	virtual GstElement* GetVideoSink(GstElement* sinkbin){return nullptr;}
+	GstElement* GetVideoSink(GstElement* sinkbin) override;
 	
 	/**
 	 * @brief Set AC4 tracks.
 	 * @param src Source element.
 	 * @param trackId Track ID.
 	 */
-	virtual void SetAC4Tracks(GstElement *src, int trackId);
+	void SetAC4Tracks(GstElement *src, int trackId) override;
 	
 	/**
 	 * @brief Set platform playback rate.
 	 * @return True on success, false otherwise.
 	 */
-	virtual bool SetPlatformPlaybackRate(){return false;}
+	bool SetPlatformPlaybackRate() override;
 	
 	/**
 	 * @brief Set rate correction.
 	 * @return True on success, false otherwise.
 	 */
-	virtual bool SetRateCorrection() = 0;
+	bool SetRateCorrection() override;
 	
 	/**
 	 * @brief Check if the given name is a video sink.
 	 * @param name Element name.
 	 * @return True if it's a video sink, false otherwise.
 	 */
-	virtual bool IsVideoSink(const char* name) = 0;
+	bool IsVideoSink(const char* name) override;
 	
 	/**
 	 * @brief Check if the given name is an audio sink or audio decoder.
 	 * @param name Element name.
 	 * @return True if it's an audio sink or audio decoder, false otherwise.
 	 */
-	virtual bool IsAudioSinkOrAudioDecoder(const char* name) = 0;
+	bool IsAudioSinkOrAudioDecoder(const char* name) override;
 	
 	/**
 	 * @brief Check if the given name is a video decoder.
 	 * @param name Element name.
 	 * @return True if it's a video decoder, false otherwise.
 	 */
-	virtual bool IsVideoDecoder(const char* name) = 0;
+	bool IsVideoDecoder(const char* name) override;
 	
 	/**
 	 * @brief Configure the audio sink.
@@ -305,14 +249,14 @@ public:
 	 * @param decStreamSync Decoder stream synchronization flag.
 	 * @return True on success, false otherwise.
 	 */
-	virtual bool ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync) = 0;
+	bool ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync) override;
 	
 	/**
 	 * @brief Check if the given name is an audio or video decoder.
 	 * @param name Element name
 	 * @return True if it's an audio or video decoder, false otherwise.
 	 */
-	virtual bool IsAudioOrVideoDecoder(const char* name) = 0;
+	bool IsAudioOrVideoDecoder(const char* name) override;
 	
 	/**
 	 * @brief Disable asynchronous audio.
@@ -321,7 +265,7 @@ public:
 	 * @param isSeeking True if seeking is in progress, false otherwise.
 	 * @return True if async changed from enabled to disabled, false otherwise.
 	 */
-	virtual bool DisableAsyncAudio(GstElement *audio_sink, int rate, bool isSeeking){return false;};
+	bool DisableAsyncAudio(GstElement *audio_sink, int rate, bool isSeeking) override;
 	
 	/**
 	 * Gets the decoder handle from the video decoder element.
@@ -329,14 +273,14 @@ public:
 	 * @param dec_handle Pointer to store the decoder handle.
 	 * @param video_dec The video decoder element.
 	 */
-	virtual void GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec) = 0;
+	void GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec) override;
 	
 	/**
 	 * @brief Resets the trick play UTC.
 	 *
 	 * @return True if the reset is required, false otherwise.
 	 */
-	virtual bool ResetTrickUTC(){return false;}
+	bool ResetTrickUTC() override;
 	
 	/**
 	 * @brief Get video PTS.
@@ -349,12 +293,12 @@ public:
 	 *
 	 * @return Video PTS in nanoseconds, or -1 on error.
 	 */
-	virtual long long GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros);
+	long long GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros) override;
 	
 	/**
 	 * @brief Notify first video frame.
 	 */
-	virtual bool NotifyVideoFirstFrame(){return false;}
+	bool NotifyVideoFirstFrame() override;
 	
 	/**
 	 * @brief Set decode error on source.
@@ -363,7 +307,7 @@ public:
 	 *
 	 * @param src The source object.
 	 */
-	virtual void SetDecodeError(GstObject* src);
+	void SetDecodeError(GstObject* src) override;
 	
 	/**
 	 * @brief Set freerun threshold on source.
@@ -372,7 +316,7 @@ public:
 	 *
 	 * @param src The source object.
 	 */
-	virtual void SetFreerunThreshold(GstObject* src){};
+	void SetFreerunThreshold(GstObject* src) override;
 	
 	/**
 	 * @brief Check if element setup is required.
@@ -381,7 +325,7 @@ public:
 	 *
 	 * @return True if setup is required, false otherwise.
 	 */
-	virtual bool RequiredElementSetup(){return false;}
+	bool RequiredElementSetup() override;
 	
 	/**
 	 * @brief Check if first audio frame callback is set.
@@ -391,7 +335,7 @@ public:
 	 * @return True if a callback is set, false otherwise.
 	 */
 	
-	virtual bool HasFirstAudioFrameCallback(){return true;}
+	bool HasFirstAudioFrameCallback() override;
 	
 	/**
 	 * @brief Check if video sink errors are handled.
@@ -400,7 +344,7 @@ public:
 	 *
 	 * @return True if video sink errors are handled, false otherwise.
 	 */
-	virtual bool IsVideoSinkHandleErrors(){return false;}
+	bool IsVideoSinkHandleErrors() override;
 	
 	/**
 	 * @brief Set playback flags.
@@ -410,49 +354,49 @@ public:
 	 * @param flags Reference to the flags integer.
 	 * @param isSub Flag indicating whether the content is a subtitle.
 	 */
-	virtual void SetPlaybackFlags(gint &flags,  bool isSub)=0;
+	void SetPlaybackFlags(gint &flags,  bool isSub) override;
 	
 	/**
 	 * @brief checks if the firstFrame is received from the simulator
 	 */
-	virtual bool IsSimulatorFirstFrame(){return false;}
+	bool IsSimulatorFirstFrame() override;
 	
 	/**
 	 * @brief checks if the sink is from the simulator
 	 */
-	virtual bool IsSimulatorSink(){return false;}
+	bool IsSimulatorSink() override;
 	
 	/**
 	 * @brief Configure the plugin priority for PulseAudio.
 	 */
-	virtual void ConfigurePluginPriority(){};
+	void ConfigurePluginPriority() override;
 	
 	/**
 	 * @brief checks if the teardown is required for simulator
 	 */
-	virtual bool ShouldTearDownForTrickplay(){return false;}
+	bool ShouldTearDownForTrickplay() override;
 	
 	/**
 	 * @brief checks if the video sample is from the simulator
 	 */
-	virtual bool IsSimulatorVideoSample(){return false;}
+	bool IsSimulatorVideoSample() override;
 	
 	/**
 	 *@brief Sets the platform specific H264 caps
 	 */
-	virtual void SetH264Caps(GstCaps *caps){}
+	void SetH264Caps(GstCaps *caps) override;
 	
 	/**
 	 *@brief Sets the HEVC caps for simulator
 	 */
-	virtual void SetHevcCaps(GstCaps *caps){}
+	void SetHevcCaps(GstCaps *caps) override;
 	
 	/**
 	 * @brief Resets segment event flags during trickplay transitions.
 	 *
 	 * Manages segment event tracking for trickplay scenarios without disrupting seekplay or advertisements.
 	 */
-	virtual bool ResetNewSegmentEvent(){return false;}
+	bool ResetNewSegmentEvent() override;
 
 	/**
 	 * @brief Checks if the platform is video master.
@@ -460,6 +404,6 @@ public:
 	 * @param videoSink The video sink element.
 	 * @return 'true' if video master otherwise false.
 	 */
-	virtual bool IsVideoMaster(GstElement *videoSink) = 0;
+	bool IsVideoMaster(GstElement *videoSink) override;
 };
 #endif
