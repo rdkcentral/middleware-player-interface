@@ -220,19 +220,21 @@ static void gst_cdmidecryptor_init(
 	//GST_DEBUG_OBJECT(cdmidecryptor, "\n Initialized plugin mutex\n");
 	g_cond_init(&cdmidecryptor->condition);
 	cdmidecryptor->streamReceived = false;
-	// Lock access to canWait to keep Coverity happy
+	// Lock access to protect shared state to keep Coverity happy
 	g_mutex_lock(&cdmidecryptor->mutex);
 	cdmidecryptor->canWait = false;
-	g_mutex_unlock(&cdmidecryptor->mutex);
 	cdmidecryptor->protectionEvent = NULL;
 	cdmidecryptor->sessionManager = NULL;
-	cdmidecryptor->drmSession = NULL;
-	cdmidecryptor->player = NULL;
-	cdmidecryptor->mediaType = eGST_MEDIATYPE_MANIFEST;
 	cdmidecryptor->firstsegprocessed = false;
 	cdmidecryptor->selectedProtection = NULL;
 	cdmidecryptor->decryptFailCount = 0;
 	cdmidecryptor->hdcpOpProtectionFailCount = 0;
+	cdmidecryptor->drmSession = NULL;
+	g_mutex_unlock(&cdmidecryptor->mutex);
+	GST_OBJECT_LOCK(cdmidecryptor);
+	cdmidecryptor->player = NULL;
+	GST_OBJECT_UNLOCK(cdmidecryptor);
+	cdmidecryptor->mediaType = eGST_MEDIATYPE_MANIFEST;
 	cdmidecryptor->notifyDecryptError = true;
 	cdmidecryptor->streamEncrypted = false;
 	cdmidecryptor->ignoreSVP = false;
