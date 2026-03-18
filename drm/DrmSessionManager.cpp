@@ -17,7 +17,6 @@
  * limitations under the License.
 */
 
-
 /**
  * @file DrmSessionManager.cpp
  * @brief Source file for DrmSessionManager.
