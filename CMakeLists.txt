@@ -172,7 +172,6 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
-	PerfProfiler.h
 )
 if(ENABLE_MW_PROFILING)
     list(APPEND LIBPLAYERGSTINTERFACE_HEADERS PerfProfiler.h)
@@ -214,7 +213,6 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
-	PerfProfiler.h
 	DESTINATION include)
 if(ENABLE_MW_PROFILING)
     install(FILES PerfProfiler.h DESTINATION include)
@@ -232,7 +230,6 @@ set(SOURCES
 	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
-	PerfProfiler.cpp
 )
 if(ENABLE_MW_PROFILING)
     list(APPEND SOURCES PerfProfiler.cpp)
