@@ -19,6 +19,8 @@
 
 #include "GstHandlerControl.h"
 #include "PlayerLogManager.h"
+#include "TelemetryMarkers.h"
+#include "PlayerTelemetry.h"
 #include <cstdio>
 #include <string>
 
@@ -75,6 +77,8 @@ bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string na
 	{
 		MW_LOG_ERR("GstPlayer: %d instance%s of %s running", 
 		mInstanceCount, mInstanceCount?"s":"", name.c_str());
+		PlayerTelemetry::sendEvent(TELEMETRY_EVENT_HANDLER_TIMEOUT,
+			{{"handler", name}, {"count", std::to_string(mInstanceCount)}});
 		return false;
 	}
 	else

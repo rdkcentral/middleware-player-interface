@@ -56,3 +56,17 @@
 /* ── Miscellaneous events ─────────────────────────────────────────────────── */
 #define TELEMETRY_EVENT_EOS_DETECTED       "END_OF_STREAM_DETECTED" /**< GST_MESSAGE_EOS received on the pipeline bus */
 #define TELEMETRY_EVENT_TRACK_SWITCHED     "TRACK_SWITCHED"         /**< Mid-stream audio/video track change */
+
+/* ── DRM / Content protection events ─────────────────────────────────────── */
+#define TELEMETRY_EVENT_DRM_HELPER_NOT_FOUND       "DRM_HELPER_NOT_FOUND"       /**< No DRM helper found for the content protection system */
+#define TELEMETRY_EVENT_DRM_PSSH_PARSE_FAILED      "DRM_PSSH_PARSE_FAILED"      /**< Failed to parse PSSH data from DRM init data */
+#define TELEMETRY_EVENT_DRM_SESSION_CREATE_FAILED  "DRM_SESSION_CREATE_FAILED"  /**< DRM session creation returned null / invalid params */
+#define TELEMETRY_EVENT_DRM_SESSION_INIT_FAILED    "DRM_SESSION_INIT_FAILED"    /**< DRM session OCDM initialisation failed */
+#define TELEMETRY_EVENT_OCDM_SYSTEM_CREATE_FAILED  "OCDM_SYSTEM_CREATE_FAILED"  /**< opencdm_create_system() returned null */
+#define TELEMETRY_EVENT_OCDM_SESSION_CREATE_FAILED "OCDM_SESSION_CREATE_FAILED" /**< opencdm_construct_session() returned an error */
+#define TELEMETRY_EVENT_HDCP_PROTECTION_FAILURE    "HDCP_PROTECTION_FAILURE"    /**< HDCP output protection failure detected */
+#define TELEMETRY_EVENT_HDCP_COMPLIANCE_FAILURE    "HDCP_COMPLIANCE_FAILURE"    /**< HDCP compliance check failure (2.2 vs 1.4) */
+#define TELEMETRY_EVENT_DECRYPT_FAILURE            "DECRYPT_FAILURE"            /**< Decryption failure threshold exceeded */
+
+/* ── Handler / concurrency events ────────────────────────────────────────── */
+#define TELEMETRY_EVENT_HANDLER_TIMEOUT            "HANDLER_TIMEOUT"            /**< A GStreamer bus/callback handler did not complete before timeout */
