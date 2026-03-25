@@ -33,9 +33,14 @@ endif()
 
 option(ENABLE_MW_PROFILING "Enable middleware profiling" ON)
 
+message(STATUS "ENABLE_MW_PROFILING = ${ENABLE_MW_PROFILING}")
+
 if(ENABLE_MW_PROFILING)
-  add_definitions(-DENABLE_MW_PROFILING)
-endif()
+ message(STATUS "Middleware profiling is ENABLED")
+ add_definitions(-DENABLE_MW_PROFILING)
+else()
+ message(STATUS "Middleware profiling is DISABLED")
+ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
