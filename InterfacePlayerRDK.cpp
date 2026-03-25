@@ -1290,7 +1290,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				{
 
 
-#if 0
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				std::map<std::string, int> i;
 				std::map<std::string, std::string> s;
 				std::map<std::string, float> f;
@@ -1299,7 +1299,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				s["cur"]  = gst_element_state_get_name(current);
 				s["pen"]  = gst_element_state_get_name(pending);
 
-				// GstState is an enum; transmit numeric value (stable for decoding on the backend)
+				/** GstState is an enum; transmit numeric value (stable for decoding on the backend)  */
 				i["tgt"]  = static_cast<int>(targetState);
 
 				 PlayerTelemetry2 telemetry;
@@ -4127,19 +4127,19 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 	MW_LOG_ERR("GstPlayer_OnGstPtsErrorCb: Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
-#if 0 
+#ifdef PLAYER_TELEMETRY_SUPPORT
 	std::map<std::string, int> i;
 	std::map<std::string, std::string> s;
 	std::map<std::string, float> f;
 
-	// String values
+	/** String values */
 	s["elem"] = GST_ELEMENT_NAME(object);
 
-	// Integer values
+	/** Integer values */
 	i["vid"] = isVideo ? 1 : 0;
 	i["aud"] = isAudioSink ? 1 : 0;
 
-	// Float values
+	/** Float values */
 	f["pts"] = static_cast<float>(privatePlayer->gstPrivateContext->lastKnownPTS);
 	f["ptsUpd"] = static_cast<float>(privatePlayer->gstPrivateContext->ptsUpdatedTimeMS);
 
@@ -4177,18 +4177,18 @@ static void GstPlayer_OnGstDecodeErrorCb(GstElement* object, guint arg0, gpointe
 	long long deltaMS = NOW_STEADY_TS_MS - privatePlayer->gstPrivateContext->decodeErrorMsgTimeMS;
 	privatePlayer->gstPrivateContext->decodeErrorCBCount += 1;
 
-#if 0 
+#ifdef PLAYER_TELEMETRY_SUPPORT
 	std::map<std::string, int> i;
 	std::map<std::string, std::string> s;
 	std::map<std::string, float> f;
 
-	// String values
+	/** String values */
 	s["elem"] = GST_ELEMENT_NAME(object);
 
-	// Integer values
+	/** Integer values */
 	i["cnt"] = privatePlayer->gstPrivateContext->decodeErrorCBCount;
 
-	// Float values
+	/** Float values */
 	f["delta"] = static_cast<float>(deltaMS);
 	f["rate"]  = privatePlayer->gstPrivateContext->rate;
 
@@ -4232,17 +4232,17 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 		case GST_MESSAGE_ERROR:
 			{
 				gst_message_parse_error(msg, &error, &dbg_info);
-#if 0
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				std::map<std::string, int> i;
 				std::map<std::string, std::string> s;
 				std::map<std::string, float> f;
 
-				// String values
+				/** String values */
 				s["elem"] = GST_OBJECT_NAME(msg->src);
 				s["err"]  = error->message ? error->message : "";
 				s["dbg"]  = dbg_info ? dbg_info : "";
 
-				// Float values
+				/** Float values */
 				f["rate"] = privatePlayer->gstPrivateContext->rate;
 
 				PlayerTelemetry2 telemetry;
