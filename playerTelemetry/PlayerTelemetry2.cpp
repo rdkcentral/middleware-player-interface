@@ -24,6 +24,8 @@
 
 #include "PlayerTelemetry2.hpp"
 
+#ifdef PLAYER_TELEMETRY_SUPPORT
+
 #ifndef PLAYER_SIMULATOR_BUILD
 #include <telemetry_busmessage_sender.h>
 #endif
@@ -146,3 +148,5 @@ bool PlayerTelemetry2::send(const std::string &markerName, const char *data)
 
 	return bRet;
 }
+
+#endif // PLAYER_TELEMETRY_SUPPORT

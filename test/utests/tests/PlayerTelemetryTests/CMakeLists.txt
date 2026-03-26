@@ -37,6 +37,7 @@ set(PLAYER_SOURCES
 )
 
 add_definitions(-DPLAYER_SIMULATOR_BUILD)
+add_definitions(-DPLAYER_TELEMETRY_SUPPORT)
 
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}

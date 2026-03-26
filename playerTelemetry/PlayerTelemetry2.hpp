@@ -25,13 +25,15 @@
 #ifndef __PLAYER_TELEMETRY_2_H__
 #define __PLAYER_TELEMETRY_2_H__
 
+#ifdef PLAYER_TELEMETRY_SUPPORT
+
 #include <cjson/cJSON.h>
 #include <iostream>
 #include <string>
 #include <map>
 #include "PlayerLogManager.h"
 
-// Note that RDK telemetry 2.0 support is per process basic,
+// Note that RDK telemetry 2.0 support is per process basis,
 // this class is created to take care of un initialization of telemetry but having object as global variable
 // when process goes down, destructor of this class will be called and it will uninitialize the telemetry.
 
@@ -111,5 +113,7 @@ public:
 	 */
 	bool send(const std::string &markerName, const char *data);
 };
+
+#endif // PLAYER_TELEMETRY_SUPPORT
 
 #endif // __PLAYER_TELEMETRY_2_H__

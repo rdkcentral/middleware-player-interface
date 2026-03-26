@@ -37,6 +37,8 @@ set(PlayerTelemetry_SRC PlayerTelemetry2.cpp)
 
 add_library(playertelemetry SHARED ${PlayerTelemetry_SRC})
 
+target_compile_definitions(playertelemetry PUBLIC PLAYER_TELEMETRY_SUPPORT)
+
 target_include_directories(playertelemetry PUBLIC
     ${LIBCJSON_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../playerLogManager

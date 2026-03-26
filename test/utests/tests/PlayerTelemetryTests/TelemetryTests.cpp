@@ -21,6 +21,8 @@
 #include <cjson/cJSON.h>
 #include "PlayerTelemetry2.hpp"
 
+#ifdef PLAYER_TELEMETRY_SUPPORT
+
 class PlayerTelemetryTest : public ::testing::Test {
 protected:
 
@@ -109,3 +111,5 @@ TEST_F(PlayerTelemetryTest, Send_MapData_EmptyMaps)
 	std::map<std::string, float> floatData;
 	EXPECT_EQ(true, telemetry.send(markername, intData, stringData, floatData));
 }
+
+#endif // PLAYER_TELEMETRY_SUPPORT
