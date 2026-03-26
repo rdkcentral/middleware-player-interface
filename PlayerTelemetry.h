@@ -31,7 +31,15 @@
  * telemetry back-end.  Integration with T2 or another platform service can be
  * added by extending or replacing the body of sendEvent() without changing any
  * call sites.
+ *
+ * When PLAYER_TELEMETRY_SUPPORT is NOT defined at compile time every call to
+ * sendEvent() is compiled away to a no-op so there is zero overhead and no
+ * dependency on <map> in non-telemetry builds.  Enable telemetry by passing
+ * -DPLAYER_TELEMETRY_SUPPORT (or setting CMAKE_PLAYER_TELEMETRY_SUPPORT) at
+ * build time.
  */
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
 
 #include <string>
 #include <map>
@@ -40,6 +48,8 @@
 /**
  * @class PlayerTelemetry
  * @brief Static helper for emitting named telemetry events with optional payload data.
+ *
+ * Active implementation compiled when PLAYER_TELEMETRY_SUPPORT is defined.
  */
 class PlayerTelemetry
 {
@@ -76,3 +86,28 @@ public:
 private:
     PlayerTelemetry() = delete;
 };
+
+#else /* PLAYER_TELEMETRY_SUPPORT not defined */
+
+#include <string>
+#include <map>
+
+/**
+ * @class PlayerTelemetry
+ * @brief No-op stub compiled when PLAYER_TELEMETRY_SUPPORT is not defined.
+ *
+ * All methods are empty inline functions so the compiler eliminates them
+ * entirely.  Call sites require no #ifdef guards.
+ */
+class PlayerTelemetry
+{
+public:
+    static void sendEvent(const std::string& /*eventName*/) {}
+    static void sendEvent(const std::string& /*eventName*/,
+                          const std::map<std::string, std::string>& /*payload*/) {}
+
+private:
+    PlayerTelemetry() = delete;
+};
+
+#endif /* PLAYER_TELEMETRY_SUPPORT */
