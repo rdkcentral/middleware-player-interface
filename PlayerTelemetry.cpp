@@ -38,6 +38,7 @@
  */
 void PlayerTelemetry::sendEvent(const std::string& eventName)
 {
+    /* t2_event_s() is a C API that takes char* but does not modify the string. */
     t2_event_s(const_cast<char*>(eventName.c_str()), const_cast<char*>("1"));
 }
 
@@ -58,6 +59,7 @@ void PlayerTelemetry::sendEvent(const std::string& eventName, const TelemetryPay
         }
         fields += kv.first + '=' + kv.second;
     }
+    /* t2_event_s() is a C API that takes char* but does not modify the strings. */
     t2_event_s(const_cast<char*>(eventName.c_str()), const_cast<char*>(fields.c_str()));
 }
 

@@ -4265,7 +4265,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
 			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
-			#ifdef PLAYER_TELEMETRY_SUPPORT
+#ifdef PLAYER_TELEMETRY_SUPPORT
 			if (error->domain == GST_RESOURCE_ERROR)
 			{
 				TelemetryPayload networkErrPayload;
@@ -4282,7 +4282,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				errPayload.add("debugInfo", dbg_info ? dbg_info : "none");
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_ERROR, errPayload);
 			}
-			#endif /* PLAYER_TELEMETRY_SUPPORT */
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			g_clear_error(&error);
 			g_free(dbg_info);
 			break;
