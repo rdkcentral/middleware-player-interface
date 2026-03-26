@@ -99,9 +99,11 @@ void OCDMSessionAdapter::initDRMSystem()
 		if (m_pOpenCDMSystem == nullptr) {
 			MW_LOG_ERR("opencdm_create_system() FAILED");
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload ocdmSystemPayload;
 				ocdmSystemPayload.add("keySystem", m_keySystem);
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_OCDM_SYSTEM_CREATE_FAILED, ocdmSystemPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 		}
 	}
@@ -176,10 +178,12 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 			MW_LOG_ERR("Error constructing OCDM session. OCDM err=0x%x", ocdmRet);
 			m_eKeyState = KEY_ERROR_SESSION_CREATE_FAILED;
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload ocdmSessionPayload;
 				ocdmSessionPayload.add("keySystem", m_keySystem);
 				ocdmSessionPayload.add("errorCode", static_cast<int>(ocdmRet));
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_OCDM_SESSION_CREATE_FAILED, ocdmSessionPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 		}
 	}

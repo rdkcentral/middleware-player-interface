@@ -415,9 +415,11 @@ DrmSession * DrmSessionManager::createDrmSession( int& responseCode,
 	{
 		MW_LOG_ERR(" Failed to locate DRM helper");
 		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 			TelemetryPayload drmHelperPayload;
 			drmHelperPayload.add("systemId", systemId);
 			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_HELPER_NOT_FOUND, drmHelperPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 		}
 	}
 	else
@@ -434,10 +436,12 @@ DrmSession * DrmSessionManager::createDrmSession( int& responseCode,
 		{
 			MW_LOG_ERR(" Failed to Parse PSSH from the DRM InitData");
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload psshPayload;
 				psshPayload.add("systemId", systemId);
 				psshPayload.add("initDataLen", static_cast<int>(initDataLen));
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_PSSH_PARSE_FAILED, psshPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 			err = MW_CORRUPT_DRM_METADATA;
 		}
@@ -460,9 +464,11 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		ensure the provided DRMInfo is supported using hasDRM */
 		MW_LOG_ERR(" Failed to create DRM Session invalid parameters ");
 		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 			TelemetryPayload drmSessionPayload;
 			drmSessionPayload.add("reason", "invalid_parameters");
 			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_SESSION_CREATE_FAILED, drmSessionPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 		}
 		return nullptr;
 	}
@@ -947,10 +953,12 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 			MW_LOG_ERR("DRM session ID is empty: Key State %d ", code);
 			err = MW_DRM_SESSIONID_EMPTY;
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload emptySessionPayload;
 				emptySessionPayload.add("reason", "empty_session_id");
 				emptySessionPayload.add("keyState", static_cast<int>(code));
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_SESSION_INIT_FAILED, emptySessionPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 		}
 		else if (code == KEY_ERROR_SESSION_CREATE_FAILED)
@@ -958,20 +966,24 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 			MW_LOG_ERR("OCDM session construction failed: Key State %d ", code);
 			err = MW_DRM_SESSION_CREATE_FAILED;
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload ocdmCreateFailedPayload;
 				ocdmCreateFailedPayload.add("reason", "ocdm_session_create_failed");
 				ocdmCreateFailedPayload.add("keyState", static_cast<int>(code));
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_SESSION_INIT_FAILED, ocdmCreateFailedPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 		}
 		else
 		{
 			err= MW_DRM_DATA_BIND_FAILED;
 			{
+#ifdef PLAYER_TELEMETRY_SUPPORT
 				TelemetryPayload dataBindPayload;
 				dataBindPayload.add("reason", "data_bind_failed");
 				dataBindPayload.add("keyState", static_cast<int>(code));
 				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DRM_SESSION_INIT_FAILED, dataBindPayload);
+#endif /* PLAYER_TELEMETRY_SUPPORT */
 			}
 		}
 	}
