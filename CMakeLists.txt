@@ -57,6 +57,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/externals/rdk)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/baseConversion)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerLogManager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerJsonObject)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerTelemetry)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mp4demux)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/rialto)
 
@@ -67,6 +68,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/rialto)
 add_subdirectory(baseConversion)
 add_subdirectory(playerLogManager)
 add_subdirectory(playerJsonObject)
+add_subdirectory(playerTelemetry)
 add_subdirectory(externals)
 
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/PlayerCCManager.cpp PlayerUtils.cpp)
@@ -459,6 +461,7 @@ target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINT
 target_link_libraries(playergstinterface subtec)
 target_link_libraries(playergstinterface baseconversion)
 target_link_libraries(playergstinterface playerfbinterface)
+target_link_libraries(playergstinterface playertelemetry)
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} {LIBPLAYERGSTINTERFACE_MOCK_SOURCES})
 
 # Optionally build pi-cli for l2
