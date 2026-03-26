@@ -161,7 +161,11 @@ if( (LEVEL) >= PlayerLogManager::mwLoglevel ) \
 #define MW_LOG_DEBUG(FORMAT, ...) MW_LOG(mLOGLEVEL_DEBUG, FORMAT, ##__VA_ARGS__)
 #define MW_LOG_INFO(FORMAT, ...)  MW_LOG(mLOGLEVEL_INFO, FORMAT, ##__VA_ARGS__)
 #define MW_LOG_WARN(FORMAT, ...)  MW_LOG(mLOGLEVEL_WARN, FORMAT, ##__VA_ARGS__)
+#ifdef PLAYER_TELEMETRY_SUPPORT
 #define MW_LOG_MIL(FORMAT, ...)   MW_LOG(mLOGLEVEL_MIL, FORMAT, ##__VA_ARGS__)
+#else
+#define MW_LOG_MIL(FORMAT, ...)   do {} while(0)
+#endif
 #define MW_LOG_ERR(FORMAT, ...)   MW_LOG(mLOGLEVEL_ERROR, FORMAT, ##__VA_ARGS__)
 
 #endif /* PLAYER_LOG_MANAGER_H */
