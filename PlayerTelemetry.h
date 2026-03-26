@@ -46,7 +46,6 @@
 
 #include <string>
 #include <map>
-#include "PlayerLogManager.h"
 
 /**
  * @class TelemetryPayload
@@ -106,6 +105,8 @@ private:
  * @brief Static helper for emitting named telemetry events with optional payload data.
  *
  * Active implementation compiled when PLAYER_TELEMETRY_SUPPORT is defined.
+ * The method bodies are provided in PlayerTelemetry.cpp which uses the
+ * Telemetry 2.0 framework (t2_event_s).
  */
 class PlayerTelemetry
 {
@@ -114,29 +115,14 @@ public:
      * @brief Emit a telemetry event with no additional payload.
      * @param[in] eventName  One of the TELEMETRY_EVENT_* markers from TelemetryMarkers.h.
      */
-    static void sendEvent(const std::string& eventName)
-    {
-        MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-    }
+    static void sendEvent(const std::string& eventName);
 
     /**
      * @brief Emit a telemetry event with a structured key/value payload.
      * @param[in] eventName  One of the TELEMETRY_EVENT_* markers from TelemetryMarkers.h.
      * @param[in] payload    Additional context data built with TelemetryPayload::add().
      */
-    static void sendEvent(const std::string& eventName, const TelemetryPayload& payload)
-    {
-        std::string fields;
-        for (const auto& kv : payload.fields())
-        {
-            if (!fields.empty())
-            {
-                fields += ' ';
-            }
-            fields += kv.first + '=' + kv.second;
-        }
-        MW_LOG_MIL("[TELEMETRY] event=%s %s", eventName.c_str(), fields.c_str());
-    }
+    static void sendEvent(const std::string& eventName, const TelemetryPayload& payload);
 
 private:
     PlayerTelemetry() = delete;
