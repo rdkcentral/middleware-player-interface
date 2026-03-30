@@ -5367,6 +5367,7 @@ void AddBufferFieldToStructure(GstStructure *structure, const char *fieldName, c
  */
 void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo)
 {
+	MW_PROFILE_FUNCTION();
 	GstCaps *caps = GetCaps(codecInfo.mCodecFormat);
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	stream->format = codecInfo.mCodecFormat;
