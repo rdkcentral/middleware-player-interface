@@ -42,7 +42,8 @@ set(TEST_SOURCES PlayerSubtecCCManagerTests.cpp
 			 TtmlPacketTests.cpp
 			 WebVttPacketTests.cpp
 			 ClosedCaptionsPacketTests.cpp
-			 PacketSenderTests.cpp)
+			 PacketSenderTests.cpp
+			 SubtecChannelTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/closedcaptions/subtec/PlayerSubtecCCManager.cpp
