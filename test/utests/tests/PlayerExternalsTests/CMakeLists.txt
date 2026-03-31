@@ -40,11 +40,11 @@ include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES PlayerExternalsRun.cpp
-	PlayerThunderInterfaceFun.cpp
-	PlayerExternalsInterfaceFun.cpp
-	PlayerRFCFun.cpp
-	PlayerExternalsInterfaceBaseFun.cpp
-  PlayerExternalUtilsFun.cpp)
+	PlayerThunderInterfaceTests.cpp
+	PlayerExternalsInterfaceTests.cpp
+	PlayerRFCTests.cpp
+	PlayerExternalsInterfaceBaseTests.cpp
+	PlayerExternalUtilsTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		   ${PLAYER_ROOT}/externals/PlayerThunderInterface.cpp
