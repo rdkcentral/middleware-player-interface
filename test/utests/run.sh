@@ -80,7 +80,7 @@ PLAYER_BUILD_GCNO=""
 
 if [ "$build_coverage" -eq "1" ]; then
     #Find where player .gcno files get put when player-cli is built via install-middleware.sh -c
-    A_GCNO=$(find ${PLAYERDIR}/build -name 'AampConfig*gcno' -print -quit)
+    A_GCNO=$(find ${PLAYER_DIR}/build -name 'AampConfig*gcno' -print -quit)
 
     if [ -z "$A_GCNO" ]; then
         echo "ERROR need to run 'install-middleware.sh -c' first to get baseline list of middleware files for coverage"
