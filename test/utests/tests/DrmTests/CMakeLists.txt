@@ -67,7 +67,6 @@ set(TEST_SOURCES DrmTestsRun.cpp
 	HlsDrmSessionInterfaceTests.cpp
 	PlayerHlsDrmSessionInterfaceBaseTests.cpp
 	DrmInfo.cpp
-	DrmUtilsTests.cpp
 	PlayerHlsOcdmTests.cpp
 	HlsOcdmBridgeInterfaceTests.cpp)
 
