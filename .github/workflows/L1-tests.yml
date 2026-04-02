@@ -18,6 +18,8 @@ jobs:
       - name: native build
         run: yes | ./install-middleware.sh -s subtec
 
+      - name: Prepare coverage baseline
+        run: ./install-middleware.sh -c
       # Run L1 tests
       - name: Run unit tests with coverage - L1
         working-directory: ./test/utests
