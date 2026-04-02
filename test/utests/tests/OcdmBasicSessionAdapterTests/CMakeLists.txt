@@ -21,7 +21,7 @@ set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
 set(EXEC_NAME OcdmBasicSessionAdapterTests)
 
-include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/subtec/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/ocdm)
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/ocdm)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
