@@ -126,6 +126,12 @@ InterfacePlayerPriv::InterfacePlayerPriv():mPlayerName()
 	socInterface = SocInterface::CreateSocInterface();
 }
 
+InterfacePlayerPriv::InterfacePlayerPriv(bool isRialto):mPlayerName()
+{
+	gstPrivateContext = new GstPlayerPriv();
+	socInterface = SocInterface::CreateSocInterface();
+}
+
 InterfacePlayerPriv::~InterfacePlayerPriv()
 {
 	delete gstPrivateContext;
