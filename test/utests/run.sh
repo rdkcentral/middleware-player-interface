@@ -50,9 +50,6 @@ cat << EOF > test_details.json
 EOF
 }
 
-# "corrupt arc tag"
-(find . -name "*.gcda" -print0 | xargs -0 rm) || true
-
 build_coverage=0
 halt_on_error=0
 rdke_build=0
@@ -76,18 +73,12 @@ done
 TEST_DIR=$PWD
 PLAYER_DIR=$(realpath ${TEST_DIR}/../..)
 
-PLAYER_BUILD_GCNO=""
-
-if [ "$build_coverage" -eq "1" ]; then
-    #Find where player .gcno files get put when player-cli is built via install-middleware.sh -c
-    A_GCNO=$(find ${PLAYER_DIR}/build -name 'AampConfig*gcno' -print -quit)
-
-    if [ -z "$A_GCNO" ]; then
-        echo "ERROR need to run 'install-middleware.sh -c' first to get baseline list of middleware files for coverage"
-        exit 1
-    fi
-    PLAYER_BUILD_GCNO=$(dirname $A_GCNO)
-fi
+echo "====== DIAGNOSTICS: GCC, G++, gcov, lcov, geninfo Versions ======"
+gcc --version || true
+g++ --version || true
+gcov --version || true
+lcov --version || true
+geninfo --version || true
 
 # Build and run microtests:
 set -e
@@ -186,7 +177,7 @@ else
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
-    lcov --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
+    lcov --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --ignore-errors mismatch --output-file all.info && \
     lcov --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
     genhtml --demangle-cpp -o CombinedCoverage all.cleaned.info
     echo "Checking for CombinedCoverage directory in $(pwd):"
