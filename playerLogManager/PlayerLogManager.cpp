@@ -138,7 +138,9 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
 		    { // remap MW log levels to Ethan log levels
 			    int ethanLogLevel;
 			    // Important: in production builds, Ethan logger filters out everything
-			    // except ETHAN_LOG_MILESTONE and ETHAN_LOG_FATAL
+			    // except ETHAN_LOG_MILESTONE and ETHAN_LOG_FATAL.
+			    // Only errors and critical failures should emit telemetry markers;
+			    // normal/success events should not generate telemetry.
 			    switch (logLevelIndex)
 			    {
 				    case mLOGLEVEL_TRACE:
@@ -146,15 +148,24 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
 					    ethanLogLevel = ETHAN_LOG_DEBUG;
 					    break;
 
+				    case mLOGLEVEL_INFO:
+					    ethanLogLevel = ETHAN_LOG_INFO;
+					    break;
+
+				    case mLOGLEVEL_WARN:
+					    ethanLogLevel = ETHAN_LOG_WARNING;
+					    break;
+
+				    case mLOGLEVEL_MIL:
+					    ethanLogLevel = ETHAN_LOG_WARNING;
+					    break;
+
 				    case mLOGLEVEL_ERROR:
 					    ethanLogLevel = ETHAN_LOG_FATAL;
 					    break;
 
-				    case mLOGLEVEL_INFO: // note: we rely on eLOGLEVEL_INFO at tune time for triage
-				    case mLOGLEVEL_WARN:
-				    case mLOGLEVEL_MIL:
 				    default:
-					    ethanLogLevel = ETHAN_LOG_MILESTONE;
+					    ethanLogLevel = ETHAN_LOG_WARNING;
 					    break;
 			    }
 			    vethanlog(ethanLogLevel,NULL,NULL,-1,format_ptr, args);
