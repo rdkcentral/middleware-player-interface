@@ -261,6 +261,7 @@ class InterfacePlayerPriv
 	private:
 	protected:
 	public:
+		InterfacePlayerPriv();
 		InterfacePlayerPriv(bool isRialto);
 		~InterfacePlayerPriv();
 		GstPlayerPriv *gstPrivateContext;
