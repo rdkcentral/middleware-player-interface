@@ -920,7 +920,7 @@ TEST(InterfacePlayerPriv, InterfacePlayerPriv__start)
     
     // Invoke the non-parameterized constructor and ensure no exception is thrown
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Invoked InterfacePlayerPriv() constructor." << std::endl;
         
     });
@@ -952,7 +952,7 @@ TEST(InterfacePlayerPriv, PositiveValidInput) {
     std::cout << "Entering PositiveValidInput test" << std::endl;
     // Create an object of InterfacePlayerPriv using its default constructor
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Define parameters for valid input
@@ -997,7 +997,7 @@ TEST(InterfacePlayerPriv, PositiveValidInput) {
 TEST(InterfacePlayerPriv, InvalidMediaType_SendGstEvents) {
     std::cout << "Entering InvalidMediaType test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with an invalid mediaType
@@ -1042,7 +1042,7 @@ TEST(InterfacePlayerPriv, InvalidMediaType_SendGstEvents) {
 TEST(InterfacePlayerPriv, ZeroPts) {
     std::cout << "Entering ZeroPts test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with pts as zero
@@ -1086,7 +1086,7 @@ TEST(InterfacePlayerPriv, ZeroPts) {
 TEST(InterfacePlayerPriv, MaxPts) {
     std::cout << "Entering MaxPts test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with pts set to maximum (UINT64_MAX)
@@ -1132,7 +1132,7 @@ TEST(InterfacePlayerPriv, MaxPts) {
 TEST(InterfacePlayerPriv, InvalidEnableGstPosQuery) {
     std::cout << "Entering InvalidEnableGstPosQuery test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with a negative enableGstPosQuery value
@@ -1177,7 +1177,7 @@ TEST(InterfacePlayerPriv, InvalidEnableGstPosQuery) {
 TEST(InterfacePlayerPriv, NegativeVodTrickModeFPS) {
     std::cout << "Entering NegativeVodTrickModeFPS test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with negative vodTrickModeFPS
@@ -1222,7 +1222,7 @@ TEST(InterfacePlayerPriv, NegativeVodTrickModeFPS) {
 TEST(InterfacePlayerPriv, EnablePTSReStampTrue) {
     std::cout << "Entering EnablePTSReStampTrue test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with enablePTSReStamp true
@@ -1265,7 +1265,7 @@ TEST(InterfacePlayerPriv, EnablePTSReStampTrue) {
 TEST(InterfacePlayerPriv, EnablePTSReStampFalse) {
     std::cout << "Entering EnablePTSReStampFalse test" << std::endl;
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Constructed InterfacePlayerPriv object." << std::endl;
         
         // Set parameters with enablePTSReStamp false
@@ -1311,7 +1311,7 @@ TEST(InterfacePlayerPriv, PositiveValidSegmentEvent)
     std::cout << "Entering PositiveValidSegmentEvent test" << std::endl;
 
     // Create an object of InterfacePlayerPriv using default constructor.
-    InterfacePlayerPriv player;
+    InterfacePlayerPriv player(false);
     // Loop through valid media types
     int validMediaTypes[2] = { eSUB_TYPE_WEBVTT, eSUB_TYPE_MP4 };
     for (int i = 0; i < 2; ++i)
@@ -1354,7 +1354,7 @@ TEST(InterfacePlayerPriv, ZeroDurationSegmentEvent)
     std::cout << "Entering ZeroDurationSegmentEvent test" << std::endl;
 
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         int mediaType = eSUB_TYPE_WEBVTT;
         GstClockTime startPts = 1000;
         GstClockTime stopPts  = 1000;
@@ -1392,7 +1392,7 @@ TEST(InterfacePlayerPriv, StartPtsGreaterThanStopPts)
     std::cout << "Entering StartPtsGreaterThanStopPts test" << std::endl;
 
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         int mediaType = eSUB_TYPE_MP4;
         GstClockTime startPts = 3000;
         GstClockTime stopPts  = 2000;
@@ -1429,7 +1429,7 @@ TEST(InterfacePlayerPriv, InvalidMediaType)
     std::cout << "Entering InvalidMediaType test" << std::endl;
 
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         int mediaType = -1;
         GstClockTime startPts = 1000;
         GstClockTime stopPts  = 2000;
@@ -1466,7 +1466,7 @@ TEST(InterfacePlayerPriv, BoundaryConditionMaxStopPts)
     std::cout << "Entering BoundaryConditionMaxStopPts test" << std::endl;
 
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         int mediaType = eSUB_TYPE_WEBVTT;
         GstClockTime startPts = 0;
         // Maximum value for GstClockTime (unsigned 64-bit integer)
@@ -1508,7 +1508,7 @@ TEST(InterfacePlayerPriv, ZeroStartPtsValidStopPts)
     std::cout << "Entering ZeroStartPtsValidStopPts test" << std::endl;
 
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         int mediaType = eSUB_TYPE_MP4;
         GstClockTime startPts = 0;
         GstClockTime stopPts  = 2000;
@@ -1546,7 +1546,7 @@ TEST(InterfacePlayerPriv, ValidParametersDefaultPointer) {
     
     // Create an object using default constructor, expecting no throw.
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1597,7 +1597,7 @@ TEST(InterfacePlayerPriv, ValidParametersWithBuffer) {
     std::cout << "Entering ValidParametersWithBuffer test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1655,7 +1655,7 @@ TEST(InterfacePlayerPriv, InvalidMediaType_SendQtDemuxOverrideEvent) {
     std::cout << "Entering InvalidMediaType test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = -1;
@@ -1704,7 +1704,7 @@ TEST(InterfacePlayerPriv, InvalidVodTrickModeFPS) {
     std::cout << "Entering InvalidVodTrickModeFPS test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1752,7 +1752,7 @@ TEST(InterfacePlayerPriv, NonNullBufferPtrNullWithNonZeroLen) {
     std::cout << "Entering NonNullBufferPtrNullWithNonZeroLen test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1803,7 +1803,7 @@ TEST(InterfacePlayerPriv, NonNullBufferPtrProvidedWithZeroLen) {
     std::cout << "Entering NonNullBufferPtrProvidedWithZeroLen test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1856,7 +1856,7 @@ TEST(InterfacePlayerPriv, VodTrickModeFPSZero) {
     std::cout << "Entering VodTrickModeFPSZero test" << std::endl;
     
     EXPECT_NO_THROW({
-        InterfacePlayerPriv player;
+        InterfacePlayerPriv player(false);
         std::cout << "Created InterfacePlayerPriv object using default constructor." << std::endl;
         
         int mediaType = 1;
@@ -1907,7 +1907,7 @@ TEST(InterfacePlayerPriv, ValidParameters) {
     std::cout << "Entering ValidParameters test" << std::endl;
     
     // Create object using default constructor
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare valid parameters
@@ -1964,7 +1964,7 @@ TEST(InterfacePlayerPriv, NullInstancePointer) {
     std::cout << "Entering NullInstancePointer test" << std::endl;
     
     // Create object
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare parameters with null instance pointer
@@ -2018,7 +2018,7 @@ TEST(InterfacePlayerPriv, NullDetailedSignalString) {
     std::cout << "Entering NullDetailedSignalString test" << std::endl;
     
     // Create object
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare parameters with null detailed_signal
@@ -2072,7 +2072,7 @@ TEST(InterfacePlayerPriv, NullCallbackHandler) {
     std::cout << "Entering NullCallbackHandler test" << std::endl;
     
     // Create object
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare parameters with null callback handler
@@ -2131,7 +2131,7 @@ TEST(InterfacePlayerPriv, NullUserDataPointer) {
     std::cout << "Entering NullUserDataPointer test" << std::endl;
     
     // Create object
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare parameters with null user data pointer
@@ -2186,7 +2186,7 @@ TEST(InterfacePlayerPriv, EmptyDetailedSignalString) {
     std::cout << "Entering EmptyDetailedSignalString test" << std::endl;
     
     // Create object
-    InterfacePlayerPriv obj;
+    InterfacePlayerPriv obj(false);
     std::cout << "Created InterfacePlayerPriv object using default constructor" << std::endl;
     
     // Prepare parameters with empty detailed_signal string
@@ -2242,7 +2242,7 @@ TEST(InterfacePlayerPriv, DestructorCalledOnStackObject_start) {
     EXPECT_NO_THROW({
         {
             // Create a local object on the stack.
-            InterfacePlayerPriv obj;
+            InterfacePlayerPriv obj(false);
             std::cout << "Invoked default constructor for InterfacePlayerPriv." << std::endl;    
             std::cout << "About to exit inner scope, destructor will be invoked." << std::endl;
         } // Destructor automatically invoked here.
