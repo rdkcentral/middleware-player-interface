@@ -77,7 +77,6 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
 
 add_executable(${EXEC_NAME}
 			   ${TEST_SOURCES}
-			   ${MOCK_SOURCES}
 			   ${PLAYER_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")

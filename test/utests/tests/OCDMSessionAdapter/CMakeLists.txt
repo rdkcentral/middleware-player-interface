@@ -42,7 +42,6 @@ include_directories(${PLAYER_ROOT}/drm/helper)
 include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
-include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 
 set(TEST_SOURCES FunctionalTests.cpp
