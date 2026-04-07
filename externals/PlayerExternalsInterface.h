@@ -320,14 +320,6 @@ public:
 
     void SetUseFireBoltSDK(bool t_use_firebolt_sdk);
 
-#ifdef UBUNTU
-    static std::shared_ptr<PlayerExternalsInterface> createInstance()
-    {
-        return std::shared_ptr<PlayerExternalsInterface>(
-            new PlayerExternalsInterface());
-    }
-#endif
-
     void SetPowerEvent(bool powerEvt);
 
     bool GetPowerEvent();
