@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: playersocinterfaceimpl
+Description: SoC-specific interface implementation library for player middleware
+Version: @PROJECT_VERSION@
+Requires: gstreamer-1.0 >= 1.18.0, gstreamer-app-1.0, gstreamer-plugins-base-1.0
+Libs: -L${libdir} -lplayersocinterfaceimpl
+Cflags: -I${includedir}
