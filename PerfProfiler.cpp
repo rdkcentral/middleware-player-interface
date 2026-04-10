@@ -1,5 +1,4 @@
 #include "PerfProfiler.h"
-#include <iostream>
 #include <thread>
 #include <mutex>
 #include <unordered_map>

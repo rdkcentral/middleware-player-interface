@@ -94,7 +94,6 @@ std::size_t GetPlayerPrintableThreadID( void )
  */
 void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char *format, ...)
 {
-	//MW_PROFILE_FUNCTION();
 	// Increment log counter for each log line, wrap at 1000 for consistent 3-digit formatting
 	uint32_t logSeqNum = gMwLogCounter.fetch_add(1, std::memory_order_relaxed) % 1000;
 	
@@ -176,7 +175,6 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
  */
 void DumpBinaryBlob(const unsigned char *ptr, size_t len)
 {
-	//MW_PROFILE_FUNCTION();
 #define FIT_CHARS 64
 	char buf[FIT_CHARS + 1]; // pad for NUL
 	char *dst = buf;

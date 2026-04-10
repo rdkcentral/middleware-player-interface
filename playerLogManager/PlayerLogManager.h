@@ -32,8 +32,6 @@
 #include <algorithm>
 #include <cstdint>
 
-#include "PerfProfiler.h"
-
 /**
  * @brief Log level's of Middleware
  */
@@ -69,7 +67,6 @@ public :
 	 */	
 	static void SetLoggerInfo(bool logRedirectStatus, bool ethanLogStatus, int level, bool lock)
 	{
-		MW_PROFILE_FUNCTION();
 		PlayerLogManager::disableLogRedirection = logRedirectStatus;
 		PlayerLogManager::enableEthanLogRedirection = ethanLogStatus;
 		PlayerLogManager::setLogLevel(MW_LogLevel(level));
@@ -84,7 +81,6 @@ public :
 	 */
 	static bool isLogLevelAllowed(MW_LogLevel chkLevel)
 	{
-		MW_PROFILE_FUNCTION();
 		return (chkLevel>=mwLoglevel);
 	}
 	/**
@@ -95,7 +91,6 @@ public :
 	 */
 	static void setLogLevel(MW_LogLevel newLevel)
 	{
-		MW_PROFILE_FUNCTION();
 		if( !locked )
 		{
 			mwLoglevel = newLevel;
@@ -108,7 +103,6 @@ public :
 	 */
 	static void lockLogLevel( bool lock )
 	{
-		MW_PROFILE_FUNCTION();
 		locked = lock;
 	}
     /**     
@@ -116,7 +110,6 @@ public :
     */     
     static std::string getHexDebugStr(const std::vector<uint8_t>& data)
     {  
-		MW_PROFILE_FUNCTION();
         std::ostringstream hexSs;
         hexSs << "0x";
         hexSs << std::hex << std::uppercase << std::setfill('0');
