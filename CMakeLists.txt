@@ -42,6 +42,12 @@ set(SOCINTERFACEIMPL_DEPENDS
 
 add_library(${PROJECT_NAME} SHARED ${SOCINTERFACEIMPL_SOURCES})
 
+# Use the project() version for the shared library naming + SONAME
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION   ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE ${SOCINTERFACEIMPL_DEPENDS})
 
 # Install the library
