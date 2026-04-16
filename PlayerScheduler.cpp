@@ -178,7 +178,12 @@ void PlayerScheduler::StopScheduler()
 
 	//allow StopScheduler() to be called without warning from a nonsuspended state and
 	//not cause an error in ResumeScheduler() below due to trying to unlock an unlocked lock
-	if(!mLockOut)
+	bool lockOut;
+	{
+		std::lock_guard<std::mutex>lock(mQMutex);
+		lockOut = mLockOut;
+	}
+	if(!lockOut)
 	{
 		SuspendScheduler();
 	}
@@ -188,8 +193,8 @@ void PlayerScheduler::StopScheduler()
 	//prevent possible deadlock where mSchedulerThread is waiting for mExLock/mExMutex
 	ResumeScheduler();
 	mQCond.notify_one();
-    if (mSchedulerThread.joinable())
-        mSchedulerThread.join();
+        if (mSchedulerThread.joinable())
+            mSchedulerThread.join();
 }
 
 /**
@@ -218,6 +223,7 @@ void PlayerScheduler::ResumeScheduler()
 bool PlayerScheduler::RemoveTask(int id)
 {
 	bool ret = false;
+	std::lock_guard<std::mutex>exLock(mExMutex);
 	std::lock_guard<std::mutex>lock(mQMutex);
 	// Make sure its not currently executing/executed task
 	if (id != PLAYER_TASK_ID_INVALID && mCurrentTaskId != id)
