@@ -186,10 +186,13 @@ void PlayerScheduler::StopScheduler()
 	RemoveAllTasks();
 
 	//prevent possible deadlock where mSchedulerThread is waiting for mExLock/mExMutex
-	ResumeScheduler();
+	if(mLockOut)
+	{
+		ResumeScheduler();
+	}
 	mQCond.notify_one();
-    if (mSchedulerThread.joinable())
-        mSchedulerThread.join();
+        if (mSchedulerThread.joinable())
+            mSchedulerThread.join();
 }
 
 /**
