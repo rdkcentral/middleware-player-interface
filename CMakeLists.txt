@@ -26,7 +26,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
 endif()
-set(CMAKE_CXX_STANDARD 17)
 find_package(OpenSSL REQUIRED)
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
