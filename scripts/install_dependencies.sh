@@ -82,7 +82,7 @@ function package_exists_lin_fn() {
 function install_package_fn() {
     if ! package_exists_lin_fn $1 ; then
         echo "Installing $1"
-        sudo apt install $1 -y
+        sudo DEBIAN_FRONTEND=noninteractive apt install $1 -y
         if [ $? == 0 ] ; then
             INSTALL_STATUS_ARR+=("$1 was successfully installed.")
         else
@@ -110,7 +110,7 @@ function pip_install_package_fn()
 
 function install_pkgs_linux_fn()
 {
-    sudo apt update
+    sudo DEBIAN_FRONTEND=noninteractive apt update
     install_package_fn git
     install_package_fn cmake
     install_package_fn gcc
