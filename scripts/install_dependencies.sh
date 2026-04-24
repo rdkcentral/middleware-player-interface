@@ -82,7 +82,7 @@ function package_exists_lin_fn() {
 function install_package_fn() {
     if ! package_exists_lin_fn $1 ; then
         echo "Installing $1"
-        sudo DEBIAN_FRONTEND=noninteractive apt install $1 -y
+        sudo TZ=Etc/UTC DEBIAN_FRONTEND=noninteractive apt install $1 -y
         if [ $? == 0 ] ; then
             INSTALL_STATUS_ARR+=("$1 was successfully installed.")
         else
