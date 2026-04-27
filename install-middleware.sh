@@ -19,6 +19,10 @@
 #
 #set -x
 
+# Prevent interactive prompts during package installation (for CI/CD environments)
+export DEBIAN_FRONTEND=noninteractive
+export TZ=Etc/UTC
+
 if [[ -z "${MAKEFLAGS}" ]]; then
     export MAKEFLAGS=-j$(nproc)
 fi
