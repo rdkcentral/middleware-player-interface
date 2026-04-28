@@ -770,7 +770,7 @@ gboolean InterfacePlayerRDK::ProgressCallbackOnTimeout(gpointer user_data)
 			MonitorAV(pInterfacePlayerRDK);
 		}
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::progressCb);
-		MW_LOG_TRACE("current %d, stored %d ", g_source_get_id(g_main_current_source()), privatePlayer->gstPrivateContext->periodicProgressCallbackIdleTaskId);
+		MW_LOG_TRACE("current %d, stored %d  %s", g_source_get_id(g_main_current_source()), privatePlayer->gstPrivateContext->periodicProgressCallbackIdleTaskId);
 	}
 	return G_SOURCE_CONTINUE;
 }

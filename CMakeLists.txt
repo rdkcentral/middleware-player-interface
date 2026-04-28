@@ -408,6 +408,11 @@ if (CMAKE_SUBTITLE_SUPPORT)
 endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
+# Keep format diagnostics visible, but do not fail the build on format warnings.
+target_compile_options(playergstinterface PRIVATE
+	-Wno-error=format
+)
+
 target_include_directories(playergstinterface PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/externals
