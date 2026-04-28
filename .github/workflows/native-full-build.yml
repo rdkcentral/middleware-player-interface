@@ -2,8 +2,9 @@ name: Build Component in Native Environment
 
 on:
   pull_request:
-    branches: [ develop , main ]
+    branches: [ develop , main , feature/dev_sprint_pli ]
     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
+  workflow_dispatch:
 
 jobs:
   build-player-interface-on-pr:
