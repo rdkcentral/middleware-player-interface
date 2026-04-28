@@ -104,7 +104,9 @@ else
     echo $OSTYPE
     exit 1
 fi
+
 make
+
 # Work around for cmake deprecation of --testdir option for version 3.21.0 and above
 cmake_version=$(cmake --version | head -n 1 | awk '{print $3}')
 major_version=$(echo "$cmake_version" | cut -d. -f1)
