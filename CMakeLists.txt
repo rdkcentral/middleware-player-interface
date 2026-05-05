@@ -177,6 +177,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	MediaSample.h
 )
 if(ENABLE_MW_PROFILING)
     list(APPEND LIBPLAYERGSTINTERFACE_HEADERS PerfProfiler.h)
@@ -212,6 +213,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
 	DemuxDataTypes.h
+	MediaSample.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h

@@ -37,10 +37,10 @@
 #include "SocUtils.h"
 #include "GstUtils.h"
 #include "DemuxDataTypes.h"
+#include "MediaSample.h"
 
 // Forward declarations
 class InterfacePlayerPriv;
-class AampGrowableBuffer;
 
 struct MonitorAVState
 {
