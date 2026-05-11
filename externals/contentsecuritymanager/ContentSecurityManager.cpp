@@ -25,6 +25,7 @@
 #include "ContentProtectionFirebolt.h"
 #include "ContentSecurityManager.h"
 #include "PlayerLogManager.h"
+#include "PerfProfiler.h"
 #include <string.h>
 #include "_base64.h"
 #include <inttypes.h> // For PRId64
@@ -53,6 +54,7 @@ static bool mUseFireboltSDK = false;
  */
 ContentSecurityManager* ContentSecurityManager::GetInstance()
 {
+	MW_PROFILE_FUNCTION();
 	std::lock_guard<std::mutex> lock{InstanceMutex};
 	if(Instance == nullptr)
 	{
@@ -80,6 +82,7 @@ ContentSecurityManager* ContentSecurityManager::GetInstance()
  */
 void ContentSecurityManager::DestroyInstance()
 {
+	MW_PROFILE_FUNCTION();
 	std::lock_guard<std::mutex> lock{InstanceMutex};
 	if (Instance)
 	{
@@ -93,6 +96,7 @@ void ContentSecurityManager::DestroyInstance()
  */
 bool ContentSecurityManager::getSessionToken(std::string &token)
 {
+	MW_PROFILE_FUNCTION();
 	return false;
 }
 
@@ -101,6 +105,7 @@ bool ContentSecurityManager::getSessionToken(std::string &token)
  */
 void ContentSecurityManager::UseFireboltSDK(bool status)
 {
+	MW_PROFILE_FUNCTION();
 	MW_LOG_INFO("Set Use Firebolt SDK as %d",status);
 	mUseFireboltSDK = status;
 }
@@ -109,6 +114,7 @@ std::size_t ContentSecurityManager::getInputSummaryHash(const char* moneyTraceMe
 		size_t contMetaLen, const char* licenseRequest, const char* keySystemId,
 		const char* mediaUsage, const char* accessToken, bool isVideoMuted)
 {
+	MW_PROFILE_FUNCTION();
 	std::stringstream ss;
 	ss<< moneyTraceMetadata[0][1]<<isVideoMuted<<//sessionConfiguration (only variables)
 		//ignoring hard coded aspectDimensions 
@@ -130,6 +136,7 @@ bool ContentSecurityManager::AcquireLicense(std::string clientId, std::string ap
 		ContentSecurityManagerSession &session,
 		char** licenseResponse, size_t* licenseResponseLength, int32_t* statusCode, int32_t* reasonCode, int32_t* businessStatus, bool isVideoMuted, int sleepTime)
 {
+	MW_PROFILE_FUNCTION();
 	bool success = false;
 	auto inputSummaryHash = getInputSummaryHash(moneyTraceMetadata, contentMetadata,
 			contMetaLen, licenseRequest, keySystemId,
@@ -169,6 +176,7 @@ bool ContentSecurityManager::AcquireLicense(std::string clientId, std::string ap
  */
 bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
 {
+	MW_PROFILE_FUNCTION();
 	bool success = false;
 	success = SetDrmSessionState(sessionId, active);
 	return success;
@@ -179,6 +187,7 @@ bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
  */
 void ContentSecurityManager::ReleaseSession(int64_t sessionId)
 {
+	MW_PROFILE_FUNCTION();
 	CloseDrmSession(sessionId);
 }
 
@@ -187,6 +196,7 @@ void ContentSecurityManager::ReleaseSession(int64_t sessionId)
  */
 bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height)
 {
+	MW_PROFILE_FUNCTION();
 	bool rpcResult = false;
 	rpcResult = setWindowSize(sessionId, video_width, video_height);
 	return rpcResult;
@@ -197,6 +207,7 @@ bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video
  */
 bool ContentSecurityManager::setPlaybackSpeedState(int64_t sessionId, int64_t playback_speed, int64_t playback_position)
 {
+	MW_PROFILE_FUNCTION();
 	bool rpcResult = false;
 	rpcResult = SetPlaybackPosition(sessionId, static_cast<float>(playback_speed), static_cast<int32_t>(playback_position));
 	return rpcResult;
@@ -207,6 +218,7 @@ bool ContentSecurityManager::setPlaybackSpeedState(int64_t sessionId, int64_t pl
  */
 void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<void(uint32_t, uint32_t, const std::string&)>& callback)
 {
+	MW_PROFILE_FUNCTION();
 	SendWatermarkSessionEvent_CB = callback;
 	return;
 }
@@ -216,6 +228,7 @@ void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<voi
  */
 std::function<void(uint32_t, uint32_t, const std::string&)>& ContentSecurityManager::getWatermarkSessionEvent_CB( )
 {
+	MW_PROFILE_FUNCTION();
 	return SendWatermarkSessionEvent_CB;
 }
 

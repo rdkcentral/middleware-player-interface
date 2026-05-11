@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cstdint>
+
 /**
  * @brief Log level's of Middleware
  */
@@ -104,17 +105,17 @@ public :
 	{
 		locked = lock;
 	}
-        /**     
-         * @fn getHexDebugStr
-         */     
-        static std::string getHexDebugStr(const std::vector<uint8_t>& data)
-        {  
-                std::ostringstream hexSs;
-                hexSs << "0x";
-                hexSs << std::hex << std::uppercase << std::setfill('0');
-                std::for_each(data.cbegin(), data.cend(), [&](int c) { hexSs << std::setw(2) << c; });
-                return hexSs.str();
-        }
+    /**     
+    * @fn getHexDebugStr
+    */     
+    static std::string getHexDebugStr(const std::vector<uint8_t>& data)
+    {  
+        std::ostringstream hexSs;
+        hexSs << "0x";
+        hexSs << std::hex << std::uppercase << std::setfill('0');
+        std::for_each(data.cbegin(), data.cend(), [&](int c) { hexSs << std::setw(2) << c; });
+        return hexSs.str();
+    }
 
 };
 /**

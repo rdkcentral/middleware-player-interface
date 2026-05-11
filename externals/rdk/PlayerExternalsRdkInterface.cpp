@@ -203,6 +203,7 @@ void PlayerExternalsRdkInterface::OnResolutionPreChange(int width, int height)
 
 PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 {
+    MW_PROFILE_FUNCTION();
 #ifdef USE_DS_EVENT_SUPPORTED
 	RemoveDsClientEventHandlers();
 #endif

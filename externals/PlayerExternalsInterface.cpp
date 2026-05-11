@@ -24,6 +24,7 @@
 
 #include "PlayerExternalsInterface.h"
 #include "PlayerExternalUtils.h"
+#include "PerfProfiler.h"
 #include <utility>
 
 #ifdef IARM_MGR
@@ -38,6 +39,7 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP 
  */
 PlayerExternalsInterface::PlayerExternalsInterface()
 {
+    MW_PROFILE_FUNCTION();
 #ifdef IARM_MGR
     MW_PRE_LOGGER_LOG("Device API IARM/Firebolt\n");
     m_pIarmInterface = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
@@ -53,12 +55,14 @@ PlayerExternalsInterface::PlayerExternalsInterface()
  */
 PlayerExternalsInterface::~PlayerExternalsInterface()
 {
+    MW_PROFILE_FUNCTION();
     m_pIarmInterface = nullptr;
     s_pPlayerOP = NULL;    
 }
 
 void PlayerExternalsInterface::Initialize()
 {
+    MW_PROFILE_FUNCTION();
     if(s_pPlayerOP != NULL)
     {
         MW_PRE_LOGGER_LOG("PlayerExternalsInterface::Initialize\n");
@@ -75,6 +79,7 @@ void PlayerExternalsInterface::Initialize()
  */
 bool PlayerExternalsInterface::IsSourceUHD()
 {
+    MW_PROFILE_FUNCTION();
     return m_pIarmInterface->IsSourceUHD();
 }
 
@@ -83,6 +88,7 @@ bool PlayerExternalsInterface::IsSourceUHD()
  */
 void PlayerExternalsInterface::GetDisplayResolution(int &width, int &height)
 {
+    MW_PROFILE_FUNCTION();
     m_pIarmInterface->GetDisplayResolution(width, height);
 }
 
@@ -91,6 +97,7 @@ void PlayerExternalsInterface::GetDisplayResolution(int &width, int &height)
  */
 bool PlayerExternalsInterface::IsPlayerExternalsInterfaceInstanceActive()
 {
+    MW_PROFILE_FUNCTION();
     bool retval = false;
 
     if(s_pPlayerOP != NULL) {
@@ -104,6 +111,7 @@ bool PlayerExternalsInterface::IsPlayerExternalsInterfaceInstanceActive()
  */
 std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::GetPlayerExternalsInterfaceInstance()
 {
+    MW_PROFILE_FUNCTION();
     if(s_pPlayerOP == NULL) {
         s_pPlayerOP = std::shared_ptr<PlayerExternalsInterface>(new PlayerExternalsInterface());
     }
@@ -116,6 +124,7 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::GetPlayerExt
  */
 char * PlayerExternalsInterface::GetTR181PlayerConfig(const char * paramName, size_t & iConfigLen)
 {
+    MW_PROFILE_FUNCTION();
     char * sRet = nullptr;
     sRet = m_pIarmInterface->GetTR181Config(paramName, iConfigLen);    
     return sRet;
@@ -126,6 +135,7 @@ char * PlayerExternalsInterface::GetTR181PlayerConfig(const char * paramName, si
  */
 bool PlayerExternalsInterface::GetActiveInterface()
 {
+    MW_PROFILE_FUNCTION();
     bool bRet = false;
     bRet = m_pIarmInterface->GetActiveInterface();
     return bRet;
@@ -136,6 +146,7 @@ bool PlayerExternalsInterface::GetActiveInterface()
  */
 bool PlayerExternalsInterface::IsConfigWifiCurlHeader()
 {
+    MW_PROFILE_FUNCTION();
     bool bRet = false;
 #ifdef IARM_MGR
     bRet = true;
@@ -147,6 +158,7 @@ bool PlayerExternalsInterface::IsConfigWifiCurlHeader()
 
 void PlayerExternalsInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
 {
+    MW_PROFILE_FUNCTION();
     m_pIarmInterface->SetUseFireBoltSDK(t_use_firebolt_sdk);
 }
 
