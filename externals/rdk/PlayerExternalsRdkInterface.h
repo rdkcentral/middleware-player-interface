@@ -36,6 +36,7 @@
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
+#include "PerfProfiler.h"
 
  /*
 IARM Deprecation Note:
