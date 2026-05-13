@@ -28,12 +28,19 @@
 namespace SocUtils
 {
 	static std::shared_ptr<SocInterface> socInterface;
+
+	static std::shared_ptr<SocInterface> GetSocInterface()
+	{
+		if (!socInterface)
+		{
+			socInterface = SocInterface::CreateSocInterface();
+		}
+		return socInterface;
+	}
+
 	void Init()
 	{
-	    if (!socInterface)
-	    {
-	        socInterface = SocInterface::CreateSocInterface();
-	    }
+		(void)GetSocInterface();
 	}
 	/**
 	 * @brief Checks if AppSrc should be used for progressive playback.
@@ -45,7 +52,7 @@ namespace SocUtils
 	 */
 	bool UseAppSrcForProgressivePlayback( void )
 	{
-		return socInterface->UseAppSrc();
+		return GetSocInterface()->UseAppSrc();
 	}
 
 	/**
@@ -58,7 +65,7 @@ namespace SocUtils
 	 */
 	bool UseWesterosSink( void )
 	{
-		return socInterface->UseWesterosSink();
+		return GetSocInterface()->UseWesterosSink();
 	}
 
 	/**
@@ -70,7 +77,7 @@ namespace SocUtils
 	 */
 	bool IsAudioFragmentSyncSupported( void )
 	{
-		return socInterface->IsAudioFragmentSyncSupported();
+		return GetSocInterface()->IsAudioFragmentSyncSupported();
 	}
 
 	/**
@@ -83,7 +90,7 @@ namespace SocUtils
 	 */
 	bool EnableLiveLatencyCorrection( void )
 	{
-		return socInterface->EnableLiveLatencyCorrection();
+		return GetSocInterface()->EnableLiveLatencyCorrection();
 	}
 
 	/**
@@ -96,7 +103,7 @@ namespace SocUtils
 	 */
 	int RequiredQueuedFrames( void )
 	{
-		return socInterface->RequiredQueuedFrames();
+		return GetSocInterface()->RequiredQueuedFrames();
 	}
 
 	/**
@@ -109,7 +116,7 @@ namespace SocUtils
 	 */
 	bool EnablePTSRestamp(void)
 	{
-		return socInterface->EnablePTSRestamp();
+		return GetSocInterface()->EnablePTSRestamp();
 	}
 	/**
 	 * @brief Resets segment event flags during trickplay transitions.
@@ -118,7 +125,7 @@ namespace SocUtils
 	 */
 	bool ResetNewSegmentEvent()
 	{
-		return socInterface->ResetNewSegmentEvent();
+		return GetSocInterface()->ResetNewSegmentEvent();
 	}
 	/**
 	 *	@brief Check if GST Subtec is enabled

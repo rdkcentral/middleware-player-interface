@@ -20,6 +20,7 @@
 #include "GstUtils.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include "SocUtils.h"
 
 /**
  * @brief Get the GStreamer Caps based on the provided format and platform.
@@ -158,4 +159,3 @@ void PlayerCliGstTerm()
 {
 	gst_deinit();
 }
-
