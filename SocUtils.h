@@ -26,6 +26,7 @@
 
 namespace SocUtils
 {
+    void Init();
 	/**
 	 * @brief Checks if AppSrc should be used for progressive playback.
 	 * 
