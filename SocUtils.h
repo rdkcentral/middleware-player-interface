@@ -26,6 +26,13 @@
 
 namespace SocUtils
 {
+	/**
+	 * @brief Initializes access to SOC-specific runtime capabilities.
+	 *
+	 * This function must be called before any other SocUtils accessor is used.
+	 * It performs the required initialization for querying vendor/SOC
+	 * capabilities at runtime.
+	 */
     void Init();
 	/**
 	 * @brief Checks if AppSrc should be used for progressive playback.
