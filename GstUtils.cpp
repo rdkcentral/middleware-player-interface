@@ -149,7 +149,6 @@ GstBuffer* CreateGstBufferWithData(gconstpointer data, gsize size)
 void PlayerCliGstInit(int *argc, char ***argv)
 {
 	gst_init(argc,argv);
-	SocUtils::Init();
 }
 
 /**
