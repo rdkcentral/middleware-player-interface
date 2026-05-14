@@ -32,7 +32,7 @@ namespace SocUtils
 	 * This function can be used to perform eager initialization during startup.
 	 * SocUtils accessors also perform lazy initialization when needed.
 	 */
-    void Init();
+	void Init();
 	/**
 	 * @brief Checks if AppSrc should be used for progressive playback.
 	 * 

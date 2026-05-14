@@ -27,14 +27,9 @@
 
 namespace SocUtils
 {
-	static std::shared_ptr<SocInterface> socInterface;
-
 	static std::shared_ptr<SocInterface> GetSocInterface()
 	{
-		if (!socInterface)
-		{
-			socInterface = SocInterface::CreateSocInterface();
-		}
+		static std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
 		return socInterface;
 	}
 
