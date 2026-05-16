@@ -33,7 +33,7 @@ IFirebolt folder to be deleted, as IARM is no longer available as an alternative
 */
 
 #include "DeviceFireboltInterface.h"
-#include "fireboltaamp.h"
+#include "firebolt/entos/firebolt.h"
 #include "PlayerLogManager.h"
 #include "PlayerExternalsRdkInterface.h"
 #include "PlayerExternalUtils.h"
@@ -99,7 +99,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
        
 	MW_PRE_LOGGER_LOG("Subscribing to Firebolt hdcp change event \n");
 
-	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnHdcpChanged(
+	auto result =  Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().subscribeOnHdcpChanged(
 					[](const auto& hdcpProtocol) {
 						MW_LOG_ERR("[Event] HDCP changed");
 						HDCPEventHandlerFirebolt(hdcpProtocol);
@@ -118,7 +118,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 
 	MW_PRE_LOGGER_LOG("Subscribing to Firebolt resolution change event  \n");
 
-	result = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnVideoResolutionChanged(
+	result = Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().subscribeOnVideoResolutionChanged(
 					[](const std::string& videoResolution) 
 					{
 						MW_LOG_WARN("[Event] Video resolution changed: %s" , videoResolution.c_str());
@@ -139,14 +139,14 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 void DeviceFireboltInterface::RemoveEventHandlers()
 {
 	//removes everything ...
-    Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();        
+    Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().unsubscribeAll();        
 }
 
 void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 {
 	MW_PRE_LOGGER_LOG("Subscribing to Firebolt Network change event\n");
 
-	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnNetworkChanged(
+	auto result =  Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().subscribeOnNetworkChanged(
 					[](const auto& network) {
 						MW_LOG_ERR("[Event] network changed");
 					    getActiveInterfaceEventHandlerFirebolt(network);
@@ -165,7 +165,7 @@ void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 
 	std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
-	auto network = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().network();
+	auto network = Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().network();
 
 	if(network)
 	{
@@ -258,7 +258,7 @@ static void ResolutionHandlerFirebolt(const std::string& t_res)
 
 	MW_LOG_INFO("Resolution: %s", t_res.c_str());
 
-	auto curr_network = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
+	auto curr_network = Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().videoResolution();
 
 	if(curr_network)
 	{
