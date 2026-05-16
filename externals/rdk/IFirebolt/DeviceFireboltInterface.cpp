@@ -49,9 +49,9 @@ std::shared_ptr<DeviceFireboltInterface> s_pDeviceFireboltInterface = nullptr;
 std::mutex mFireboltConnectionMutex;
 std::condition_variable mFireboltConnectionCV;
 
-static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_HDCPVersionMap);
-static void ResolutionHandlerFirebolt(const std::string& t_res);
-static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::Device::NetworkInfoResult& t_NetworkInfoResult);
+static void HDCPEventHandlerFirebolt(const Firebolt::EntOs::Device::HDCPVersionMap& t_HDCPVersionMap);
+static void ResolutionHandlerFirebolt(const Firebolt::EntOs::Device::Resolution& t_res);
+static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::EntOs::Device::NetworkInfoResult& t_NetworkInfoResult);
 
 std::shared_ptr<DeviceFireboltInterface> DeviceFireboltInterface::GetInstance()
 {
@@ -119,9 +119,9 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 	MW_PRE_LOGGER_LOG("Subscribing to Firebolt resolution change event  \n");
 
 	result = Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().subscribeOnVideoResolutionChanged(
-					[](const std::string& videoResolution) 
+					[](const Firebolt::EntOs::Device::Resolution& videoResolution)
 					{
-						MW_LOG_WARN("[Event] Video resolution changed: %s" , videoResolution.c_str());
+						MW_LOG_WARN("[Event] Video resolution changed");
 						ResolutionHandlerFirebolt(videoResolution);
 					});
 	if(result)
@@ -169,7 +169,7 @@ void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 
 	if(network)
 	{
-		if(network.value().type == Firebolt::Device::NetworkType::WIFI)
+		if(network.value().type == Firebolt::EntOs::Device::NetworkType::WIFI)
 		{
 			MW_PRE_LOGGER_LOG("Active interface wifi\n");
 			pInstance->SetActiveInterface(true);
@@ -189,20 +189,20 @@ char * DeviceFireboltInterface::GetTR181Config(const char * paramName, size_t & 
     return nullptr;
 }
 
-static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::Device::NetworkInfoResult& t_NetworkInfoResult)
+static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::EntOs::Device::NetworkInfoResult& t_NetworkInfoResult)
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
-	if(t_NetworkInfoResult.state == Firebolt::Device::NetworkState::CONNECTED)
+	if(t_NetworkInfoResult.state == Firebolt::EntOs::Device::NetworkState::CONNECTED)
 	{
 		std::string interface = "unknown";
-		if(t_NetworkInfoResult.type == Firebolt::Device::NetworkType::WIFI)
+		if(t_NetworkInfoResult.type == Firebolt::EntOs::Device::NetworkType::WIFI)
 		{
 			interface = "wlan";
 			pInstance->SetActiveInterface(true);
 			MW_LOG_INFO("Network interface changed to wifi");
 		}
-		else if(t_NetworkInfoResult.type == Firebolt::Device::NetworkType::ETHERNET)
+		else if(t_NetworkInfoResult.type == Firebolt::EntOs::Device::NetworkType::ETHERNET)
 		{
 			interface = "eth";
 			pInstance->SetActiveInterface(false);
@@ -225,7 +225,7 @@ static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::Device::Netw
 /**
  * @brief IARM event handler for HDCP and HDMI hot plug events
  */
-static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_HDCPVersionMap)
+static void HDCPEventHandlerFirebolt(const Firebolt::EntOs::Device::HDCPVersionMap& t_HDCPVersionMap)
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
@@ -251,12 +251,12 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 /**
  * @brief IARM event handler for resolution changes
  */
-static void ResolutionHandlerFirebolt(const std::string& t_res)
+static void ResolutionHandlerFirebolt(const Firebolt::EntOs::Device::Resolution& t_res)
 {
     int width = 1280;
 	int height = 720;
 
-	MW_LOG_INFO("Resolution: %s", t_res.c_str());
+	MW_LOG_INFO("Resolution changed");
 
 	auto curr_network = Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().videoResolution();
 

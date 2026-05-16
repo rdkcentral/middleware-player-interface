@@ -44,8 +44,6 @@ class FireboltInterface{
 
         bool mIsConnected = false;
 
-        unsigned int mListenerId;
-
         FireboltInterface();
 
         bool CreateFireboltInstance(const std::string &url);
