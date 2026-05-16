@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include "fireboltaamp.h"
+#include "firebolt/entos/firebolt.h"
 
 #include <memory>
 

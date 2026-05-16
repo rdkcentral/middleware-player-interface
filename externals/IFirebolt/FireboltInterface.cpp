@@ -83,13 +83,13 @@ bool FireboltInterface::CreateFireboltInstance(const std::string &url)
 	};
 	mIsConnected = false;
 	MW_LOG_ERR("CreateFireboltInstance url: %s -- config : %s", url.c_str(), config.c_str());
-	Firebolt::Error errorInitialize = Firebolt::IFireboltAampAccessor::Instance().Initialize(config);
+	Firebolt::Error errorInitialize = Firebolt::EntOs::IFireboltAccessor::Instance().Initialize(config);
 	if (errorInitialize != Firebolt::Error::None)
 	{
 		MW_LOG_ERR("Failed to create FireboltInstance InitializeError:\"%d\"", static_cast<int>(errorInitialize));
 		return false;
 	}
-	auto errorConnect = Firebolt::IFireboltAampAccessor::Instance().Connect(callback);
+	auto errorConnect = Firebolt::EntOs::IFireboltAccessor::Instance().Connect(callback);
 	if (!errorConnect)
 	{
 		MW_LOG_ERR("Failed to create FireboltInstance ConnectError:\"%d\"",  static_cast<int>(errorConnect.error()));
@@ -113,12 +113,12 @@ void FireboltInterface::ConnectionChanged(const bool connected, int error)
 void FireboltInterface::DestroyFireboltInstance()
 {
 	MW_LOG_WARN("Destroying Firebolt instance");
-	Firebolt::IFireboltAampAccessor::Instance().Disconnect(mListenerId);
+	Firebolt::EntOs::IFireboltAccessor::Instance().Disconnect(mListenerId);
 }
 
 FireboltInterface::~FireboltInterface()
 {
-    Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().unsubscribeAll();
-    Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();
+    Firebolt::EntOs::IFireboltAccessor::Instance().ContentProtectionInterface().unsubscribeAll();
+    Firebolt::EntOs::IFireboltAccessor::Instance().DeviceInterface().unsubscribeAll();
     DestroyFireboltInstance();
 }
