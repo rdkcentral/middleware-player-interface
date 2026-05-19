@@ -90,11 +90,16 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(GST REQUIRED
+    IMPORTED_TARGET
     gstreamer-1.0
     gstreamer-base-1.0
     gstreamer-app-1.0
 )
 
-target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GST_LIBRARIES}) 
+if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    message(STATUS "PlayerCommonTests: linking GStreamer via pkg-config imported target (PkgConfig::GST). If configuration fails, ensure gstreamer and gst-plugins-base are installed and discoverable via PKG_CONFIG_PATH.")
+endif()
+
+target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} PkgConfig::GST) 
 
 player_utest_run_add(${EXEC_NAME})
