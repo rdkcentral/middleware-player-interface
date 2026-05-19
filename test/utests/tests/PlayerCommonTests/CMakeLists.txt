@@ -97,7 +97,7 @@ pkg_check_modules(GST REQUIRED
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    message(STATUS "PlayerCommonTests: linking GStreamer via pkg-config imported target (PkgConfig::GST). If configuration fails, ensure gstreamer and gst-plugins-base are installed and discoverable via PKG_CONFIG_PATH.")
+    message(STATUS "PlayerCommonTests: on Darwin, linking GStreamer via pkg-config imported target (PkgConfig::GST). If configuration fails, ensure gstreamer and gst-plugins-base are installed and discoverable via PKG_CONFIG_PATH.")
 endif()
 
 target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} PkgConfig::GST) 
