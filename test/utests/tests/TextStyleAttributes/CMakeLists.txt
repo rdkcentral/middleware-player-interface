@@ -23,6 +23,7 @@ include_directories(${PLAYER_ROOT})
 include_directories(${PLAYER_ROOT}/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
+include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerJsonObject)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/mp4demux)
@@ -39,8 +40,8 @@ set(TEST_SOURCES    GetTextStyleAttributesTests.cpp
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/subtec/subtecparser/TextStyleAttributes.cpp
-		${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp
-		${PLAYER_ROOT}/baseConversion/_base64.cpp)
+		${PLAYER_ROOT}/baseConversion/_base64.cpp
+		${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}

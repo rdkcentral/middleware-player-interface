@@ -24,6 +24,7 @@ set(EXEC_NAME GstHandlerControlTests)
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
+include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerJsonobject)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 

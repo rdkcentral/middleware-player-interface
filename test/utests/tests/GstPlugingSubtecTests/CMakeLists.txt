@@ -30,6 +30,7 @@ include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
 include_directories(${PLAYER_ROOT}/mp4demux)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/vendor)
 
 
 include_directories(${GTEST_INCLUDE_DIRS})

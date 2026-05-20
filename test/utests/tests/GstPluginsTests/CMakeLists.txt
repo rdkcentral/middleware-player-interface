@@ -23,6 +23,7 @@ set(EXEC_NAME PlayerGstPluginTests)
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ave ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
+include_directories(${PLAYER_ROOT}/vendor)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/playerJsonObject)
@@ -30,6 +31,7 @@ include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
 include_directories(${PLAYER_ROOT}/mp4demux)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/externals/contentsecuritymanager)
 
 
 include_directories(${GTEST_INCLUDE_DIRS})

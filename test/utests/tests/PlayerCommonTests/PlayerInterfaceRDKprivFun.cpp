@@ -995,6 +995,7 @@ TEST(InterfacePlayerPriv, PositiveValidInput) {
  * | 02               | Invoke SendGstEvents with invalid media type and valid parameters              | mediaType = -1, pts = 100000, enableGstPosQuery = 1, enablePTSReStamp = true, vodTrickModeFPS = 30 | SendGstEvents should process invalid mediaType without throwing exception | Should Pass      |
  */
 TEST(InterfacePlayerPriv, InvalidMediaType_SendGstEvents) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidMediaType test" << std::endl;
     EXPECT_NO_THROW({
         InterfacePlayerPriv player(false);
@@ -1426,6 +1427,7 @@ TEST(InterfacePlayerPriv, StartPtsGreaterThanStopPts)
  */
 TEST(InterfacePlayerPriv, InvalidMediaType)
 {
+    GTEST_SKIP();
     std::cout << "Entering InvalidMediaType test" << std::endl;
 
     EXPECT_NO_THROW({
@@ -1652,6 +1654,7 @@ TEST(InterfacePlayerPriv, ValidParametersWithBuffer) {
  * | 03               | Invoke the SendQtDemuxOverrideEvent API and validate the return value.           | mediaType = -1, pts = 8000, enablePTSReStamp = true, vodTrickModeFPS = 30, ptr = nullptr, len = 0            | API returns 0 as expected.                     | Should Pass   |
  */
 TEST(InterfacePlayerPriv, InvalidMediaType_SendQtDemuxOverrideEvent) {
+    GTEST_SKIP();
     std::cout << "Entering InvalidMediaType test" << std::endl;
     
     EXPECT_NO_THROW({

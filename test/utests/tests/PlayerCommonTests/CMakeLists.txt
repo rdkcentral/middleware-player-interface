@@ -17,6 +17,15 @@
 
 include(GoogleTest)
 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GST REQUIRED
+    gstreamer-1.0
+    gstreamer-base-1.0
+    gstreamer-app-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+
 set(PLAYER_ROOT "../../../../")
 set(UTESTS_ROOT "../../")
 set(EXEC_NAME PlayerCommonTests)
@@ -30,12 +39,15 @@ include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
 include_directories(${PLAYER_ROOT}/mp4demux)
 include_directories(${PLAYER_ROOT}/externals)
+include_directories(${PLAYER_ROOT}/vendor)
 
 
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
+include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
+include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${LibXml2_INCLUDE_DIRS})
 include_directories(${LIBCJSON_INCLUDE_DIRS})
 include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
@@ -92,9 +104,34 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED
     gstreamer-1.0
     gstreamer-base-1.0
-    gstreamer-app-1.0
+    gstreamer-app-1.0)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+
+#target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GST_LIBRARIES}) 
+
+# --- Link dirs (important for macOS) ---
+link_directories(
+  ${GSTREAMER_LIBRARY_DIRS}
+  ${GSTREAMERAPP_LIBRARY_DIRS}
+  ${GSTREAMERBASE_LIBRARY_DIRS}
 )
 
-target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GST_LIBRARIES}) 
+# --- Link libraries (common for Linux + macOS) ---
+target_link_libraries(${EXEC_NAME} PRIVATE
+  fakes
+  pthread
+  ${GLIB_LINK_LIBRARIES}
+  ${OS_LD_FLAGS}
+  ${GMOCK_LINK_LIBRARIES}
+  ${GTEST_LINK_LIBRARIES}
+  ${GSTREAMERAPP_LINK_LIBRARIES}
+  ${GSTREAMERBASE_LINK_LIBRARIES}
+  ${GSTREAMER_LINK_LIBRARIES}
+)
 
+# --- RPATH (fixes macOS runtime issues) ---
+set_target_properties(${EXEC_NAME} PROPERTIES
+  BUILD_RPATH "${GSTREAMER_LIBRARY_DIRS}"
+)
 player_utest_run_add(${EXEC_NAME})

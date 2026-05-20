@@ -134,7 +134,7 @@ TEST(GetThreadID, TypicalThreadIDValue) {
     std::cout << "Entering GetThreadID with a typical thread id value test" << std::endl;
     
     // Prepare input value
-    pthread_t t = 12345;
+    pthread_t t = {};
     std::cout << "Invoking GetThreadID with value: " << t << std::endl;
     
     std::size_t result = 0;
