@@ -86,7 +86,7 @@ SocPlatformType InferPlatformFromPluginScan()
 	
 	if( platform == SOC_PLATFORM_DEFAULT )
 	{
-		MW_LOG_WARN("InterfacePlayerRDK: None of the plugins found in registry");
+		MW_LOG_WARN("InterfacePlayerRDK: Coveritytesting None of the plugins found in registry");
 	}
 	return platform;
 }

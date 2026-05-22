@@ -74,7 +74,7 @@ std::shared_ptr<HlsDrmBase> PlayerHlsDrmSessionInterface::createSession(const st
 /**
  * @brief Registers GetAccessKey callback from application
  */
-void PlayerHlsDrmSessionInterface::RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback)
+void PlayerHlsDrmSessionInterface::RegisterGetHlsDrmSessionCb(GetHlsDrmSessionCallback Callback)
 {
-	return m_pHlsDrmSessionManager->RegisterGetHlsDrmSessionCb(Callback);
+	return m_pHlsDrmSessionManager->RegisterGetHlsDrmSessionCb(std::move(Callback));
 }
