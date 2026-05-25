@@ -65,6 +65,22 @@ struct DrmSessionContext
 		drmSession = other.drmSession;
 		return *this;
 	}
+	// Move constructor - moves data vector, copies pointer, mutex remains per-instance
+	DrmSessionContext(DrmSessionContext&& other) noexcept : data(std::move(other.data)), drmSession(other.drmSession)
+	{
+		other.drmSession = NULL;
+	}
+	// Move assignment
+	DrmSessionContext& operator=(DrmSessionContext&& other) noexcept
+	{
+		if (this != &other)
+		{
+			data = std::move(other.data);
+			drmSession = other.drmSession;
+			other.drmSession = NULL;
+		}
+		return *this;
+	}
 	~DrmSessionContext()
 	{
 	}
