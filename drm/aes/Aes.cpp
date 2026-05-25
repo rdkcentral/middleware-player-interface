@@ -214,10 +214,22 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 void AesDec::WaitForKeyAcquireCompleteUnlocked(int timeInMs, DrmReturn &err, std::unique_lock<std::mutex>& lock )
 {
 	MW_LOG_INFO( "waiting for key acquisition to complete,wait time:%d",timeInMs );
-	if( std::cv_status::timeout == mCond.wait_for(lock, std::chrono::milliseconds(timeInMs)) ) // block until drm ready
+	// Wait with predicate - returns false if timeout, true if condition met
+	bool acquiredBeforeTimeout = mCond.wait_for(lock, std::chrono::milliseconds(timeInMs),
+		[this]() { return mDrmState != eDRM_ACQUIRING_KEY; });
+	
+	if (!acquiredBeforeTimeout)
 	{
 		MW_LOG_WARN("AesDec:: wait for key acquisition timed out");
 		err = eDRM_KEY_ACQUISITION_TIMEOUT;
+	}
+	else if (mDrmState == eDRM_KEY_ACQUIRED)
+	{
+		err = eDRM_SUCCESS;
+	}
+	else if (mDrmState == eDRM_KEY_FAILED)
+	{
+		err = eDRM_ERROR;
 	}
 }
 

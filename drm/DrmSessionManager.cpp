@@ -219,7 +219,7 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 
 void DrmSessionManager::setVideoWindowSize(int width, int height)
 {
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	MW_LOG_WARN("In DrmSessionManager:: setting video window size w:%d x h:%d mMaxDRMSessions=%d sessionID=[%" PRId64 "]",width,height,mMaxDRMSessions,localSession.getSessionID());
 	if(localSession.isSessionValid())
 	{
@@ -235,7 +235,7 @@ void DrmSessionManager::setVideoMute(bool live, double currentLatency, bool live
 	MW_LOG_WARN("Video mute status (new): %d, state changed: %.1s, pos: %f", isVideoOnMute, (isVideoOnMute == mIsVideoOnMute) ? "N":"Y", positionMs);
 
 	mIsVideoOnMute.store(isVideoOnMute);
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), !mIsVideoOnMute.load());
@@ -255,7 +255,7 @@ void DrmSessionManager::setVideoMute(bool live, double currentLatency, bool live
 void DrmSessionManager::hideWatermarkOnDetach(void)
 {
 	MW_LOG_WARN("Clearing first frame flag and de-activating watermark.");
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
@@ -267,7 +267,7 @@ void DrmSessionManager::hideWatermarkOnDetach(void)
 void DrmSessionManager::setPlaybackSpeedState(bool live, double currentLatency, bool livepoint , double liveOffsetMs, int speed, double positionMs, bool firstFrameSeen)
 {
 	bool isVideoOnMute=mIsVideoOnMute.load();
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	MW_LOG_WARN("In DrmSessionManager::after calling setPlaybackSpeedState speed=%d position=%f sessionID=[%" PRId64 "], mute: %d",speed, positionMs, localSession.getSessionID(), isVideoOnMute);
 	mCurrentSpeed.store(speed);
 	if(firstFrameSeen)
@@ -955,7 +955,7 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
  */
 void DrmSessionManager::notifyCleanup()
 {
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		// Set current session to inactive
