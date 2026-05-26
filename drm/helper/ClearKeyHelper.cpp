@@ -192,7 +192,7 @@ void ClearKeyHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo, 
 		{
 			std::string keyURI;
 			resolveURL(keyURI, mDrmInfo.manifestURL, mDrmInfo.keyURI.c_str(), mDrmInfo.bPropagateUriParams);
-			licenseRequest.url = keyURI;
+			licenseRequest.url = std::move(keyURI);
 		}
 		else
 		{

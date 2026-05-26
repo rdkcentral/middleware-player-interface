@@ -72,8 +72,8 @@ public:
 	/**
 	 *@brief Registers GetAccessKey callback from application
 	 */
-	void RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback){
-			GetHlsDrmSessionCb = Callback;
+	void RegisterGetHlsDrmSessionCb(GetHlsDrmSessionCallback Callback){
+		GetHlsDrmSessionCb = std::move(Callback);
 	};
 };
 

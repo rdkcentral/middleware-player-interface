@@ -38,7 +38,7 @@ class OCDMGSTSessionAdapter : public OCDMSessionAdapter
 {
         void ExtractSEI( GstBuffer *buffer);
 public:
-	OCDMGSTSessionAdapter(DrmHelperPtr drmHelper,  DrmCallbacks *drmCallbacks) : OCDMSessionAdapter(drmHelper, drmCallbacks)
+	OCDMGSTSessionAdapter(DrmHelperPtr drmHelper,  DrmCallbacks *drmCallbacks) : OCDMSessionAdapter(std::move(drmHelper), drmCallbacks)
 , OCDMGSTSessionDecrypt(nullptr)
 	{
                 const char* ocdmgstsessiondecrypt = "opencdm_gstreamer_session_decrypt_buffer";
