@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <utility>
 
 /*
  *@enum PlayerThunderAccessPlugin : Supported Plugins
@@ -110,12 +111,12 @@ struct PlayerAudioData{
     std::string mixType;
 
     PlayerAudioData(std::string lang, std::string content_Type, std::string nm, std::string t, int pk_int, std::string mix_Type)
-    : language(lang),
-    contentType(content_Type),
-    name(nm),
-    type(t),
+    : language(std::move(lang)),
+    contentType(std::move(content_Type)),
+    name(std::move(nm)),
+    type(std::move(t)),
     pk(pk_int),
-    mixType(mix_Type)
+    mixType(std::move(mix_Type))
     {
     }
 
@@ -146,11 +147,11 @@ struct PlayerTextData{
     int pk;
 
     PlayerTextData(std::string t, std::string lang, int ccSer, std::string cc_Type, std::string nm, int pk_int)
-    :type(t),
-    language(lang),
+    :type(std::move(t)),
+    language(std::move(lang)),
     ccServiceNumber(ccSer),
-    ccType(cc_Type),
-    name(nm),
+    ccType(std::move(cc_Type)),
+    name(std::move(nm)),
     pk(pk_int)
     {
     }

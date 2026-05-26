@@ -60,7 +60,7 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mIsVideoOnMute(false)
  		,mCurrentSpeed(0)
 		,mFirstFrameSeen(false)
-		,mPlayerSendWatermarkSessionUpdateEventCB(watermarkSessionUpdateCallback)
+		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
 	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
 	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
@@ -799,7 +799,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				data.push_back(std::move(keyIdEntry));
 			}
 
-			cachedKeyIDs[sessionSlot].data = data;
+			cachedKeyIDs[sessionSlot].data = std::move(data);
 		}
 		cachedKeyIDs[sessionSlot].creationTime = GetCurrentTimeMS();
 		cachedKeyIDs[sessionSlot].isPrimaryKeyId = isPrimarySession;
