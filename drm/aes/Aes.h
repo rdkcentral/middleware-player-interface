@@ -158,16 +158,16 @@ public:
         /*
          *@brief Registers acquireLicense callback from application 
          */
-        void RegisterNotifyDrmErrorCb(const NotifyCallback Callback)      {
-               NotifyDrmErrorCb = Callback;
+        void RegisterNotifyDrmErrorCb(NotifyCallback Callback)      {
+               NotifyDrmErrorCb = std::move(Callback);
         };
         using TerminateCurlInstanceCallback = std::function<void(int mCurlInstance)>;
         TerminateCurlInstanceCallback TerminateCurlInstanceCb;
         /*
          *@brief Registers acquireLicense callback from application 
          */
-        void RegisterTerminateCurlInstanceCb(const TerminateCurlInstanceCallback Callback)      {
-               TerminateCurlInstanceCb = Callback;
+        void RegisterTerminateCurlInstanceCb(TerminateCurlInstanceCallback Callback)      {
+               TerminateCurlInstanceCb = std::move(Callback);
         };
 	  /** ProfileUpdate callback for updating the profile bucket type to application */
                 using ProfileUpdateCallback = std::function<void(bool type, int bucketType)>;
@@ -176,8 +176,8 @@ public:
         /*
          *@brief Registers ProfileUpdate  callback from application
          */
-        void RegisterProfileUpdateCb(const ProfileUpdateCallback Callback){
-               ProfileUpdateDrmDecrypt = Callback;
+        void RegisterProfileUpdateCb(ProfileUpdateCallback Callback){
+               ProfileUpdateDrmDecrypt = std::move(Callback);
         };
 
 	  /** ProfileUpdate callback for getting the access key from application  */
@@ -187,8 +187,8 @@ public:
         /*
          *@brief Registers GetAccessKey callback from application
          */
-        void RegisterGetAccessKeyCb(const GetAccessKeyCallback Callback){
-               GetAccessKeyCb = Callback;
+        void RegisterGetAccessKeyCb(GetAccessKeyCallback Callback){
+               GetAccessKeyCb = std::move(Callback);
         };
 	  /** ProfileUpdate callback for initiating the curl init  from application  */
         using GetCurlInitCallback = std::function<void(int& curlInstance )>;
@@ -197,8 +197,8 @@ public:
         /*
          *@brief Registers GetAccessKey callback from application
          */
-        void RegisterGetCurlInitCb(const GetCurlInitCallback Callback){
-               GetCurlInitCb = Callback;
+        void RegisterGetCurlInitCb(GetCurlInitCallback Callback){
+               GetCurlInitCb = std::move(Callback);
         };
 private:
 
