@@ -29,6 +29,7 @@
 #include "HlsDrmBase.h"
 #include "DrmSession.h"
 #include <functional>
+#include <utility>
 #include "DrmHelper.h"
 
 enum DrmMediaType
@@ -72,8 +73,8 @@ public:
 	/**
 	 *@brief Registers GetAccessKey callback from application
 	 */
-	void RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback){
-			GetHlsDrmSessionCb = Callback;
+	void RegisterGetHlsDrmSessionCb(GetHlsDrmSessionCallback Callback){
+		GetHlsDrmSessionCb = std::move(Callback);
 	};
 };
 
