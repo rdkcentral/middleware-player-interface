@@ -23,6 +23,7 @@
  */
 #include "PlayerUtils.h"
 #include "_base64.h"
+#include <utility>
 
 /**
  * @brief Check if string start with a prefix
@@ -262,7 +263,7 @@ void trim(std::string& src)
 	{
 		size_t last = src.find_last_not_of(" \n\r\t\f\v");
 		std::string dst = src.substr(first, (last - first + 1));
-		src = dst;
+		src = std::move(dst);
 	}
 }
 
