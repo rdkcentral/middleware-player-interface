@@ -217,9 +217,27 @@ DrmData * ClearKeySession::generateKeyRequest(string& destinationURL, uint32_t t
 				cJSON *keyIds = cJSON_CreateArray();
 				if(keyIds)
 				{
-					cJSON_AddItemToArray(keyIds, cJSON_CreateString(urlEncodedkeyId));
-					cJSON_AddItemToObject(licenseRequest, "kids", keyIds);
-					cJSON_AddItemToObject(licenseRequest, "type",cJSON_CreateString("temporary"));
+				cJSON *keyIdItem = cJSON_CreateString(urlEncodedkeyId);
+				cJSON *typeItem = cJSON_CreateString("temporary");
+				
+				if (!keyIdItem || !cJSON_AddItemToArray(keyIds, keyIdItem))
+				{
+					MW_LOG_ERR("Failed to add keyId to array");
+					if(keyIdItem) cJSON_Delete(keyIdItem);
+					cJSON_Delete(keyIds);
+				}
+				else if (!cJSON_AddItemToObject(licenseRequest, "kids", keyIds))
+				{
+					MW_LOG_ERR("Failed to add kids to license request");
+					cJSON_Delete(keyIds);
+				}
+				else if (!typeItem || !cJSON_AddItemToObject(licenseRequest, "type", typeItem))
+				{
+					MW_LOG_ERR("Failed to add type to license request");
+					if(typeItem) cJSON_Delete(typeItem);
+				}
+				else
+				{
 					char* requestBody = cJSON_PrintUnformatted(licenseRequest);
 					if(requestBody)
 					{
@@ -229,9 +247,10 @@ DrmData * ClearKeySession::generateKeyRequest(string& destinationURL, uint32_t t
 						cJSON_free(requestBody);
 					}
 				}
-				cJSON_Delete(licenseRequest);
 			}
-			free(urlEncodedkeyId);
+			cJSON_Delete(licenseRequest);
+		}
+		free(urlEncodedkeyId);
 		}
 	}
 	return licenseChallenge;
