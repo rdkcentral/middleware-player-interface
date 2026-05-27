@@ -98,7 +98,12 @@ bool DefaultSocInterface::IsVideoDecoder(const char* name)
  */
 bool DefaultSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
-	return StartsWith(name,"rialtomsevideosink") || StartsWith(name,"rialtomseaudiosink");
+	if (!name)
+	{
+		return false;
+	}
+
+	return StartsWith(name, "rialtomsevideosink") || StartsWith(name, "rialtomseaudiosink");
 }
 
 /**
@@ -207,6 +212,11 @@ long long SocInterface::GetVideoPts(GstElement */*video_sink*/, GstElement */*vi
 }
 bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
 {
+        if (inputStr == nullptr || prefix == nullptr)
+        {
+                return false;
+        }
+
         bool rc = true;
         while( *prefix )
         {
@@ -268,5 +278,12 @@ void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_cla
 
 bool DefaultSocInterface::IsVideoMaster(GstElement *videoSink)
 {
-	return true;
+        gboolean isMaster{TRUE};
+        GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(videoSink),"is-master");
+        if( pspec!=NULL )
+        { // rialto-specific
+                g_object_get(videoSink, "is-master", &isMaster, nullptr);
+                MW_LOG_INFO("is-master %d", isMaster);
+        }
+        return (isMaster == TRUE);
 }

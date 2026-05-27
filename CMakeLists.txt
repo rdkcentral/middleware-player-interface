@@ -34,6 +34,13 @@ endif()
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
 
+if(COVERAGE_ENABLED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)

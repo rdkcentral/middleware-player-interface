@@ -177,7 +177,7 @@ else
 fi
 
 if [ "$build_coverage" -eq "1" ]; then
-    lcov --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --output-file all.info && \
+    lcov --directory ${TEST_DIR} -b ${PLAYER_DIR} --capture --rc geninfo_unexecuted_blocks=1 --ignore-errors mismatch --output-file all.info && \
     lcov --remove all.info "*/test/*" "*/.libs/*" "/usr/*" --output-file all.cleaned.info && \
     genhtml --demangle-cpp -o CombinedCoverage all.cleaned.info
     echo "Checking for CombinedCoverage directory in $(pwd):"
