@@ -34,8 +34,10 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdio.h>
-#include "Aes.h"
 
+#define private public
+#include "Aes.h"
+#undef private
 
 class DrmAesDecTests : public ::testing::Test
 {
@@ -1334,9 +1336,12 @@ TEST(DrmAesDecTests, SignalKeyAcquired_successfully_notifies_waiting_threads)
     std::cout<<"Exiting SignalKeyAcquired_successfully_notifies_waiting_threads test"<<std::endl;
 }
 /**
- * @brief Verify that WaitForKeyAcquireCompleteUnlocked returns eDRM_SUCCESS under an unlocked context
+ * @brief Verify that WaitForKeyAcquireCompleteUnlocked completes without timeout when key is acquired
  *
- * This test verifies that the AesDec::WaitForKeyAcquireCompleteUnlocked method successfully completes key acquisition when invoked with a valid timeout and an unlocked mutex lock. It ensures that the API returns the expected value (eDRM_SUCCESS) confirming proper behavior.
+ * This test verifies that the AesDec::WaitForKeyAcquireCompleteUnlocked method successfully waits for key acquisition 
+ * to complete when invoked with a valid timeout. The function leaves err unchanged (eDRM_ERROR) when the key is acquired 
+ * because it only reports wait failures (timeout, errors); the actual operation (e.g., Decrypt) is responsible for 
+ * setting success when it completes successfully.
  *
  * **Test Group ID:** Basic: 01
  * **Test Case ID:** 033
@@ -1350,8 +1355,8 @@ TEST(DrmAesDecTests, SignalKeyAcquired_successfully_notifies_waiting_threads)
  * | Variation / Step | Description                                                                              | Test Data                                                                                           | Expected Result                                     | Notes         |
  * | :--------------: | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------- |
  * | 01               | Initialize AesDec instance, std::mutex, and std::unique_lock to prepare the test setup     | No input parameters required                                                                          | Objects initialized successfully                    | Should be successful |
- * | 02               | Invoke WaitForKeyAcquireCompleteUnlocked API method using timeInMs = 1000 and a valid lock   | timeInMs = 1000, return_value = uninitialized, lock = valid unique_lock on mtx                        | API call returns eDRM_SUCCESS in return_value         | Should Pass   |
- * | 03               | Verify that the expected return value matches eDRM_SUCCESS via EXPECT_EQ assertion           | return_value = eDRM_SUCCESS                                                                           | EXPECT_EQ assertion passes confirming successful result | Should be successful |
+ * | 02               | Invoke WaitForKeyAcquireCompleteUnlocked API method using timeInMs = 1000 and a valid lock   | timeInMs = 1000, return_value = uninitialized, lock = valid unique_lock on mtx                        | API completes without timeout, leaves err as eDRM_ERROR | Should Pass   |
+ * | 03               | Verify that err remains eDRM_ERROR (function doesn't presume operation success)             | return_value = eDRM_ERROR                                                                           | EXPECT_EQ assertion passes confirming correct behavior | Should be successful |
  */
 TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition)
 {
@@ -1359,9 +1364,20 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition)
 
     AesDec aesDec;
 
-    std::mutex mtx;
 
-    std::unique_lock<std::mutex> lock(mtx);
+    std::unique_lock<std::mutex> lock(aesDec.mMutex);
+
+    aesDec.mDrmState = eDRM_ACQUIRING_KEY;
+
+    // Spawn thread to simulate key acquisition success
+    std::thread keyAcquiredThread([&aesDec]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Simulate key fetch delay
+        {
+            std::lock_guard<std::mutex> lg(aesDec.mMutex);
+            aesDec.mDrmState = eDRM_KEY_ACQUIRED;
+        }
+        aesDec.mCond.notify_all();  // Signal waiting thread that key is ready
+    });
 
     int timeInMs = 1000;
     DrmReturn return_value;
@@ -1372,7 +1388,11 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition)
 
     std::cout << "Method returned err with value " << return_value << std::endl;
 
-    EXPECT_EQ(return_value, eDRM_KEY_ACQUIRED);
+    // WaitForKeyAcquireCompleteUnlocked leaves err unchanged when key is acquired;
+    // only the actual operation (e.g., Decrypt) will set eDRM_SUCCESS
+    EXPECT_EQ(return_value, eDRM_ERROR);
+
+    keyAcquiredThread.join();
 
     std::cout << "Exiting WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition test" << std::endl;
 }
@@ -1404,9 +1424,9 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTime
 
     AesDec aesDec;
 
-    std::mutex mtx;
+    std::unique_lock<std::mutex> lock(aesDec.mMutex);
 
-    std::unique_lock<std::mutex> lock(mtx);
+    aesDec.mDrmState = eDRM_ACQUIRING_KEY;
 
     int timeInMs = 0;
     DrmReturn return_value;
@@ -1417,6 +1437,7 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTime
 
     std::cout << "Method returned err with value " << return_value << std::endl;
 
+    // - Returns correct timeout error code
     EXPECT_EQ(return_value, eDRM_KEY_ACQUISITION_TIMEOUT);
 
     std::cout << "Exiting WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTimeout test" << std::endl;

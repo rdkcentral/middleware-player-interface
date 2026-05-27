@@ -228,7 +228,7 @@ void AesDec::WaitForKeyAcquireCompleteUnlocked(int timeInMs, DrmReturn &err, std
 	}
 	else if (mDrmState == eDRM_KEY_ACQUIRED)
 	{
-		err = eDRM_SUCCESS;
+		// Key ready - leave err unchanged; caller must verify actual operation success
 	}
 	else if (mDrmState == eDRM_KEY_FAILED)
 	{
