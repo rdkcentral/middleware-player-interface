@@ -34,8 +34,10 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdio.h>
-#include "Aes.h"
 
+#define private public
+#include "Aes.h"
+#undef private
 
 class DrmAesDecTests : public ::testing::Test
 {
@@ -1359,9 +1361,20 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition)
 
     AesDec aesDec;
 
-    std::mutex mtx;
 
-    std::unique_lock<std::mutex> lock(mtx);
+    std::unique_lock<std::mutex> lock(aesDec.mMutex);
+
+    aesDec.mDrmState = eDRM_ACQUIRING_KEY;
+
+    // Spawn thread to simulate key acquisition success
+    std::thread keyAcquiredThread([&aesDec]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Simulate key fetch delay
+        {
+            std::lock_guard<std::mutex> lg(aesDec.mMutex);
+            aesDec.mDrmState = eDRM_KEY_ACQUIRED;
+        }
+        aesDec.mCond.notify_all();  // Signal waiting thread that key is ready
+    });
 
     int timeInMs = 1000;
     DrmReturn return_value;
@@ -1372,7 +1385,10 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition)
 
     std::cout << "Method returned err with value " << return_value << std::endl;
 
-    EXPECT_EQ(return_value, eDRM_KEY_ACQUIRED);
+    // - Returns correct success code for acquired key
+    EXPECT_EQ(return_value, eDRM_SUCCESS);
+
+    keyAcquiredThread.join();
 
     std::cout << "Exiting WaitForKeyAcquireCompleteUnlocked_SuccessfulKeyAcquisition test" << std::endl;
 }
@@ -1404,9 +1420,9 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTime
 
     AesDec aesDec;
 
-    std::mutex mtx;
+    std::unique_lock<std::mutex> lock(aesDec.mMutex);
 
-    std::unique_lock<std::mutex> lock(mtx);
+    aesDec.mDrmState = eDRM_ACQUIRING_KEY;
 
     int timeInMs = 0;
     DrmReturn return_value;
@@ -1417,6 +1433,7 @@ TEST(DrmAesDecTests, WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTime
 
     std::cout << "Method returned err with value " << return_value << std::endl;
 
+    // - Returns correct timeout error code
     EXPECT_EQ(return_value, eDRM_KEY_ACQUISITION_TIMEOUT);
 
     std::cout << "Exiting WaitForKeyAcquireCompleteUnlocked_ZeroWaitTimeImmediateTimeout test" << std::endl;
