@@ -31,6 +31,8 @@
 bool SocInterface::mIsRialtoMode = false;
 
 
+/**Initially re-sets the IsRialtoMode */
+bool SocInterface::mIsRialtoMode = false;
 /**
  * @brief Checks if the input string starts with the given prefix.
  *

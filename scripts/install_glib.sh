@@ -26,7 +26,7 @@ function install_build_glib_fn()
         echo "Installing glib..."
         do_clone_fn  https://github.com/GNOME/glib.git -b 2.78.0
         pushd glib
-        export CXXFLAGS="-U_LIBCPP_ENABLE_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST"
+	export CXXFLAGS="-U_LIBCPP_ENABLE_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST"
         meson setup build -Dtests=false -Dinstalled_tests=false && cd build
         meson compile
         INSTALL_STATUS_ARR+=("glib was successfully installed.")
