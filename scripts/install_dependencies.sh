@@ -18,7 +18,7 @@
 # limitations under the License.
 #
 
-declare DEFAULT_OPENSSL_VERSION="openssl@3.4"
+declare DEFAULT_OPENSSL_VERSION="openssl@3"
 
 function install_pkgs_pkgconfig_darwin_fn()
 {
@@ -82,7 +82,7 @@ function package_exists_lin_fn() {
 function install_package_fn() {
     if ! package_exists_lin_fn $1 ; then
         echo "Installing $1"
-        sudo apt install $1 -y
+        sudo TZ=Etc/UTC DEBIAN_FRONTEND=noninteractive apt install $1 -y
         if [ $? == 0 ] ; then
             INSTALL_STATUS_ARR+=("$1 was successfully installed.")
         else
@@ -110,7 +110,7 @@ function pip_install_package_fn()
 
 function install_pkgs_linux_fn()
 {
-    sudo apt update
+    sudo DEBIAN_FRONTEND=noninteractive apt update
     install_package_fn git
     install_package_fn cmake
     install_package_fn gcc
@@ -199,7 +199,7 @@ function install_pkgs_fn()
           brew update
       fi
 
-      install_pkgs_darwin_fn git json-glib cmake "openssl@3.4" libxml2 ossp-uuid cjson gnu-sed jpeg-turbo taglib speex mpg123 meson ninja pkg-config flac asio jsoncpp lcov gcovr jq curl
+      install_pkgs_darwin_fn git json-glib cmake "openssl@3" libxml2 ossp-uuid cjson gnu-sed jpeg-turbo taglib speex mpg123 meson ninja pkg-config flac asio jsoncpp lcov gcovr jq curl
       install_pkgs_darwin_fn coreutils websocketpp "boost@1.85" jansson libxkbcommon cppunit gnu-sed fontconfig doxygen graphviz tinyxml2 openldap krb5
 
       # ORC causes compile errors on x86_64 Mac, but not on ARM64

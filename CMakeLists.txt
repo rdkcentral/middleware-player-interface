@@ -18,12 +18,14 @@
 
 cmake_minimum_required(VERSION 3.5)
 project(Playergstinterface VERSION 0.1.0)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Set default install prefix
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
 endif()
-set(CMAKE_CXX_STANDARD 17)
 find_package(OpenSSL REQUIRED)
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
@@ -33,6 +35,13 @@ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
+
+if(COVERAGE_ENABLED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+endif()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
@@ -112,7 +121,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 	execute_process (
 		COMMAND bash -c "xcrun --show-sdk-path" OUTPUT_VARIABLE osxSdkPath OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
-	set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++14 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
+	set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++17 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
 	set(OS_LD_FLAGS "${OS_LD_FLAGS} -F${osxSdkPath}/System/Library/Frameworks -framework Cocoa -L${osxSdkPath}/../MacOSX.sdk/usr/lib -L.libs/lib -L/usr/local/lib/")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot ${osxSdkPath}/../MacOSX.sdk -I/usr/local/include")
 	string(STRIP ${OS_LD_FLAGS} OS_LD_FLAGS)
@@ -171,6 +180,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	MediaSample.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -203,6 +213,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
 	DemuxDataTypes.h
+	MediaSample.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h

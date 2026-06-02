@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v3
       
       - name: native build
-        run: yes | ./install-middleware.sh -s subtec
+        run: yes | ./install-middleware.sh -c -s subtec
 
       # Run L1 tests
       - name: Run unit tests with coverage - L1
