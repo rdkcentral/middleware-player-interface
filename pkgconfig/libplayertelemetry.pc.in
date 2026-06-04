@@ -1,0 +1,12 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: playertelemetry
+Description: Telemetry 2.0 support for player middleware
+Version: @PROJECT_VERSION@
+Requires: libcjson
+Requires.private: playerlogmanager
+Libs: -L${libdir} -lplayertelemetry
+Cflags: -I${includedir}

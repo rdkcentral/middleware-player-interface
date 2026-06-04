@@ -406,6 +406,13 @@ if (CMAKE_SUBTITLE_SUPPORT)
 
 	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
 endif()
+
+if (CMAKE_PLAYER_TELEMETRY_SUPPORT)
+	message("CMAKE_PLAYER_TELEMETRY_SUPPORT set")
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DPLAYER_TELEMETRY_SUPPORT")
+	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/playerTelemetry)
+	add_subdirectory(playerTelemetry)
+endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
 target_include_directories(playergstinterface PUBLIC
@@ -463,6 +470,9 @@ target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINT
 target_link_libraries(playergstinterface subtec)
 target_link_libraries(playergstinterface baseconversion)
 target_link_libraries(playergstinterface playerfbinterface)
+if (CMAKE_PLAYER_TELEMETRY_SUPPORT)
+	target_link_libraries(playergstinterface playertelemetry)
+endif()
 set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} {LIBPLAYERGSTINTERFACE_MOCK_SOURCES})
 
 # Optionally build pi-cli for l2
