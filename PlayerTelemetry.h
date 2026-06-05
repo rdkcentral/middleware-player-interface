@@ -48,6 +48,7 @@
 #include <map>
 #include "PlayerLogManager.h"
 
+#include <telemetry_busmessage_sender.h>
 /**
  * @class TelemetryPayload
  * @brief Key/value container for telemetry event context data.
@@ -114,7 +115,12 @@ public:
      * @brief Emit a telemetry event with no additional payload.
      * @param[in] eventName  One of the TELEMETRY_EVENT_* markers from TelemetryMarkers.h.
      */
-    static void sendEvent(const std::string& eventName);
+    static void sendEvent(const std::string& eventName)
+    {
+	MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
+        t2_event_d(const_cast<char*>(eventName.c_str()), 1);
+
+    }
 
     /**
      * @brief Emit a telemetry event with a structured key/value payload.
