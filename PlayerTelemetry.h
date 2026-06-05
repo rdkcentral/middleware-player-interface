@@ -117,7 +117,7 @@ public:
     static void sendEvent(const std::string& eventName)
     {
         MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-	T2ERROR t2Error = t2_event_d(&marker[0], 1);
+	    t2_event_d(&marker[0], 1);
     }
 
     /**
