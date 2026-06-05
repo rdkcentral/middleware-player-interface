@@ -116,8 +116,8 @@ public:
      */
     static void sendEvent(const std::string& eventName)
     {
-        MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-	    t2_event_d(&marker[0], 1);
+       MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
+       t2_event_d(eventName.c_str(), 1);
     }
 
     /**
