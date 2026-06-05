@@ -114,11 +114,7 @@ public:
      * @brief Emit a telemetry event with no additional payload.
      * @param[in] eventName  One of the TELEMETRY_EVENT_* markers from TelemetryMarkers.h.
      */
-    static void sendEvent(const std::string& eventName)
-    {
-       MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-       t2_event_d(eventName.c_str(), 1);
-    }
+    static void sendEvent(const std::string& eventName);
 
     /**
      * @brief Emit a telemetry event with a structured key/value payload.
