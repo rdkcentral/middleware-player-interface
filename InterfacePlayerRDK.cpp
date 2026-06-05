@@ -578,7 +578,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		{
 #ifdef PLAYER_TELEMETRY_SUPPORT
 			PlayerTelemetry2 Telemetry;
-			Telemetry.SendEvent(ELEMETRY_EVENT_PLAYBACK_STARTED);
+			Telemetry.sendEvent(ELEMETRY_EVENT_PLAYBACK_STARTED);
 #endif
 			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PLAYBACK_STARTED);
 		}
