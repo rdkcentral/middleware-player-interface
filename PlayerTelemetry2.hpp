@@ -62,6 +62,8 @@ public:
      * @param[in] data - Data to be sent
      */
     bool send(const std::string &markerName, const char *  data);
+
+    void sendEvent(const std::string& eventName);
 };
 
 #endif // __PLAYER_TELEMETRY_2_H__

@@ -136,3 +136,9 @@ bool PlayerTelemetry2::send( const std::string &markerName, const char *  data)
     }
     return bRet;
 }
+void PlayerTelemetry2::sendEvent(const std::string& eventName)
+{
+    bool init = mInitializer.isInitialized();
+    MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
+    t2_event_d(const_cast<char*>(eventName.c_str()), 1);
+}

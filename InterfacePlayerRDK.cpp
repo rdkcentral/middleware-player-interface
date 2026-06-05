@@ -106,6 +106,10 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
 	// start Scheduler Worker for task handling
 	mScheduler.StartScheduler();
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	PlayerTelemetry2 telemetry;
+	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
+#endif
 	PlayerTelemetry::sendEvent(TELEMETRY_EVENT_INITIALIZED);
 }
 
@@ -572,6 +576,10 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		}
 		else
 		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			PlayerTelemetry2 Telemetry;
+			Telemetry.SendEvent(ELEMETRY_EVENT_PLAYBACK_STARTED);
+#endif
 			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PLAYBACK_STARTED);
 		}
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
