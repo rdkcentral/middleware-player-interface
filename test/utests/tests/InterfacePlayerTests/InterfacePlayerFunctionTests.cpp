@@ -3298,3 +3298,48 @@ TEST_F(InterfacePlayerTests, GetVideoPTS_PropertyProbeOnceAtCreation)
 	EXPECT_EQ(mInterfaceGstPlayer->GetVideoPTS(), ptsValue);
 	EXPECT_EQ(mInterfaceGstPlayer->GetVideoPTS(), ptsValue);
 }
+/**
+ * @brief Test that NotifyFragmentCachingComplete defers PLAYING while seekPausedState is active.
+ *
+ * This matches the middleware behavior required for seek-with-keepPaused flows,
+ * where fragment caching completion should not force playback transition until
+ * explicit resume is requested.
+ */
+TEST_F(InterfacePlayerTests, NotifyFragmentCachingComplete_DefersPlayingWhenSeekPaused)
+{
+	// Arrange: Create a pending play state and protect it with seekPausedState
+	mPlayerContext->pendingPlayState = true;
+	mPlayerContext->seekPausedState = true;
+	mPlayerContext->buffering_target_state = GST_STATE_PAUSED;
+
+	// Act: Notify fragment caching complete
+        mInterfaceGstPlayer->NotifyFragmentCachingComplete();
+
+
+	// Assert: Pending state should remain until explicit resume, and target stays PLAYING
+	EXPECT_EQ(mPlayerContext->pendingPlayState, true);
+	EXPECT_EQ(mPlayerContext->seekPausedState, true);
+	EXPECT_EQ(mPlayerContext->buffering_target_state, GST_STATE_PLAYING);
+}
+
+/**
+ * @brief Test that SetPlayBackRate clears seekPausedState when resuming from a seek-paused state.
+ *
+ * When a non-zero rate arrives while seekPausedState is active and the pipeline is still paused,
+ * the middleware should force resume and clear the protection state.
+ */
+TEST_F(InterfacePlayerTests, SetPlayBackRate_ForceResumeClearsSeekPausedState)
+{
+	// Arrange: Simulate a paused pipeline in seek-paused state
+	mPlayerContext->paused = true;
+	mPlayerContext->seekPausedState = true;
+	mPlayerContext->pendingPlayState = true;
+	mPlayerContext->pipeline = nullptr;
+
+	// Act: Request a resume rate
+        bool result = mInterfaceGstPlayer->SetPlayBackRate(1.0);
+	// Assert: Middleware should clear seekPausedState and pendingPlayState, and return true
+	EXPECT_TRUE(result);
+	EXPECT_EQ(mPlayerContext->seekPausedState, false);
+	EXPECT_EQ(mPlayerContext->pendingPlayState, false);
+}
