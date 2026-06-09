@@ -1985,7 +1985,10 @@ TEST_F(InterfacePlayerTests, Pause_Success)
 	mPlayerContext->pipeline = &gst_element_pipeline;
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, NotNull(), NotNull(), _))
-		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillRepeatedly(DoAll(
+			SetArgPointee<1>(GST_STATE_PAUSED),
+			SetArgPointee<2>(GST_STATE_NULL),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(_, GST_STATE_PAUSED))
 		.WillOnce(Return(GST_STATE_CHANGE_ASYNC));
@@ -3334,7 +3337,23 @@ TEST_F(InterfacePlayerTests, SetPlayBackRate_ForceResumeClearsSeekPausedState)
 	mPlayerContext->paused = true;
 	mPlayerContext->seekPausedState = true;
 	mPlayerContext->pendingPlayState = true;
-	mPlayerContext->pipeline = nullptr;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	// Mock the socInterface->SetPlaybackRate call
+	auto mockSocInterface = std::make_shared<NiceMock<MockSocInterfaceForPts>>();
+	mInterfacePrivatePlayer->socInterface = mockSocInterface;
+	ON_CALL(*mockSocInterface, SetPlaybackRate).WillByDefault(Return(true));
+
+	// Mock gst_element_set_state to return PLAYING state change
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+
+	// Mock gst_element_get_state for both the initial call and validateStateWithMsTimeout
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, NotNull(), NotNull(), _))
+		.WillRepeatedly(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_NULL),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 	// Act: Request a resume rate
         bool result = mInterfaceGstPlayer->SetPlayBackRate(1.0);
