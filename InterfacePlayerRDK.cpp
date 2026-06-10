@@ -2998,7 +2998,7 @@ bool InterfacePlayerRDK::HandleVideoBufferSent()
 
 void InterfacePlayerRDK::SetPlayerName(std::string name)
 {
-	interfacePlayerPriv->mPlayerName = name;
+	interfacePlayerPriv->mPlayerName = std::move(name);
 }
 
 /**

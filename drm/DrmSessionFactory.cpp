@@ -47,12 +47,12 @@ DrmSession* DrmSessionFactory::GetDrmSession(DrmHelperPtr drmHelper, DrmCallback
 		else
 #endif
 		{
-			return new OCDMBasicSessionAdapter(drmHelper, drmCallbacks);
+			return new OCDMBasicSessionAdapter(std::move(drmHelper), drmCallbacks);
 		}
 	}
 	else
 	{
-		return new OCDMGSTSessionAdapter(drmHelper, drmCallbacks);
+		return new OCDMGSTSessionAdapter(std::move(drmHelper), drmCallbacks);
 	}
 #else // No form of OCDM support. Attempt to fallback to hardcoded session classes
     if (systemId == CLEAR_KEY_SYSTEM_STRING)
