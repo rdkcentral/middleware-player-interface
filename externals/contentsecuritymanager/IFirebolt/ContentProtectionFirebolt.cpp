@@ -244,7 +244,7 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 	}
 
 	{
-		std::lock_guard<std::mutex> lock(mContentProtectionMutex);
+		std::unique_lock<std::mutex> lock(mContentProtectionMutex);
 		if (!accessTokenStr.empty() &&
 				!contentMetaDataStr.empty() &&
 				!licenseRequestStr.empty())
@@ -406,7 +406,11 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 					{
 						++retryCount;
 						MW_LOG_WARN("ContentProtection license request failed, response for %s : statusCode: %d, reasonCode: %d, so retrying with delay %d, retry count : %u", apiName, *statusCode, *reasonCode, sleepTime, retryCount );
-						ms_sleep(sleepTime);						
+						// Release lock before sleeping to avoid blocking other threads
+						lock.unlock();
+						ms_sleep(sleepTime);
+						// Re-acquire lock for next iteration
+						lock.lock();
 					}
 					else
 					{
