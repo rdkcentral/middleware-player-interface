@@ -229,10 +229,9 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 						 * where input data changes e.g. following a call to updatePlaybackSession
 						 * the input data to the shared session is updated here*/
 						newSession = ContentSecurityManagerSession(response["sessionId"].Number(), 
-								ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetadata,
-									contMetaLen, licenseRequest, keySystemId,
-									mediaUsage, accessToken, isVideoMuted));
-
+							ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetaDataStr.c_str(),
+								contMetaLen, licenseRequestStr.c_str(), keySystemId,
+								mediaUsage, accessTokenStr.c_str(), isVideoMuted));
 						std::string license = response["license"].String();
 						MW_LOG_TRACE("SecManager obtained license with length: %d and data: %s",license.size(), license.c_str());
 						if (!license.empty())
