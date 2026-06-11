@@ -273,13 +273,13 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 				if(!update)
 				{
 					result = OpenDrmSession(clientId, appId, keySystem,
-							licenseRequest, initData, sessionId, errorCode, drmSession);
+							licenseRequestStr, initData, sessionId, errorCode, drmSession);
 				}
 				else
 				{
 					result = 
 						UpdateDrmSession(sessionId, errorCode,
-								licenseRequest, initData, drmSession);					
+								licenseRequestStr, initData, drmSession);
 				}
 				if (drmSession.empty())
 				{
@@ -326,17 +326,21 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 										*licenseResponseLength = licenseDecodedLen;
 
 										MW_LOG_INFO("ContentProtection license post base64 decode length: %zu", *licenseResponseLength);
+										ret = true;
 									}
 									else
 									{
 										MW_LOG_ERR("ContentProtection failed to allocate memory for license!");
 									}
-									free(licenseDecoded);
-									ret = true;
 								}
 								else
 								{
 									MW_LOG_ERR("ContentProtection license base64 decode failed!");
+								}
+								
+								if (licenseDecoded != nullptr)
+								{
+									free(licenseDecoded);
 								}
 							}
 						}

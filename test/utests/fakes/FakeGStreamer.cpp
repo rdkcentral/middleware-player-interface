@@ -1081,6 +1081,12 @@ void gst_base_transform_set_gap_aware(GstBaseTransform *trans, gboolean gap_awar
 void gst_base_transform_set_in_place(GstBaseTransform *trans, gboolean in_place){}
 void gst_base_transform_set_passthrough(GstBaseTransform *trans, gboolean passthrough){}
 
+GType gst_verimatrixdecryptor_get_type(void) { return G_TYPE_OBJECT; }
+GType gst_subtecbin_get_type(void) { return G_TYPE_OBJECT; }
+GType gst_subtecmp4transform_get_type(void) { return G_TYPE_OBJECT; }
+GType gst_subtecsink_get_type(void) { return G_TYPE_OBJECT; }
+GType gst_vipertransform_get_type(void) { return G_TYPE_OBJECT; }
+
 #ifdef __cplusplus
 }
 #endif

@@ -36,6 +36,13 @@ endif()
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
 
+if(COVERAGE_ENABLED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
@@ -168,6 +175,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	MediaSample.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -200,6 +208,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
 	DemuxDataTypes.h
+	MediaSample.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h
