@@ -28,7 +28,7 @@
 #include <gst/base/gstbasetransform.h>
 #include "PlayerLogManager.h"
 
-#define REQUIRED_QUEUED_FRAMES_DEFAULT (5+1)
+#define REQUIRED_QUEUED_FRAMES_DEFAULT 4 // reduced from 6 to 4 to satisfy least common denominator
 
 typedef gboolean (*AcceptCapsFunc)(GstBaseTransform *, GstPadDirection, GstCaps *);
 
@@ -90,10 +90,20 @@ protected:
 	
 	/*config to indicate platforms using westeros sink*/
 	bool mUsingWesterosSink = false;
+
+	/* Set to true once DiscoverVideoDecoderProperties() or
+	 * DiscoverVideoSinkProperties() finds the 'video-pts' GObject property
+	 * on a video element at creation time. */
+	bool mVideoPtsPropertySupported{false};
 	
 public:
 	SocInterface() {}
 
+	/** 
+	 * @brief Set rialto mode or not
+	 * @return True when rialto is enabled 
+	 */
+	static bool mIsRialtoMode;
 	/**
 	 * @brief Sets the state of Westeros Sink usage.
 	 *
@@ -140,6 +150,11 @@ public:
 	 * @return A pointer to the created SocInterface object.
 	 */
 	static std::shared_ptr<SocInterface> CreateSocInterface();
+	/**
+	 * @brief Creates an instance of the SoC-specific interface with argument as rialtomode or not .
+	 * @return A pointer to the created SocInterface object.
+	 */
+	static std::shared_ptr<SocInterface> CreateSocInterface(bool isRialto);
 
 	/**
 	 * @brief Configure the accept caps
@@ -291,7 +306,7 @@ public:
 	 * @return True on success, false otherwise.
 	 */
 	virtual bool SetRateCorrection() = 0;
-	
+
 	/**
 	 * @brief Check if the given name is a video sink.
 	 * @param name Element name.
@@ -362,10 +377,29 @@ public:
 	 * @param video_dec The video decoder element.
 	 * @param isWesteros A flag for Westeros logic.
 	 *
-	 * @return Video PTS in nanoseconds, or -1 on error.
+	 * @return Video PTS in in 90 kHz ticks, or -1 if the 'video-pts'
+	 *         property is not supported on this platform.
 	 */
 	virtual long long GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros);
-	
+
+	/**
+	 * @brief Discover decoder-specific properties at video decoder creation time.
+	 *
+	 * Called once when the video decoder element transitions NULL -> READY.
+	 *
+	 * @param element The video decoder GStreamer element.
+	 */
+	virtual void DiscoverVideoDecoderProperties(GstElement *element);
+
+	/**
+	 * @brief Discover sink-specific properties at video sink creation time.
+	 *
+	 * Called once when the video sink element transitions READY -> PAUSED.
+	 *
+	 * @param element The video sink GStreamer element.
+	 */
+	virtual void DiscoverVideoSinkProperties(GstElement *element);
+
 	/**
 	 * @brief Notify first video frame.
 	 */
@@ -476,5 +510,27 @@ public:
 	 * @return 'true' if video master otherwise false.
 	 */
 	virtual bool IsVideoMaster(GstElement *videoSink) = 0;
+
+protected:
+	/**
+	 * @brief Probe the 'video-pts' GObject property on @p element and update
+	 *        mVideoPtsPropertySupported. Used by DiscoverVideoDecoderProperties()
+	 *        and DiscoverVideoSinkProperties() implementations.
+	 *
+	 * @param element The GStreamer element to probe.
+	 */
+	void CheckVideoPtsPropertySupport(GstElement *element);
+
+	/**
+	 * @brief Read the raw 'video-pts' value from a GStreamer element.
+	 *
+	 * Encapsulates the null-guard, property probe, and g_object_get call
+	 * shared by all SocInterface subclass overrides of GetVideoPts().
+	 *
+	 * @param element The GStreamer element to query
+	 * @return The PTS value in 90 kHz ticks, -1 if the 'video-pts'
+	 *         property is not supported, or 0 if element is NULL.
+	 */
+	long long ReadVideoPts(GstElement *element);
 };
 #endif
