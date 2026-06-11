@@ -35,7 +35,7 @@
 
 class HlsDrmSessionManager : public PlayerHlsDrmSessionInterfaceBase
 {
-	DrmSession* mDrmSession;
+	DrmSession* mDrmSession = nullptr;
 public:
 	/**
 	 * @fn getInstance 
