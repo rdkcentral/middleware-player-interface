@@ -20,7 +20,6 @@
 #include <memory>
 #include <iostream>
 
-#include "PlayerLogManager.h"
 #include "VerimatrixHelper.h"
 #include "DrmUtils.h"
 #include "DrmConstants.h"
@@ -122,15 +121,10 @@ void VerimatrixHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo
 
 void VerimatrixHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
 {
-	if(!licenseResponse)
-	{
-		MW_LOG_WARN("invalid license response");
-		return;
-	}
-	if (mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
-		licenseResponse->setData(mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
-	else if (mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)
-		licenseResponse->setData(reinterpret_cast<const char*>(mKeyID.data()), mKeyID.size());
+	if(mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
+		licenseResponse->setData((unsigned char*)mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
+	else if(mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)
+		licenseResponse->setData((unsigned char*)mKeyID.data(), mKeyID.size());
 	else
 		MW_LOG_WARN("unknown mediaFormat %d", mDrmInfo.mediaFormat);
 }

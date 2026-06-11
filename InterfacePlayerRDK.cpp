@@ -89,8 +89,7 @@ const char * CipherTypeToString(CipherType type)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
+mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library");
@@ -283,14 +282,10 @@ static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMe
  * @param rate Bitrate.
  * @param pipelineName Pipeline name.
  * @param PipelinePriority Pipeline priority.
- * @param FirstFrameFlag Whether the first-frame callback is required.
- * @param manifestUrl URL of the manifest used to configure stream setup.
- * @param enableLiveLatency Whether to enable live-latency mode in the
- *        RialtoSink streams-info context (passed as enable-live-latency).
  */
 void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subFormat,
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
-										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
+										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl)
 {
 	mFirstFrameRequired = FirstFrameFlag;
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
@@ -476,24 +471,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 			MW_LOG_WARN("Couldn't get video-sink");
 		}
 	}
-
-	if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
-	{
-		MW_LOG_INFO("RialtoSink subtitle_sink = %p ",interfacePlayerPriv->gstPrivateContext->subtitle_sink);
-		GstContext *context = gst_context_new("streams-info", false);
-		GstStructure *contextStructure = gst_context_writable_structure(context);
-		if( !interfacePlayerPriv->gstPrivateContext->subtitle_sink ) MW_LOG_WARN( "subtitle_sink==NULL" );
-		gst_structure_set(
-						  contextStructure,
-						  "video-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->video_sink)?0x1u:0x0u,
-						  "audio-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->audio_sink)?0x1u:0x0u,
-						  "text-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->subtitle_sink)?0x1u:0x0u,
-					  "enable-live-latency", G_TYPE_BOOLEAN, (gboolean)enableLiveLatency,
-						  NULL );
-		gst_element_set_context(GST_ELEMENT(interfacePlayerPriv->gstPrivateContext->pipeline), context);
-		gst_context_unref(context);
-	}
-
 	if (interfacePlayerPriv->gstPrivateContext->pauseOnStartPlayback && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED - pause on playback enabled");
@@ -533,6 +510,21 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 	interfacePlayerPriv->gstPrivateContext->numberOfVideoBuffersSent = 0;
 	interfacePlayerPriv->gstPrivateContext->decodeErrorMsgTimeMS = 0;
 	interfacePlayerPriv->gstPrivateContext->decodeErrorCBCount = 0;
+	if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
+	{
+		MW_LOG_INFO("RialtoSink subtitle_sink = %p ",interfacePlayerPriv->gstPrivateContext->subtitle_sink);
+		GstContext *context = gst_context_new("streams-info", false);
+		GstStructure *contextStructure = gst_context_writable_structure(context);
+		if( !interfacePlayerPriv->gstPrivateContext->subtitle_sink ) MW_LOG_WARN( "subtitle_sink==NULL" );
+		gst_structure_set(
+						  contextStructure,
+						  "video-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->video_sink)?0x1u:0x0u,
+						  "audio-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->audio_sink)?0x1u:0x0u,
+						  "text-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->subtitle_sink)?0x1u:0x0u,
+						  nullptr );
+		gst_element_set_context(GST_ELEMENT(interfacePlayerPriv->gstPrivateContext->pipeline), context);
+		gst_context_unref(context);
+	}
 }
 
 /**
@@ -1404,10 +1396,8 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 
 	interfacePlayerPriv->gstPrivateContext->syncControl.disable();
 	interfacePlayerPriv->gstPrivateContext->aSyncControl.disable();
-	{
-		std::unique_lock<std::mutex> sourceSetupLock(mSourceSetupMutex);
-		mSourceSetupCV.notify_all();
-	}
+	std::unique_lock<std::mutex> sourceSetupLock(mSourceSetupMutex);
+	mSourceSetupCV.notify_all();
 	if(interfacePlayerPriv->gstPrivateContext->bus)
 	{
 		gst_bus_remove_watch(interfacePlayerPriv->gstPrivateContext->bus);           /* Remove the watch from bus so that gstreamer no longer sends messages to it */
@@ -1494,13 +1484,10 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	interfacePlayerPriv->gstPrivateContext->paused = false;
 	interfacePlayerPriv->gstPrivateContext->pipelineState = GST_STATE_NULL;
 	// Reset mute and volume params
-	{
-		const std::lock_guard<std::mutex> lock(interfacePlayerPriv->gstPrivateContext->volumeMuteMutex);
-		interfacePlayerPriv->gstPrivateContext->audioMuted = false;
-		interfacePlayerPriv->gstPrivateContext->videoMuted = false;
-		interfacePlayerPriv->gstPrivateContext->audioVolume = 1.0;
-	}
+	interfacePlayerPriv->gstPrivateContext->audioMuted = false;
+	interfacePlayerPriv->gstPrivateContext->videoMuted = false;
 	interfacePlayerPriv->gstPrivateContext->subtitleMuted = false;
+	interfacePlayerPriv->gstPrivateContext->audioVolume = 1.0;
 
 	// Reset mp4demux playback semantic shim on pipeline event reset
 	interfacePlayerPriv->gstPrivateContext->isMp4DemuxPlayback = false;
@@ -1792,16 +1779,11 @@ static void gst_need_data(void *source, guint size, void *_this)
 static void gst_enough_data(GstElement *source, void *_this)
 {
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
+	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	if(pInterfacePlayerRDK)
 	{
-		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-		HANDLER_CONTROL_HELPER_CALLBACK_VOID();
-		bool shouldProcessEnoughData = false;
-		{
-			std::unique_lock<std::mutex> lock(pInterfacePlayerRDK->mSourceSetupMutex);
-			shouldProcessEnoughData = !pInterfacePlayerRDK->mPauseInjector;
-		}
-		if (shouldProcessEnoughData) // avoid processing enough data if the downloads are already disabled.
+		if (!pInterfacePlayerRDK->mPauseInjector) // avoid processing enough data if the downloads are already disabled.
 		{
 			GstMediaType mediaType = gstGetMediaTypeForSource(source, pInterfacePlayerRDK);
 			if (mediaType != eGST_MEDIATYPE_DEFAULT)
@@ -2959,8 +2941,7 @@ bool InterfacePlayerRDK::WaitForSourceSetup(int mediaType)
 	{
 		// Wait for either a notification or timeout
 		auto timeout = std::chrono::milliseconds(waitInterval);
-		auto status = mSourceSetupCV.wait_for(lock, timeout);
-		(void)status;
+		mSourceSetupCV.wait_for(lock, timeout);
 		if (mPauseInjector)
 		{
 			//Playback stopped by application
@@ -3014,19 +2995,13 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 	if (eGST_MEDIATYPE_SUBTITLE == mediaType && discontinuity)
 	{
-		bool pauseInjectorState;
-    		{
-        		std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-        		pauseInjectorState = !mPauseInjector;
-    		}
-
 		MW_LOG_WARN( "[%d] Discontinuity detected - setting subtitle clock to %" GST_TIME_FORMAT " dAR %d rP %d init %d sC %d",
-				mediaType,
-				GST_TIME_ARGS(pts),
-				pauseInjectorState,
-				stream->resetPosition,
-				initFragment,
-				stream->sourceConfigured );
+					mediaType,
+					GST_TIME_ARGS(pts),
+					!mPauseInjector,
+					stream->resetPosition,
+					initFragment,
+					stream->sourceConfigured );
 		//gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_NONE, pts);
 	}
 
@@ -3039,13 +3014,11 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	if (!stream->sourceConfigured && stream->format != GST_FORMAT_INVALID)
 	{
 		bool status = WaitForSourceSetup(type);
+
+		if (mPauseInjector || !status)
 		{
-			std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-			if (this->mPauseInjector || !status)
-			{
-				pthread_mutex_unlock(&stream->sourceLock);
-				return false;
-			}
+			pthread_mutex_unlock(&stream->sourceLock);
+			return false;
 		}
 	}
 	if (isFirstBuffer)
@@ -3066,11 +3039,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	}
 
 	sendNewSegmentEvent = segmentEventSent;
-	bool bPushBuffer;
-	{
-		std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-		bPushBuffer = !this->mPauseInjector;
-	}
+	bool bPushBuffer = !mPauseInjector;
 	if(bPushBuffer)
 	{
 		GstBuffer *buffer;
@@ -3088,36 +3057,15 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 			pts_offset = 0;
 		}
 
-		// Capture size and raw pointer before transferring shared ownership to
-		// GStreamer.  A heap-allocated copy of the shared_ptr is used as
-		// user_data so the notify callback can release the last reference,
-		// which frees the underlying storage (vector or buffer array) via
-		// the shared_ptr's deleter.  mData is shared_ptr<const uint8_t>; we
-		// cast to the mutable gpointer type required by GStreamer's C API only
-		// here at the boundary, and pass GST_MEMORY_FLAG_READONLY so GStreamer
-		// will not mutate the underlying bytes.
-		const gsize dataSize = static_cast<gsize>(sample.mDataSize);
-		gpointer rawPtr = const_cast<gpointer>(
-			static_cast<gconstpointer>(sample.mData.get()));
-
-		// Guard: GStreamer does not defend against null data with non-zero
-		// size (or zero size), either of which would lead to UB in downstream
-		// gst_buffer_map / appsrc push.  Reject early without leaking state.
-		if (!rawPtr || dataSize == 0)
-		{
-			pthread_mutex_unlock(&stream->sourceLock);
-			return false;
-		}
-
-		auto* lifetimeRef = new std::shared_ptr<const uint8_t>(std::move(sample.mData));
-
+		std::vector<uint8_t>* heapVector = new std::vector<uint8_t>(std::move(sample.mData));
+		
 		buffer = gst_buffer_new_wrapped_full(
 			GST_MEMORY_FLAG_READONLY,
-			rawPtr, dataSize,
-			0, dataSize,
-			lifetimeRef,
-			[](gpointer user_data) noexcept {
-				delete static_cast<std::shared_ptr<const uint8_t>*>(user_data);
+			(gpointer)heapVector->data(), heapVector->size(),
+			0, heapVector->size(),
+			heapVector,
+			[](gpointer user_data) {
+				delete static_cast<std::vector<uint8_t>*>(user_data);
 			}
 		);
 
@@ -3137,12 +3085,11 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 			}
 
 			MW_LOG_INFO("Sending segment for mediaType[%d]. pts %" G_GUINT64_FORMAT " dts %" G_GUINT64_FORMAT " len:%zu init:%d discontinuity:%d dur:%" G_GUINT64_FORMAT " ptsOffset:%" G_GINT64_FORMAT,
-						mediaType, pts, dts, static_cast<size_t>(dataSize), initFragment, discontinuity, duration, pts_offset);
+						mediaType, pts, dts, heapVector->size(), initFragment, discontinuity, duration, pts_offset);
 		}
 		else
 		{
-			// gst_buffer_new_wrapped_full failed; release our reference manually.
-			delete lifetimeRef;
+			delete heapVector;
 			bPushBuffer = false;
 		}
 
@@ -3242,20 +3189,11 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
-			bool isVideoMaster = true;
-			if (socInterface)
+			bool isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
+			if( !isVideoMaster )
 			{
-				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
-			}
-			else
-			{
-				MW_LOG_WARN("socInterface is null, assuming video master");
-			}
-
-			// set applied_rate to trickplay rate if video sink doesn't use vmaster
-			// so that it can correctly handle there being no audio
-			if (!isVideoMaster)
-			{
+				// set applied_rate to trickplay rate if video sink doesn't use vmaster
+				// so that it can correctly handle there being no audio
 				segment.applied_rate = gstPrivateContext->rate;
 			}
 		}
@@ -3999,70 +3937,9 @@ bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePr
  */
 long long InterfacePlayerRDK::GetVideoPTS(void)
 {
-	long long currentPTS = 0;
+	gint64 currentPTS = 0;
 	currentPTS = interfacePlayerPriv->socInterface->GetVideoPts(interfacePlayerPriv->gstPrivateContext->video_sink, interfacePlayerPriv->gstPrivateContext->video_dec, interfacePlayerPriv->gstPrivateContext->using_westerossink);
-	if (currentPTS == -1)
-	{
-		/* The 'video-pts' property is not supported on this platform.
-		 * Fall back to gst_element_query_position and convert ms to 90 kHz
-		 * ticks (1 ms = 90 ticks) so that callers relying on PTS units
-		 * (90 kHz) keep working. */
-		MW_LOG_TRACE("InterfacePlayerRDK-'video-pts' property is not supported on this platform; Fall back to gst_element_query_position");
-		currentPTS = static_cast<long long>(MPEG_PTS_TICKS_PER_MS * GetVideoPosition());
-	}
-	return currentPTS;
-}
-
-/**
- *  @brief Gets the current video playback position using
- *         gst_element_query_position on the video sinkbin.
- *
- *  @retval Current playback position in milliseconds, or 0 if the
- *          pipeline is not in PLAYING/PAUSED state or the query fails.
- */
-long long InterfacePlayerRDK::GetVideoPosition(void)
-{
-	gint64 position = 0;
-	GstElement *pipeline = interfacePlayerPriv->gstPrivateContext->pipeline;
-	GstElement *videoSinkbin = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin;
-
-	if (pipeline && videoSinkbin)
-	{
-		GstState state = GST_STATE_NULL;
-		GstState pending = GST_STATE_NULL;
-		GstClockTime timeout = 0;/* non-blocking state query */
-		GstStateChangeReturn rc = gst_element_get_state(pipeline, &state, &pending, timeout);
-
-		/* Position can only be queried reliably when the pipeline is in
-		 * PLAYING or PAUSED state, so we first verify the pipeline state
-		 * via gst_element_get_state before issuing the position query. */
-		if (rc == GST_STATE_CHANGE_SUCCESS &&
-		   (state == GST_STATE_PLAYING || state == GST_STATE_PAUSED))
-		{
-			if (!gst_element_query_position(videoSinkbin, GST_FORMAT_TIME, &position))
-			{
-				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position failed");
-				position = 0;
-			}
-			else if (position == static_cast<gint64>(GST_CLOCK_TIME_NONE))
-			{
-				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position returned GST_CLOCK_TIME_NONE");
-				position = 0;
-			}
-		}
-		else
-		{
-			MW_LOG_INFO("InterfacePlayerRDK: pipeline not in PLAYING/PAUSED (state=%d, rc=%d), cannot query video position", state, rc);
-		}
-	}
-	else
-	{
-		MW_LOG_WARN("InterfacePlayerRDK: cannot query video position; pipeline=%p videoSinkbin=%p",
-					pipeline, videoSinkbin);
-	}
-
-	MW_LOG_TRACE("InterfacePlayerRDK: position(ms) = %" G_GINT64_FORMAT , GST_TIME_AS_MSECONDS(position));
-	return static_cast<long long>( (GST_TIME_AS_MSECONDS(position)) );
+	return (long long)currentPTS;
 }
 
 /**
@@ -4150,7 +4027,7 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		MW_LOG_WARN("## Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
 		privatePlayer->gstPrivateContext->stream[type].bufferUnderrun = true;
 
-		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate == GST_NORMAL_PLAY_RATE))
+		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate > 0))
 		{
 			if (!privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
 			{
@@ -4684,7 +4561,7 @@ static gboolean buffering_timeout (gpointer data)
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				// application can schedule a retune based on isBufferingTimeoutConditionMet
 			}
-			else if (frames == -1 || frames >= pInterfacePlayerRDK->m_gstConfigParam->framesToQueue || (privatePlayer->gstPrivateContext->buffering_timeout_cnt > 0 && --privatePlayer->gstPrivateContext->buffering_timeout_cnt == 0))
+			else if (frames == -1 || frames >= pInterfacePlayerRDK->m_gstConfigParam->framesToQueue || privatePlayer->gstPrivateContext->buffering_timeout_cnt-- == 0)
 			{
 				uint32_t original_buffering_timeout_cnt = privatePlayer->gstPrivateContext->buffering_timeout_cnt;
 				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
@@ -4863,8 +4740,6 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					 note: alternate "window-set" works as well
 					 */
 					gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_sink, msg->src);
-					privatePlayer->socInterface->DiscoverVideoSinkProperties(
-						privatePlayer->gstPrivateContext->video_sink);
 
 					if (privatePlayer->gstPrivateContext->usingRialtoSink)
 					{
@@ -4922,8 +4797,6 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					{ // video
 						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_dec, msg->src);
 						type_check_instance("bus_sync_handle: video_dec ", privatePlayer->gstPrivateContext->video_dec);
-						privatePlayer->socInterface->DiscoverVideoDecoderProperties(
-							privatePlayer->gstPrivateContext->video_dec);
 						privatePlayer->SignalConnect(privatePlayer->gstPrivateContext->video_dec, "first-video-frame-callback",
 									G_CALLBACK(GstPlayer_OnFirstVideoFrameCallback), pInterfacePlayerRDK);
 						privatePlayer->socInterface->SetDecodeError(msg->src);

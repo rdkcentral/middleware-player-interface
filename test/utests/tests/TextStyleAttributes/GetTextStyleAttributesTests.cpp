@@ -62,16 +62,12 @@ ACTION(ThrowJsonException)
 */
 TEST_F(GetTextStyleAttributesTests, EmptyJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string options{};
     std::uint32_t attributesMask = 0x1234;
     attributesType attributesValues = {0};
 
     EXPECT_EQ(-1, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping EmptyJsonOptionsString test);";
-#endif
 }
 
 /*
@@ -80,7 +76,6 @@ TEST_F(GetTextStyleAttributesTests, EmptyJsonOptionsString)
 */
 TEST_F(GetTextStyleAttributesTests, JsonExceptionThrown)
 {
-#ifdef TEST_SKIP
     std::string options = "{\"fontSize\":\"32.4px\"}";
     std::uint32_t attributesMask = 0x1234;
     attributesType attributesValues = {0};
@@ -88,9 +83,6 @@ TEST_F(GetTextStyleAttributesTests, JsonExceptionThrown)
     EXPECT_CALL(*g_mockPlayerJsonObject, get("penSize", An<std::string&>())).WillOnce(ThrowJsonException());
     EXPECT_EQ(-1, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping JsonExceptionThrown test);";
-#endif
 }
 
 /*
@@ -100,7 +92,6 @@ TEST_F(GetTextStyleAttributesTests, JsonExceptionThrown)
 */
 TEST_F(GetTextStyleAttributesTests, JsonValueNotReturned)
 {
-#ifdef TEST_SKIP
     std::string options = "{\"fontSize\":\"32.4px\"}";
     std::uint32_t attributesMask = 0x1234;
     attributesType attributesValues = {0};
@@ -117,9 +108,6 @@ TEST_F(GetTextStyleAttributesTests, JsonValueNotReturned)
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping JsonValueNotReturned test);";
-#endif
 }
 
 /*
@@ -128,7 +116,6 @@ TEST_F(GetTextStyleAttributesTests, JsonValueNotReturned)
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP   
     std::string penSizeValue = "32.4px";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -148,9 +135,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeRightKeyInvalidValueJsonOptionsStrin
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping FontSizeRightKeyInvalidValueJsonOptionsString test);";
-#endif
 }
 
 /*
@@ -160,7 +144,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeRightKeyInvalidValueJsonOptionsStrin
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallLowerCase)
 {
-#ifdef TEST_SKIP    
     std::string penSizeValue = "small";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -181,9 +164,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallL
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_SMALL);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueSmallLowerCase test);";
-#endif
 }
 
 /*
@@ -193,7 +173,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallL
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallUpperCase)
 {
-#ifdef TEST_SKIP 
     std::string penSizeValue = "SMALL";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -214,9 +193,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallU
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_SMALL);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueSmallUpperCase test);";
-#endif
 }
 
 /*
@@ -226,7 +202,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueSmallU
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMediumLowerCase)
 {
-#ifdef  TEST_SKIP    
     std::string penSizeValue = "medium";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -247,9 +222,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMedium
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_STANDARD);
-#else
-    GTEST_SKIP()<< "Skipping FontSizeExpectedJsonOptionsStringValueMediumLowerCase test);";
-#endif
 }
 
 /*
@@ -260,7 +232,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMedium
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMediumUpperCase)
 {
-#ifdef TEST_SKIP   
     std::string penSizeValue = "MEDIUM";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -281,9 +252,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMedium
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_STANDARD);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueMediumUpperCase test);";
-#endif
 }
 
 /*
@@ -293,7 +261,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueMedium
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueStandard)
 {
-#ifdef TEST_SKIP 
     std::string penSizeValue = "standard";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -314,9 +281,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueStanda
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_STANDARD);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueStandard test);";
-#endif
 }
 
 /*
@@ -326,7 +290,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueStanda
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueLarge)
 {
-#ifdef TEST_SKIP
     std::string penSizeValue = "large";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -347,9 +310,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueLarge)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_LARGE);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueLarge test);";
-#endif
 }
 
 /*
@@ -359,7 +319,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueLarge)
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueExtralarge)
 {
-#ifdef TEST_SKIP
     std::string penSizeValue = "extra_large";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -380,9 +339,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueExtral
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_EXTRALARGE);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueExtralarge test);";
-#endif
 }
 
 /*
@@ -392,7 +348,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueExtral
 */
 TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string penSizeValue = "auto";
     std::string options =  "{\"penSize\":\"" + penSizeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -413,9 +368,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueAuto)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_SIZE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_SIZE_ARR_POSITION], mAttributes->FONT_SIZE_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping FontSizeExpectedJsonOptionsStringValueAuto test);";
-#endif
 }
 
 /*
@@ -424,7 +376,6 @@ TEST_F(GetTextStyleAttributesTests, FontSizeExpectedJsonOptionsStringValueAuto)
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "italics";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -443,9 +394,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleRightKeyInvalidValueJsonOptionsStri
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else   
-    GTEST_SKIP() << "Skipping FontStyleRightKeyInvalidValueJsonOptionsString test);";
-#endif
 }
 
 /*
@@ -455,7 +403,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleRightKeyInvalidValueJsonOptionsStri
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonospacedserifLowerCase)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "monospaced_serif";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -476,10 +423,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_MONOSPACED_SERIF);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueMonospacedser ifLowerCase test;";
-#endif
-
 }
 
 /*
@@ -489,7 +432,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonospacedserifLowerCaseSpaceSeparated)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "monospaced serif";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -510,9 +452,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_MONOSPACED_SERIF);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueMonospacedserifLowerCaseSpaceSeparated test;";
-#endif
 }
 
 /*
@@ -522,7 +461,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonospacedserifUpperCase)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "MONOSPACED_SERIF";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -543,9 +481,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_MONOSPACED_SERIF);
-#else   
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueMonospacedserifUpperCase test;";
-#endif
 }
 
 /*
@@ -555,7 +490,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueProportionalserif)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "proportional_serif";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -576,9 +510,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValuePropo
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_PROPORTIONAL_SERIF);
-#else 
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueProportionalserif test);";
-#endif
 }
 
 /*
@@ -588,7 +519,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValuePropo
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonospacedsansserif)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "monospaced_sanserif";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -609,9 +539,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_MONOSPACED_SANSSERIF);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueMonospacedsansserif test);";
-#endif
 }
 
 /*
@@ -621,7 +548,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueMonos
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueProportionalsansserif)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "proportional_sanserif";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -642,9 +568,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValuePropo
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_PROPORTIONAL_SANSSERIF);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueProportionalsansserif test);";
-#endif  
 }
 
 /*
@@ -654,7 +577,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValuePropo
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCasual)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "casual";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -675,9 +597,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCasua
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_CASUAL);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueCasual test";
-#endif
 }
 
 /*
@@ -687,7 +606,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCasua
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCursive)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "cursive";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -708,9 +626,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCursi
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_CURSIVE);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueCursive test";
-#endif
 }
 
 /*
@@ -720,7 +635,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueCursi
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueSmallcapital)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "small capital";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -741,9 +655,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueSmall
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_SMALL_CAPITALS);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueSmallcapital test";
-#endif
 }
 
 /*
@@ -753,7 +664,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueSmall
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueDefault)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "default";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -774,9 +684,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueDefau
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_DEFAULT);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueDefault test";
-#endif
 }
 
 /*
@@ -786,7 +693,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueDefau
 */
 TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string fontStyleValue = "auto";
     std::string options =  "{\"fontStyle\":\"" + fontStyleValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -807,10 +713,34 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueAuto)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_STYLE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_STYLE_ARR_POSITION], mAttributes->FONT_STYLE_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping FontStyleExpectedJsonOptionsStringValueAuto test);";
-#endif
 }
+
+/*
+    Test the getAttributes function supplying it with Right Key but invalid corresponding value.
+    In this case getAttributes must set the attributeMask to 0; informing caller nothing to proceed
+*/
+TEST_F(GetTextStyleAttributesTests, FontColorRightKeyInvalidValueJsonOptionsString)
+{
+    std::string fontColorValue = "pink";
+    std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
+    std::uint32_t attributesMask = 0x1234;
+    attributesType attributesValues = {0};
+
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("penSize", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("fontStyle", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textForegroundColor", An<std::string&>()))
+        .WillOnce(DoAll(SetArgReferee<1>(fontColorValue), Return(true)));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textBackgroundColor", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textEdgeStyle", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textEdgeColor", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textBackgroundOpacity", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("textForegroundOpacity", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillColor", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
+    EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
+    EXPECT_EQ(attributesMask, 0);
+}
+
 /*
     Test the getAttributes with font color black.
     This will also test the output expected from the getColor function. Color value in lower case.
@@ -818,7 +748,6 @@ TEST_F(GetTextStyleAttributesTests, FontStyleExpectedJsonOptionsStringValueAuto)
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlackLowerCase)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "black";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -839,9 +768,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueBlackLowerCase test";
-#endif
 }
 
 /*
@@ -851,7 +777,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlackUpperCase)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "BLACK";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -872,9 +797,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueBlackUpperCase test";
-#endif
 }
 
 /*
@@ -884,7 +806,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueWhite)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "white";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -905,9 +826,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueWhite
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_WHITE);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueWhite test";
-#endif
 }
 
 /*
@@ -917,7 +835,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueWhite
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueRed)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "red";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -938,9 +855,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueRed)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_RED);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueRed test";
-#endif
 }
 
 /*
@@ -950,7 +864,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueRed)
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueGreen)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "green";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -971,9 +884,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueGreen
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_GREEN);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueGreen test";
-#endif
 }
 
 /*
@@ -983,7 +893,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueGreen
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlue)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "blue";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1004,9 +913,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlue)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_BLUE);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueBlue test";
-#endif
 }
 
 /*
@@ -1016,7 +922,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlue)
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "yellow";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1037,9 +942,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_YELLOW);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueBlack test";
-#endif  
 }
 
 /*
@@ -1049,7 +951,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueBlack
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueMagenta)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "magenta";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1070,9 +971,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueMagen
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_MAGENTA);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueMagenta test";
-#endif
 }
 
 /*
@@ -1082,7 +980,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueMagen
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueCyan)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "cyan";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1103,9 +1000,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueCyan)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_CYAN);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueCyan test";
-#endif
 }
 
 /*
@@ -1115,7 +1009,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueCyan)
 */
 TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string fontColorValue = "auto";
     std::string options =  "{\"textForegroundColor\":\"" + fontColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1136,9 +1029,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueAuto)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_COLOR_ARR_POSITION], mAttributes->COLOR_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping FontColorExpectedJsonOptionsStringValueAuto test";
-#endif
 }
 
 /*
@@ -1147,7 +1037,6 @@ TEST_F(GetTextStyleAttributesTests, FontColorExpectedJsonOptionsStringValueAuto)
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "pink";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -1166,9 +1055,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorRightKeyInvalidValueJsonOptio
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorRightKeyInvalidValueJsonOptionsString test";
-#endif
 }
 
 /*
@@ -1178,7 +1064,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorRightKeyInvalidValueJsonOptio
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueBlackLowerCase)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "black";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1199,9 +1084,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueBlackLowerCase test";
-#endif
 }
 
 /*
@@ -1211,7 +1093,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueBlackUpperCase)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "BLACK";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1232,9 +1113,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueBlackUpperCase test";
-#endif
 }
 
 /*
@@ -1244,7 +1122,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueWhite)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "white";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1265,9 +1142,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_WHITE);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueWhite test"; 
-#endif
 }
 
 /*
@@ -1277,7 +1151,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueRed)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "red";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1298,9 +1171,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_RED);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueRed test";
-#endif
 }
 
 /*
@@ -1310,7 +1180,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueGreen)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "green";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1331,9 +1200,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_GREEN);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueGreen test";
-#endif
 }
 
 /*
@@ -1343,7 +1209,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueBlue)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "blue";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1364,9 +1229,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_BLUE);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueBlue test";
-#endif
 }
 
 /*
@@ -1376,7 +1238,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueYellow)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "yellow";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1397,9 +1258,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_YELLOW);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueYellow test";
-#endif
 }
 
 /*
@@ -1409,7 +1267,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueMagenta)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "magenta";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1430,9 +1287,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_MAGENTA);
-#else       
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueMagenta test";
-#endif
 }
 
 /*
@@ -1442,7 +1296,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueCyan)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "cyan";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1463,9 +1316,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_CYAN);
-#else
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueCyan test";
-#endif
 }
 
 /*
@@ -1475,7 +1325,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string backgroundColorValue = "auto";
     std::string options =  "{\"textBackgroundColor\":\"" + backgroundColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1496,9 +1345,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_COLOR_ARR_POSITION], mAttributes->COLOR_EMBEDDED);
-#else   
-    GTEST_SKIP() << "Skipping BackgroundColorExpectedJsonOptionsStringValueAuto test";
-#endif  
 }
 
 /*
@@ -1507,7 +1353,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundColorExpectedJsonOptionsStringValu
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "curved";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -1526,9 +1371,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeRightKeyInvalidValueJsonOptionsStrin
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeRightKeyInvalidValueJsonOptionsString test";
-#endif
 }
 
 /*
@@ -1538,7 +1380,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeRightKeyInvalidValueJsonOptionsStrin
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneLowerCase)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "none";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1559,9 +1400,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneLo
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_NONE);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueNoneLowerCase test";
-#endif
 }
 
 /*
@@ -1571,7 +1409,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneLo
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneUpperCase)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "NONE";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1592,9 +1429,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneUp
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_NONE);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueNoneUpperCase test";
-#endif
 }
 
 /*
@@ -1604,7 +1438,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueNoneUp
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRaised)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "raised";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1625,9 +1458,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRaised
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_RAISED);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueRaised test";
-#endif
 }
 
 /*
@@ -1637,7 +1467,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRaised
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueDepressed)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "depressed";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1658,9 +1487,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueDepres
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_DEPRESSED);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueDepressed test";
-#endif
 }
 
 /*
@@ -1670,7 +1496,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueDepres
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueUniform)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "uniform";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1691,9 +1516,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueUnifor
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_UNIFORM);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueUniform test";
-#endif
 }
 
 /*
@@ -1703,7 +1525,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueUnifor
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueLeftdropshadow)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "Left drop shadow";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1724,9 +1545,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueLeftdr
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_SHADOW_LEFT);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueLeftdropshadow test";
-#endif
 }
 
 /*
@@ -1736,7 +1554,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueLeftdr
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRightdropshadow)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "Right drop shadow";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1757,9 +1574,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRightd
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_SHADOW_RIGHT);
-#else 
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueRightdropshadow test";
-#endif
 }
 
 /*
@@ -1769,7 +1583,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueRightd
 */
 TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string edgeTypeValue = "auto";
     std::string options =  "{\"textEdgeStyle\":\"" + edgeTypeValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1790,9 +1603,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueAuto)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_TYPE_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_TYPE_ARR_POSITION], mAttributes->EDGE_TYPE_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping EdgeTypeExpectedJsonOptionsStringValueAuto test";
-#endif
 }
 
 /*
@@ -1801,7 +1611,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeTypeExpectedJsonOptionsStringValueAuto)
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "pink";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -1820,9 +1629,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorRightKeyInvalidValueJsonOptionsStri
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorRightKeyInvalidValueJsonOptionsString test"; 
-#endif
 }
 
 /*
@@ -1832,7 +1638,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorRightKeyInvalidValueJsonOptionsStri
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlackLowerCase)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "black";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1853,9 +1658,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlack
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueBlackLowerCase test";
-#endif
 }
 
 /*
@@ -1865,7 +1667,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlack
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlackUpperCase)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "BLACK";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1886,9 +1687,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlack
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueBlackUpperCase test";
-#endif 
 }
 
 /*
@@ -1898,7 +1696,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlack
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueWhite)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "white";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1919,9 +1716,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueWhite
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_WHITE);
-#else 
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueWhite test";
-#endif
 }
 
 /*
@@ -1931,7 +1725,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueWhite
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueRed)
 {
-#ifdef TEST_SKIP  
     std::string edgeColorValue = "red";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1952,9 +1745,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueRed)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_RED);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueRed test";
-#endif
 }
 
 /*
@@ -1964,7 +1754,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueRed)
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueGreen)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "green";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -1985,9 +1774,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueGreen
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_GREEN);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueGreen test";
-#endif
 }
 
 /*
@@ -1997,7 +1783,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueGreen
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlue)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "blue";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2018,9 +1803,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlue)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_BLUE);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueBlue test";
-#endif
 }
 
 /*
@@ -2030,7 +1812,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueBlue)
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueYellow)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "yellow";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2051,9 +1832,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueYello
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_YELLOW);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueYellow test";
-#endif
 }
 
 /*
@@ -2063,7 +1841,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueYello
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueMagenta)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "magenta";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2084,9 +1861,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueMagen
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_MAGENTA);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueMagenta test";
-#endif
 }
 
 /*
@@ -2096,7 +1870,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueMagen
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueCyan)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "cyan";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2117,9 +1890,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueCyan)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_CYAN);
-#else 
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueCyan test";    
-#endif
 }
 
 /*
@@ -2129,7 +1899,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueCyan)
 */
 TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string edgeColorValue = "auto";
     std::string options =  "{\"textEdgeColor\":\"" + edgeColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2150,9 +1919,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueAuto)
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->EDGE_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->EDGE_COLOR_ARR_POSITION], mAttributes->COLOR_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping EdgeColorExpectedJsonOptionsStringValueAuto test";
-#endif
 }
 
 /*
@@ -2161,7 +1927,6 @@ TEST_F(GetTextStyleAttributesTests, EdgeColorExpectedJsonOptionsStringValueAuto)
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "none";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -2180,9 +1945,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityRightKeyInvalidValueJsonOpt
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityRightKeyInvalidValueJsonOptionsString test";
-#endif
 }
 
 /*
@@ -2192,7 +1954,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityRightKeyInvalidValueJsonOpt
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueSolidLowerCase)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "solid";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2213,9 +1974,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueSolidLowerCase test";
-#endif
 }
 
 /*
@@ -2225,7 +1983,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueSolidUpperCase)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "SOLID";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2246,9 +2003,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueSolidUpperCase test";
-#endif
 }
 
 /*
@@ -2258,7 +2012,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueFlash)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "flash";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2279,9 +2032,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_FLASHING);
-#else   
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueFlash test";
-#endif
 }
 
 /*
@@ -2291,7 +2041,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueTranslucent)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "translucent";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2312,9 +2061,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSLUCENT);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueTranslucent test";
-#endif
 }
 
 /*
@@ -2324,7 +2070,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueTransparent)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "transparent";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2345,9 +2090,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSPARENT);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueTransparent test";
-#endif
 }
 
 /*
@@ -2357,7 +2099,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string backgroundOpacityValue = "auto";
     std::string options =  "{\"textBackgroundOpacity\":\"" + backgroundOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2378,9 +2119,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->BACKGROUND_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->BACKGROUND_OPACITY_ARR_POSITION], mAttributes->OPACITY_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping BackgroundOpacityExpectedJsonOptionsStringValueAuto test";
-#endif
 }
 
 /*
@@ -2389,7 +2127,6 @@ TEST_F(GetTextStyleAttributesTests, BackgroundOpacityExpectedJsonOptionsStringVa
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef  TEST_SKIP
     std::string fontOpacityValue = "none";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -2408,9 +2145,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityRightKeyInvalidValueJsonOptionsSt
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityRightKeyInvalidValueJsonOptionsString test";   
-#endif         
 }
 
 /*
@@ -2420,7 +2154,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityRightKeyInvalidValueJsonOptionsSt
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSolidLowerCase)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "solid";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2441,9 +2174,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSol
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueSolidLowerCase test";
-#endif
 }
 
 /*
@@ -2453,7 +2183,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSol
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSolidUpperCase)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "SOLID";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2474,9 +2203,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSol
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueSolidUpperCase test";
-#endif
 }
 
 /*
@@ -2486,7 +2212,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueSol
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueFlash)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "flash";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2507,9 +2232,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueFla
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_FLASHING);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueFlash test";
-#endif
 }
 
 /*
@@ -2519,7 +2241,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueFla
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTranslucent)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "translucent";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2540,9 +2261,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTra
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSLUCENT);
-#else 
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueTranslucent test";
-#endif
 }
 
 /*
@@ -2552,7 +2270,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTra
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTransparent)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "transparent";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2573,9 +2290,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTra
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSPARENT);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueTransparent test";
-#endif
 }
 
 /*
@@ -2585,7 +2299,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueTra
 */
 TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string fontOpacityValue = "auto";
     std::string options =  "{\"textForegroundOpacity\":\"" + fontOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2606,9 +2319,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueAut
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->FONT_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->FONT_OPACITY_ARR_POSITION], mAttributes->OPACITY_EMBEDDED);
-#else
-    GTEST_SKIP() << "Skipping FontOpacityExpectedJsonOptionsStringValueAuto test";
-#endif
 }
 
 /*
@@ -2617,7 +2327,6 @@ TEST_F(GetTextStyleAttributesTests, FontOpacityExpectedJsonOptionsStringValueAut
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "pink";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -2636,9 +2345,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorRightKeyInvalidValueJsonOptionsSt
     EXPECT_CALL(*g_mockPlayerJsonObject, get("windowFillOpacity", An<std::string&>())).WillOnce(Return(false));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else 
-    GTEST_SKIP() << "Skipping WindowColorRightKeyInvalidValueJsonOptionsString test";
-#endif
 }
 
 /*
@@ -2648,7 +2354,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorRightKeyInvalidValueJsonOptionsSt
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBlackLowerCase)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "black";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2669,9 +2374,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBla
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping WindowColorExpectedJsonOptionsStringValueBlackLowerCase test";
-#endif
 }
 
 /*
@@ -2681,7 +2383,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBla
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBlackUpperCase)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "BLACK";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2702,9 +2403,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBla
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_BLACK);
-#else
-    GTEST_SKIP() << "Skipping WindowColorExpectedJsonOptionsStringValueBlackUpperCase test";
-#endif
 }
 
 /*
@@ -2714,7 +2412,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBla
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueWhite)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "white";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2735,9 +2432,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueWhi
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_WHITE);
-#else
-    GTEST_SKIP() << "Skipping WindowColorExpectedJsonOptionsStringValueWhite test";
-#endif
 }
 
 /*
@@ -2747,7 +2441,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueWhi
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueRed)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "red";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2768,9 +2461,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueRed
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_RED);
-#else
-    GTEST_SKIP() << "Skipping WindowColorExpectedJsonOptionsStringValueRed test";
-#endif
 }
 
 /*
@@ -2780,7 +2470,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueRed
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueGreen)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "green";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2801,9 +2490,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueGre
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_GREEN);
-#else
-    GTEST_SKIP() << "skipping WindowColorExpectedJsonOptionsStringValueGreen test";
-#endif
 }
 
 /*
@@ -2813,7 +2499,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueGre
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBlue)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "blue";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2834,9 +2519,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBlu
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_BLUE);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -2846,7 +2528,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueBlu
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueYellow)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "yellow";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2867,9 +2548,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueYel
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_YELLOW);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -2879,7 +2557,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueYel
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueMagenta)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "Magenta";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2900,9 +2577,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueMag
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_MAGENTA);
-#else 
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -2912,7 +2586,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueMag
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueCyan)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "cyan";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2933,9 +2606,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueCya
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_CYAN);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -2945,7 +2615,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueCya
 */
 TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string windowColorValue = "auto";
     std::string options =  "{\"windowFillColor\":\"" + windowColorValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -2966,9 +2635,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueAut
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_COLOR_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_COLOR_ARR_POSITION], mAttributes->COLOR_EMBEDDED);
-#else 
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -2977,7 +2643,6 @@ TEST_F(GetTextStyleAttributesTests, WindowColorExpectedJsonOptionsStringValueAut
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityRightKeyInvalidValueJsonOptionsString)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "none";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0x1234;
@@ -2996,9 +2661,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityRightKeyInvalidValueJsonOptions
         .WillOnce(DoAll(SetArgReferee<1>(windowOpacityValue), Return(true)));
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, 0);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3008,7 +2670,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityRightKeyInvalidValueJsonOptions
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueSolidLowerCase)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "solid";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3029,9 +2690,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueS
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3041,7 +2699,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueS
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueSolidUpperCase)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "SOLID";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3062,9 +2719,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueS
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_SOLID);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3074,7 +2728,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueS
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueFlash)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "flash";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3095,9 +2748,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueF
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_FLASHING);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3107,7 +2757,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueF
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueTranslucent)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "translucent";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3128,9 +2777,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueT
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSLUCENT);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3140,7 +2786,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueT
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueTransparent)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "transparent";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3161,9 +2806,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueT
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_TRANSPARENT);
-#else
-    GTEST_SKIP();
-#endif
 }
 
 /*
@@ -3173,7 +2815,6 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueT
 */
 TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueAuto)
 {
-#ifdef TEST_SKIP
     std::string windowOpacityValue = "auto";
     std::string options =  "{\"windowFillOpacity\":\"" + windowOpacityValue + "\"}";
     std::uint32_t attributesMask = 0;
@@ -3194,7 +2835,4 @@ TEST_F(GetTextStyleAttributesTests, WindowOpacityExpectedJsonOptionsStringValueA
     EXPECT_EQ(0, mAttributes->getAttributes(options, attributesValues, attributesMask));
     EXPECT_EQ(attributesMask, (1<<mAttributes->WIN_OPACITY_ARR_POSITION));
     EXPECT_EQ(attributesValues[mAttributes->WIN_OPACITY_ARR_POSITION], mAttributes->OPACITY_EMBEDDED);
-#else
-    GTEST_SKIP();
-#endif
 }

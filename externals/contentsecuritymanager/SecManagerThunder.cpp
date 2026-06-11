@@ -245,27 +245,23 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 
 							if (licenseDecoded != nullptr && licenseDecodedLen != 0)
 							{
+								MW_LOG_INFO("SecManager license post base64 decode length: %d", *licenseResponseLength);
 								*licenseResponse = (char*) malloc(licenseDecodedLen);
 								if (*licenseResponse)
 								{
 									memcpy(*licenseResponse, licenseDecoded, licenseDecodedLen);
 									*licenseResponseLength = licenseDecodedLen;
-								        MW_LOG_INFO("SecManager license post base64 decode length: %d", *licenseResponseLength);
-									ret = true;
 								}
 								else
 								{
 									MW_LOG_ERR("SecManager failed to allocate memory for license!");
 								}
+								free(licenseDecoded);
+								ret = true;
 							}
 							else
 							{
 								MW_LOG_ERR("SecManager license base64 decode failed!");
-							}
-							
-							if (licenseDecoded != nullptr)
-							{
-								free(licenseDecoded);
 							}
 						}
 					}

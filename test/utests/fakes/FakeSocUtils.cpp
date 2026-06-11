@@ -67,15 +67,4 @@ namespace SocUtils
 	{
 		return false;
 	}
-	/**
-	 *	@brief Check if GST Subtec is enabled
-	 */
-	bool isGstSubtecEnabled()
-	{
-#ifdef GST_SUBTEC_ENABLED
-		return true;
-#else
-		return false;
-#endif
-	}
 }
