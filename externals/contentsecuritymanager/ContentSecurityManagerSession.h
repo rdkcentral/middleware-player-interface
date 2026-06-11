@@ -92,17 +92,19 @@ public:
 	//allow copying, the secManager session will only be closed when all copies have gone out of scope
 	ContentSecurityManagerSession(const ContentSecurityManagerSession& other): mpSessionManager(), sessionIdMutex()
 	{
-		std::lock(sessionIdMutex, other.sessionIdMutex);
-		std::lock_guard<std::mutex> thisLock(sessionIdMutex, std::adopt_lock);
-		std::lock_guard<std::mutex> otherLock(other.sessionIdMutex, std::adopt_lock);
-		mpSessionManager=other.mpSessionManager;
+		std::unique_lock<std::mutex> thisLock(sessionIdMutex, std::defer_lock);
+		std::unique_lock<std::mutex> otherLock(other.sessionIdMutex, std::defer_lock);
+		std::lock(thisLock, otherLock);
+		mpSessionManager = other.mpSessionManager;
 	}
 	ContentSecurityManagerSession& operator=(const ContentSecurityManagerSession& other)
 	{
-		std::lock(sessionIdMutex, other.sessionIdMutex);
-		std::lock_guard<std::mutex> thisLock(sessionIdMutex, std::adopt_lock);
-		std::lock_guard<std::mutex> otherLock(other.sessionIdMutex, std::adopt_lock);
-		mpSessionManager=other.mpSessionManager;
+		if (this == &other)
+                    return *this;
+		std::unique_lock<std::mutex> thisLock(sessionIdMutex, std::defer_lock);
+		std::unique_lock<std::mutex> otherLock(other.sessionIdMutex, std::defer_lock);
+		std::lock(thisLock, otherLock);
+		mpSessionManager = other.mpSessionManager;
 		return *this;
 	}
 
