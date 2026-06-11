@@ -168,6 +168,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	MediaSample.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -200,6 +201,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
 	DemuxDataTypes.h
+	MediaSample.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h
