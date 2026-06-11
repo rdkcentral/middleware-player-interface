@@ -91,21 +91,13 @@ public:
 
 	PlayerIsoBmffBuffer(const PlayerIsoBmffBuffer&) = delete;
 	PlayerIsoBmffBuffer& operator=(const PlayerIsoBmffBuffer&) = delete;
-
-	/**
-	 * @fn getChunkedBox
-	 *
-	 * @return Box handle if Chunk box found in a parsed buffer. NULL otherwise
-	 */
-	IsoBmffBox* getChunkedBox() const;
-
+	
 	/**
 	 * @fn getChunkedfBox
 	 *
 	 * @return Box handle if Chunk box found in a parsed buffer. NULL otherwise
-	 * @note Deprecated alias for getChunkedBox.
 	 */
-	IsoBmffBox* getChunkedfBox() const;
+	player_isobmff::IsoBmffBox* getChunkedfBox() const;
 
 	/**
 	 * @fn UpdateBufferData
@@ -157,35 +149,11 @@ public:
 	bool parseMdatBox(uint8_t *buf, size_t &size);
 
 	/**
-	* @fn getMdatBoxSize
-	* @param[out] size - size of mdat buffer
-	* @return true if buffer size available. false otherwise
-	*/
+	 * @fn getMdatBoxSize
+	 * @param[out] size - size of mdat buffer
+	 * @return true if buffer size available. false otherwise
+	 */
 	bool getMdatBoxSize(size_t &size);
-
-
-	/** 
-     * @brief Get the vector of ISOBMFF boxes
-     * @return Constant reference to the vector of boxes
-     */
-    const std::vector<player_isobmff::IsoBmffBox*>& getBoxes() const {
-        return boxes;
-    }
-
-	/**
-	 *  @brief Get buffer pointer
-	 */
-	uint8_t* getBuffer() const;
-	/**
-	 *  @brief Get buffer size
-	 */
-	size_t getBufferSize() const;
-
-	/**
-	 *  @brief Get parsed mdat box count
-	 */
-	size_t getMdatCount() const;
-
 };
 
 #endif /* __PLAYERISOBMFFBUFFER_H__ */

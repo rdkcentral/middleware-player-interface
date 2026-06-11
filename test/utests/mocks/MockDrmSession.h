@@ -33,20 +33,15 @@
 class MockDrmSession : public DrmSession
 {
 public:
-	MockDrmSession(const std::string& keySystem = PLAYREADY_KEY_SYSTEM_STRING)
-		: DrmSession(keySystem) {}
+	MockDrmSession() : DrmSession("mock-key-system") {}
+	virtual ~MockDrmSession() = default;
 
 	MOCK_METHOD(void, generateDRMSession, (const uint8_t *f_pbInitData, uint32_t f_cbInitData, std::string &customData), (override));
-	MOCK_METHOD(DrmData*, generateKeyRequest, (std::string& destinationURL, uint32_t timeout), (override));
+	MOCK_METHOD(DrmData*, generateKeyRequest, (string& destinationURL, uint32_t timeout), (override));
 	MOCK_METHOD(int, processDRMKey, (DrmData* key, uint32_t timeout), (override));
-	MOCK_METHOD(int, decrypt, (GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps), (override));
-	MOCK_METHOD(int, decrypt, (const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData), (override));
 	MOCK_METHOD(KeyState, getState, (), (override));
 	MOCK_METHOD(void, clearDecryptContext, (), (override));
-#if defined(USE_OPENCDM_ADAPTER)
-	MOCK_METHOD(void, setKeyId, (const std::vector<uint8_t>& keyId), (override));
-#endif
+	MOCK_METHOD(const std::vector<std::vector<uint8_t>>&, getUsableKeys, (), (const, override));
 };
-extern MockDrmSession *g_mockDrmSession;
 
 #endif /* PLAYER_MOCK_DRM_SESSION_H */

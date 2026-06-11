@@ -47,9 +47,5 @@ GstHandlerControl::ScopeHelper GstHandlerControl::getScopeHelper()
 
 bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string name)
 {
-    if( MaximumDelayMilliseconds <= 0 )
-    {
-        return false;
-    }
 	return true;
 }

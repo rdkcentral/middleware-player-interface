@@ -98,12 +98,7 @@ bool DefaultSocInterface::IsVideoDecoder(const char* name)
  */
 bool DefaultSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
-	if (!name)
-	{
-		return false;
-	}
-
-	return StartsWith(name, "rialtomsevideosink") || StartsWith(name, "rialtomseaudiosink");
+	return StartsWith(name,"rialtomsevideosink") || StartsWith(name,"rialtomseaudiosink");
 }
 
 /**
@@ -193,30 +188,23 @@ void SocInterface::SetWesterosSinkState(bool status)
 {
 	mUsingWesterosSink = true;
 }
-void SocInterface::CheckVideoPtsPropertySupport(GstElement */*element*/)
+long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
 {
-}
-void SocInterface::DiscoverVideoDecoderProperties(GstElement */*element*/)
-{
-}
-void SocInterface::DiscoverVideoSinkProperties(GstElement */*element*/)
-{
-}
-long long SocInterface::ReadVideoPts(GstElement */*element*/)
-{
-	return 0;
-}
-long long SocInterface::GetVideoPts(GstElement */*video_sink*/, GstElement */*video_dec*/, bool /*isWesteros*/)
-{
-	return 0;
+        gint64 currentPTS = 0;
+        GstElement *element;
+        element = video_dec;
+        if(element)
+        {
+                g_object_get(element, "video-pts", &currentPTS, NULL);/* Gets the 'video-pts' from the element into the currentPTS */
+                if(!isWesteros)
+                {
+                        currentPTS = currentPTS * 2;
+                }
+        }
+        return (long long)currentPTS;
 }
 bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
 {
-        if (inputStr == nullptr || prefix == nullptr)
-        {
-                return false;
-        }
-
         bool rc = true;
         while( *prefix )
         {
@@ -278,12 +266,5 @@ void SocInterface::ConfigureAcceptCaps(GstBaseTransformClass* base_transform_cla
 
 bool DefaultSocInterface::IsVideoMaster(GstElement *videoSink)
 {
-        gboolean isMaster{TRUE};
-        GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(videoSink),"is-master");
-        if( pspec!=NULL )
-        { // rialto-specific
-                g_object_get(videoSink, "is-master", &isMaster, nullptr);
-                MW_LOG_INFO("is-master %d", isMaster);
-        }
-        return (isMaster == TRUE);
+	return true;
 }

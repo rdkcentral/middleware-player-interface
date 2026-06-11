@@ -53,7 +53,7 @@ class PlayerExternalsInterfaceBase
 
     public:
 
-        PlayerExternalsInterfaceBase():m_isHDCPEnabled(false),m_displayWidth(0),m_displayHeight(0),m_sourceWidth(0),m_sourceHeight(0),m_gstElement(nullptr){}
+        PlayerExternalsInterfaceBase():m_sourceWidth(0),m_sourceHeight(0),m_gstElement(nullptr){}
 
         virtual void Initialize() = 0;
         /**

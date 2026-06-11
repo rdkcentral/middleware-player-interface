@@ -64,7 +64,7 @@ public:
 
 	virtual void AcquireKey(void *metadata,int trackType) override {};
 
-	virtual DRMState GetState() override;
+	virtual DRMState GetState() override {return m_drmState;}
 
 };
 
