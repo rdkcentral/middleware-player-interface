@@ -59,12 +59,7 @@ void AesDec::NotifyDRMError(DrmTuneFailure drmFailure)
 {
         this->NotifyDrmErrorCb((int)drmFailure);
 	SignalDrmError();
-	DRMState currentState;
-	{
-		std::lock_guard<std::mutex> guard(mMutex);
-		currentState = mDrmState;
-	}
-	MW_LOG_ERR("AesDec::NotifyDRMError: drmState:%d", currentState );
+	MW_LOG_ERR("AesDec::NotifyDRMError: drmState:%d", mDrmState );
 }
 
 
@@ -83,9 +78,9 @@ void AesDec::SignalDrmError()
  */
 void AesDec::SignalKeyAcquired()
 {
+	MW_LOG_WARN("AesDRMListener drmState:%d moving to KeyAcquired", mDrmState);
 	{
 		std::unique_lock<std::mutex> lock(mMutex);
-		MW_LOG_WARN("AesDRMListener drmState:%d moving to KeyAcquired", mDrmState);
 		mDrmState = eDRM_KEY_ACQUIRED;
 		mCond.notify_all();
 	}
@@ -114,12 +109,7 @@ void AesDec::AcquireKey()
 	int failureReason = (int)failureReasonIn;
 	 
          char* ptr = NULL;
-	int curlInstanceLocal;
-	{
-		std::lock_guard<std::mutex> guard(mMutex);
-		curlInstanceLocal = mCurlInstance;
-	}
-	this->GetAccessKeyCb(keyURI,  tempEffectiveUrl, http_error, downloadTime, curlInstanceLocal, keyAcquisitionStatus, failureReason, &ptr);
+	this->GetAccessKeyCb(keyURI,  tempEffectiveUrl, http_error, downloadTime, mCurlInstance, keyAcquisitionStatus, failureReason, &ptr);
         m_ptr = ( char*)ptr;
 	if(keyAcquisitionStatus)
 	{
@@ -154,7 +144,6 @@ void AesDec::AcquireKey(void *metadata,int trackType)
  */
 DRMState AesDec::GetState()
 {
-	std::lock_guard<std::mutex> guard(mMutex);
 	return mDrmState;
 }
 
@@ -363,17 +352,12 @@ std::shared_ptr<AesDec> AesDec::GetInstance()
  * @brief AesDec Constructor
  * 
  */
-AesDec::AesDec() :  mCond(),
-		mMutex(),
-		mOpensslCtx(),
-		mDrmInfo(),
-		m_ptr(nullptr),
-		mDrmState(eDRM_INITIALIZED),
-		mPrevDrmState(eDRM_INITIALIZED),
-		mDrmUrl(""),
-		mCurlInstance(-1),
-		mAcquireKeyWaitTime(MAX_LICENSE_ACQ_WAIT_TIME),
-		licenseAcquisitionThreadId()
+AesDec::AesDec() :  mDrmState(eDRM_INITIALIZED),
+		mPrevDrmState(eDRM_INITIALIZED), mDrmUrl(""),
+		mCond(), mMutex(), mOpensslCtx(),
+         	mDrmInfo(), mCurlInstance(-1),
+		licenseAcquisitionThreadId(),
+		mAcquireKeyWaitTime(MAX_LICENSE_ACQ_WAIT_TIME)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	OPEN_SSL_CONTEXT = EVP_CIPHER_CTX_new();

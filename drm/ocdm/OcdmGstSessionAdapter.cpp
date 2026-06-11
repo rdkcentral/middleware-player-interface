@@ -192,17 +192,14 @@ void OCDMGSTSessionAdapter::ExtractSEI( GstBuffer *buffer)
 	gsize len;
 	if (buffer)
 	{
-		if (!gst_buffer_map( buffer, &info, (GstMapFlags)(GST_MAP_READ) ))
-		{
-			MW_LOG_ERR("Failed to map GstBuffer for SEI extraction");
-			return;
-		}
+		gst_buffer_map( buffer, &info, (GstMapFlags)(GST_MAP_READ) );
 		ptr = info.data;
 		len = info.size;
 	}
 	else
 	{
 		MW_LOG_WARN("Invalid Buffer Input - NULL");
+		gst_buffer_unmap(buffer, &info);
 		return;
 	}
 

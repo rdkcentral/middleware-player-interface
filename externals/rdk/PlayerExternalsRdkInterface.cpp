@@ -141,11 +141,8 @@ void PlayerExternalsRdkInterface::RegisterDsClientEventHandler()
 		device::Host::getInstance().Register(baseInterface<device::Host::IVideoOutputPortEvents>(),"PI::DisplayInfo");
 		device::Host::getInstance().Register(baseInterface<device::Host::IDisplayDeviceEvents>(), "PI::DisplaySettings");
 	}
-	catch (const std::exception& e) {
-		MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-	}
 	catch (...) {
-		MW_LOG_WARN("DeviceSettings unknown exception caught\n");
+		MW_LOG_WARN("DeviceSettings exception caught\n");
 	}
 }
 
@@ -157,13 +154,9 @@ void PlayerExternalsRdkInterface::RemoveDsClientEventHandlers()
 		device::Host::getInstance().UnRegister(baseInterface<device::Host::IDisplayDeviceEvents>());
 		device::Manager::DeInitialize();
 	}
-	catch (const std::exception& e)
-	{
-		MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-	}
 	catch(...)
 	{
-		MW_LOG_WARN("DeviceSettings unknown exception caught\n");
+		MW_LOG_WARN("DeviceSettings exception caught\n");
 	}
 }
 
@@ -301,11 +294,8 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
 	device::Manager::DeInitialize();
     }
-    catch (const std::exception& e) {
-        MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-    }
     catch (...) {
-        MW_LOG_WARN("DeviceSettings unknown exception caught\n");
+        MW_LOG_WARN("DeviceSettings exception caught\n");
     }
 
     m_isHDCPEnabled = isHDCPEnabled;

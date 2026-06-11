@@ -29,36 +29,6 @@
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
-#include "SocInterface.h"
-
-/**
- * Minimal SocInterface mock for GetVideoPTS tests.
- * Only GetVideoPts is mocked; all other methods delegate to the base fake.
- */
-class MockSocInterfaceForPts : public SocInterface
-{
-public:
-	MOCK_METHOD(long long, GetVideoPts,
-		(GstElement *video_sink, GstElement *video_dec, bool isWesteros),
-		(override));
-	/* Pure virtual stubs required to make this class instantiable. */
-	MOCK_METHOD(bool, SetPlaybackRate,
-		(const std::vector<GstElement*>& sources, GstElement *pipeline,
-		 double rate, GstElement *video_dec, GstElement *audio_dec), (override));
-	MOCK_METHOD(bool, SetRateCorrection, (), (override));
-	MOCK_METHOD(bool, IsVideoSink, (const char* name), (override));
-	MOCK_METHOD(bool, IsAudioSinkOrAudioDecoder, (const char* name), (override));
-	MOCK_METHOD(bool, IsVideoDecoder, (const char* name), (override));
-	MOCK_METHOD(bool, ConfigureAudioSink,
-		(GstElement **audio_sink, GstObject *src, bool decStreamSync), (override));
-	MOCK_METHOD(bool, IsAudioOrVideoDecoder, (const char* name), (override));
-	MOCK_METHOD(void, GetCCDecoderHandle,
-		(gpointer *dec_handle, GstElement *video_dec), (override));
-	MOCK_METHOD(bool, IsVideoMaster, (GstElement *videoSink), (override));
-	MOCK_METHOD(void, SetAudioProperty,
-		(const char * &volume, const char * &mute, bool& isSinkBinVolume), (override));
-	MOCK_METHOD(void, SetPlaybackFlags, (gint &flags, bool isSub), (override));
-};
 
 
 using ::testing::NiceMock;
@@ -158,7 +128,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 	mPlayerConfigParams->useRialtoSink = true;
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, false);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 	EXPECT_EQ(mPlayerContext->using_westerossink, true);
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, true);
 
@@ -167,7 +137,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 {
 	g_mockGStreamer = nullptr;
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].format, GST_FORMAT_INVALID);
 }
@@ -178,7 +148,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 	mPlayerContext->buffering_enabled = true;
 	mPlayerContext->rate = GST_NORMAL_PLAY_RATE;
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
 	EXPECT_EQ(mPlayerContext->buffering_in_progress, true);
 	EXPECT_EQ(mPlayerContext->buffering_target_state, GST_STATE_PLAYING);
@@ -193,7 +163,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
 	EXPECT_EQ(cbResponse, 5); //callback was called
@@ -208,7 +178,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_ESChange)
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest");
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
 	EXPECT_EQ(cbResponse, 5);
@@ -1920,7 +1890,6 @@ TEST_F(InterfacePlayerTests, ResumeInjector_SetsPauseInjectorToFalseAndNotifiesA
 
 TEST_F(InterfacePlayerTests, SendNewSegmentEvent_VideoMediaType)
 {
-	GTEST_SKIP();
 	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
 	GstClockTime startPts = 1000;
 	GstClockTime stopPts = 2000;
