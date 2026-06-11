@@ -196,9 +196,17 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
 		// Clear the session data if license key acquisition failed or if forceClearSession is true in the case of LicenseCaching is false.
-		if((cachedKeyIDs[i].isFailedKeyEntries || forceClearSession) && drmSessionContexts != NULL)
+		bool isFailedKeyEntry = false;
 		{
-			std::lock_guard<std::mutex> guard(drmSessionContexts[i].sessionMutex);
+			std::lock_guard<std::mutex> keyLock(cachedKeyMutex);
+			if (cachedKeyIDs != nullptr)
+			{
+				isFailedKeyEntry = cachedKeyIDs[i].isFailedKeyEntries;
+			}
+		}
+		if((isFailedKeyEntry || forceClearSession) && drmSessionContexts != NULL)
+		{
+			std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
 			if (drmSessionContexts[i].drmSession != NULL)
 			{
 				MW_LOG_WARN("DrmSessionManager:: Clearing failed Session Data Slot : %d", i);
@@ -811,7 +819,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			bool isKeyIdFound = false;
 			{
 				// Protect access to cachedKeyIDs
-				std::lock_guard<std::mutex> guard(cachedKeyMutex);
+				std::lock_guard<std::mutex> keyIdLock(cachedKeyMutex);
 				auto &keyIDSlot = cachedKeyIDs[sessionSlot].data;
 				const auto &keyIdToFind = drmSessionContexts[sessionSlot].data;
 
