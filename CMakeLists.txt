@@ -33,6 +33,13 @@ if(DISABLE_SECURITY_TOKEN)
 	add_definitions(-DDISABLE_SECURITY_TOKEN)
 endif()
 
+option(PLAYER_TELEMETRY_SUPPORT "Enable player telemetry support" OFF)
+
+if(PLAYER_TELEMETRY_SUPPORT)
+	message(STATUS "PLAYER_TELEMETRY_SUPPORT set")
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DPLAYER_TELEMETRY_SUPPORT")
+endif()
+
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
 
