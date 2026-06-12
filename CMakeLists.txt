@@ -159,6 +159,7 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	gstplayertaskpool.h
 	GstHandlerControl.h
 	InterfacePlayerRDK.h
+	PlayerTelemetry.h
 	drm/DrmUtils.h
 	drm/aes/Aes.h
 	drm/HlsDrmBase.h
@@ -183,6 +184,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	gstplayertaskpool.h
 	GstHandlerControl.h
 	InterfacePlayerRDK.h
+	PlayerTelemetry.h
 	SocUtils.h
 	drm/DrmUtils.h
 	GstUtils.h
@@ -230,6 +232,11 @@ set(SOURCES
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
 )
+
+if(CMAKE_PLAYER_TELEMETRY_SUPPORT)
+	list(APPEND SOURCES PlayerTelemetry.cpp)
+	add_definitions(-DPLAYER_TELEMETRY_SUPPORT)
+endif()
 
 if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 	list(APPEND SOURCES

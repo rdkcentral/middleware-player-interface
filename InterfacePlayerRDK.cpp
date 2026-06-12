@@ -35,6 +35,9 @@
 #include "player-xternal-stats.h"
 #endif
 #include "PlayerUtils.h"
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry.h"
+#endif
 
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
@@ -1323,9 +1326,35 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 			case GST_STATE_CHANGE_FAILURE:
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in FAILURE state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				LogStatus(element);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> i;
+					std::map<std::string, std::string> s;
+					std::map<std::string, float> f;
+					s["cur"]  = gst_element_state_get_name(current);
+					s["pen"]  = gst_element_state_get_name(pending);
+					// GstState is an enum; transmit numeric value (stable for decoding on the backend)
+					i["tgt"]  = static_cast<int>(targetState);
+					PlayerTelemetry2 telemetry;
+					telemetry.send("MW_PIPELINE_STATE_CHANGE_FAILURE", i, s, f);
+				}
+#endif
 				break;
 			case GST_STATE_CHANGE_SUCCESS:
 				MW_LOG_DEBUG("InterfacePlayerRDK: %s is in success state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> i;
+					std::map<std::string, std::string> s;
+					std::map<std::string, float> f;
+					s["cur"]  = gst_element_state_get_name(current);
+					s["pen"]  = gst_element_state_get_name(pending);
+					// GstState is an enum; transmit numeric value (stable for decoding on the backend)
+					i["tgt"]  = static_cast<int>(targetState);
+					PlayerTelemetry2 telemetry;
+					telemetry.send("MW_PIPELINE_STATE_CHANGE_SUCCESS", i, s, f);
+				}
+#endif
 				break;
 			case GST_STATE_CHANGE_ASYNC:
 				if(syncOnlyTransition)
@@ -1333,9 +1362,35 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 					MW_LOG_MIL("InterfacePlayerRDK: %s state is changing asynchronously : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 					LogStatus(element);
 				}
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> i;
+					std::map<std::string, std::string> s;
+					std::map<std::string, float> f;
+					s["cur"]  = gst_element_state_get_name(current);
+					s["pen"]  = gst_element_state_get_name(pending);
+					// GstState is an enum; transmit numeric value (stable for decoding on the backend)
+					i["tgt"]  = static_cast<int>(targetState);
+					PlayerTelemetry2 telemetry;
+					telemetry.send("MW_PIPELINE_STATE_CHANGE_ASYNC", i, s, f);
+				}
+#endif
 				break;
 			default:
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in an unknown state", SafeName(element).c_str());
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> i;
+					std::map<std::string, std::string> s;
+					std::map<std::string, float> f;
+					s["cur"]  = gst_element_state_get_name(current);
+					s["pen"]  = gst_element_state_get_name(pending);
+					// GstState is an enum; transmit numeric value (stable for decoding on the backend)
+					i["tgt"]  = static_cast<int>(targetState);
+					PlayerTelemetry2 telemetry;
+					telemetry.send("MW_PIPELINE_STATE_CHANGE_UNKNOWN", i, s, f);
+				}
+#endif
 				break;
 		}
 
