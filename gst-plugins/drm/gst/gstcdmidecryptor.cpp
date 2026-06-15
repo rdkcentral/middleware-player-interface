@@ -541,7 +541,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 			else
 			{ /* If drmSession creation failed, then the call will be aborted here */
 				result = GST_FLOW_NOT_SUPPORTED;
-				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps  is **** NULL ****, returning GST_FLOW_NOT_SUPPORTED");
+				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps is NULL, returning GST_FLOW_NOT_SUPPORTED");
 			}
 		}
 		goto free_resources;
