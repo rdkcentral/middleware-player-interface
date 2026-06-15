@@ -90,7 +90,7 @@ const char * CipherTypeToString(CipherType type)
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
 mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
+trickTeardown(false), m_bBeingDestroyed(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library");
@@ -106,6 +106,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
+	m_bBeingDestroyed = true;
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
@@ -657,6 +658,11 @@ gboolean InterfacePlayerRDK::IdleCallbackOnEOS(gpointer user_data)
 
 	InterfacePlayerPriv* privatePlayer = nullptr;
 
+	if (!pInterfacePlayerRDK || pInterfacePlayerRDK->IsBeingDestroyed())
+	{
+		return G_SOURCE_REMOVE;
+	}
+
 	if (pInterfacePlayerRDK)
 	{
 	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
@@ -805,6 +811,11 @@ gboolean InterfacePlayerRDK::ProgressCallbackOnTimeout(gpointer user_data)
 {
 	InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK *)user_data;
 	InterfacePlayerPriv* privatePlayer = nullptr;
+	if (!pInterfacePlayerRDK || pInterfacePlayerRDK->IsBeingDestroyed())
+	{
+		return G_SOURCE_REMOVE;
+	}
+
 	if (pInterfacePlayerRDK)
 	{
 	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
@@ -1483,6 +1494,13 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 	}
 	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
+
+	GMainContext* ctx = g_main_context_default();
+	while (g_main_context_pending(ctx))
+	{
+		g_main_context_iteration(ctx, FALSE);
+	}
+
 	/* Prevent potential side effects of injecting EOS and
 	 * make the stop process more deterministic by:
 	 1) Confirming that bus handlers (disabled above) have completed
