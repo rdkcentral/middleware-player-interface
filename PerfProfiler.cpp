@@ -1,10 +1,20 @@
 #include "PerfProfiler.h"
+#include "MWConfig.h"
 #include <thread>
 #include <mutex>
 #include <unordered_map>
 #include "PlayerLogManager.h"
 
+bool ScopedTimer::IsProfilingActive() {
 #ifdef ENABLE_MW_PROFILING
+    // Check both compile-time flag and runtime config
+    return MWConfig::GetInstance().IsProfilingEnabled();
+#else
+    // If compile-time flag is not set, check runtime config
+    // This allows profiling to be enabled at runtime even without compile-time flag
+    return MWConfig::GetInstance().IsProfilingEnabled();
+#endif
+}
 
 ScopedTimer::ScopedTimer(const std::string& funcName, const std::string& fileName, int line)
     : name(funcName + " [" + fileName + ":" + std::to_string(line) + "]"),
@@ -34,5 +44,3 @@ ScopedTimer::~ScopedTimer() {
         std::hash<std::thread::id>{}(std::this_thread::get_id()),
         duration);
 }
-
-#endif // ENABLE_MW_PROFILING

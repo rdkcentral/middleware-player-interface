@@ -4,12 +4,19 @@
 #include <string>
 #include <chrono>
 
-#ifdef ENABLE_MW_PROFILING
+// Forward declaration to avoid circular dependency
+class MWConfig;
 
 class ScopedTimer {
 public:
     ScopedTimer(const std::string& funcName, const std::string& fileName, int line);
     ~ScopedTimer();
+
+    /**
+     * @brief Check if profiling is active (compile-time or runtime enabled)
+     * @return true if profiling should be active
+     */
+    static bool IsProfilingActive();
 
 private:
     std::string name;
@@ -19,10 +26,13 @@ private:
 // Macro helpers for generating a unique variable name per expansion
 #define MW_PROFILE_CONCAT_IMPL(x, y) x##y
 #define MW_PROFILE_CONCAT(x, y) MW_PROFILE_CONCAT_IMPL(x, y)
-// Macro for easy integration
-#define MW_PROFILE_FUNCTION() ScopedTimer MW_PROFILE_CONCAT(timer_, __LINE__)(__FUNCTION__, __FILE__, __LINE__)
-#else
-#define MW_PROFILE_FUNCTION() do { } while (0)
 
-#endif //ENABLE_MW_PROFILING
+// Macro for easy integration - checks both compile-time flag and runtime config
+#define MW_PROFILE_FUNCTION() \
+    do { \
+        if (ScopedTimer::IsProfilingActive()) { \
+            ScopedTimer MW_PROFILE_CONCAT(timer_, __LINE__)(__FUNCTION__, __FILE__, __LINE__); \
+        } \
+    } while (0)
+
 #endif // PERF_PROFILER_H

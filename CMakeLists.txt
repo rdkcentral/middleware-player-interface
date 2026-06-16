@@ -178,10 +178,9 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	subtitle/vttCue.h
 	ProcessHandler.h
 	MediaSample.h
+	MWConfig.h
+	PerfProfiler.h
 )
-if(ENABLE_MW_PROFILING)
-    list(APPEND LIBPLAYERGSTINTERFACE_HEADERS PerfProfiler.h)
-endif()
 
 install(FILES closedcaptions/CCTrackInfo.h
 	PlayerScheduler.h
@@ -220,10 +219,9 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	MWConfig.h
+	PerfProfiler.h
 	DESTINATION include)
-if(ENABLE_MW_PROFILING)
-    install(FILES PerfProfiler.h DESTINATION include)
-endif()
 
 set(SOURCES
 	InterfacePlayerRDK.cpp
@@ -237,10 +235,9 @@ set(SOURCES
 	vendor/default/DefaultSocInterface.cpp
 	drm/processProtectionHls.cpp
 	ProcessHandler.cpp
+	MWConfig.cpp
+	PerfProfiler.cpp
 )
-if(ENABLE_MW_PROFILING)
-    list(APPEND SOURCES PerfProfiler.cpp)
-endif()
 
 if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 	list(APPEND SOURCES

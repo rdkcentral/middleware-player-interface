@@ -36,6 +36,7 @@
 #endif
 #include "PlayerUtils.h"
 #include "PerfProfiler.h"
+#include "MWConfig.h"
 
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
@@ -93,6 +94,9 @@ mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL
 mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
+	// Initialize middleware configuration (profiling, etc.)
+	MWConfig::GetInstance().Initialize();
+	
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	m_gstConfigParam = new Configs();
 	m_gstConfigParam->framesToQueue = SocUtils::RequiredQueuedFrames();
