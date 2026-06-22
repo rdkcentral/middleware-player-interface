@@ -201,8 +201,11 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 	{
 		for (size_t i = 0; i < uuidHex.size(); i += 2)
 		{
-			uint8_t byte = (uint8_t)strtoul(uuidHex.substr(i, 2).c_str(), nullptr, 16);
-			defaultKeyIDBinary.push_back(byte);
+		    std::string hexPair = uuidHex.substr(i, 2);  // lives until end of iteration
+		    char* end = nullptr;
+		    unsigned long v = strtoul(hexPair.c_str(), &end, 16);
+		    if (!end || *end != '\0') { defaultKeyIDBinary.clear(); break; }
+		    defaultKeyIDBinary.push_back(static_cast<uint8_t>(v));
 		}
 	}
 
