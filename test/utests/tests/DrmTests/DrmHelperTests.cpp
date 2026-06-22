@@ -750,7 +750,7 @@ TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_UUIDFormatNeverMatchedBinary
  *
  * STATUS: FAIL before fix, PASS after fix
  */
-TEST_F(DrmHelperTests, RDKEMW19892_Broken_MultiKeyUUIDSelectsWrongSlot)
+TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_MultiKeyUUIDSelectsWrongSlot)
 {
 	// PSSH Version 1 with 2 key IDs:
 	// Key 0: 00000000-0000-0000-0000-000000000000 (all zeros)
