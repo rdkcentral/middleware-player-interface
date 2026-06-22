@@ -190,6 +190,7 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 	// for comparison against binary keyIDs parsed from PSSH
 	std::vector<uint8_t> defaultKeyIDBinary;
 	std::string uuidHex;
+	uuidHex.reserve(cencData.size());
 	for (char c : cencData)
 	{
 		if (c != '-')
