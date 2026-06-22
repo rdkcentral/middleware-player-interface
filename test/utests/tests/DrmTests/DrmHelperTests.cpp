@@ -803,7 +803,7 @@ TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_MultiKeyUUIDSelectsWrongSlot
  *
  * STATUS: FAIL before fix, PASS after fix
  */
-TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDUppercaseHex)
+TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_UUIDUppercaseHex)
 {
 	// Multi-key PSSH: Key0 = all 0xAA (dummy), Key1 = 2db6c48d301f48eabb771ba7a8ac9042 (target)
 	const char *psshBase64 = "AAAARHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAKqqqqqqqqqqqqqqqqqqqqqLbbEjTAfSOq7dxunqKyQQgAAAAA=";
