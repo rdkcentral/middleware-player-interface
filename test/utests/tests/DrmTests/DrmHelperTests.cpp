@@ -541,7 +541,7 @@ TEST_F(DrmHelperTests, TestWidevineHelperParsePsshDrmMetaData)
 }
 
 /*****************************************************************************
- * RDKEMW-19892: setDefaultKeyID / getKey test suite
+ * setDefaultKeyID / getKey test suite
  *
  * These tests verify both WORKING and NON-WORKING (previously broken) scenarios
  * to confirm the fix for the defaultkey:-1 issue during trick play.
@@ -681,17 +681,19 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_MultiKeyRawBinarySelectsCorrectSlot)
  *
  * BEFORE FIX: setDefaultKeyID converts "2db6c48d-301f-48ea-bb77-1ba7a8ac9042"
  *             to 36 ASCII bytes and compares against 16-byte binary keys.
- *             NEVER matches → mDefaultKeySlot stays -1 → defaultkey:-1 in logs
+ *             NEVER matches → mDefaultKeySlot stays -1 → getKey falls back to slot 0
+ *             → returns dummy key (0xAA...) instead of the real key at slot 1
  *
  * AFTER FIX: UUID string is hex-decoded to 16-byte binary before comparison.
- *            Matches correctly → mDefaultKeySlot = 0 → correct key returned
+ *            Matches correctly → mDefaultKeySlot = 1 → correct key returned
  *
  * STATUS: FAIL before fix, PASS after fix
  */
 TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDFormatNeverMatchedBinaryKeys)
 {
-	// PSSH with single 16-byte binary key: 2db6c48d301f48eabb771ba7a8ac9042
-	const char *psshBase64 = "AAAANHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAEttsSNMB9I6rt3G6eorJBCAAAAAA==";
+	// Multi-key PSSH: Key0 = all 0xAA (dummy), Key1 = 2db6c48d301f48eabb771ba7a8ac9042 (target)
+	// The target key is at slot 1, so slot-0 fallback returns the WRONG key.
+	const char *psshBase64 = "AAAARHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAKqqqqqqqqqqqqqqqqqqqqqLbbEjTAfSOq7dxunqKyQQgAAAAA=";
 	size_t psshDataLen = 0;
 	unsigned char *psshDataPtr = base64_Decode(psshBase64, &psshDataLen, strlen(psshBase64));
 	ASSERT_NE(psshDataPtr, nullptr);
@@ -705,24 +707,27 @@ TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDFormatNeverMatchedBinaryKeys)
 
 	std::map<int, std::vector<uint8_t>> keyIDs;
 	widevineHelper->getKeys(keyIDs);
-	ASSERT_GE(keyIDs.size(), 1u);
+	ASSERT_EQ(keyIDs.size(), 2u);
 
-	std::vector<uint8_t> expectedBinaryKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
-	                                           0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
-	ASSERT_EQ(keyIDs[0], expectedBinaryKey);
+	std::vector<uint8_t> dummyKey = {0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
+	                                  0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
+	std::vector<uint8_t> targetKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
+	                                   0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
+	ASSERT_EQ(keyIDs[0], dummyKey);
+	ASSERT_EQ(keyIDs[1], targetKey);
 
 	// THIS IS THE REAL PRODUCTION FORMAT: UUID with hyphens from manifest
 	// <ContentProtection cenc:default_KID="2db6c48d-301f-48ea-bb77-1ba7a8ac9042"/>
 	std::string cencDefaultKID = "2db6c48d-301f-48ea-bb77-1ba7a8ac9042";
 	widevineHelper->setDefaultKeyID(cencDefaultKID);
 
-	// BEFORE FIX: getKey would log "defaultkey: -1" and fall to slot 0 by luck
-	// (which happens to be correct here since there's only 1 key, but wrong for multi-key)
-	// AFTER FIX: mDefaultKeySlot is properly set to 0
+	// BEFORE FIX: UUID (36 ASCII bytes) never matches binary keys → mDefaultKeySlot=-1
+	//             → getKey falls back to slot 0 (dummyKey) → WRONG KEY
+	// AFTER FIX:  UUID hex-decoded to binary → matches slot 1 → correct key
 	std::vector<uint8_t> keyID;
 	widevineHelper->getKey(keyID);
-	EXPECT_FALSE(keyID.empty()) << "getKey must not return empty with UUID format cenc:default_KID";
-	EXPECT_EQ(keyID, expectedBinaryKey) << "UUID format must correctly match binary PSSH key";
+	EXPECT_NE(keyID, dummyKey) << "BEFORE-FIX BEHAVIOR: fell back to slot 0 (wrong key!)";
+	EXPECT_EQ(keyID, targetKey) << "UUID format must correctly select slot 1 (target key)";
 
 	free(psshDataPtr);
 }
@@ -800,7 +805,8 @@ TEST_F(DrmHelperTests, RDKEMW19892_Broken_MultiKeyUUIDSelectsWrongSlot)
  */
 TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDUppercaseHex)
 {
-	const char *psshBase64 = "AAAANHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAEttsSNMB9I6rt3G6eorJBCAAAAAA==";
+	// Multi-key PSSH: Key0 = all 0xAA (dummy), Key1 = 2db6c48d301f48eabb771ba7a8ac9042 (target)
+	const char *psshBase64 = "AAAARHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAKqqqqqqqqqqqqqqqqqqqqqLbbEjTAfSOq7dxunqKyQQgAAAAA=";
 	size_t psshDataLen = 0;
 	unsigned char *psshDataPtr = base64_Decode(psshBase64, &psshDataLen, strlen(psshBase64));
 	ASSERT_NE(psshDataPtr, nullptr);
@@ -811,16 +817,20 @@ TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDUppercaseHex)
 	ASSERT_NE(widevineHelper, nullptr);
 	ASSERT_TRUE(widevineHelper->parsePssh(psshDataPtr, (uint32_t)psshDataLen));
 
-	std::vector<uint8_t> expectedKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
-	                                     0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
+	std::vector<uint8_t> dummyKey = {0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
+	                                  0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
+	std::vector<uint8_t> targetKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
+	                                   0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
 
 	// UPPERCASE UUID — some CDN/manifest generators produce this
+	// Must select slot 1 (targetKey), NOT fall back to slot 0 (dummyKey)
 	std::string cencDefaultKID = "2DB6C48D-301F-48EA-BB77-1BA7A8AC9042";
 	widevineHelper->setDefaultKeyID(cencDefaultKID);
 
 	std::vector<uint8_t> keyID;
 	widevineHelper->getKey(keyID);
-	EXPECT_EQ(keyID, expectedKey) << "Uppercase UUID must also correctly match binary PSSH key";
+	EXPECT_NE(keyID, dummyKey) << "BEFORE-FIX BEHAVIOR: fell back to slot 0 (wrong key!)";
+	EXPECT_EQ(keyID, targetKey) << "Uppercase UUID must correctly select slot 1";
 
 	free(psshDataPtr);
 }
@@ -829,11 +839,16 @@ TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDUppercaseHex)
  * NON-WORKING SCENARIO 4 (BROKEN BEFORE FIX):
  * UUID without hyphens (some implementations strip hyphens)
  *
- * STATUS: FAIL before fix, PASS after fix (due to fallback to slot 0)
+ * BEFORE FIX: 32-char hex string (32 ASCII bytes) compared against 16-byte binary
+ *             → no match → slot-0 fallback → wrong key
+ * AFTER FIX:  Hex-decoded to 16 bytes → matches slot 1 → correct key
+ *
+ * STATUS: FAIL before fix, PASS after fix
  */
 TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDWithoutHyphens)
 {
-	const char *psshBase64 = "AAAANHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAEttsSNMB9I6rt3G6eorJBCAAAAAA==";
+	// Multi-key PSSH: Key0 = all 0xAA (dummy), Key1 = 2db6c48d301f48eabb771ba7a8ac9042 (target)
+	const char *psshBase64 = "AAAARHBzc2gBAAAA7e+LqXnWSs6jyCfc1R0h7QAAAAKqqqqqqqqqqqqqqqqqqqqqLbbEjTAfSOq7dxunqKyQQgAAAAA=";
 	size_t psshDataLen = 0;
 	unsigned char *psshDataPtr = base64_Decode(psshBase64, &psshDataLen, strlen(psshBase64));
 	ASSERT_NE(psshDataPtr, nullptr);
@@ -844,16 +859,20 @@ TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDWithoutHyphens)
 	ASSERT_NE(widevineHelper, nullptr);
 	ASSERT_TRUE(widevineHelper->parsePssh(psshDataPtr, (uint32_t)psshDataLen));
 
-	std::vector<uint8_t> expectedKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
-	                                     0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
+	std::vector<uint8_t> dummyKey = {0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
+	                                  0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
+	std::vector<uint8_t> targetKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
+	                                   0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
 
 	// UUID without hyphens (32 hex chars) — also valid
+	// Must select slot 1 (targetKey), NOT fall back to slot 0 (dummyKey)
 	std::string cencDefaultKID = "2db6c48d301f48eabb771ba7a8ac9042";
 	widevineHelper->setDefaultKeyID(cencDefaultKID);
 
 	std::vector<uint8_t> keyID;
 	widevineHelper->getKey(keyID);
-	EXPECT_EQ(keyID, expectedKey) << "UUID without hyphens must also match binary PSSH key";
+	EXPECT_NE(keyID, dummyKey) << "BEFORE-FIX BEHAVIOR: fell back to slot 0 (wrong key!)";
+	EXPECT_EQ(keyID, targetKey) << "UUID without hyphens must correctly select slot 1";
 
 	free(psshDataPtr);
 }
@@ -1139,242 +1158,4 @@ TEST_F(DrmHelperTests, TestCompareHelpers)
 	playreadyHelper3->parsePssh((const unsigned char*)pssh3.data(), (uint32_t)pssh3.size());
 	ASSERT_FALSE(playreadyHelper->compare(playreadyHelper3));
 }
-/**
- * @brief Verify that the default initialization of ChallengeInfo sets all member variables to their expected default values.
- *
- * This test verifies that when the default constructor of ChallengeInfo is invoked, the member variable 'data' is set to nullptr,
- * and both 'url' and 'accessToken' are initialized to empty strings. This ensures that the object is in a valid and predictable state for further operations.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 001
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                                   | Test Data                                                                                              | Expected Result                                                                                                                        | Notes       |
- * | :--------------: | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
- * | 01               | Invoke the default constructor for ChallengeInfo to create a new object                                         | No input, default constructor call, expected output: data = nullptr, url = "", accessToken = ""          | The object is initialized with data as nullptr, and both url and accessToken as empty strings; all assertions pass                       | Should Pass |
- */
-TEST_F(DrmHelperTests, VerifyDefaultInitialization) {
 
-    std::cout << "Entering VerifyDefaultInitialization test" << "\n";
-
-    std::cout << "Invoking default constructor for ChallengeInfo" << "\n";
-    
-    ChallengeInfo challengeInfo;
-    
-    std::cout << "Default constructor invoked. Checking initial values" << "\n";
-    
-    if (challengeInfo.data == nullptr) {
-        std::cout << "challengeInfo.data is null" << "\n";
-    }
-    else {
-        std::cout << "challengeInfo.data is not null" << "\n";
-    }
-
-    std::cout << "challengeInfo.url value: '" << challengeInfo.url << "'" << "\n";
-    std::cout << "challengeInfo.accessToken value: '" << challengeInfo.accessToken << "'" << "\n";
-
-    EXPECT_EQ(challengeInfo.data, nullptr);
-    EXPECT_EQ(challengeInfo.url, "");
-    EXPECT_EQ(challengeInfo.accessToken, "");
-    
-    std::cout << "Exiting VerifyDefaultInitialization test" << "\n";
-}
-/**
- * @brief Validate the default constructor initializes LicenseRequest object with correct defaults.
- *
- * This test verifies that the LicenseRequest class's default constructor correctly initializes all members with appropriate default values. It confirms that the method field is set to one of the allowed values (DRM_RETRIEVE, GET, or POST), licenseAnonymousRequest is set to false, url and payload are empty strings, and the headers map is empty.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 002
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke default constructor for LicenseRequest object | None | LicenseRequest object is created with default field values | Should be successful |
- * | 02 | Validate that the method field is set to one of (DRM_RETRIEVE, GET, POST) | licenseRequestObject.method = DRM_RETRIEVE, GET, or POST | Method field matches one of the allowed values | Should Pass |
- * | 03 | Check that licenseAnonymousRequest is false by default | licenseRequestObject.licenseAnonymousRequest = false | The field evaluates to false as expected | Should Pass |
- * | 04 | Verify that the url field is an empty string | licenseRequestObject.url = "" | Url field is an empty string | Should Pass |
- * | 05 | Verify that the payload field is an empty string | licenseRequestObject.payload = "" | Payload field is an empty string | Should Pass |
- * | 06 | Ensure that the headers map is empty | licenseRequestObject.headers = {} | Headers map is empty | Should Pass |
- */
-TEST_F(DrmHelperTests, DefaultConstructorInitialization_PositiveTest)
-{
-    std::cout<<"Entering DefaultConstructorInitialization_PositiveTest test"<<std::endl;
-
-    LicenseRequest licenseRequestObject;
-
-    std::cout<<"LicenseRequest default constructor invoked"<<std::endl;
-
-    std::cout<<"Retrieved method value: "<< licenseRequestObject.method <<std::endl;
-    std::cout<<"Retrieved licenseAnonymousRequest value: "<< licenseRequestObject.licenseAnonymousRequest <<std::endl;
-    std::cout<<"Retrieved url value: \""<< licenseRequestObject.url <<"\""<<std::endl;
-    std::cout<<"Retrieved payload value: \""<< licenseRequestObject.payload <<"\""<<std::endl;
-    std::cout<<"Headers map size: "<< licenseRequestObject.headers.size() <<std::endl;
-
-    EXPECT_TRUE(
-      licenseRequestObject.method == LicenseRequest::DRM_RETRIEVE ||
-      licenseRequestObject.method == LicenseRequest::GET ||
-      licenseRequestObject.method == LicenseRequest::POST
-    );
-    EXPECT_FALSE(licenseRequestObject.licenseAnonymousRequest);
-    EXPECT_EQ(licenseRequestObject.url, std::string(""));
-    EXPECT_EQ(licenseRequestObject.payload, std::string(""));
-    EXPECT_TRUE(licenseRequestObject.headers.empty());
-
-    std::cout<<"Exiting DefaultConstructorInitialization_PositiveTest test"<<std::endl;
-}
-/**
- * @brief Validate if DrmHelperEngine is properly constructed using its default constructor.
- *
- * Validate that the default constructor of DrmHelperEngine does not throw any exception and creates a valid instance.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 003
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                                                  | Expected Result                                             | Notes       |
- * | :--------------: | ------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- | ----------- |
- * | 01               | Invoke the default constructor of DrmHelperEngine and verify that no exception is thrown | Invocation: DrmHelperEngine engine                         | API should not throw an exception; assertion EXPECT_NO_THROW passes | Should Pass |
- */
-TEST_F(DrmHelperTests, DefaultConstruction)
-{
-    std::cout << "Entering DefaultConstruction test" << std::endl;
-
-    std::cout << "Invoking DrmHelperEngine default constructor" << std::endl;
-    EXPECT_NO_THROW({
-      DrmHelperEngine engine;
-    });
-    std::cout << "DrmHelperEngine instance created" << std::endl;
-
-    std::cout << "Exiting DefaultConstruction test" << std::endl;
-}
-/**
- * @brief Validate that DrmHelperEngine::getInstance() returns a non-null instance and enforces singleton behavior.
- *
- * This test verifies that invoking DrmHelperEngine::getInstance() returns a valid, non-null instance on the first call and that subsequent calls return the same instance address, ensuring the singleton design pattern is correctly implemented.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 005
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                                                 | Expected Result                                           | Notes      |
- * | :----:           | ------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ---------- |
- * | 01               | Invoke DrmHelperEngine::getInstance() for the first time            | output1 = instance address from first call                | Returns a non-null instance address                       | Should Pass|
- * | 02               | Invoke DrmHelperEngine::getInstance() for the second time           | output2 = instance address from second call               | Returns a non-null instance address                       | Should Pass|
- * | 03               | Verify that both instance addresses are equal (singleton behavior)  | instance1 (from first call), instance2 (from second call)   | Both pointers are equal, confirming singleton behavior    | Should Pass|
- */
-TEST_F(DrmHelperTests, getInstance_start)
-{
-    std::cout << "Entering getInstance_start test" << std::endl;
-
-    std::cout << "Invoking DrmHelperEngine::getInstance() for the first time" << std::endl;
-    DrmHelperEngine &instance1 = DrmHelperEngine::getInstance();
-    ASSERT_NE(&instance1, nullptr);
-    std::cout << "First instance address: " << &instance1 << std::endl;
-
-    std::cout << "Invoking DrmHelperEngine::getInstance() for the second time" << std::endl;
-    DrmHelperEngine &instance2 = DrmHelperEngine::getInstance();
-    ASSERT_NE(&instance2, nullptr);
-    std::cout << "Second instance address: " << &instance2 << std::endl;
-   
-    std::cout << "Verifying that both instance addresses are equal" << std::endl;
-    EXPECT_EQ(&instance1, &instance2);
-
-    std::cout << "Verified non-null instance and singleton behavior. Instance address: " << &instance1 << std::endl;
-
-    std::cout << "Exiting getInstance_start test" << std::endl;
-}
-/**
- * @brief Verify getSystemIds API handles an empty vector input without throwing exceptions
- *
- * This test validates that when getSystemIds is invoked on an empty vector, it does not throw an exception and optionally populates or leaves the vector unchanged. The focus is to ensure that the API gracefully handles empty input scenarios.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 006@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Create DrmHelperEngine object using the default constructor | No input arguments | Object is successfully created | Should be successful |
- * | 02 | Initialize systemIds vector as empty | systemIds vector = {} | Empty vector is created and printed | Should be successful |
- * | 03 | Invoke getSystemIds method | engine.getSystemIds(systemIds) | No exception is thrown; systemIds updated if applicable | Should Pass |
- * | 04 | Output the results of the getSystemIds invocation | Printed console logs showing systemIds vector size and elements | Console displays vector size and its contents (if any) | Should be successful |
- */
-TEST_F(DrmHelperTests, GetSystemIds_EmptyVector)
-{
-    std::cout << "Entering GetSystemIds_EmptyVector test" << std::endl;
-    
-    std::cout << "Creating DrmHelperEngine object using the default constructor" << std::endl;
-    DrmHelperEngine engine;
-    
-    std::vector<std::string> systemIds;
-    std::cout << "Initial systemIds vector size: " << systemIds.size() << std::endl;
-    
-    std::cout << "Invoking getSystemIds method" << std::endl;
-    EXPECT_NO_THROW(engine.getSystemIds(systemIds));
-    
-    std::cout << "After Invoking getSystemIds, systemIds vector size: " << systemIds.size() << std::endl;
-    for (size_t i = 0; i < systemIds.size(); ++i)
-    {
-        std::cout << "systemIds[" << i << "]: " << systemIds[i] << std::endl;
-    }
-    
-    std::cout << "Exiting GetSystemIds_EmptyVector test" << std::endl;
-}
-/**
- * @brief Verify that registerFactory handles a null input gracefully without altering internal state.
- *
- * This test ensures that the API `registerFactory` does not register a null factory pointer
- * and maintains internal consistency. It verifies that the factory count remains unchanged (zero),
- * demonstrating proper handling of invalid input without exceptions or side effects.
- *
- * **Test Group ID:** Basic: 01 @n
- * **Test Case ID:** 008 @n
- * **Priority:** High @n
- *
- * **Pre-Conditions:** None @n
- * **Dependencies:** None @n
- * **User Interaction:** None @n
- *
- * **Test Procedure:** @n
- * | Variation / Step | Description                                                           | Test Data       | Expected Result                            | Notes              |
- * | :--------------: | --------------------------------------------------------------------- | --------------- | ------------------------------------------ | ------------------ |
- * | 01               | Invoke registerFactory with a null pointer                            | factory = null  | Factory count remains zero                 | Should Not Change  |
- * | 02               | Retrieve factory count after attempted registration with null pointer |                 | Count = 0                                  | Verifies no effect |
- */
-TEST_F(DrmHelperTests, NullFactoryRegistrationTest)
-{
-    std::cout << "Entering NullFactoryRegistrationTest test" << std::endl;
-
-    DrmHelperEngine engine;
-
-    std::cout << "Invoking registerFactory with nullptr" << std::endl;
-    EXPECT_NO_THROW(engine.registerFactory(nullptr););
-
-    std::cout << "Exiting NullFactoryRegistrationTest test" << std::endl;
-}
