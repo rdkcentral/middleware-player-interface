@@ -689,7 +689,7 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_MultiKeyRawBinarySelectsCorrectSlot)
  *
  * STATUS: FAIL before fix, PASS after fix
  */
-TEST_F(DrmHelperTests, RDKEMW19892_Broken_UUIDFormatNeverMatchedBinaryKeys)
+TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_UUIDFormatNeverMatchedBinaryKeys)
 {
 	// Multi-key PSSH: Key0 = all 0xAA (dummy), Key1 = 2db6c48d301f48eabb771ba7a8ac9042 (target)
 	// The target key is at slot 1, so slot-0 fallback returns the WRONG key.
