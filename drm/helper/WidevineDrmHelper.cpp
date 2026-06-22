@@ -184,8 +184,8 @@ void WidevineDrmHelper::setDrmMetaData(const std::string& metaData)
 
 void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 {
+	mDefaultKeySlot = -1;
 	std::vector<uint8_t> defaultKeyID(cencData.begin(), cencData.end());
-
 	// Also convert UUID string (e.g. "f3dff538-b8c9-58e4-e8cd-96cf811d32dc") to 16-byte binary
 	// for comparison against binary keyIDs parsed from PSSH
 	std::vector<uint8_t> defaultKeyIDBinary;
