@@ -165,7 +165,7 @@ static void gst_cdmidecryptor_class_init(
 {
 	DEBUG_FUNC();
 
-	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
+	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface(false);
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstBaseTransformClass *base_transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
@@ -190,10 +190,10 @@ static void gst_cdmidecryptor_class_init(
 	base_transform_class->transform_ip = GST_DEBUG_FUNCPTR(
 			gst_cdmidecryptor_transform_ip);
 
-	if (socInterface)
-	{
-		socInterface->ConfigureAcceptCaps(base_transform_class, gst_cdmidecryptor_accept_caps);
-	}
+	// if (socInterface)
+	// {
+	// 	socInterface->ConfigureAcceptCaps(base_transform_class, gst_cdmidecryptor_accept_caps);
+	// }
 
 	base_transform_class->transform_ip_on_passthrough = FALSE;
 
@@ -227,6 +227,7 @@ static void gst_cdmidecryptor_init(
 	cdmidecryptor->protectionEvent = NULL;
 	cdmidecryptor->sessionManager = NULL;
 	cdmidecryptor->firstsegprocessed = false;
+	cdmidecryptor->isFlushing = false;
 	cdmidecryptor->selectedProtection = NULL;
 	cdmidecryptor->decryptFailCount = 0;
 	cdmidecryptor->hdcpOpProtectionFailCount = 0;
@@ -306,7 +307,7 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 {
 	DEBUG_FUNC();
 
-	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
+	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface(false);
 	GstCDMIDecryptor *cdmidecryptor = GST_CDMI_DECRYPTOR(trans);
 	g_return_val_if_fail(direction != GST_PAD_UNKNOWN, NULL);
 	unsigned size = gst_caps_get_size(caps);
@@ -317,6 +318,10 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 
 	if(!cdmidecryptor->selectedProtection)
 	{
+        if (size == 0)
+		{
+			GST_WARNING_OBJECT(trans, "No caps structures available while selecting protection system");
+		}
 		GstStructure *capstruct = gst_caps_get_structure(caps, 0);
 		const gchar* capsinfo = gst_structure_get_string(capstruct, "protection-system");
 		if(capsinfo != NULL)
@@ -343,6 +348,20 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 		{
 			GST_DEBUG_OBJECT(trans, "can't find protection-system field from caps: %" GST_PTR_FORMAT, caps);
 		}
+	}
+
+    GST_WARNING_OBJECT(trans, "selectedProtection=%s size=%u direction=%s inputCaps=%" GST_PTR_FORMAT " filter=%" GST_PTR_FORMAT,
+			cdmidecryptor->selectedProtection ? cdmidecryptor->selectedProtection : "(null)",
+			size,
+			(direction == GST_PAD_SRC) ? "src" : "sink",
+			caps,
+			filter);
+
+	// Guard: if SRC direction and selectedProtection is NULL, return safe passthrough caps
+	if (direction == GST_PAD_SRC && !cdmidecryptor->selectedProtection)
+	{
+		gst_caps_unref(transformedCaps);
+		return gst_caps_ref(filter ? filter : caps);
 	}
 
 	for (unsigned i = 0; i < size; ++i)
@@ -438,12 +457,18 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 		}
 
 		gst_cdmicapsappendifnotduplicate(transformedCaps, out);
+        GST_WARNING_OBJECT(trans, "caps[%u] transformed to %" GST_PTR_FORMAT, i, transformedCaps);
 
-		if (socInterface && socInterface->IsTransformCapsRequired())
-		{
-			if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps) && OCDMGstTransformCaps)
-				OCDMGstTransformCaps(&transformedCaps);
-		}
+
+		// if (socInterface && socInterface->IsTransformCapsRequired())
+		// {
+		// 	if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps) && OCDMGstTransformCaps)
+		//           {
+		//               GST_WARNING_OBJECT(trans, "Before OCDMGstTransformCaps transformedCaps=%" GST_PTR_FORMAT, transformedCaps);
+		// 		OCDMGstTransformCaps(&transformedCaps);
+		//               GST_WARNING_OBJECT(trans, "After OCDMGstTransformCaps transformedCaps=%" GST_PTR_FORMAT, transformedCaps);
+		//           }
+		// }
 
 	}
 
@@ -452,10 +477,13 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 		GstCaps* intersection;
 
 		GST_LOG_OBJECT(trans, "Using filter caps %" GST_PTR_FORMAT, filter);
+        GST_WARNING_OBJECT(trans, "Before intersect transformedCaps=%" GST_PTR_FORMAT " filter=%" GST_PTR_FORMAT,
+				transformedCaps, filter);
 		intersection = gst_caps_intersect_full(transformedCaps, filter,
 				GST_CAPS_INTERSECT_FIRST);
 		gst_caps_unref(transformedCaps);
 		transformedCaps = intersection;
+        GST_WARNING_OBJECT(trans, "After intersect transformedCaps=%" GST_PTR_FORMAT, transformedCaps);
 	}
 
 	GST_LOG_OBJECT(trans, "returning %" GST_PTR_FORMAT, transformedCaps);
@@ -483,7 +511,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 {
 	DEBUG_FUNC();
 
-	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
+	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface(false);
 	GstCDMIDecryptor *cdmidecryptor =
 			GST_CDMI_DECRYPTOR(trans);
 
@@ -503,6 +531,17 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 
 	GST_DEBUG_OBJECT(cdmidecryptor, "Processing buffer");
 
+	/* Guard against freed/invalid buffers that can arrive during a pipeline
+	 * flush (ABR discontinuity). The flush frees in-flight buffers while
+	 * transform_ip may still hold a reference, causing gst_buffer_map_range
+	 * assertion failures (GST_IS_BUFFER failure storm in the log).
+	 */
+	if (!buffer || !GST_IS_BUFFER(buffer))
+	{
+		GST_WARNING_OBJECT(cdmidecryptor, "Received NULL or freed buffer — skipping (flush in progress)");
+		return GST_FLOW_OK;
+	}
+
 	if (!buffer)
 	{
 		GST_ERROR_OBJECT(cdmidecryptor,"Failed to get writable buffer");
@@ -515,6 +554,16 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 
 	g_mutex_lock(&cdmidecryptor->mutex);
 	mutexLocked = TRUE;
+
+	/* Reject buffers arriving during a flush to prevent the decrypt element
+	 * from accessing pipeline-freed memory during ABR profile switches.
+	 */
+	if (cdmidecryptor->isFlushing)
+	{
+		GST_DEBUG_OBJECT(cdmidecryptor, "Pipeline is flushing — discarding buffer");
+		result = GST_FLOW_FLUSHING;
+		goto free_resources;
+	}
 
 	if (cdmidecryptor->sinkCaps == NULL && cdmidecryptor->streamReceived) {
 		// Caps negotiation hasn't completed yet - wait briefly
@@ -532,8 +581,8 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	{
 		GST_DEBUG_OBJECT(cdmidecryptor,
 				"Failed to get GstProtection metadata from buffer %p, could be clear buffer",buffer);
-		if (socInterface && socInterface->IsDecryptRequired())
-		{
+		// if (socInterface && socInterface->IsDecryptRequired())
+		// {
 			// call decrypt even for clear samples in order to copy it to a secure buffer. If secure buffers are not supported
 			// decrypt() call will return without doing anything
 			if (cdmidecryptor->drmSession != NULL && cdmidecryptor->sinkCaps != NULL)
@@ -543,7 +592,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 				result = GST_FLOW_NOT_SUPPORTED;
 				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps is NULL, returning GST_FLOW_NOT_SUPPORTED");
 			}
-		}
+		// }
 		goto free_resources;
 	}
 
@@ -624,6 +673,12 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	}
 
 	ivBuffer = gst_value_get_buffer(value);
+	if (!ivBuffer)
+	{
+		GST_ERROR_OBJECT(cdmidecryptor, "Failed to get IV buffer for sample");
+		result = GST_FLOW_NOT_SUPPORTED;
+		goto free_resources;
+	}
 
 	value = gst_structure_get_value(protectionMeta->info, "kid");
 	if (!value) {
@@ -633,6 +688,12 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	}
 
 	keyIDBuffer = gst_value_get_buffer(value);
+	if (!keyIDBuffer)
+	{
+		GST_ERROR_OBJECT(cdmidecryptor, "Failed to get keyID buffer for sample");
+		result = GST_FLOW_NOT_SUPPORTED;
+		goto free_resources;
+	}
 
 	if (subSampleCount)
 	{
@@ -645,6 +706,13 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 			goto free_resources;
 		}
 		subsamplesBuffer = gst_value_get_buffer(value);
+		if (!subsamplesBuffer)
+		{
+			GST_ERROR_OBJECT(cdmidecryptor,
+					"Failed to get subsamples buffer");
+			result = GST_FLOW_NOT_SUPPORTED;
+			goto free_resources;
+		}
 		if (!gst_buffer_map(subsamplesBuffer, &subSamplesMap, GST_MAP_READ))
 		{
 			GST_ERROR_OBJECT(cdmidecryptor,
@@ -774,6 +842,30 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 
 	switch (GST_EVENT_TYPE(event))
 	{
+	case GST_EVENT_FLUSH_START:
+	{
+		// GST_DEBUG_OBJECT(cdmidecryptor, "FLUSH_START: resetting DRM session state");
+		GST_DEBUG_OBJECT(cdmidecryptor, "FLUSH_START: blocking transform_ip");
+		g_mutex_lock(&cdmidecryptor->mutex);
+		cdmidecryptor->isFlushing = TRUE;
+		// cdmidecryptor->streamReceived = FALSE;
+		cdmidecryptor->canWait = FALSE;
+		g_cond_signal(&cdmidecryptor->condition); // Wake any waiting transform_ip threads
+		g_mutex_unlock(&cdmidecryptor->mutex);
+		result = GST_BASE_TRANSFORM_CLASS(gst_cdmidecryptor_parent_class)->sink_event(trans, event);
+		break;
+	}
+
+	case GST_EVENT_FLUSH_STOP:
+	{
+		GST_DEBUG_OBJECT(cdmidecryptor, "FLUSH_STOP: unblocking transform_ip");
+		g_mutex_lock(&cdmidecryptor->mutex);
+		cdmidecryptor->isFlushing = FALSE;
+		cdmidecryptor->canWait = TRUE;
+		g_mutex_unlock(&cdmidecryptor->mutex);
+		result = GST_BASE_TRANSFORM_CLASS(gst_cdmidecryptor_parent_class)->sink_event(trans, event);
+		break;
+	}
 
 	//GST_EVENT_PROTECTION has information about encryption and contains initData for DRM library
 	//This is the starting point of DRM activities.
@@ -911,6 +1003,9 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
 		g_mutex_lock(&cdmidecryptor->mutex);
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
+		// Reset streamReceived so transform_ip blocks (via g_cond_wait) while the
+		// new session is established, preventing decrypt with the old/aborted session.
+		cdmidecryptor->streamReceived = FALSE;
 		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
                 int err = -1;
 		int responseCode =-1;
@@ -998,7 +1093,7 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 	
 	DEBUG_FUNC();
 
-	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
+	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface(false);
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	GstCDMIDecryptor* cdmidecryptor =
 			GST_CDMI_DECRYPTOR(element);
@@ -1015,6 +1110,7 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 		GST_DEBUG_OBJECT(cdmidecryptor, "PAUSED->READY");
 		g_mutex_lock(&cdmidecryptor->mutex);
 		cdmidecryptor->canWait = false;
+		cdmidecryptor->streamReceived = FALSE; // Reset so stale session is not used after flush
 		g_cond_signal(&cdmidecryptor->condition);
 		g_mutex_unlock(&cdmidecryptor->mutex);
 		break;
@@ -1077,6 +1173,8 @@ static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
 {
 	gboolean ret = TRUE;
 	GST_DEBUG_OBJECT (trans, "received accept caps with direction: %s caps: %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps);
+    GST_WARNING_OBJECT(trans, "accept_caps direction=%s caps=%" GST_PTR_FORMAT,
+			(direction == GST_PAD_SRC) ? "src" : "sink", caps);
 
 	GstCaps *allowedCaps = NULL;
 
@@ -1097,6 +1195,7 @@ static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
 	else
 	{
 		GST_DEBUG_OBJECT(trans, "Allowed caps: %" GST_PTR_FORMAT, allowedCaps);
+        GST_WARNING_OBJECT(trans, "accept_caps allowedCaps=%" GST_PTR_FORMAT, allowedCaps);
 		ret = gst_caps_is_subset(caps, allowedCaps);
 		gst_caps_unref(allowedCaps);
 	}
@@ -1120,6 +1219,7 @@ static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
 			}
 		}
 	}
+    GST_WARNING_OBJECT(trans, "accept_caps result=%d", ret);
 	GST_DEBUG_OBJECT(trans, "Return from accept_caps: %d", ret);
 	return ret;
 }

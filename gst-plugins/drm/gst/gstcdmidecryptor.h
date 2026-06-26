@@ -51,6 +51,7 @@ struct _GstCDMIDecryptor
     gboolean                        streamReceived;
     gboolean                        canWait;
     gboolean                        firstsegprocessed;
+    gboolean                       isFlushing; /* Set during GST_FLUSH_EVENT_START to block transform_ip from accessing freed buffers. */
     GstMediaType                   mediaType;
 
     GMutex                          mutex;
