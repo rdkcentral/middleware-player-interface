@@ -65,7 +65,7 @@ OCDMSessionAdapter::OCDMSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *cal
 		m_keyStatusReady(),
 		m_OCDMSessionCallbacks(),
 		m_destUrl(),
-		m_drmHelper(drmHelper),
+	m_drmHelper(std::move(drmHelper)),
 		m_drmCallbacks(callbacks),
 		m_keyStatusWait(),
 		m_keyId(),
@@ -74,7 +74,7 @@ OCDMSessionAdapter::OCDMSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *cal
 		m_usableKeysMutex()
 {
 	MW_LOG_WARN("OCDMSessionAdapter :: enter ");
-	MW_LOG_WARN("OCDMSessionAdapter :: key process timeout is %d", drmHelper->keyProcessTimeout());
+	MW_LOG_WARN("OCDMSessionAdapter :: key process timeout is %d", m_drmHelper->keyProcessTimeout());
 
 	initDRMSystem();
 
@@ -177,7 +177,7 @@ void OCDMSessionAdapter::processOCDMChallenge(const char destUrl[], const uint8_
 
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
 
-	const std::string challengeData(reinterpret_cast<const char *>(challenge), challengeSize);
+	std::string challengeData(reinterpret_cast<const char *>(challenge), challengeSize);
 	const std::set<std::string> individualisationTypes = {"individualization-request", "3"};
 	const std::string delimiter(":Type:");
 	const size_t delimiterPos = challengeData.find(delimiter);
@@ -197,7 +197,7 @@ void OCDMSessionAdapter::processOCDMChallenge(const char destUrl[], const uint8_
 	else
 	{
 		// Assuming this is a standard challenge callback
-		m_challenge = challengeData;
+		m_challenge = std::move(challengeData);
 		MW_LOG_WARN("processOCDMChallenge challenge = %s", m_challenge.c_str());
 
 		m_destUrl.assign(destUrl);
@@ -239,7 +239,7 @@ void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySiz
 			// Check if this key already exists to avoid duplicates
 			if (std::find(m_usableKeys.begin(), m_usableKeys.end(), keyData) == m_usableKeys.end())
 			{
-				m_usableKeys.push_back(keyData);
+				m_usableKeys.push_back(std::move(keyData));
 			}
 		}
 	}
