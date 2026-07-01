@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include "DrmConstants.h"
 #include "SocInterface.h"
+#include "TelemetryMarkers.h"
+#include "PlayerTelemetry.h"
 
 GST_DEBUG_CATEGORY_STATIC ( gst_cdmidecryptor_debug_category);
 #define GST_CAT_DEFAULT  gst_cdmidecryptor_debug_category
@@ -674,6 +676,11 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 		if(cdmidecryptor->hdcpOpProtectionFailCount >= DECRYPT_FAILURE_THRESHOLD) {
 			GstStructure *newmsg = gst_structure_new("HDCPProtectionFailure", "message", G_TYPE_STRING,"HDCP Output Protection Error", NULL);
 			gst_element_post_message(reinterpret_cast<GstElement*>(cdmidecryptor),gst_message_new_application (GST_OBJECT (cdmidecryptor), newmsg));
+			{
+				TelemetryPayload hdcpProtPayload;
+				hdcpProtPayload.add("failCount", cdmidecryptor->hdcpOpProtectionFailCount);
+				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_HDCP_PROTECTION_FAILURE, hdcpProtPayload);
+			}
 		}
 		cdmidecryptor->hdcpOpProtectionFailCount = 0;
 	}
@@ -689,10 +696,21 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 			{
 				// Failure - 2.2 vs 1.4 HDCP
 				error = g_error_new(GST_STREAM_ERROR , GST_STREAM_ERROR_FAILED, "HDCP Compliance Check Failure");
+				{
+					TelemetryPayload hdcpCompPayload;
+					hdcpCompPayload.add("failCount", cdmidecryptor->decryptFailCount);
+					PlayerTelemetry::sendEvent(TELEMETRY_EVENT_HDCP_COMPLIANCE_FAILURE, hdcpCompPayload);
+				}
 			}
 			else
 			{
 				error = g_error_new(GST_STREAM_ERROR , GST_STREAM_ERROR_FAILED, "Decrypt Error: code %d", errorCode);
+				{
+					TelemetryPayload decryptFailPayload;
+					decryptFailPayload.add("errorCode", errorCode);
+					decryptFailPayload.add("failCount", cdmidecryptor->decryptFailCount);
+					PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DECRYPT_FAILURE, decryptFailPayload);
+				}
 			}
 			gst_element_post_message(reinterpret_cast<GstElement*>(cdmidecryptor), gst_message_new_error (GST_OBJECT (cdmidecryptor), error, "Decrypt Failed"));
 			g_error_free(error);
