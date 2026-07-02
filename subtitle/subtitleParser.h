@@ -99,7 +99,7 @@ public:
 	 *
 	 * Used by the HLS PTS-restamp path to align subtitle display time
 	 * with the restamped video PTS without rewriting MPEGTS in the
-	 * VTT header. Default no-op; subtec-based parsers override.
+	 * VTT header. Default no-op; parsers that need this behavior override.
 	 */
 	virtual void setPtsOffset(double ptsOffsetSec) {}
 	void RegisterCallback(const PlayerCallbacks& playerCallBack)
