@@ -600,18 +600,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 			Telemetry.sendEvent(TELEMETRY_EVENT_PLAYBACK_STARTED);
 #endif
 			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PLAYBACK_STARTED);
-			MW_LOG_WARN("seekPausedState active - deferring transition to PLAYING, marking pendingPlayState");
-			interfacePlayerPriv->gstPrivateContext->buffering_target_state = GST_STATE_PLAYING;
-			interfacePlayerPriv->gstPrivateContext->pendingPlayState = true;
-			/* Ensure pipeline is left/returned to PAUSED to avoid accidental play */
-			if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
-			{
-				MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PAUSED failed while deferring PLAYING");
-			}
-			interfacePlayerPriv->gstPrivateContext->paused = true;
-		}
-		else
-		{
 			if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
 			{
 				MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PLAYING failed");
