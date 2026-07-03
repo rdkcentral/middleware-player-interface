@@ -139,7 +139,16 @@ public:
             fields += kv.first + '=' + kv.second;
         }
         MW_LOG_MIL("[TELEMETRY] event=%s %s", eventName.c_str(), fields.c_str());
-    }
+
+	   // Fallback so value is never empty (optional but useful)
+       if (fields.empty())
+       {
+               fields = "empty_payload=true";
+       }
+
+       t2_event_s(const_cast<char*>(eventName.c_str()),
+                      const_cast<char*>(fields.c_str()));
+}
 
 private:
     PlayerTelemetry() = delete;
