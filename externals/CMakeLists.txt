@@ -135,6 +135,11 @@ if(CMAKE_IARM_MGR)
     list(APPEND LIB_EXT_DEPENDS -lIARMBus -lds -ldshalcli)
 endif()
 
+if(CMAKE_DS_THUNDER_PLUGIN)
+    message("CMAKE_DS_THUNDER_PLUGIN set: libds replaced by Thunder HdcpProfile.1 / DisplaySettings.1 / DisplayInfo.1")
+    set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_DS_THUNDER_PLUGIN=1")
+endif()
+
 if(CMAKE_PLAYER_RFC_REQUIRED)
     message("PLAYER RFC set")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DPLAYER_RFC_ENABLED")

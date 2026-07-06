@@ -29,6 +29,10 @@
 #include "PlayerExternalsInterface.h"
 #include <utility>
 
+#ifdef USE_DS_THUNDER_PLUGIN
+#include "PlayerThunderAccess.h"
+#endif
+
 #include <cstdio>
 
 #define DISPLAY_WIDTH_UNKNOWN       -1  /**< Parsing failed for getResolution().getName(); */
@@ -126,7 +130,9 @@ void PlayerExternalsRdkInterface::Initialize()
     MW_PRE_LOGGER_LOG("Done getting interface \n");
 
     SetHDMIStatus();
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifdef USE_DS_THUNDER_PLUGIN
+    RegisterThunderEventHandlers();
+#elif defined(USE_DS_EVENT_SUPPORTED)
     RegisterDsClientEventHandler();
 #endif
 
@@ -203,7 +209,9 @@ void PlayerExternalsRdkInterface::OnResolutionPreChange(int width, int height)
 
 PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 {
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifdef USE_DS_THUNDER_PLUGIN
+    RemoveThunderEventHandlers();
+#elif defined(USE_DS_EVENT_SUPPORTED)
 	RemoveDsClientEventHandlers();
 #endif
     m_pDeviceInterfaceBase = nullptr;
@@ -228,6 +236,65 @@ void PlayerExternalsRdkInterface::SetResolution(int width, int height)
  */
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
+#ifdef USE_DS_THUNDER_PLUGIN
+    /*
+     * Thunder path: replaces all libds (device::Manager / VideoOutputPort) calls.
+     * CSV mapping:
+     *   getHDCPCurrentProtocol  -> HdcpProfile.1  getHDCPStatus -> currentHDCPVersion
+     *   getHDCPReceiverProtocol -> HdcpProfile.1  getHDCPStatus -> receiverHDCPVersion
+     *   isContentProtected      -> HdcpProfile.1  getHDCPStatus -> isHDCPEnabled
+     *   isDisplayConnected      -> HdcpProfile.1  getHDCPStatus -> isConnected
+     *   getPixelResolution      -> DisplayInfo.1  displayinfo   -> width / height
+     */
+    bool isConnected  = false;
+    bool isHDCPEnabled = false;
+    dsHdcpProtocolVersion_t hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+
+    /* --- Query HDCP status via HdcpProfile.1 --- */
+    if (m_hdcpProfileThunder) {
+        JsonObject param, result;
+        if (m_hdcpProfileThunder->InvokeJSONRPC("getHDCPStatus", param, result)) {
+            isConnected   = result["isConnected"].Boolean();
+            isHDCPEnabled = result["isHDCPEnabled"].Boolean();
+            std::string currentVer = result["currentHDCPVersion"].String();
+            hdcpCurrentProtocol = (currentVer == "2.2") ? dsHDCP_VERSION_2X : dsHDCP_VERSION_1X;
+            MW_LOG_WARN("SetHDMIStatus: connected=%d enabled=%d currentHDCPVersion=%s\n",
+                        isConnected, isHDCPEnabled, currentVer.c_str());
+        } else {
+            MW_LOG_WARN("SetHDMIStatus: getHDCPStatus JSONRPC failed\n");
+        }
+    } else {
+        MW_LOG_WARN("SetHDMIStatus: HdcpProfile Thunder object not initialised\n");
+    }
+
+    /* --- Query pixel resolution via DisplayInfo.1 --- */
+    if (isConnected && m_displayInfoThunder) {
+        JsonObject param, result;
+        if (m_displayInfoThunder->InvokeJSONRPC("displayinfo", param, result)) {
+            int w = static_cast<int>(result["width"].Number());
+            int h = static_cast<int>(result["height"].Number());
+            MW_LOG_WARN("SetHDMIStatus: resolution %dx%d\n", w, h);
+            SetResolution(w, h);
+        } else {
+            MW_LOG_WARN("SetHDMIStatus: displayinfo JSONRPC failed\n");
+        }
+    } else if (!isConnected) {
+        SetResolution(DISPLAY_RESOLUTION_NA, DISPLAY_RESOLUTION_NA);
+    }
+
+    m_isHDCPEnabled = isHDCPEnabled;
+    if (m_isHDCPEnabled) {
+        m_hdcpCurrentProtocol = hdcpCurrentProtocol;
+        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    } else {
+        MW_LOG_WARN("HDCP is not enabled\n");
+    }
+    if (!isConnected) {
+        m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
+    }
+
+#else
     bool                    isConnected              = false;
     bool                    isHDCPCompliant          = false;
     bool                    isHDCPEnabled            = true;
@@ -235,12 +302,9 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
     dsHdcpProtocolVersion_t hdcpReceiverProtocol     = dsHDCP_VERSION_MAX;
     dsHdcpProtocolVersion_t hdcpCurrentProtocol      = dsHDCP_VERSION_MAX;
 
-
-
-
     try {
         //Get the HDMI port
-	device::Manager::Initialize();
+        device::Manager::Initialize();
         std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
         ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
         isConnected        = vPort.isDisplayConnected();
@@ -299,7 +363,7 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
             SetResolution(DISPLAY_RESOLUTION_NA,DISPLAY_RESOLUTION_NA);
         }
 
-	device::Manager::DeInitialize();
+        device::Manager::DeInitialize();
     }
     catch (const std::exception& e) {
         MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
@@ -327,10 +391,95 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
         m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
         MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
     }
-
+#endif
 
     return;
 }
+
+#ifdef USE_DS_THUNDER_PLUGIN
+/**
+ * @brief Create Thunder plugin objects and subscribe to HDMI/HDCP/resolution events.
+ * CSV mapping:
+ *   IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
+ *   IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG   -> DisplaySettings.1 connectedVideoDisplaysUpdated
+ *   IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE -> DisplaySettings.1 resolutionChanged
+ *   IARM_BUS_DSMGR_EVENT_RES_PRECHANGE  -> DisplaySettings.1 resolutionPreChange
+ */
+void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
+{
+    /* ---- HdcpProfile.1 ---- */
+    m_hdcpProfileThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::HDCPPROFILE);
+    m_hdcpProfileThunder->ActivatePlugin();
+
+    /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
+    m_hdcpProfileThunder->SubscribeEvent(
+        "onDisplayConnectionChanged",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] onDisplayConnectionChanged received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* ---- DisplaySettings.1 ---- */
+    m_dsThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DS);
+    m_dsThunder->ActivatePlugin();
+
+    /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
+    m_dsThunder->SubscribeEvent(
+        "connectedVideoDisplaysUpdated",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] connectedVideoDisplaysUpdated received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
+    m_dsThunder->SubscribeEvent(
+        "resolutionChanged",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] resolutionChanged received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* resolutionPreChange: replaces IARM_BUS_DSMGR_EVENT_RES_PRECHANGE */
+    m_dsThunder->SubscribeEvent(
+        "resolutionPreChange",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] resolutionPreChange received\n");
+        });
+
+    /* ---- DisplayInfo.1 ---- */
+    m_displayInfoThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DISPLAYINFO);
+    m_displayInfoThunder->ActivatePlugin();
+}
+
+/**
+ * @brief Unsubscribe Thunder events and release plugin objects.
+ */
+void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
+{
+    if (m_hdcpProfileThunder) {
+        m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
+        m_hdcpProfileThunder.reset();
+    }
+    if (m_dsThunder) {
+        m_dsThunder->UnSubscribeEvent("connectedVideoDisplaysUpdated");
+        m_dsThunder->UnSubscribeEvent("resolutionChanged");
+        m_dsThunder->UnSubscribeEvent("resolutionPreChange");
+        m_dsThunder.reset();
+    }
+    if (m_displayInfoThunder) {
+        m_displayInfoThunder.reset();
+    }
+}
+#endif /* USE_DS_THUNDER_PLUGIN */
 
 void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
 {

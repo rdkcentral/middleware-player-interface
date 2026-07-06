@@ -24,6 +24,8 @@
 
 #ifndef PLAYER_IARM_RDK_INTERFACE_H
 #define PLAYER_IARM_RDK_INTERFACE_H
+
+#ifndef USE_DS_THUNDER_PLUGIN
 #include "manager.hpp"
 #include "host.hpp"
 #include "videoResolution.hpp"
@@ -33,6 +35,10 @@
 #include "dsDisplay.h"
 #include "audioOutputPort.hpp"
 #include "dsAudio.h"
+#else
+#include "PlayerThunderAccess.h"
+#include <memory>
+#endif
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
@@ -87,6 +93,14 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 
         /**< Callback function for fake tune operations */
         std::function<void()> m_doFakeTuneCallback = nullptr;
+
+#ifdef USE_DS_THUNDER_PLUGIN
+        std::unique_ptr<PlayerThunderAccess> m_hdcpProfileThunder;
+        std::unique_ptr<PlayerThunderAccess> m_dsThunder;
+        std::unique_ptr<PlayerThunderAccess> m_displayInfoThunder;
+        void RegisterThunderEventHandlers();
+        void RemoveThunderEventHandlers();
+#endif
 
         PlayerExternalsRdkInterface();
 

@@ -52,6 +52,8 @@ using namespace WPEFramework;
 #define WATERMARK_PLUGIN_CALLSIGN "org.rdk.Watermark.1"
 #define HDMIINPUT_CALLSIGN "org.rdk.HdmiInput.1"
 #define COMPOSITEINPUT_CALLSIGN "org.rdk.CompositeInput.1"
+#define HDCPPROFILE_CALLSIGN "org.rdk.HdcpProfile.1"
+#define DISPLAYINFO_CALLSIGN "DisplayInfo.1"
 
 /**
  * @brief Structure to save the Thunder security token details
@@ -109,6 +111,12 @@ PlayerThunderAccess::PlayerThunderAccess(PlayerThunderAccessPlugin callsign)
             break;
         case PlayerThunderAccessPlugin::COMPOSITEINPUT :
             pluginCallsign = COMPOSITEINPUT_CALLSIGN;
+            break;
+        case PlayerThunderAccessPlugin::HDCPPROFILE :
+            pluginCallsign = HDCPPROFILE_CALLSIGN;
+            break;
+        case PlayerThunderAccessPlugin::DISPLAYINFO :
+            pluginCallsign = DISPLAYINFO_CALLSIGN;
             break;
         default:
             MW_LOG_ERR("Undefined plugin tried to initialize: %d", (int)callsign);
