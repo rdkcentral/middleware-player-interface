@@ -38,6 +38,10 @@
 #else
 #include "PlayerThunderAccess.h"
 #include <memory>
+// Compatibility aliases: libds types not available when using Thunder
+typedef int dsHdcpProtocolVersion_t;
+#define dsHDCP_VERSION_1X 14
+#define dsHDCP_VERSION_2X 22
 #endif
 
 #include <memory>
