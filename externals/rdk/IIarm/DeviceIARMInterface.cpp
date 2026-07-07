@@ -89,7 +89,7 @@ typedef struct _IARM_BUS_NetSrvMgr_Iface_EventData_t {
 
 std::shared_ptr<DeviceIARMInterface> s_pDeviceIARMInterface = nullptr;
 
-#ifndef USE_DS_EVENT_SUPPORTED
+#if !defined(USE_DS_EVENT_SUPPORTED) && !defined(USE_DS_THUNDER_PLUGIN)
 static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *data, size_t len);
 static void ResolutionHandler(const char *owner, IARM_EventId_t eventId, void *data, size_t len);
 #endif
@@ -259,6 +259,7 @@ static void IARM_PowerChangeHandler (const PowerController_PowerState_t currentS
 
 void DeviceIARMInterface::IARMInit()
 {
+#ifndef USE_DS_THUNDER_PLUGIN
     //char processName[20] = {0};
     IARM_Result_t result;
     MW_PRE_LOGGER_LOG("IARM Interface Init started in Player\n");
@@ -292,12 +293,12 @@ void DeviceIARMInterface::IARMInit()
     }
 
     MW_PRE_LOGGER_LOG("IARM Interface Init completed in Player\n");
-
+#endif /* USE_DS_THUNDER_PLUGIN */
 }
 
 void DeviceIARMInterface::RegisterDsMgrEventHandler()
 {
-#ifndef USE_DS_EVENT_SUPPORTED
+#if !defined(USE_DS_EVENT_SUPPORTED) && !defined(USE_DS_THUNDER_PLUGIN)
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG, HDMIEventHandler);
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDCP_STATUS, HDMIEventHandler);
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE, ResolutionHandler);
@@ -306,16 +307,19 @@ void DeviceIARMInterface::RegisterDsMgrEventHandler()
 
 void DeviceIARMInterface::RemoveEventHandlers()
 {
-#ifndef USE_DS_EVENT_SUPPORTED
+#if !defined(USE_DS_EVENT_SUPPORTED) && !defined(USE_DS_THUNDER_PLUGIN)
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG, HDMIEventHandler);
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDCP_STATUS, HDMIEventHandler);
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE, ResolutionHandler);
 #endif
+#ifndef USE_DS_THUNDER_PLUGIN
     IARM_Bus_RemoveEventHandler("NET_SRV_MGR", IARM_BUS_NETWORK_MANAGER_EVENT_INTERFACE_IPADDRESS, getActiveInterfaceEventHandler);
+#endif
 }
 
 void DeviceIARMInterface::RegisterNtwMgrEventHandler()
 {
+#ifndef USE_DS_THUNDER_PLUGIN
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
     bool wifiStatus = false;
@@ -336,6 +340,7 @@ void DeviceIARMInterface::RegisterNtwMgrEventHandler()
     }
     IARM_Bus_RegisterEventHandler("NET_SRV_MGR", IARM_BUS_NETWORK_MANAGER_EVENT_INTERFACE_IPADDRESS, getActiveInterfaceEventHandler);
     pInstance->SetActiveInterface(wifiStatus);
+#endif /* USE_DS_THUNDER_PLUGIN */
 }
 
 char * DeviceIARMInterface::GetTR181Config(const char * paramName, size_t & iConfigLen)
@@ -407,7 +412,7 @@ static void getActiveInterfaceEventHandler (const char *owner, IARM_EventId_t ev
 	
 }
 
-#ifndef USE_DS_EVENT_SUPPORTED
+#if !defined(USE_DS_EVENT_SUPPORTED) && !defined(USE_DS_THUNDER_PLUGIN)
 /**
  * @brief IARM event handler for HDCP and HDMI hot plug events
  */
