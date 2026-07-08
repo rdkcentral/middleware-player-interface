@@ -35,7 +35,7 @@
 using namespace std;
 using namespace WPEFramework;
 
-#define SERVER_DETAILS  "127.0.0.1:9998"
+#define SERVER_DETAILS  "100.64.11.1:9998"
 #define MAX_LENGTH 1024
 
 #define APP_ID "MainPlayer"
