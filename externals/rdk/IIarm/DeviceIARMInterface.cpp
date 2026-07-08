@@ -38,13 +38,13 @@ Remove the entire folder externals/rdk/IARM
 #include <libIARM.h>
 #include <libIBus.h>
 #include <iarmUtil.h>
+#include <thread>
 #include "libIBusDaemon.h"
 #include <hostIf_tr69ReqHandler.h>
 #include "tr181api.h"
 #include "_base64.h"
 #ifdef USE_PREINIT_DECODING
 #include "power_controller.h"
-#include <thread>
 #include <system_error> // for std::system_error 
 #include <exception> // for std::exception base class
 #endif
@@ -244,6 +244,18 @@ static void IARM_PowerChangeHandler (const PowerController_PowerState_t currentS
 {
 	MW_LOG_INFO("Entering IARM_PowerChangeHandler:State Changed currentState: %d, newState: %d",
 			currentState, newState);
+	
+
+	std::shared_ptr<PlayerExternalsRdkInterface> pInstance =
+		PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+	if (newState != POWER_STATE_ON) {
+		pInstance->SetPowerEvent(true);
+		MW_LOG_INFO(" Power transition to non-ON state, blocking HDMI events\n");
+	} else {
+		pInstance->SetPowerEvent(false);
+		MW_LOG_INFO(" Power transition to ON, allowing HDMI events\n");
+	}
+
 	bool isOnOrStandby = (newState == POWER_STATE_STANDBY || newState == POWER_STATE_ON);
 	if((currentState == POWER_STATE_STANDBY_DEEP_SLEEP && isOnOrStandby) || 
         (prevState == POWER_STATE_STANDBY_DEEP_SLEEP && currentState == POWER_STATE_STANDBY_LIGHT_SLEEP && isOnOrStandby))
@@ -415,6 +427,12 @@ static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *da
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
+
+    if (pInstance->GetPowerEvent())
+    {
+        MW_LOG_WARN(" Skipping HDMI event processing during power transition\n");
+        return;
+    }
     switch (eventId)
     {
         case IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG :
@@ -428,6 +446,10 @@ static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *da
 
             pInstance->SetHDMIStatus();
 
+	    // Dispatch to detached worker thread — do NOT block IARM dispatch thread
+            std::thread([pInstance]() {
+                pInstance->SetHDMIStatus();
+            }).detach();
             break;
         }
         case IARM_BUS_DSMGR_EVENT_HDCP_STATUS :
@@ -439,6 +461,9 @@ static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *da
                       hdcpStatus, hdcpStatusStr);
 
             pInstance->SetHDMIStatus();
+	    std::thread([pInstance]() {
+                pInstance->SetHDMIStatus();
+            }).detach();
             break;
         }
         default:
