@@ -3441,12 +3441,14 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			/* wait a bit longer for the state change to conclude */
 			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
 			{
-				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
+				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d ret-false", nextState);
+				retValue = false;
 			}
 		}
 		else if (GST_STATE_CHANGE_SUCCESS != rc)
 		{
-			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
+			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d ret-false", rc);
+			retValue = false;
 		}
 		
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
