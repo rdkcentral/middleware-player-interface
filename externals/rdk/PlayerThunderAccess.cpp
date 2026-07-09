@@ -126,20 +126,26 @@ PlayerThunderAccess::PlayerThunderAccess(PlayerThunderAccessPlugin callsign)
 
     uint32_t status = Core::ERROR_NONE;
 
+    MW_LOG_WARN("[ThunderAccess] Connecting to Thunder server=%s callsign=%s", SERVER_DETAILS, pluginCallsign.c_str());
+
     Core::SystemInfo::SetEnvironment(_T("THUNDER_ACCESS"), (_T(SERVER_DETAILS)));
     string sToken = "";
 #ifdef DISABLE_SECURITY_TOKEN
      gPlayerSecurityData.securityToken = "token=" + sToken;
      gPlayerSecurityData.tokenQueried = true;
+     MW_LOG_WARN("[ThunderAccess] Security token DISABLED");
 #else
     if(!gPlayerSecurityData.tokenQueried)
     {
         unsigned char buffer[MAX_LENGTH] = {0};
         gPlayerSecurityData.tokenStatus = GetSecurityToken(MAX_LENGTH,buffer);
         if(gPlayerSecurityData.tokenStatus > 0){
-            // LOG_INFO( "[ThunderAccess] : GetSecurityToken success");
             sToken = (char*)buffer;
             gPlayerSecurityData.securityToken = "token=" + sToken;
+            MW_LOG_WARN("[ThunderAccess] Security token obtained (len=%d)", gPlayerSecurityData.tokenStatus);
+        }
+        else {
+            MW_LOG_WARN("[ThunderAccess] GetSecurityToken failed status=%d — proceeding without token", gPlayerSecurityData.tokenStatus);
         }
         gPlayerSecurityData.tokenQueried = true;
     }
@@ -157,7 +163,7 @@ PlayerThunderAccess::PlayerThunderAccess(PlayerThunderAccessPlugin callsign)
         if (NULL == controllerObject) {
             MW_LOG_WARN( "[ThunderAccess] Controller object creation failed");
         } else {
-            MW_LOG_INFO( "[ThunderAccess] Controller object creation success");
+            MW_LOG_INFO( "[ThunderAccess] Controller object creation success (server=%s)", SERVER_DETAILS);
         }
     }
 
@@ -170,7 +176,7 @@ PlayerThunderAccess::PlayerThunderAccess(PlayerThunderAccessPlugin callsign)
     if (NULL == remoteObject) {
         MW_LOG_WARN( "[ThunderAccess] %s Client initialization failed", pluginCallsign.c_str());
     } else {
-        MW_LOG_INFO( "[ThunderAccess] %s Client initialization success", pluginCallsign.c_str());
+        MW_LOG_INFO( "[ThunderAccess] %s Client initialization success (server=%s)", pluginCallsign.c_str(), SERVER_DETAILS);
     }
 }
 
