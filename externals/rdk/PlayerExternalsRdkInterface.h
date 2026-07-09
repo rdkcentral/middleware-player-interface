@@ -38,6 +38,10 @@
 #else
 #include "PlayerThunderAccess.h"
 #include <memory>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 // Compatibility aliases: libds types not available when using Thunder
 typedef int dsHdcpProtocolVersion_t;
 #define dsHDCP_VERSION_1X 14
@@ -101,9 +105,16 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 #ifdef USE_DS_THUNDER_PLUGIN
         std::unique_ptr<PlayerThunderAccess> m_hdcpProfileThunder;
         std::unique_ptr<PlayerThunderAccess> m_dsThunder;
-        std::unique_ptr<PlayerThunderAccess> m_displayInfoThunder;
         void RegisterThunderEventHandlers();
         void RemoveThunderEventHandlers();
+        /* Worker thread: serialises and coalesces HDMI-status update requests */
+        void PostHDMIStatusUpdate();
+        void EventWorkerLoop();
+        std::thread             m_eventWorkerThread;
+        std::mutex              m_eventMutex;
+        std::condition_variable m_eventCv;
+        std::atomic<bool>       m_eventPending{false};
+        std::atomic<bool>       m_eventWorkerStop{false};
 #endif
 
         PlayerExternalsRdkInterface();

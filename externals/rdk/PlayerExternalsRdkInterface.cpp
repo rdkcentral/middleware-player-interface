@@ -129,11 +129,16 @@ void PlayerExternalsRdkInterface::Initialize()
 
     MW_PRE_LOGGER_LOG("Done getting interface \n");
 
-    SetHDMIStatus();
 #ifdef USE_DS_THUNDER_PLUGIN
+    /* Register event handlers first so Thunder objects exist before SetHDMIStatus() is called */
     RegisterThunderEventHandlers();
-#elif defined(USE_DS_EVENT_SUPPORTED)
+    /* Post the initial HDMI status query through the worker thread */
+    PostHDMIStatusUpdate();
+#else
+    SetHDMIStatus();
+#  ifdef USE_DS_EVENT_SUPPORTED
     RegisterDsClientEventHandler();
+#  endif
 #endif
 
     MW_PRE_LOGGER_LOG("Initializing completed \n");
@@ -244,7 +249,7 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
      *   getHDCPReceiverProtocol -> HdcpProfile.1  getHDCPStatus -> receiverHDCPVersion
      *   isContentProtected      -> HdcpProfile.1  getHDCPStatus -> isHDCPEnabled
      *   isDisplayConnected      -> HdcpProfile.1  getHDCPStatus -> isConnected
-     *   getPixelResolution      -> DisplayInfo.1  displayinfo   -> width / height
+     *   getPixelResolution      -> DisplaySettings.1  getCurrentResolution -> w / h
      */
     bool isConnected  = false;
     bool isHDCPEnabled = false;
@@ -290,30 +295,33 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
         MW_LOG_WARN("[DS-Thunder] m_hdcpProfileThunder is NULL — was RegisterThunderEventHandlers() called?\n");
     }
 
-    /* --- Query pixel resolution via DisplayInfo.1 --- */
-    if (isConnected && m_displayInfoThunder) {
+    /* --- Query pixel resolution via DisplaySettings.1::getCurrentResolution --- */
+    if (isConnected && m_dsThunder) {
         JsonObject param, result;
         std::string rawResponse;
-        MW_LOG_WARN("[DS-Thunder] Calling DisplayInfo.1::displayinfo (property)\n");
-        /* Note: displayinfo is a WPEFramework *property* — it has no "success" field.
-         * InvokeJSONRPC may return false even on success; read result fields directly. */
-        bool rpcRet = m_displayInfoThunder->InvokeJSONRPC("displayinfo", param, result);
+        MW_LOG_WARN("[DS-Thunder] Calling DisplaySettings.1::getCurrentResolution\n");
+        bool rpcRet = m_dsThunder->InvokeJSONRPC("getCurrentResolution", param, result);
         result.ToString(rawResponse);
-        MW_LOG_WARN("[DS-Thunder] displayinfo rpcRet=%d rawResponse=%s\n", rpcRet, rawResponse.c_str());
-        /* Read width/height regardless of rpcRet — property has no "success" key */
-        int w = static_cast<int>(result["width"].Number());
-        int h = static_cast<int>(result["height"].Number());
-        MW_LOG_WARN("[DS-Thunder] displayinfo: width=%d height=%d\n", w, h);
-        if (w > 0 && h > 0) {
-            SetResolution(w, h);
+        MW_LOG_WARN("[DS-Thunder] getCurrentResolution rpcRet=%d rawResponse=%s\n", rpcRet, rawResponse.c_str());
+        if (rpcRet && result["success"].Boolean()) {
+            int w = static_cast<int>(result["w"].Number());
+            int h = static_cast<int>(result["h"].Number());
+            MW_LOG_WARN("[DS-Thunder] getCurrentResolution: resolution=%s w=%d h=%d\n",
+                        result["resolution"].String().c_str(), w, h);
+            if (w > 0 && h > 0) {
+                SetResolution(w, h);
+            } else {
+                MW_LOG_WARN("[DS-Thunder] getCurrentResolution: invalid resolution w=%d h=%d — keeping current\n", w, h);
+            }
         } else {
-            MW_LOG_WARN("[DS-Thunder] displayinfo: invalid resolution w=%d h=%d — keeping current\n", w, h);
+            MW_LOG_WARN("[DS-Thunder] getCurrentResolution failed rpcRet=%d success=%d\n",
+                        rpcRet, result["success"].Boolean());
         }
     } else if (!isConnected) {
         MW_LOG_WARN("[DS-Thunder] Display not connected — setting resolution to NA\n");
         SetResolution(DISPLAY_RESOLUTION_NA, DISPLAY_RESOLUTION_NA);
     } else {
-        MW_LOG_WARN("[DS-Thunder] m_displayInfoThunder is NULL\n");
+        MW_LOG_WARN("[DS-Thunder] m_dsThunder is NULL\n");
     }
 
     m_isHDCPEnabled = isHDCPEnabled;
@@ -432,6 +440,46 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
 #ifdef USE_DS_THUNDER_PLUGIN
 /**
+ * @brief Signal the worker thread that an HDMI status update is needed.
+ *        Safe to call from Thunder event callbacks (returns immediately).
+ *        Multiple concurrent calls are coalesced — the worker runs SetHDMIStatus()
+ *        exactly once per burst of events.
+ */
+void PlayerExternalsRdkInterface::PostHDMIStatusUpdate()
+{
+    {
+        std::lock_guard<std::mutex> lk(m_eventMutex);
+        m_eventPending = true;
+    }
+    m_eventCv.notify_one();
+    MW_LOG_WARN("[DS-Thunder] PostHDMIStatusUpdate: event queued\n");
+}
+
+/**
+ * @brief Worker thread body.
+ *        Waits for a pending update, then calls SetHDMIStatus() once.
+ *        Coalesces rapid back-to-back events into a single call.
+ */
+void PlayerExternalsRdkInterface::EventWorkerLoop()
+{
+    MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: thread started\n");
+    while (true) {
+        std::unique_lock<std::mutex> lk(m_eventMutex);
+        m_eventCv.wait(lk, [this] {
+            return m_eventPending.load() || m_eventWorkerStop.load();
+        });
+        if (m_eventWorkerStop.load()) {
+            MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: stop requested — exiting\n");
+            break;
+        }
+        m_eventPending = false;
+        lk.unlock(); /* unlock before JSONRPC calls */
+        MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: calling SetHDMIStatus()\n");
+        SetHDMIStatus();
+    }
+}
+
+/**
  * @brief Create Thunder plugin objects and subscribe to HDMI/HDCP/resolution events.
  * CSV mapping:
  *   IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
@@ -443,6 +491,12 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
 {
     MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() start\n");
 
+    /* Start the worker thread that serialises SetHDMIStatus() calls */
+    m_eventWorkerStop = false;
+    m_eventPending    = false;
+    m_eventWorkerThread = std::thread(&PlayerExternalsRdkInterface::EventWorkerLoop, this);
+    MW_LOG_WARN("[DS-Thunder] EventWorkerLoop thread started\n");
+
     /* ---- HdcpProfile.1 ---- */
     MW_LOG_WARN("[DS-Thunder] Creating PlayerThunderAccess for HDCPPROFILE (org.rdk.HdcpProfile.1)\n");
     m_hdcpProfileThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::HDCPPROFILE);
@@ -450,16 +504,15 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
     MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 ActivatePlugin() ret=%d\n", activateRet);
 
     /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
+    /* NOTE: Thunder does not allow InvokeJSONRPC from within a callback.
+     * Spawn a detached thread so the callback returns immediately. */
     bool subRet = m_hdcpProfileThunder->SubscribeEvent(
         "onDisplayConnectionChanged",
-        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
             std::string paramsStr;
             params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] onDisplayConnectionChanged event received params=%s\n", paramsStr.c_str());
-            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
-            if (pInstance) {
-                pInstance->SetHDMIStatus();
-            }
+            MW_LOG_WARN("[DS-Thunder] onDisplayConnectionChanged received params=%s\n", paramsStr.c_str());
+            PostHDMIStatusUpdate();
         });
     MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 SubscribeEvent(onDisplayConnectionChanged) ret=%d\n", subRet);
 
@@ -472,28 +525,22 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
     /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
     subRet = m_dsThunder->SubscribeEvent(
         "connectedVideoDisplaysUpdated",
-        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
             std::string paramsStr;
             params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] connectedVideoDisplaysUpdated event received params=%s\n", paramsStr.c_str());
-            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
-            if (pInstance) {
-                pInstance->SetHDMIStatus();
-            }
+            MW_LOG_WARN("[DS-Thunder] connectedVideoDisplaysUpdated received params=%s\n", paramsStr.c_str());
+            PostHDMIStatusUpdate();
         });
     MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(connectedVideoDisplaysUpdated) ret=%d\n", subRet);
 
     /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
     subRet = m_dsThunder->SubscribeEvent(
         "resolutionChanged",
-        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
             std::string paramsStr;
             params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] resolutionChanged event received params=%s\n", paramsStr.c_str());
-            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
-            if (pInstance) {
-                pInstance->SetHDMIStatus();
-            }
+            MW_LOG_WARN("[DS-Thunder] resolutionChanged received params=%s\n", paramsStr.c_str());
+            PostHDMIStatusUpdate();
         });
     MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionChanged) ret=%d\n", subRet);
 
@@ -505,12 +552,6 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
         });
     MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionPreChange) ret=%d\n", subRet);
 
-    /* ---- DisplayInfo.1 ---- */
-    MW_LOG_WARN("[DS-Thunder] Creating PlayerThunderAccess for DISPLAYINFO (DisplayInfo.1)\n");
-    m_displayInfoThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DISPLAYINFO);
-    activateRet = m_displayInfoThunder->ActivatePlugin();
-    MW_LOG_WARN("[DS-Thunder] DisplayInfo.1 ActivatePlugin() ret=%d\n", activateRet);
-
     MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() done\n");
 }
 
@@ -519,6 +560,17 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
  */
 void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
 {
+    /* Stop worker thread before unsubscribing */
+    {
+        std::lock_guard<std::mutex> lk(m_eventMutex);
+        m_eventWorkerStop = true;
+    }
+    m_eventCv.notify_one();
+    if (m_eventWorkerThread.joinable()) {
+        m_eventWorkerThread.join();
+        MW_LOG_WARN("[DS-Thunder] EventWorkerLoop thread joined\n");
+    }
+
     if (m_hdcpProfileThunder) {
         m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
         m_hdcpProfileThunder.reset();
@@ -528,9 +580,6 @@ void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
         m_dsThunder->UnSubscribeEvent("resolutionChanged");
         m_dsThunder->UnSubscribeEvent("resolutionPreChange");
         m_dsThunder.reset();
-    }
-    if (m_displayInfoThunder) {
-        m_displayInfoThunder.reset();
     }
 }
 #endif /* USE_DS_THUNDER_PLUGIN */

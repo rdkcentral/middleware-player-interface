@@ -44,8 +44,7 @@ enum PlayerThunderAccessPlugin
     WATERMARK,
     HDMIINPUT,
     COMPOSITEINPUT,
-    HDCPPROFILE,
-    DISPLAYINFO
+    HDCPPROFILE
 };
 
 /*

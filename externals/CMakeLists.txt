@@ -141,7 +141,7 @@ if(CMAKE_IARM_MGR)
 endif()
 
 if(CMAKE_DS_THUNDER_PLUGIN)
-    message("CMAKE_DS_THUNDER_PLUGIN set: libds replaced by Thunder HdcpProfile.1 / DisplaySettings.1 / DisplayInfo.1")
+    message("CMAKE_DS_THUNDER_PLUGIN set: libds replaced by Thunder HdcpProfile.1 / DisplaySettings.1")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_DS_THUNDER_PLUGIN=1")
     # PlayerThunderAccess.cpp is required; ensure it is compiled even if CMAKE_WPEFRAMEWORK_REQUIRED was not set
     if(NOT CMAKE_WPEFRAMEWORK_REQUIRED)

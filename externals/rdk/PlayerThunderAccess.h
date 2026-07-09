@@ -28,7 +28,6 @@
 #include "Module.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Weffc++"
-#pragma GCC diagnostic ignored "-Wmacro-redefined"
 #include <core/core.h>
 #include <websocket/websocket.h>
 #pragma GCC diagnostic pop
