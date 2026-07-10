@@ -583,12 +583,11 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_RawBinaryBytesAsString)
 	widevineHelper->getKeys(keyIDs);
 	ASSERT_GE(keyIDs.size(), 1u);
 
-	std::vector<uint8_t> expectedKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
-	                                     0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
-	ASSERT_EQ(keyIDs[0], expectedKey);
+	ASSERT_NE(keyIDs.find(0), keyIDs.end());
+	ASSERT_EQ(keyIDs.at(0), expectedKey);
 
 	// Pass raw binary as string (this is how old tests did it — always worked)
-	std::string defaultKeyStr(keyIDs[0].begin(), keyIDs[0].end());
+	std::string defaultKeyStr(keyIDs.at(0).begin(), keyIDs.at(0).end());
 	widevineHelper->setDefaultKeyID(defaultKeyStr);
 
 	std::vector<uint8_t> keyID;
