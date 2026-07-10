@@ -24,6 +24,8 @@
 
 #ifndef PLAYER_IARM_RDK_INTERFACE_H
 #define PLAYER_IARM_RDK_INTERFACE_H
+
+#ifndef USE_DS_THUNDER_PLUGIN
 #include "manager.hpp"
 #include "host.hpp"
 #include "videoResolution.hpp"
@@ -33,6 +35,18 @@
 #include "dsDisplay.h"
 #include "audioOutputPort.hpp"
 #include "dsAudio.h"
+#else
+#include "PlayerThunderAccess.h"
+#include <memory>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+// Compatibility aliases: libds types not available when using Thunder
+typedef int dsHdcpProtocolVersion_t;
+#define dsHDCP_VERSION_1X 14
+#define dsHDCP_VERSION_2X 22
+#endif
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
@@ -88,6 +102,20 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         /**< Callback function for fake tune operations */
         std::function<void()> m_doFakeTuneCallback = nullptr;
 
+#ifdef USE_DS_THUNDER_PLUGIN
+        std::unique_ptr<PlayerThunderAccess> m_hdcpProfileThunder;
+        std::unique_ptr<PlayerThunderAccess> m_dsThunder;
+        void RegisterThunderEventHandlers();
+        void RemoveThunderEventHandlers();
+        /* Worker thread: serialises and coalesces HDMI-status update requests */
+        void EventWorkerLoop();
+        std::thread             m_eventWorkerThread;
+        std::mutex              m_eventMutex;
+        std::condition_variable m_eventCv;
+        std::atomic<bool>       m_eventPending{false};
+        std::atomic<bool>       m_eventWorkerStop{false};
+#endif
+
         PlayerExternalsRdkInterface();
 
     public:
@@ -122,6 +150,12 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
          * @param[in] height height of current resolution
          */
         void SetResolution(int width, int height);
+
+#ifdef USE_DS_THUNDER_PLUGIN
+        /* Post a pending HDMI-status update to the coalescing worker thread.
+         * Safe to call from any Firebolt event callback thread. */
+        void PostHDMIStatusUpdate();
+#endif
 
         // Singleton for object creation
 	

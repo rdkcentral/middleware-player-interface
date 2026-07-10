@@ -80,6 +80,15 @@ public:
     bool ActivatePlugin() override;
 
     /**
+     *   @fn SubscribeEvent
+     *   @note   Subscribe event data for the specific plugin
+     *   @param  eventName,functionHandler Event name, Event handler
+     *   @retval true on success
+     *   @retval false on failure
+     */
+    bool SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+
+    /**
      *   @fn UnSubscribeEvent
      *   @note   unSubscribe event data for the specific plugin
      *   @param  eventName Event name
@@ -396,15 +405,6 @@ private:
      *   @return true if success, false if failure
      */
     bool GetResolutionFromDS_VIDEOIN(int & widthFromDS, int & heightFromDS);
-
-    /**
-     *   @fn SubscribeEvent
-     *   @note   Subscribe event data for the specific plugin
-     *   @param  eventName,functionHandler Event name, Event handler
-     *   @retval true on success
-     *   @retval false on failure
-     */
-    bool SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
 
     /**
      * @fn GetAudioTrackInternal

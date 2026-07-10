@@ -29,6 +29,10 @@
 #include "PlayerExternalsInterface.h"
 #include <utility>
 
+#ifdef USE_DS_THUNDER_PLUGIN
+#include "PlayerThunderAccess.h"
+#endif
+
 #include <cstdio>
 
 #define DISPLAY_WIDTH_UNKNOWN       -1  /**< Parsing failed for getResolution().getName(); */
@@ -125,9 +129,16 @@ void PlayerExternalsRdkInterface::Initialize()
 
     MW_PRE_LOGGER_LOG("Done getting interface \n");
 
+#ifdef USE_DS_THUNDER_PLUGIN
+    /* Register event handlers first so Thunder objects exist before SetHDMIStatus() is called */
+    RegisterThunderEventHandlers();
+    /* Post the initial HDMI status query through the worker thread */
+    PostHDMIStatusUpdate();
+#else
     SetHDMIStatus();
-#ifdef USE_DS_EVENT_SUPPORTED
+#  ifdef USE_DS_EVENT_SUPPORTED
     RegisterDsClientEventHandler();
+#  endif
 #endif
 
     MW_PRE_LOGGER_LOG("Initializing completed \n");
@@ -203,7 +214,9 @@ void PlayerExternalsRdkInterface::OnResolutionPreChange(int width, int height)
 
 PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 {
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifdef USE_DS_THUNDER_PLUGIN
+    RemoveThunderEventHandlers();
+#elif defined(USE_DS_EVENT_SUPPORTED)
 	RemoveDsClientEventHandlers();
 #endif
     m_pDeviceInterfaceBase = nullptr;
@@ -228,6 +241,102 @@ void PlayerExternalsRdkInterface::SetResolution(int width, int height)
  */
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
+#ifdef USE_DS_THUNDER_PLUGIN
+    /*
+     * Thunder path: replaces all libds (device::Manager / VideoOutputPort) calls.
+     * CSV mapping:
+     *   getHDCPCurrentProtocol  -> HdcpProfile.1  getHDCPStatus -> currentHDCPVersion
+     *   getHDCPReceiverProtocol -> HdcpProfile.1  getHDCPStatus -> receiverHDCPVersion
+     *   isContentProtected      -> HdcpProfile.1  getHDCPStatus -> isHDCPEnabled
+     *   isDisplayConnected      -> HdcpProfile.1  getHDCPStatus -> isConnected
+     *   getPixelResolution      -> DisplaySettings.1  getCurrentResolution -> w / h
+     */
+    bool isConnected  = false;
+    bool isHDCPEnabled = false;
+    dsHdcpProtocolVersion_t hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+
+    MW_LOG_WARN("[DS-Thunder] SetHDMIStatus() called\n");
+
+    /* --- Query HDCP status via HdcpProfile.1 --- */
+    if (m_hdcpProfileThunder) {
+        JsonObject param, result;
+        std::string rawResponse;
+        MW_LOG_WARN("[DS-Thunder] Calling HdcpProfile.1::getHDCPStatus\n");
+        bool rpcRet = m_hdcpProfileThunder->InvokeJSONRPC("getHDCPStatus", param, result);
+        result.ToString(rawResponse);
+        MW_LOG_WARN("[DS-Thunder] getHDCPStatus rpcRet=%d rawResponse=%s\n", rpcRet, rawResponse.c_str());
+        if (rpcRet) {
+            /* Response is nested: { "HDCPStatus": { "isConnected":..., ... }, "success":true } */
+            if (result.HasLabel("HDCPStatus")) {
+                JsonObject hdcpStatus = result["HDCPStatus"].Object();
+                std::string hdcpStatusStr;
+                hdcpStatus.ToString(hdcpStatusStr);
+                MW_LOG_WARN("[DS-Thunder] HDCPStatus object=%s\n", hdcpStatusStr.c_str());
+                isConnected   = hdcpStatus["isConnected"].Boolean();
+                isHDCPEnabled = hdcpStatus["isHDCPEnabled"].Boolean();
+                std::string currentVer = hdcpStatus["currentHDCPVersion"].String();
+                hdcpCurrentProtocol = (currentVer == "2.2") ? dsHDCP_VERSION_2X : dsHDCP_VERSION_1X;
+                MW_LOG_WARN("[DS-Thunder] getHDCPStatus: isConnected=%d isHDCPEnabled=%d currentHDCPVersion=%s\n",
+                            isConnected, isHDCPEnabled, currentVer.c_str());
+            } else {
+                MW_LOG_WARN("[DS-Thunder] getHDCPStatus: 'HDCPStatus' key missing in response — falling back to flat read\n");
+                /* Fallback: try flat fields (old API) */
+                isConnected   = result["isConnected"].Boolean();
+                isHDCPEnabled = result["isHDCPEnabled"].Boolean();
+                std::string currentVer = result["currentHDCPVersion"].String();
+                hdcpCurrentProtocol = (currentVer == "2.2") ? dsHDCP_VERSION_2X : dsHDCP_VERSION_1X;
+                MW_LOG_WARN("[DS-Thunder] fallback flat: isConnected=%d isHDCPEnabled=%d currentHDCPVersion=%s\n",
+                            isConnected, isHDCPEnabled, currentVer.c_str());
+            }
+        } else {
+            MW_LOG_WARN("[DS-Thunder] getHDCPStatus JSONRPC call failed (rpcRet=false)\n");
+        }
+    } else {
+        MW_LOG_WARN("[DS-Thunder] m_hdcpProfileThunder is NULL — was RegisterThunderEventHandlers() called?\n");
+    }
+
+    /* --- Query pixel resolution via DisplaySettings.1::getCurrentResolution --- */
+    if (isConnected && m_dsThunder) {
+        JsonObject param, result;
+        std::string rawResponse;
+        MW_LOG_WARN("[DS-Thunder] Calling DisplaySettings.1::getCurrentResolution\n");
+        bool rpcRet = m_dsThunder->InvokeJSONRPC("getCurrentResolution", param, result);
+        result.ToString(rawResponse);
+        MW_LOG_WARN("[DS-Thunder] getCurrentResolution rpcRet=%d rawResponse=%s\n", rpcRet, rawResponse.c_str());
+        if (rpcRet && result["success"].Boolean()) {
+            int w = static_cast<int>(result["w"].Number());
+            int h = static_cast<int>(result["h"].Number());
+            MW_LOG_WARN("[DS-Thunder] getCurrentResolution: resolution=%s w=%d h=%d\n",
+                        result["resolution"].String().c_str(), w, h);
+            if (w > 0 && h > 0) {
+                SetResolution(w, h);
+            } else {
+                MW_LOG_WARN("[DS-Thunder] getCurrentResolution: invalid resolution w=%d h=%d — keeping current\n", w, h);
+            }
+        } else {
+            MW_LOG_WARN("[DS-Thunder] getCurrentResolution failed rpcRet=%d success=%d\n",
+                        rpcRet, result["success"].Boolean());
+        }
+    } else if (!isConnected) {
+        MW_LOG_WARN("[DS-Thunder] Display not connected — setting resolution to NA\n");
+        SetResolution(DISPLAY_RESOLUTION_NA, DISPLAY_RESOLUTION_NA);
+    } else {
+        MW_LOG_WARN("[DS-Thunder] m_dsThunder is NULL\n");
+    }
+
+    m_isHDCPEnabled = isHDCPEnabled;
+    if (m_isHDCPEnabled) {
+        m_hdcpCurrentProtocol = hdcpCurrentProtocol;
+        MW_LOG_WARN("[DS-Thunder] HDCP version detected: %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    } else {
+        MW_LOG_WARN("[DS-Thunder] HDCP is not enabled\n");
+    }
+    if (!isConnected) {
+        m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+        MW_LOG_WARN("[DS-Thunder] GetHDCPVersion: Display not connected — defaulting to HDCP 1.4 (%d)\n", m_hdcpCurrentProtocol);
+    }
+
+#else
     bool                    isConnected              = false;
     bool                    isHDCPCompliant          = false;
     bool                    isHDCPEnabled            = true;
@@ -235,12 +344,9 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
     dsHdcpProtocolVersion_t hdcpReceiverProtocol     = dsHDCP_VERSION_MAX;
     dsHdcpProtocolVersion_t hdcpCurrentProtocol      = dsHDCP_VERSION_MAX;
 
-
-
-
     try {
         //Get the HDMI port
-	device::Manager::Initialize();
+        device::Manager::Initialize();
         std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
         ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
         isConnected        = vPort.isDisplayConnected();
@@ -299,7 +405,7 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
             SetResolution(DISPLAY_RESOLUTION_NA,DISPLAY_RESOLUTION_NA);
         }
 
-	device::Manager::DeInitialize();
+        device::Manager::DeInitialize();
     }
     catch (const std::exception& e) {
         MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
@@ -327,10 +433,191 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
         m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
         MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
     }
-
+#endif
 
     return;
 }
+
+#ifdef USE_DS_THUNDER_PLUGIN
+/**
+ * @brief Signal the worker thread that an HDMI status update is needed.
+ *        Safe to call from Thunder event callbacks (returns immediately).
+ *        Multiple concurrent calls are coalesced — the worker runs SetHDMIStatus()
+ *        exactly once per burst of events.
+ */
+void PlayerExternalsRdkInterface::PostHDMIStatusUpdate()
+{
+    {
+        std::lock_guard<std::mutex> lk(m_eventMutex);
+        m_eventPending = true;
+    }
+    m_eventCv.notify_one();
+    MW_LOG_WARN("[DS-Thunder] PostHDMIStatusUpdate: event queued\n");
+}
+
+/**
+ * @brief Worker thread body.
+ *        Waits for a pending update, then calls SetHDMIStatus() once.
+ *        Coalesces rapid back-to-back events into a single call.
+ */
+void PlayerExternalsRdkInterface::EventWorkerLoop()
+{
+    MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: thread started\n");
+    while (true) {
+        std::unique_lock<std::mutex> lk(m_eventMutex);
+        m_eventCv.wait(lk, [this] {
+            return m_eventPending.load() || m_eventWorkerStop.load();
+        });
+        if (m_eventWorkerStop.load()) {
+            MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: stop requested — exiting\n");
+            break;
+        }
+        m_eventPending = false;
+        lk.unlock(); /* unlock before JSONRPC calls */
+        MW_LOG_WARN("[DS-Thunder] EventWorkerLoop: calling SetHDMIStatus()\n");
+        SetHDMIStatus();
+    }
+}
+
+/**
+ * @brief Create Thunder plugin objects and, in IARM mode, subscribe to Thunder
+ *        HDMI/HDCP/resolution events.
+ *
+ * Event-source split:
+ *   IARM mode  : Thunder events are the source.
+ *                Callbacks route through PostHDMIStatusUpdate() so that
+ *                InvokeJSONRPC is never called from inside a Thunder callback.
+ *                CSV mapping:
+ *                  IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
+ *                  IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG   -> DisplaySettings.1 connectedVideoDisplaysUpdated
+ *                  IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE -> DisplaySettings.1 resolutionChanged
+ *                  IARM_BUS_DSMGR_EVENT_RES_PRECHANGE  -> DisplaySettings.1 resolutionPreChange
+ *   Firebolt mode: Firebolt SDK delivers events via subscribeOnHdcpChanged /
+ *                  subscribeOnVideoResolutionChanged in DeviceFireboltInterface.
+ *                  Those handlers call PostHDMIStatusUpdate() directly.
+ *                  No Thunder subscriptions needed here.
+ *
+ * The Thunder plugin objects (m_hdcpProfileThunder, m_dsThunder) are created in
+ * both modes and used solely for the data queries inside SetHDMIStatus()
+ * (getHDCPStatus and getCurrentResolution).
+ */
+void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
+{
+    MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() start\n");
+
+    /* Start the worker thread that serialises SetHDMIStatus() calls.
+     * Needed in both modes: Thunder callbacks must not call InvokeJSONRPC
+     * directly, and Firebolt callbacks may arrive concurrently. */
+    m_eventWorkerStop = false;
+    m_eventPending    = false;
+    m_eventWorkerThread = std::thread(&PlayerExternalsRdkInterface::EventWorkerLoop, this);
+    MW_LOG_WARN("[DS-Thunder] EventWorkerLoop thread started\n");
+
+    /* ---- HdcpProfile.1 ---- */
+    MW_LOG_WARN("[DS-Thunder] Creating PlayerThunderAccess for HDCPPROFILE (org.rdk.HdcpProfile.1)\n");
+    m_hdcpProfileThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::HDCPPROFILE);
+    bool activateRet = m_hdcpProfileThunder->ActivatePlugin();
+    MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 ActivatePlugin() ret=%d\n", activateRet);
+
+    /* ---- DisplaySettings.1 ---- */
+    MW_LOG_WARN("[DS-Thunder] Creating PlayerThunderAccess for DS (org.rdk.DisplaySettings.1)\n");
+    m_dsThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DS);
+    activateRet = m_dsThunder->ActivatePlugin();
+    MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 ActivatePlugin() ret=%d\n", activateRet);
+
+    /* ---- Thunder event subscriptions (IARM mode only) ---- */
+    if (m_initialized == InitState::IARM)
+    {
+        MW_LOG_WARN("[DS-Thunder] IARM mode: subscribing to Thunder events\n");
+
+        /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
+        bool subRet = m_hdcpProfileThunder->SubscribeEvent(
+            "onDisplayConnectionChanged",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] onDisplayConnectionChanged received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 SubscribeEvent(onDisplayConnectionChanged) ret=%d\n", subRet);
+
+        /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
+        subRet = m_dsThunder->SubscribeEvent(
+            "connectedVideoDisplaysUpdated",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] connectedVideoDisplaysUpdated received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(connectedVideoDisplaysUpdated) ret=%d\n", subRet);
+
+        /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
+        subRet = m_dsThunder->SubscribeEvent(
+            "resolutionChanged",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] resolutionChanged received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionChanged) ret=%d\n", subRet);
+
+        /* resolutionPreChange: replaces IARM_BUS_DSMGR_EVENT_RES_PRECHANGE (log only) */
+        subRet = m_dsThunder->SubscribeEvent(
+            "resolutionPreChange",
+            [](const WPEFramework::Core::JSON::VariantContainer& params) {
+                MW_LOG_WARN("[DS-Thunder] resolutionPreChange event received\n");
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionPreChange) ret=%d\n", subRet);
+    }
+    else
+    {
+        MW_LOG_WARN("[DS-Thunder] Firebolt mode: Thunder event subscriptions skipped "
+                    "(events delivered by Firebolt SDK -> PostHDMIStatusUpdate)\n");
+    }
+
+    MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() done\n");
+}
+
+/**
+ * @brief Stop the worker thread, unsubscribe Thunder events (IARM mode only),
+ *        and release plugin objects.
+ */
+void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
+{
+    /* Stop worker thread first so no further SetHDMIStatus() calls are made */
+    {
+        std::lock_guard<std::mutex> lk(m_eventMutex);
+        m_eventWorkerStop = true;
+    }
+    m_eventCv.notify_one();
+    if (m_eventWorkerThread.joinable()) {
+        m_eventWorkerThread.join();
+        MW_LOG_WARN("[DS-Thunder] EventWorkerLoop thread joined\n");
+    }
+
+    /* Unsubscribe Thunder events — only if they were registered (IARM mode) */
+    if (m_initialized == InitState::IARM)
+    {
+        if (m_hdcpProfileThunder) {
+            m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
+        }
+        if (m_dsThunder) {
+            m_dsThunder->UnSubscribeEvent("connectedVideoDisplaysUpdated");
+            m_dsThunder->UnSubscribeEvent("resolutionChanged");
+            m_dsThunder->UnSubscribeEvent("resolutionPreChange");
+        }
+    }
+
+    if (m_hdcpProfileThunder) {
+        m_hdcpProfileThunder.reset();
+    }
+    if (m_dsThunder) {
+        m_dsThunder.reset();
+    }
+}
+#endif /* USE_DS_THUNDER_PLUGIN */
 
 void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
 {

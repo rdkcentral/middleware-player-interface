@@ -229,6 +229,14 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
+#ifdef USE_DS_THUNDER_PLUGIN
+    /* When the Thunder plugin path is active, HDCP version and connection state
+     * are read authoritatively from HdcpProfile.1::getHDCPStatus inside
+     * SetHDMIStatus().  Route through the coalescing worker thread so that
+     * concurrent Firebolt callbacks don't race on the Thunder RPC object. */
+    MW_LOG_WARN("[DS-Thunder] HDCPEventHandlerFirebolt: routing to PostHDMIStatusUpdate\n");
+    pInstance->PostHDMIStatusUpdate();
+#else
     if(t_HDCPVersionMap.hdcp2_2)
 	{
 		pInstance->setHdcpProtocol(dsHDCP_VERSION_2X);
@@ -245,7 +253,7 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 	}
 
 	pInstance->SetHDMIStatus();
-            
+#endif
 }
 
 /**
@@ -253,6 +261,15 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
  */
 static void ResolutionHandlerFirebolt(const std::string& t_res)
 {
+#ifdef USE_DS_THUNDER_PLUGIN
+    /* When the Thunder plugin path is active, resolution is fetched from
+     * DisplaySettings.1::getCurrentResolution inside SetHDMIStatus().  Route
+     * through the coalescing worker thread so this event is handled in order
+     * with HDCP events. */
+    MW_LOG_WARN("[DS-Thunder] ResolutionHandlerFirebolt: routing to PostHDMIStatusUpdate\n");
+    std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+    pInstance->PostHDMIStatusUpdate();
+#else
     int width = 1280;
 	int height = 720;
 
@@ -272,5 +289,5 @@ static void ResolutionHandlerFirebolt(const std::string& t_res)
 	{
 		MW_LOG_ERR("Failed to get current resolution");
 	}
-
+#endif
 }

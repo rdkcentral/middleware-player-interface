@@ -64,7 +64,7 @@ ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
                    ,controllerObject(NULL)
                    ,pluginCallsign(callsign)
 {
-    MW_LOG_INFO( "[ThunderAccessPlayer]Inside");
+    MW_LOG_WARN( "[GSK-TAP-CTOR] callsign=%s server=%s", callsign.c_str(), SERVER_DETAILS);
     uint32_t status = Core::ERROR_NONE;
 
     Core::SystemInfo::SetEnvironment(_T("THUNDER_ACCESS"), (_T(SERVER_DETAILS)));
@@ -72,19 +72,22 @@ ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
 #ifdef DISABLE_SECURITY_TOKEN
      gSecurityPlayerData.securityToken = "token=" + sToken;
      gSecurityPlayerData.tokenQueried = true;
+     MW_LOG_WARN( "[GSK-TAP-TOKEN] security token DISABLED");
 #else
     if(!gSecurityPlayerData.tokenQueried)
     {
         unsigned char buffer[MAX_LENGTH] = {0};
         gSecurityPlayerData.tokenStatus = GetSecurityToken(MAX_LENGTH,buffer);
         if(gSecurityPlayerData.tokenStatus > 0){
-            MW_LOG_INFO( "[ThunderAccessPlayer] : GetSecurityToken success");
             sToken = (char*)buffer;
             gSecurityPlayerData.securityToken = "token=" + sToken;
+            MW_LOG_WARN( "[GSK-TAP-TOKEN] GetSecurityToken success len=%d", gSecurityPlayerData.tokenStatus);
+        } else {
+            MW_LOG_WARN( "[GSK-TAP-TOKEN] GetSecurityToken failed status=%d proceeding without token", gSecurityPlayerData.tokenStatus);
         }
         gSecurityPlayerData.tokenQueried = true;
-
-        //MW_LOG_WARN( "[ThunderAccessPlayer] securityToken : %s tokenStatus : %d tokenQueried : %s", gSecurityPlayerData.securityToken.c_str(), gSecurityPlayerData.tokenStatus, ((gSecurityPlayerData.tokenQueried)?"true":"false"));
+    } else {
+        MW_LOG_INFO( "[GSK-TAP-TOKEN] reusing cached token tokenStatus=%d", gSecurityPlayerData.tokenStatus);
     }
 #endif
     if (NULL == controllerObject) {
@@ -97,9 +100,9 @@ ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
         }
 
         if (NULL == controllerObject) {
-            MW_LOG_WARN( "[ThunderAccessPlayer] Controller object creation failed");
+            MW_LOG_WARN( "[GSK-TAP-CTRL] controller object creation FAILED");
         } else {
-            MW_LOG_INFO( "[ThunderAccessPlayer] Controller object creation success");
+            MW_LOG_WARN( "[GSK-TAP-CTRL] controller object created OK server=%s", SERVER_DETAILS);
         }
     }
 
@@ -110,9 +113,9 @@ ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
         remoteObject = new JSONRPC::LinkType<Core::JSON::IElement>(_T(pluginCallsign), _T(""));
     }
     if (NULL == remoteObject) {
-        MW_LOG_WARN( "[ThunderAccessPlayer] %s Client initialization failed", pluginCallsign.c_str());
+        MW_LOG_WARN( "[GSK-TAP-REMOTE] %s remote object creation FAILED", pluginCallsign.c_str());
     } else {
-        MW_LOG_INFO( "[ThunderAccessPlayer] %s Client initialization success", pluginCallsign.c_str());
+        MW_LOG_WARN( "[GSK-TAP-REMOTE] %s remote object created OK server=%s", pluginCallsign.c_str(), SERVER_DETAILS);
     }
 }
 
@@ -138,18 +141,19 @@ bool ThunderAccessPlayer::ActivatePlugin()
 
     if (NULL != controllerObject) {
         controlParam["callsign"] = pluginCallsign;
+        MW_LOG_WARN( "[GSK-TAP-ACTIVATE] sending activate callsign=%s", pluginCallsign.c_str());
         status = controllerObject->Invoke<JsonObject, JsonObject>(THUNDER_RPC_TIMEOUT, _T("activate"), controlParam, result);
         if (Core::ERROR_NONE == status){
             result.ToString(response);
-            MW_LOG_INFO( "[ThunderAccessPlayer] %s plugin Activated. Response : %s ", pluginCallsign.c_str(), response.c_str());
+            MW_LOG_WARN( "[GSK-TAP-ACTIVATE] %s activated OK response=%s", pluginCallsign.c_str(), response.c_str());
         }
         else
         {
-            MW_LOG_WARN( "[ThunderAccessPlayer] %s plugin Activation failed with error status : %u ", pluginCallsign.c_str(), status);
+            MW_LOG_WARN( "[GSK-TAP-ACTIVATE] %s activation FAILED errorStatus=%u", pluginCallsign.c_str(), status);
             ret = false;
         }
     } else {
-        MW_LOG_WARN( "[ThunderAccessPlayer] Controller Object NULL ");
+        MW_LOG_WARN( "[GSK-TAP-ACTIVATE] controller object is NULL cannot activate %s", pluginCallsign.c_str());
         ret = false;
     }
     return ret;
@@ -163,16 +167,17 @@ bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(c
 {
     bool ret = true;
     uint32_t status = Core::ERROR_NONE;
+    MW_LOG_WARN( "[GSK-TAP-SUBSCRIBE] callsign=%s event=%s", pluginCallsign.c_str(), eventName.c_str());
     if (NULL != remoteObject) {
         status = remoteObject->Subscribe<JsonObject>(THUNDER_RPC_TIMEOUT, _T(eventName), functionHandler);
         if (Core::ERROR_NONE == status) {
-            MW_LOG_INFO( "[ThunderAccessPlayer] Subscribed to : %s", eventName.c_str());
+            MW_LOG_WARN( "[GSK-TAP-SUBSCRIBE] %s::%s subscribed OK", pluginCallsign.c_str(), eventName.c_str());
         } else {
-            MW_LOG_WARN( "[ThunderAccessPlayer] Subscription failed for : %s with error status %u", eventName.c_str(), status);
+            MW_LOG_WARN( "[GSK-TAP-SUBSCRIBE] %s::%s subscription FAILED errorStatus=%u", pluginCallsign.c_str(), eventName.c_str(), status);
             ret = false;
         }
     } else {
-        MW_LOG_WARN( "[ThunderAccessPlayer] remoteObject not created for the plugin!");
+        MW_LOG_WARN( "[GSK-TAP-SUBSCRIBE] remoteObject is NULL for %s cannot subscribe to %s", pluginCallsign.c_str(), eventName.c_str());
         ret = false;
     }
     return ret;
@@ -186,11 +191,12 @@ bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(c
 bool ThunderAccessPlayer::UnSubscribeEvent (std::string eventName)
 {
     bool ret = true;
+    MW_LOG_WARN( "[GSK-TAP-UNSUBSCRIBE] callsign=%s event=%s", pluginCallsign.c_str(), eventName.c_str());
     if (NULL != remoteObject) {
         remoteObject->Unsubscribe(THUNDER_RPC_TIMEOUT, _T(eventName));
-        MW_LOG_INFO( "[ThunderAccessPlayer] UnSubscribed : %s event", eventName.c_str());
+        MW_LOG_WARN( "[GSK-TAP-UNSUBSCRIBE] %s::%s unsubscribed OK", pluginCallsign.c_str(), eventName.c_str());
     } else {
-        MW_LOG_WARN( "[ThunderAccessPlayer] remoteObject not created for the plugin!");
+        MW_LOG_WARN( "[GSK-TAP-UNSUBSCRIBE] remoteObject is NULL for %s cannot unsubscribe %s", pluginCallsign.c_str(), eventName.c_str());
         ret = false;
     }
     return ret;
@@ -206,26 +212,26 @@ bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject &pa
     std::string response;
     uint32_t status = Core::ERROR_NONE;
 
+    MW_LOG_WARN( "[GSK-TAP-INVOKE] callsign=%s method=%s", pluginCallsign.c_str(), method.c_str());
     if(NULL == remoteObject)
     {
-        MW_LOG_WARN( "[ThunderAccessPlayer] client not initialized! ");
+        MW_LOG_WARN( "[GSK-TAP-INVOKE] remoteObject is NULL for %s cannot invoke %s", pluginCallsign.c_str(), method.c_str());
         return false;
     }
 
     JsonObject result_internal;
     status = remoteObject->Invoke<JsonObject, JsonObject>(waitTime, _T(method), param, result_internal);
+    result_internal.ToString(response);
     if (Core::ERROR_NONE == status)
     {
         if (result_internal["success"].Boolean()) {
-            result_internal.ToString(response);
-            MW_LOG_TRACE( "[ThunderAccessPlayer] %s success! Response : %s", method.c_str() , response.c_str());
+            MW_LOG_WARN( "[GSK-TAP-INVOKE] %s::%s SUCCESS response=%s", pluginCallsign.c_str(), method.c_str(), response.c_str());
         } else {
-            result_internal.ToString(response);
-            MW_LOG_WARN( "[ThunderAccessPlayer] %s call failed! Response : %s", method.c_str() , response.c_str());
+            MW_LOG_WARN( "[GSK-TAP-INVOKE] %s::%s FAILED (no success field) response=%s", pluginCallsign.c_str(), method.c_str(), response.c_str());
             ret = false;
         }
     } else {
-        MW_LOG_WARN( "[ThunderAccessPlayer] %s : invoke failed with error status %u", method.c_str(), status);
+        MW_LOG_WARN( "[GSK-TAP-INVOKE] %s::%s invoke FAILED errorStatus=%u response=%s", pluginCallsign.c_str(), method.c_str(), status, response.c_str());
         ret = false;
     }
 

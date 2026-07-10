@@ -43,7 +43,8 @@ enum PlayerThunderAccessPlugin
     SECMANAGER,
     WATERMARK,
     HDMIINPUT,
-    COMPOSITEINPUT
+    COMPOSITEINPUT,
+    HDCPPROFILE
 };
 
 /*
