@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <iostream>
+#include <cstdlib>
 
 #include "WidevineDrmHelper.h"
 #include "DrmUtils.h"
@@ -205,8 +206,13 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 		{
 			char hexPair[3] = {uuidHex[i], uuidHex[i + 1], '\0'};
 			char* end = nullptr;
-			unsigned long v = strtoul(hexPair, &end, 16);
-			if (*end != '\0' || v > 0xFF) { defaultKeyIDBinary.clear(); break; }
+			unsigned long v = std::strtoul(hexPair, &end, 16);
+			if (*end != '\0' || v > 0xFF) 
+			{
+				MW_LOG_WARN("setDefaultKeyID: invalid hex in cencData at offset %zu", i);
+				defaultKeyIDBinary.clear();
+				break;
+			}
 			defaultKeyIDBinary.push_back(static_cast<uint8_t>(v));
 		}
 	}
@@ -249,14 +255,14 @@ void WidevineDrmHelper::getKey(std::vector<uint8_t>& keyID) const
 		std::string keyStr = PlayerLogManager::getHexDebugStr(keyPair.second);
 		MW_LOG_DEBUG("Key ID [%d]: %s", keyPair.first, keyStr.c_str());
 	}
-	if ((mDefaultKeySlot >= 0) && ((size_t)mDefaultKeySlot < mKeyIDs.size()))
+	if ((mDefaultKeySlot >= 0) && (mKeyIDs.find(mDefaultKeySlot) != mKeyIDs.end()))
 	{
-		keyID = this->mKeyIDs.at(mDefaultKeySlot);
+		keyID = mKeyIDs.at(mDefaultKeySlot);
 	}
-	else if (mKeyIDs.size() > 0)
+	else if (!mKeyIDs.empty())
 	{
-		MW_LOG_WARN("mDefaultKeySlot(%d) invalid, falling back to slot 0", mDefaultKeySlot);
-		keyID = this->mKeyIDs.at(0);
+		MW_LOG_WARN("mDefaultKeySlot(%d) not found in mKeyIDs, falling back to first entry", mDefaultKeySlot);
+		keyID = mKeyIDs.begin()->second;
 	}
 	else
 	{
