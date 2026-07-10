@@ -250,10 +250,13 @@ void WidevineDrmHelper::createInitData(std::vector<uint8_t>& initData) const
 void WidevineDrmHelper::getKey(std::vector<uint8_t>& keyID) const
 {
 	MW_LOG_WARN("WidevineDrmHelper::getKey defaultkey: %d mKeyIDs.size:%zu", mDefaultKeySlot, mKeyIDs.size());
-	// Print all key IDs for debugging
-	for (const auto& keyPair : mKeyIDs) {
-		std::string keyStr = PlayerLogManager::getHexDebugStr(keyPair.second);
-		MW_LOG_DEBUG("Key ID [%d]: %s", keyPair.first, keyStr.c_str());
+	// Print all key IDs when debug logging is active
+	if (PlayerLogManager::isLogLevelAllowed(mLOGLEVEL_DEBUG))
+	{
+		for (const auto& keyPair : mKeyIDs) {
+			std::string keyStr = PlayerLogManager::getHexDebugStr(keyPair.second);
+			MW_LOG_DEBUG("Key ID [%d]: %s", keyPair.first, keyStr.c_str());
+		}
 	}
 	if ((mDefaultKeySlot >= 0) && (mKeyIDs.find(mDefaultKeySlot) != mKeyIDs.end()))
 	{
