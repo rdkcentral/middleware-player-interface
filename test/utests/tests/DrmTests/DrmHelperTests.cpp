@@ -712,8 +712,10 @@ TEST_F(DrmHelperTests, RDKEMW19892_PreviouslyBroken_UUIDFormatNeverMatchedBinary
 	                                  0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
 	std::vector<uint8_t> targetKey = {0x2D, 0xB6, 0xC4, 0x8D, 0x30, 0x1F, 0x48, 0xEA,
 	                                   0xBB, 0x77, 0x1B, 0xA7, 0xA8, 0xAC, 0x90, 0x42};
-	ASSERT_EQ(keyIDs[0], dummyKey);
-	ASSERT_EQ(keyIDs[1], targetKey);
+	ASSERT_NE(keyIDs.find(0), keyIDs.end());
+	ASSERT_NE(keyIDs.find(1), keyIDs.end());
+	ASSERT_EQ(keyIDs.at(0), dummyKey);
+	ASSERT_EQ(keyIDs.at(1), targetKey);
 
 	// THIS IS THE REAL PRODUCTION FORMAT: UUID with hyphens from manifest
 	// <ContentProtection cenc:default_KID="2db6c48d-301f-48ea-bb77-1ba7a8ac9042"/>
