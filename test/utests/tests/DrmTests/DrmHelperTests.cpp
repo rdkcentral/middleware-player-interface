@@ -660,7 +660,8 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_MultiKeyRawBinarySelectsCorrectSlot)
 	                              0x11,0x11,0x11,0x11,0x11,0x11,0x11,0x11};
 
 	// Pass raw binary of key1 as string — this always worked
-	std::string defaultKeyStr(keyIDs[1].begin(), keyIDs[1].end());
+	ASSERT_NE(keyIDs.find(1), keyIDs.end());
+	std::string defaultKeyStr(keyIDs.at(1).begin(), keyIDs.at(1).end());
 	widevineHelper->setDefaultKeyID(defaultKeyStr);
 
 	std::vector<uint8_t> keyID;
