@@ -577,7 +577,9 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_RawBinaryBytesAsString)
 							"edef8ba9-79d6-4ace-a3c8-27dcd51d21ed");
 	std::shared_ptr<DrmHelper> widevineHelper = DrmHelperEngine::getInstance().createHelper(drmInfo);
 	ASSERT_NE(widevineHelper, nullptr);
-	ASSERT_TRUE(widevineHelper->parsePssh(psshDataPtr, (uint32_t)psshDataLen));
+	const bool parsed = widevineHelper->parsePssh(psshDataPtr, static_cast<uint32_t>(psshDataLen));
+	free(psshDataPtr);
+	ASSERT_TRUE(parsed);
 
 	std::map<int, std::vector<uint8_t>> keyIDs;
 	widevineHelper->getKeys(keyIDs);
@@ -595,8 +597,6 @@ TEST_F(DrmHelperTests, RDKEMW19892_Working_RawBinaryBytesAsString)
 	std::vector<uint8_t> keyID;
 	widevineHelper->getKey(keyID);
 	EXPECT_EQ(keyID, expectedKey) << "Raw binary setDefaultKeyID must work (always worked)";
-
-	free(psshDataPtr);
 }
 
 /**
