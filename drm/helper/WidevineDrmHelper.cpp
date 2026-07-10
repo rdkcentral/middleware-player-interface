@@ -261,7 +261,10 @@ void WidevineDrmHelper::getKey(std::vector<uint8_t>& keyID) const
 	}
 	else if (!mKeyIDs.empty())
 	{
-		MW_LOG_WARN("mDefaultKeySlot(%d) not found in mKeyIDs, falling back to first entry", mDefaultKeySlot);
+		if (mDefaultKeySlot >= 0)
+		{
+			MW_LOG_WARN("mDefaultKeySlot(%d) not found in mKeyIDs, falling back to first entry", mDefaultKeySlot);
+		}
 		keyID = mKeyIDs.begin()->second;
 	}
 	else
