@@ -480,18 +480,34 @@ void PlayerExternalsRdkInterface::EventWorkerLoop()
 }
 
 /**
- * @brief Create Thunder plugin objects and subscribe to HDMI/HDCP/resolution events.
- * CSV mapping:
- *   IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
- *   IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG   -> DisplaySettings.1 connectedVideoDisplaysUpdated
- *   IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE -> DisplaySettings.1 resolutionChanged
- *   IARM_BUS_DSMGR_EVENT_RES_PRECHANGE  -> DisplaySettings.1 resolutionPreChange
+ * @brief Create Thunder plugin objects and, in IARM mode, subscribe to Thunder
+ *        HDMI/HDCP/resolution events.
+ *
+ * Event-source split:
+ *   IARM mode  : Thunder events are the source.
+ *                Callbacks route through PostHDMIStatusUpdate() so that
+ *                InvokeJSONRPC is never called from inside a Thunder callback.
+ *                CSV mapping:
+ *                  IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
+ *                  IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG   -> DisplaySettings.1 connectedVideoDisplaysUpdated
+ *                  IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE -> DisplaySettings.1 resolutionChanged
+ *                  IARM_BUS_DSMGR_EVENT_RES_PRECHANGE  -> DisplaySettings.1 resolutionPreChange
+ *   Firebolt mode: Firebolt SDK delivers events via subscribeOnHdcpChanged /
+ *                  subscribeOnVideoResolutionChanged in DeviceFireboltInterface.
+ *                  Those handlers call PostHDMIStatusUpdate() directly.
+ *                  No Thunder subscriptions needed here.
+ *
+ * The Thunder plugin objects (m_hdcpProfileThunder, m_dsThunder) are created in
+ * both modes and used solely for the data queries inside SetHDMIStatus()
+ * (getHDCPStatus and getCurrentResolution).
  */
 void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
 {
     MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() start\n");
 
-    /* Start the worker thread that serialises SetHDMIStatus() calls */
+    /* Start the worker thread that serialises SetHDMIStatus() calls.
+     * Needed in both modes: Thunder callbacks must not call InvokeJSONRPC
+     * directly, and Firebolt callbacks may arrive concurrently. */
     m_eventWorkerStop = false;
     m_eventPending    = false;
     m_eventWorkerThread = std::thread(&PlayerExternalsRdkInterface::EventWorkerLoop, this);
@@ -503,64 +519,74 @@ void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
     bool activateRet = m_hdcpProfileThunder->ActivatePlugin();
     MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 ActivatePlugin() ret=%d\n", activateRet);
 
-    /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
-    /* NOTE: Thunder does not allow InvokeJSONRPC from within a callback.
-     * Spawn a detached thread so the callback returns immediately. */
-    bool subRet = m_hdcpProfileThunder->SubscribeEvent(
-        "onDisplayConnectionChanged",
-        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
-            std::string paramsStr;
-            params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] onDisplayConnectionChanged received params=%s\n", paramsStr.c_str());
-            PostHDMIStatusUpdate();
-        });
-    MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 SubscribeEvent(onDisplayConnectionChanged) ret=%d\n", subRet);
-
     /* ---- DisplaySettings.1 ---- */
     MW_LOG_WARN("[DS-Thunder] Creating PlayerThunderAccess for DS (org.rdk.DisplaySettings.1)\n");
     m_dsThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DS);
     activateRet = m_dsThunder->ActivatePlugin();
     MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 ActivatePlugin() ret=%d\n", activateRet);
 
-    /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
-    subRet = m_dsThunder->SubscribeEvent(
-        "connectedVideoDisplaysUpdated",
-        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
-            std::string paramsStr;
-            params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] connectedVideoDisplaysUpdated received params=%s\n", paramsStr.c_str());
-            PostHDMIStatusUpdate();
-        });
-    MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(connectedVideoDisplaysUpdated) ret=%d\n", subRet);
+    /* ---- Thunder event subscriptions (IARM mode only) ---- */
+    if (m_initialized == InitState::IARM)
+    {
+        MW_LOG_WARN("[DS-Thunder] IARM mode: subscribing to Thunder events\n");
 
-    /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
-    subRet = m_dsThunder->SubscribeEvent(
-        "resolutionChanged",
-        [this](const WPEFramework::Core::JSON::VariantContainer& params) {
-            std::string paramsStr;
-            params.ToString(paramsStr);
-            MW_LOG_WARN("[DS-Thunder] resolutionChanged received params=%s\n", paramsStr.c_str());
-            PostHDMIStatusUpdate();
-        });
-    MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionChanged) ret=%d\n", subRet);
+        /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
+        bool subRet = m_hdcpProfileThunder->SubscribeEvent(
+            "onDisplayConnectionChanged",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] onDisplayConnectionChanged received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] HdcpProfile.1 SubscribeEvent(onDisplayConnectionChanged) ret=%d\n", subRet);
 
-    /* resolutionPreChange: replaces IARM_BUS_DSMGR_EVENT_RES_PRECHANGE */
-    subRet = m_dsThunder->SubscribeEvent(
-        "resolutionPreChange",
-        [](const WPEFramework::Core::JSON::VariantContainer& params) {
-            MW_LOG_WARN("[DS-Thunder] resolutionPreChange event received\n");
-        });
-    MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionPreChange) ret=%d\n", subRet);
+        /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
+        subRet = m_dsThunder->SubscribeEvent(
+            "connectedVideoDisplaysUpdated",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] connectedVideoDisplaysUpdated received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(connectedVideoDisplaysUpdated) ret=%d\n", subRet);
+
+        /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
+        subRet = m_dsThunder->SubscribeEvent(
+            "resolutionChanged",
+            [this](const WPEFramework::Core::JSON::VariantContainer& params) {
+                std::string paramsStr;
+                params.ToString(paramsStr);
+                MW_LOG_WARN("[DS-Thunder] resolutionChanged received params=%s\n", paramsStr.c_str());
+                PostHDMIStatusUpdate();
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionChanged) ret=%d\n", subRet);
+
+        /* resolutionPreChange: replaces IARM_BUS_DSMGR_EVENT_RES_PRECHANGE (log only) */
+        subRet = m_dsThunder->SubscribeEvent(
+            "resolutionPreChange",
+            [](const WPEFramework::Core::JSON::VariantContainer& params) {
+                MW_LOG_WARN("[DS-Thunder] resolutionPreChange event received\n");
+            });
+        MW_LOG_WARN("[DS-Thunder] DisplaySettings.1 SubscribeEvent(resolutionPreChange) ret=%d\n", subRet);
+    }
+    else
+    {
+        MW_LOG_WARN("[DS-Thunder] Firebolt mode: Thunder event subscriptions skipped "
+                    "(events delivered by Firebolt SDK -> PostHDMIStatusUpdate)\n");
+    }
 
     MW_LOG_WARN("[DS-Thunder] RegisterThunderEventHandlers() done\n");
 }
 
 /**
- * @brief Unsubscribe Thunder events and release plugin objects.
+ * @brief Stop the worker thread, unsubscribe Thunder events (IARM mode only),
+ *        and release plugin objects.
  */
 void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
 {
-    /* Stop worker thread before unsubscribing */
+    /* Stop worker thread first so no further SetHDMIStatus() calls are made */
     {
         std::lock_guard<std::mutex> lk(m_eventMutex);
         m_eventWorkerStop = true;
@@ -571,14 +597,23 @@ void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
         MW_LOG_WARN("[DS-Thunder] EventWorkerLoop thread joined\n");
     }
 
+    /* Unsubscribe Thunder events — only if they were registered (IARM mode) */
+    if (m_initialized == InitState::IARM)
+    {
+        if (m_hdcpProfileThunder) {
+            m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
+        }
+        if (m_dsThunder) {
+            m_dsThunder->UnSubscribeEvent("connectedVideoDisplaysUpdated");
+            m_dsThunder->UnSubscribeEvent("resolutionChanged");
+            m_dsThunder->UnSubscribeEvent("resolutionPreChange");
+        }
+    }
+
     if (m_hdcpProfileThunder) {
-        m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
         m_hdcpProfileThunder.reset();
     }
     if (m_dsThunder) {
-        m_dsThunder->UnSubscribeEvent("connectedVideoDisplaysUpdated");
-        m_dsThunder->UnSubscribeEvent("resolutionChanged");
-        m_dsThunder->UnSubscribeEvent("resolutionPreChange");
         m_dsThunder.reset();
     }
 }

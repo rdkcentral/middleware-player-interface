@@ -108,7 +108,6 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         void RegisterThunderEventHandlers();
         void RemoveThunderEventHandlers();
         /* Worker thread: serialises and coalesces HDMI-status update requests */
-        void PostHDMIStatusUpdate();
         void EventWorkerLoop();
         std::thread             m_eventWorkerThread;
         std::mutex              m_eventMutex;
@@ -151,6 +150,12 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
          * @param[in] height height of current resolution
          */
         void SetResolution(int width, int height);
+
+#ifdef USE_DS_THUNDER_PLUGIN
+        /* Post a pending HDMI-status update to the coalescing worker thread.
+         * Safe to call from any Firebolt event callback thread. */
+        void PostHDMIStatusUpdate();
+#endif
 
         // Singleton for object creation
 	
