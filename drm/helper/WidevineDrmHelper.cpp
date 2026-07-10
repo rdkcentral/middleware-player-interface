@@ -231,8 +231,8 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 	}
 	if (mDefaultKeySlot < 0 && !mKeyIDs.empty())
 	{
-		MW_LOG_WARN("setDefaultKeyID: no match found for cencData, defaulting to slot 0");
-		mDefaultKeySlot = 0;
+		mDefaultKeySlot = mKeyIDs.begin()->first;
+		MW_LOG_WARN("setDefaultKeyID: no match found for cencData, defaulting to first slot %d", mDefaultKeySlot);
 	}
 }
 
