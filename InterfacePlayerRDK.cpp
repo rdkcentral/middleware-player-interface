@@ -3445,53 +3445,61 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 /**
  *  @brief To pause/play pipeline
  */
-bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
+bool InterfacePlayerRDK::Pause(bool pause, bool forceStopGstreamerPreBuffering)
 {
-	bool retValue = true;
-	if (interfacePlayerPriv->gstPrivateContext->pipeline != NULL)
-	{
-		GstState nextState = pause ? GST_STATE_PAUSED : GST_STATE_PLAYING;
-		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
-		
-		if (GST_STATE_PAUSED == nextState && forceStopGstreamerPreBuffering)
-		{
-			/* maybe in a timing case during the playback start,
-			 * gstreamer pre buffering and underflow buffering runs simultaneously and
-			 * it will end up pausing the pipeline due to buffering_target_state has the value as GST_STATE_PAUSED.
-			 * To avoid this case, stopping the gstreamer pre buffering logic by setting the buffering_in_progress to false
-			 * and the resume play will be handled from StopBuffering once after getting enough buffer/frames.
-			 */
-			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
-		}
+    bool retValue = true;
+    if (interfacePlayerPriv->gstPrivateContext->pipeline != NULL)
+    {
+        GstState nextState = pause ? GST_STATE_PAUSED : GST_STATE_PLAYING;
+        interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
 
-		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
-		if (GST_STATE_CHANGE_ASYNC == rc)
-		{
-			/* CID:330433 Waiting while holding lock. Sleep introduced in validateStateWithMsTimeout to prevent continuous polling when synchronizing pipeline state.
-			 * Too risky to remove mutex lock. It may be replaced if approach is redesigned in future */
-			/* wait a bit longer for the state change to conclude */
-			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
-			{
-				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
-			}
-		}
-		else if (GST_STATE_CHANGE_SUCCESS != rc)
-		{
-			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
-		}
-		
-		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
-		interfacePlayerPriv->gstPrivateContext->paused = pause;
-		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
-	}
-	else
-	{
-		MW_LOG_WARN("Pipeline is NULL");
-		retValue = false;
-	}
-	return retValue;
+        if (GST_STATE_PAUSED == nextState && forceStopGstreamerPreBuffering)
+        {
+            interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
+        }
+
+        GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
+        if (GST_STATE_CHANGE_ASYNC == rc)
+        {
+            if (nextState == GST_STATE_PLAYING)
+            {
+                // When transitioning to PLAYING after a seek, the pipeline may
+                // legitimately take longer to preroll (DRM, buffering, etc.).
+                // Instead of failing immediately, mark as pending and let
+                // the ASYNC_DONE / buffering_timeout mechanism handle it.
+                MW_LOG_INFO("InterfacePlayerRDK_Pause - PLAYING transition is ASYNC, "
+                           "deferring to buffering/async-done mechanism");
+                interfacePlayerPriv->gstPrivateContext->pendingPlayState = true;
+            }
+            else
+            {
+                // For PAUSED transitions, still validate with timeout
+                if (nextState != validateStateWithMsTimeout(this, nextState, 100))
+                {
+                    MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
+                }
+            }
+        }
+        else if (GST_STATE_CHANGE_SUCCESS != rc)
+        {
+            MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
+        }
+
+        interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
+        interfacePlayerPriv->gstPrivateContext->paused = pause;
+        // Only clear pendingPlayState if we didn't just set it above
+        if (!interfacePlayerPriv->gstPrivateContext->pendingPlayState)
+        {
+            interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
+        }
+    }
+    else
+    {
+        MW_LOG_WARN("Pipeline is NULL");
+        retValue = false;
+    }
+    return retValue;
 }
-
 /**
  *  @brief Check if PTS is changing
  *  @retval true if PTS changed from lastKnown PTS or timeout hasn't expired, will optimistically return true if video-pts attribute is not available from decoder
