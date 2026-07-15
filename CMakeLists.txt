@@ -51,7 +51,7 @@ pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
 	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 else()
-	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
+	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 endif(CMAKE_SYSTEM_NAME STREQUAL Linux)
 
 #include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
@@ -139,7 +139,10 @@ else()
 endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-	set(GSTREAMER_LINK_LIBRARIES "")
+	# Zero out short-name library variables that require link_directories() to resolve.
+	# The Xcode generator appends $(CONFIGURATION) to link_directories() paths, causing
+	# spurious "search path not found" warnings. Full-path _LINK_LIBRARIES variables are
+	# used instead via separate target_link_libraries() calls below.
 	set(GST_LIBRARIES "")
 	set(GSTREAMERBASE_LIBRARIES "")
 	set(GSTVIDEO_LIBRARIES "")
@@ -443,9 +446,9 @@ endif()
 
 target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 
-target_link_libraries(playergstinterface ${GST_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+target_link_libraries(playergstinterface ${GST_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
-target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
+target_link_libraries(playergstinterface ${GSTREAMERVIDEO_LINK_LIBRARIES})
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
@@ -468,7 +471,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libplayergstinterface.pc"
 	)
 
 target_link_libraries(subtec playerlogmanager)
-target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface subtec)
 target_link_libraries(playergstinterface baseconversion)
 target_link_libraries(playergstinterface playerfbinterface)
