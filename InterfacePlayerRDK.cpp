@@ -1638,7 +1638,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Flush requested during in-flight state change (current=%s pending=%s) - waiting to settle",
 			gst_element_state_get_name(current), gst_element_state_get_name(pending));
-		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 300 * GST_MSECOND);
+		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 500 * GST_MSECOND);
 	}
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 	{
