@@ -54,20 +54,22 @@ public:
 
 	inline bool wait(const uint32_t waitTime)
 	{
-		bool ret = true;
 		std::unique_lock<std::mutex> _lock(lock);
 		if (!signalled) {
 			if (waitTime == 0) {
-				condition.wait(_lock);
+				condition.wait(_lock, [this]() { return signalled; });
 			} else {
-				if( std::cv_status::timeout == condition.wait_for(_lock,std::chrono::milliseconds(waitTime)) )
+				// Use predicate version - returns false if timeout, true if condition met
+				if (!condition.wait_for(_lock, std::chrono::milliseconds(waitTime),
+					[this]() { return signalled; }))
 				{
-					ret = false;
+					signalled = false;
+					return false; // Timeout occurred
 				}
 			}
 		}
 		signalled = false;
-		return ret;
+		return true;
 	}
 
 	inline void signal()

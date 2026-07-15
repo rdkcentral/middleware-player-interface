@@ -63,6 +63,7 @@ private:
     PlayerHlsDrmSessionInterfaceBase* m_pHlsDrmSessionManager;
 
 	PlayerHlsDrmSessionInterface();
+	~PlayerHlsDrmSessionInterface();
 
 public:
 
