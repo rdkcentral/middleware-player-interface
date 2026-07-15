@@ -43,6 +43,20 @@ PlayerHlsDrmSessionInterface::PlayerHlsDrmSessionInterface()
 }
 
 /**
+ * @brief Destructor
+ */
+PlayerHlsDrmSessionInterface::~PlayerHlsDrmSessionInterface()
+{
+#ifndef USE_OPENCDM_ADAPTER
+	if(m_pHlsDrmSessionManager != nullptr)
+	{
+		delete m_pHlsDrmSessionManager;
+		m_pHlsDrmSessionManager = nullptr;
+	}
+#endif
+}
+
+/**
  * @brief getInstance Get DRM instance
  *        Get an instance of the Hls DRM Session Manager
  */
