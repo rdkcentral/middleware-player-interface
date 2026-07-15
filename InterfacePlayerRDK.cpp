@@ -110,7 +110,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	PlayerTelemetry2 telemetry;
 	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
 #endif
-	//PlayerTelemetry::sendEvent(TELEMETRY_EVENT_INITIALIZED);
 	
 	TelemetryPayload initPayload;
 	initPayload.add("component", "InterfacePlayerRDK");
