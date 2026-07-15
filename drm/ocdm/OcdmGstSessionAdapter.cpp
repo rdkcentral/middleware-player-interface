@@ -335,7 +335,11 @@ int OCDMGSTSessionAdapter::decrypt(GstBuffer *keyIDBuffer, GstBuffer *ivBuffer, 
 								GstStructure *crypto_info = gst_structure_new ("protection_meta_info","subsample_count", G_TYPE_UINT, subSampleCount, "subsamples", GST_TYPE_BUFFER, subSamplesBuffer, "iv", GST_TYPE_BUFFER, ivBuffer, "kid", GST_TYPE_BUFFER, keyIDBuffer, "initWithLast15", G_TYPE_UINT, 0, NULL);
 					gst_buffer_add_protection_meta (buffer, crypto_info);
 							}
+                        gst_buffer_ref(buffer); // Prevent the wayland thread from freeing it.
+                        MW_LOG_WARN("surya: Prevent wayland thread from freeing buffer held by cdmi decryptor thread");
 						retValue = OCDMGSTSessionDecrypt(m_pOpenCDMSession, buffer, caps);
+                        MW_LOG_WARN("surya: unref the buffer");
+                        gst_buffer_unref(buffer); // Safe to release it now.
 			}
 			else
 				/* CID:328751 - Waiting while holding a lock, got detected due to usage of external API. It may be replaced if approach is redesigned in future */
