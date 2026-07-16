@@ -116,6 +116,18 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	initPayload.add("action", "constructor");
 	initPayload.add("isRialto", isRialto ? 1 : 0);
 	PlayerTelemetry::sendEvent(TELEMETRY_EVENT_INITIALIZED, initPayload);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> intMetrics;
+	std::map<std::string, std::string> stringMetrics;
+	std::map<std::string, float> floatMetrics;
+
+	intMetrics["isRialto"] = isRialto ? 1 : 0;
+	stringMetrics["component"] = "InterfacePlayerRDK";
+	stringMetrics["action"] = "constructor";
+
+	PlayerTelemetry2 telemetry;
+	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
+#endif
 }
 
 /* InterfacePlayerRDK destructor*/
