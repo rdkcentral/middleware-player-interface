@@ -125,7 +125,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	stringMetrics["component"] = "InterfacePlayerRDK";
 	stringMetrics["action"] = "constructor";
 
-	PlayerTelemetry2 telemetry;
+	
 	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
 #endif
 }
