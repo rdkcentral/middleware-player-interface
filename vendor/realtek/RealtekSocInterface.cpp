@@ -277,8 +277,6 @@ void RealtekSocInterface::SetFreerunThreshold(GstObject* src)
  */
 void RealtekSocInterface::SetPlaybackFlags(gint &flags, bool isSub)
 {
-	flags = PLAY_FLAG_VIDEO | PLAY_FLAG_AUDIO | PLAY_FLAG_NATIVE_AUDIO | PLAY_FLAG_NATIVE_VIDEO;
-
 	flags = PLAY_FLAG_VIDEO | PLAY_FLAG_AUDIO |  PLAY_FLAG_NATIVE_AUDIO | PLAY_FLAG_NATIVE_VIDEO | PLAY_FLAG_SOFT_VOLUME;
 	if(isSub)
 	{
