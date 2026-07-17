@@ -151,7 +151,8 @@ namespace ccMgrAPI
                 {
                     ((gsw_CcColor*)values[i])->rgb = pValues[i];
                     strncpy(((gsw_CcColor*)values[i])->name, pValuesNames[i],
-                            GSW_MAX_CC_COLOR_NAME_LENGTH);
+                            GSW_MAX_CC_COLOR_NAME_LENGTH - 1);
+                    ((gsw_CcColor*)values[i])->name[GSW_MAX_CC_COLOR_NAME_LENGTH - 1] = '\0';
                 }
                 break;
             }
