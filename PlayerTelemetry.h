@@ -37,8 +37,8 @@
  *
  * When PLAYER_TELEMETRY_SUPPORT is NOT defined at compile time every call is
  * compiled away to a no-op — zero overhead, no dependency on <map> or logging
- * headers in non-telemetry builds.  Enable telemetry by passing
- * -DPLAYER_TELEMETRY_SUPPORT (or setting CMAKE_PLAYER_TELEMETRY_SUPPORT) at
+ * headers in non-telemetry builds. Enable telemetry by passing
+ * -DPLAYER_TELEMETRY_SUPPORT (or setting CMAKE_TELEMETRY_2_0_REQUIRED) at
  * build time.
  */
 
