@@ -132,7 +132,7 @@ bool WidevineDrmHelper::parsePssh( const uint8_t* psshData, uint32_t psshSize )
 								if( fieldSize>0 && &psshData[fieldSize] <= fin )
 								{	std::vector<uint8_t> keyId;
 									keyId.assign( psshData, &psshData[fieldSize] );
-									mKeyIDs[kidCount++] = keyId;
+								mKeyIDs[kidCount++] = std::move(keyId);
 									rc = true;
 								}
 								psshData += fieldSize;
@@ -163,7 +163,7 @@ bool WidevineDrmHelper::parsePssh( const uint8_t* psshData, uint32_t psshSize )
 					{
 						std::vector<uint8_t> keyId;
 						keyId.assign( psshData, &psshData[fieldSize] );
-						mKeyIDs[i]=keyId;
+						mKeyIDs[i] = std::move(keyId);
 						psshData += fieldSize;
 						rc = true;
 					}
