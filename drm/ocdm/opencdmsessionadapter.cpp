@@ -26,7 +26,6 @@
 #include "DrmHelper.h"
 #include "PlayerUtils.h"
 
-
 #include "ProcessHandler.h"
 #include "PlayerExternalsInterface.h"
 #include <assert.h>
