@@ -66,4 +66,4 @@ public:
     void sendEvent(const std::string& eventName);
 };
 
-#endif // __PLAYER_TELEMETRY_2_H__
+#endif // PLAYER_TELEMETRY_2_H
