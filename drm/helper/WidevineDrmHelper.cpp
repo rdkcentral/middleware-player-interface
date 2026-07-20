@@ -251,7 +251,7 @@ void WidevineDrmHelper::getKey(std::vector<uint8_t>& keyID) const
 	MW_LOG_WARN("WidevineDrmHelper::getKey defaultkey: %d mKeyIDs.size:%zu", mDefaultKeySlot, mKeyIDs.size());
 	if ((mDefaultKeySlot >= 0) && (mKeyIDs.find(mDefaultKeySlot) != mKeyIDs.end()))
 	{
-		keyID = this->mKeyIDs.at(mDefaultKeySlot);
+		keyID = mKeyIDs.at(mDefaultKeySlot);
 	}
 	else if (!mKeyIDs.empty())
 	{
