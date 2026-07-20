@@ -393,9 +393,9 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 	{
             
 #ifdef PLAYER_TELEMETRY_SUPPORT /** verifying telemetry support*/
-    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is enabled at runtime");
+    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is enabled at compile time");
 #else
-    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is NOT enabled at runtime");
+    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is NOT enabled at compile time");
 #endif
 		MW_LOG_MIL("Nitz : Create pipeline %s (pipeline %p bus %p)", pipelineName, interfacePlayerPriv->gstPrivateContext->pipeline, interfacePlayerPriv->gstPrivateContext->bus);
 		CreatePipeline(pipelineName, PipelinePriority); 		/*Create a new pipeline if pipeline or the message bus does not exist*/
