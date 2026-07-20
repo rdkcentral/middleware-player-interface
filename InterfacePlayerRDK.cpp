@@ -3014,7 +3014,12 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 	int currentX = 0, currentY = 0, currentW = 0, currentH = 0;
 	if (strcmp(interfacePlayerPriv->gstPrivateContext->videoRectangle, "") != 0)
 	{
-		sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle,"%d,%d,%d,%d",&currentX,&currentY,&currentW,&currentH);
+		int parsed = sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle,"%d,%d,%d,%d",&currentX,&currentY,&currentW,&currentH);
+		if (parsed != 4)
+		{
+			MW_LOG_WARN("Failed to parse video rectangle string, parsed %d values", parsed);
+			currentX = currentY = currentW = currentH = 0;
+		}
 	}
 	//check the existing VideoRectangle co-ordinates
 	if ((currentX == x) && (currentY == y) && (currentW == w) && (currentH == h))
@@ -3175,7 +3180,7 @@ bool InterfacePlayerRDK::HandleVideoBufferSent()
 
 void InterfacePlayerRDK::SetPlayerName(std::string name)
 {
-	interfacePlayerPriv->mPlayerName = name;
+	interfacePlayerPriv->mPlayerName = std::move(name);
 }
 
 /**
