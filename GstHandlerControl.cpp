@@ -19,8 +19,6 @@
 
 #include "GstHandlerControl.h"
 #include "PlayerLogManager.h"
-#include "TelemetryMarkers.h"
-#include "PlayerTelemetry.h"
 #include <cstdio>
 #include <string>
 
