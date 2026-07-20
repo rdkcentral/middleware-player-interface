@@ -587,7 +587,22 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		}
 		else
 		{
-			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_BUFFERING_STARTED);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			{
+				std::map<std::string, int> intMetrics;
+				std::map<std::string, std::string> stringMetrics;
+				std::map<std::string, float> floatMetrics;
+
+				intMetrics["mediaFormat"] = (int)m_gstConfigParam->media;
+				intMetrics["maxBufferingTimeoutMs"] = DEFAULT_BUFFERING_MAX_MS;
+				intMetrics["framesToQueue"] = (int)m_gstConfigParam->framesToQueue;
+				intMetrics["isRialto"] = interfacePlayerPriv->gstPrivateContext->usingRialtoSink ? 1 : 0;
+				stringMetrics["state"] = "started";
+
+				PlayerTelemetry2 telemetry;
+				telemetry.send(TELEMETRY_EVENT_BUFFERING_STARTED, intMetrics, stringMetrics, floatMetrics);
+			}
+#endif
 		}
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
 		interfacePlayerPriv->gstPrivateContext->paused = false;
@@ -3091,7 +3106,21 @@ bool InterfacePlayerRDK::StopBuffering(bool forceStop, bool &isPlaying)
 				if (current == GST_STATE_PLAYING)
 				{
 					sendEndEvent = true;
-					PlayerTelemetry::sendEvent(TELEMETRY_EVENT_BUFFERING_ENDED);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+					{
+						std::map<std::string, int> intMetrics;
+						std::map<std::string, std::string> stringMetrics;
+						std::map<std::string, float> floatMetrics;
+
+						intMetrics["frames"] = frames;
+						intMetrics["forceStop"] = forceStop ? 1 : 0;
+						stringMetrics["state"] = "ended";
+						stringMetrics["source"] = "stopBuffering";
+
+						PlayerTelemetry2 telemetry;
+						telemetry.send(TELEMETRY_EVENT_BUFFERING_ENDED, intMetrics, stringMetrics, floatMetrics);
+					}
+#endif
 				}
 			}
 		}
@@ -5064,6 +5093,21 @@ static gboolean buffering_timeout (gpointer data)
 				
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				isPlayerReady = true;
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> intMetrics;
+					std::map<std::string, std::string> stringMetrics;
+					std::map<std::string, float> floatMetrics;
+
+					intMetrics["frames"] = frames;
+					intMetrics["bufferingTimeoutCnt"] = (int)original_buffering_timeout_cnt;
+					stringMetrics["state"] = "ended";
+					stringMetrics["source"] = "timeout";
+
+					PlayerTelemetry2 telemetry;
+					telemetry.send(TELEMETRY_EVENT_BUFFERING_ENDED, intMetrics, stringMetrics, floatMetrics);
+				}
+#endif
 			}
 		}
 		if (!privatePlayer->gstPrivateContext->buffering_in_progress)
