@@ -3499,13 +3499,7 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	}
 	else
 	{
-#if 0
-            PlayerTelemetry2::send("MW_PROTECTION_EVENT_FAILED",
-            formatType,
-            protSystemId ? protSystemId : "",
-            mediaType,
-            initDataSize);
-#endif
+		// No protection event is queued when initData is invalid or empty.
 	}
 }
 
