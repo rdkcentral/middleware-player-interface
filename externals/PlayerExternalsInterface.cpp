@@ -112,6 +112,14 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::GetPlayerExt
 }
 
 /**
+ * @brief Creates a new independent (non-singleton) instance
+ */
+std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::createInstance()
+{
+    return std::shared_ptr<PlayerExternalsInterface>(new PlayerExternalsInterface());
+}
+
+/**
  * @brief gets paramName TR181 config
  */
 char * PlayerExternalsInterface::GetTR181PlayerConfig(const char * paramName, size_t & iConfigLen)

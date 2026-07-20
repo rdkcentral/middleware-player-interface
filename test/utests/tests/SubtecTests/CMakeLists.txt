@@ -20,6 +20,7 @@ set(UTESTS_ROOT "../../")
 set(EXEC_NAME PlayerSubtecTests)
 
 include_directories(${PLAYER_ROOT})
+include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/subtitle)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/closedcaptions/subtec)
@@ -42,7 +43,8 @@ set(TEST_SOURCES PlayerSubtecCCManagerTests.cpp
 			 TtmlPacketTests.cpp
 			 WebVttPacketTests.cpp
 			 ClosedCaptionsPacketTests.cpp
-			 PacketSenderTests.cpp)
+			 PacketSenderTests.cpp
+			 SubtecChannelTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/closedcaptions/subtec/PlayerSubtecCCManager.cpp
@@ -51,6 +53,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		${PLAYER_ROOT}/subtec/libsubtec/SubtecChannel.cpp
 		${PLAYER_ROOT}/subtec/libsubtec/PacketSender.cpp
 		${PLAYER_ROOT}/playerJsonObject/PlayerJsonObject.cpp
+		${PLAYER_ROOT}/PlayerUtils.cpp
 		${PLAYER_ROOT}/baseConversion/_base64.cpp)
 
 if (CMAKE_PLATFORM_UBUNTU)
