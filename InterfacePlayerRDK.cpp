@@ -1634,7 +1634,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 	GstStateChangeReturn ret;
 	ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
-	
+	if (GST_STATE_CHANGE_ASYNC == ret && keepPausedSeek)
+	{
+		MW_LOG_WARN("InterfacePlayerRDK: Flush requested during in-flight state change (current=%s pending=%s) - waiting to settle",
+			gst_element_state_get_name(current), gst_element_state_get_name(pending));
+		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 300 * GST_MSECOND);
+	}
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Pipeline state %s, ret %u", gst_element_state_get_name(current), ret);
@@ -3432,22 +3437,6 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			 * and the resume play will be handled from StopBuffering once after getting enough buffer/frames.
 			 */
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
-		}
-		
-		if (GST_STATE_PLAYING == nextState)
-		{
-			GstState curState, pendState;
-			if (GST_STATE_CHANGE_ASYNC ==
-				gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
-									  &curState, &pendState, 0))
-			{
-				MW_LOG_WARN("InterfacePlayerRDK_Pause: resume during in-flight transition "
-							"(current=%s pending=%s) - settling before PLAYING",
-							gst_element_state_get_name(curState),
-							gst_element_state_get_name(pendState));
-				gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
-									  &curState, &pendState, 300 * GST_MSECOND);
-			}
 		}
 
 		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
