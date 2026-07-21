@@ -1428,6 +1428,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	else if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 	{
 		g_clear_object(&interfacePlayerPriv->gstPrivateContext->subtitle_sink);
+		pthread_mutex_lock(&stream->sourceLock);
 		if (stream->sinkbin)
 		{
 			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, clearing");
@@ -1438,6 +1439,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC source still assigned, clearing");
 			g_clear_object(&stream->source);
 		}
+		pthread_mutex_unlock(&stream->sourceLock);
 	}
 	tearDownCb(false, mediaType);
 	MW_LOG_MIL("InterfacePlayerRDK::TearDownStream: exit mediaType = %d", mediaType);
