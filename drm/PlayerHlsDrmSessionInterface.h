@@ -63,6 +63,7 @@ private:
     PlayerHlsDrmSessionInterfaceBase* m_pHlsDrmSessionManager;
 
 	PlayerHlsDrmSessionInterface();
+	~PlayerHlsDrmSessionInterface();
 
 public:
 
@@ -90,7 +91,7 @@ public:
     /**
      *@brief Registers GetAccessKey callback from application
      */
-    void RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback);
+    void RegisterGetHlsDrmSessionCb(GetHlsDrmSessionCallback Callback);
 };
 
 #endif //_PLAYER_HLS_DRM_SESSION_INTERFACE_H

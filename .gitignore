@@ -1,4 +1,5 @@
 build/
+build_aamp/
 .libs/
 
 sync/aamp
