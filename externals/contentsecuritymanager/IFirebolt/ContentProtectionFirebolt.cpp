@@ -156,12 +156,6 @@ void ContentProtectionFirebolt::Initialize()
 	MW_LOG_INFO("ContentProtectionFirebolt Initialize ");
 	m_pFireboltInterface = FireboltInterface::GetInstance();
 	mInitialized = true;
-	/* hide watermarking at startup */
-	int64_t sessionId = 0;
-	ShowWatermark(false, sessionId);
-	/* CP Thunder Plugin doesnt allow invalid sessionId like 0 as in Thunder, hence not calling CloseDrmSession */
-	//CloseDrmSession(sessionId);
-	SubscribeEvents();
 }
 
 void ContentProtectionFirebolt::DeInitialize()
@@ -173,6 +167,16 @@ void ContentProtectionFirebolt::DeInitialize()
 	mInitialized = false;
 	m_pFireboltInterface = nullptr;
 	MW_LOG_INFO("Firebolt Core de-initialized");
+}
+
+void ContentProtectionFirebolt::PostConstruct()
+{
+    /* Hide watermarking at startup and subscribe to events.
+       Called after InstanceMutex is released to avoid deadlock
+       with WPEFramework event thread. */
+    int64_t sessionId = 0;
+    ShowWatermark(false, sessionId);
+    SubscribeEvents();
 }
 
 bool ContentProtectionFirebolt::IsActive(bool /*force*/)

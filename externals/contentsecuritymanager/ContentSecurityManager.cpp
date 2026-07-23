@@ -53,24 +53,35 @@ static bool mUseFireboltSDK = false;
  */
 ContentSecurityManager* ContentSecurityManager::GetInstance()
 {
-	std::lock_guard<std::mutex> lock{InstanceMutex};
-	if(Instance == nullptr)
+	ContentSecurityManager* newInstance = nullptr;
 	{
+		std::lock_guard<std::mutex> lock{InstanceMutex};
+		if(Instance == nullptr)
+		{
 /* Firebolt is applicable to all builds which uses either secmanager or secclient */
 #if defined(USE_SECCLIENT) || defined(USE_SECMANAGER)
-		if(mUseFireboltSDK)
-		{
-			Instance = new ContentProtectionFirebolt();
-		}
-		else
-		{
+			if(mUseFireboltSDK)
+			{
+				Instance = new ContentProtectionFirebolt();
+			}
+			else
+			{
 #if defined(USE_SECMANAGER)
-			Instance = new SecManagerThunder();
+				Instance = new SecManagerThunder();
 #endif
-		}
+			}
 #else
-		Instance = new FakeSecManager();
+			Instance = new FakeSecManager();
 #endif
+			newInstance = Instance;
+		}
+	}
+	/* Run any blocking post-construction work (e.g. Firebolt IPC) AFTER
+	   InstanceMutex is released, so the singleton lock is never held across
+	   blocking transport I/O. Default PostConstruct() is a no-op. */
+	if(newInstance != nullptr)
+	{
+		newInstance->PostConstruct();
 	}
 	return Instance;
 }

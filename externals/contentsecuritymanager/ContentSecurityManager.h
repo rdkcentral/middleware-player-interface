@@ -210,6 +210,13 @@ protected:
         virtual bool setWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height) { return false; };
 
 	/**
+	 * @brief Post-construction hook run AFTER GetInstance() releases InstanceMutex.
+	 *        Lets a backend perform blocking initialization (e.g. Firebolt IPC)
+	 *        without holding the singleton lock. Default is a no-op.
+	 */
+	virtual void PostConstruct() {}
+
+	/**
 	 * @fn ContentSecurityManager
 	 */
 	ContentSecurityManager(){};

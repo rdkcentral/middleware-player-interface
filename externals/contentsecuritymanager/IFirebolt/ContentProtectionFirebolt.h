@@ -121,6 +121,11 @@ public:
 	 */
 	void DeInitialize();
 	/**
+	 * @brief Post-construction hook: performs the blocking Firebolt startup work
+	 *        (hide watermark + subscribe to events) after InstanceMutex is released.
+	 */
+	void PostConstruct() override;
+	/**
 	 * @brief Checks if Firebolt is active
 	 * @param force
 	 * @return true if initialized
