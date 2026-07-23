@@ -181,8 +181,8 @@ target_link_libraries(playerfbinterface baseconversion)
 target_link_libraries(playerfbinterface playerjsonobject)
 if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER)
    find_package(FireboltTransport CONFIG REQUIRED)
-   find_package(FireboltEntOs CONFIG REQUIRED)
-   target_link_libraries(playerfbinterface FireboltTransport::FireboltTransport FireboltEntOs::FireboltEntOs)
+   find_package(FireboltEntos CONFIG REQUIRED)
+   target_link_libraries(playerfbinterface FireboltTransport::FireboltTransport FireboltEntos::FireboltEntos)
 endif()
 
 # Configure pkg-config file
