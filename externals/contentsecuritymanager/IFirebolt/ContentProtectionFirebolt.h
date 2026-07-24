@@ -33,6 +33,7 @@
 #include <cassert>
 #include <string>
 #include <memory>
+#include <thread>
 
 class FireboltInterface; //forward declaration
 
