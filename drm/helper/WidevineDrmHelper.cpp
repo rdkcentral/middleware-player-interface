@@ -30,6 +30,7 @@
 #include "DrmUtils.h"
 #include "PlayerLogManager.h"
 #include "DrmConstants.h"
+#include "PlayerTelemetry2.hpp"
 
 #define MultiChar_Constant(TEXT) ( \
 (static_cast<uint32_t>(TEXT[0]) << 0x18) | \
