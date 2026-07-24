@@ -81,4 +81,4 @@
 #define TELEMETRY_EVENT_HDCP_PROTECTION_FAILURE    "HDCP_PROTECTION_FAILURE"    /**< HDCP output protection failure detected */
 #define TELEMETRY_EVENT_HDCP_COMPLIANCE_FAILURE    "HDCP_COMPLIANCE_FAILURE"    /**< HDCP compliance check failure (2.2 vs 1.4) */
 #define TELEMETRY_EVENT_DECRYPT_FAILURE            "DECRYPT_FAILURE"            /**< Decryption failure threshold exceeded */
-
+#define TELEMETRY_EVENT_DRM_KEY_MISMATCH           "DRM_KEY_MISMATCH"
