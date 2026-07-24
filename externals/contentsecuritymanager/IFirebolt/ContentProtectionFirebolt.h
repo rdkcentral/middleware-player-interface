@@ -186,6 +186,12 @@ public:
 
 	void HandleWatermarkEvent(const std::string& sessionId, const std::string& statusStr, const std::string& appId);
 private:
+    /**
+	 * @brief Runs the blocking Firebolt startup work (hide watermark + subscribe)
+	 *        off the construction path so GetInstance() releases InstanceMutex
+	 *        without waiting on synchronous transport I/O.
+	 */
+	void ShowWatermarkInit();
 	/**
 	 * @brief Subscribes to Firebolt events (currently stub)
 	 * @return true if stub accepted
@@ -202,6 +208,7 @@ private:
 	bool mInitialized;
 	static uint64_t mSubscriptionId;
 	std::shared_ptr<FireboltInterface> m_pFireboltInterface;
+    std::thread mShowWatermarkInitThread;
 };
 
 #endif /* CONTENT_PROTECTION_FIREBOLT_H */

@@ -157,15 +157,35 @@ void ContentProtectionFirebolt::Initialize()
 	m_pFireboltInterface = FireboltInterface::GetInstance();
 	mInitialized = true;
 	/* hide watermarking at startup */
+    /* Defer the blocking Firebolt startup work (hide watermark + subscribe) off the
+	 * construction path. ContentSecurityManager::GetInstance() holds InstanceMutex
+	 * across this constructor; doing synchronous Firebolt transport I/O here keeps
+	 * that lock held and can wedge every GetInstance()/DRM/Stop caller if the
+	 * transport stalls. Running it on a worker thread lets the constructor return
+	 * and release InstanceMutex immediately. */
+	mShowWatermarkInitThread = std::thread(&ContentProtectionFirebolt::ShowWatermarkInit, this);
+}
+
+void ContentProtectionFirebolt::ShowWatermarkInit()
+{
+	MW_LOG_INFO("ContentProtectionFirebolt ShowWatermark init started");
+	/* hide watermarking at startup */
 	int64_t sessionId = 0;
 	ShowWatermark(false, sessionId);
 	/* CP Thunder Plugin doesnt allow invalid sessionId like 0 as in Thunder, hence not calling CloseDrmSession */
 	//CloseDrmSession(sessionId);
 	SubscribeEvents();
+	MW_LOG_INFO("ContentProtectionFirebolt ShowWatermark init completed");
 }
 
 void ContentProtectionFirebolt::DeInitialize()
 {
+    /* Ensure the deferred startup worker has finished before tearing down so it
+	   does not touch this instance after destruction */
+	if (mShowWatermarkInitThread.joinable())
+	{
+		mShowWatermarkInitThread.join();
+	}
 	/* SessionID is not used internally in CP Thunder Plugin for ShowWatermark.
 	   However Native SDK requires it to be sent. Keeping it dummy*/
 	ShowWatermark(false, 0);
