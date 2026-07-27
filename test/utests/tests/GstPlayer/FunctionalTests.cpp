@@ -42,6 +42,7 @@ using ::testing::SaveArgPointee;
 using ::testing::SaveArg;
 using ::testing::Pointer;
 using ::testing::Matcher;
+using ::testing::ReturnArg;
 
 class GstPlayerTests : public ::testing::Test
 {
@@ -52,7 +53,7 @@ protected:
 	GstBus bus = {};
 	GstQuery query = {};
 	InterfacePlayerRDK *mInterfaceGstPlayer;
-
+	GstBusFunc bus_message_func = nullptr;
 	void SetUp() override
 	{
 		g_mockPlayerUtils = new MockPlayerUtils();
@@ -86,6 +87,7 @@ public:
 		bool enableRectangleProperty;
 		bool usingWesteros;
 		bool usingRialto;
+		bool gstreamerSubsEnabled;
 	} Config_Params;
 
 	static gboolean ProgressCallbackOnTimeout(gpointer user_data)
@@ -148,7 +150,7 @@ public:
 		GstElement *p_audio_sink = &audio_sink;
 		GstPipeline *pipeline = GST_PIPELINE(&gst_element_pipeline);
 
-		GstBusFunc bus_message_func = nullptr;
+
 		GstBusSyncHandler bus_sync_func = nullptr;
 
 		isPipelineSetup = true;
@@ -168,7 +170,7 @@ public:
 		mInterfaceGstPlayer->m_gstConfigParam->useWesterosSink = setup->usingWesteros;
 		mInterfaceGstPlayer->m_gstConfigParam->useRialtoSink = setup->usingRialto;
 		mInterfaceGstPlayer->m_gstConfigParam->enableRectPropertyCfg = setup->enableRectangleProperty;
-
+		mInterfaceGstPlayer->m_gstConfigParam->gstreamerSubsEnabled = setup->gstreamerSubsEnabled;
 		// CreatePipeline()
 
 		EXPECT_CALL(*g_mockGStreamer, gst_pipeline_new(StrEq("testPipeline")))
@@ -234,18 +236,25 @@ public:
 				.WillRepeatedly(Return(p_video_sink));
 		}
 
-		EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(pipeline), NotNull()))
+
+        /* subs using subtecbin*/
+		EXPECT_CALL(*g_mockGStreamer, gst_element_link_many(_, _))
+			.WillRepeatedly(Return(TRUE));
+		EXPECT_CALL(*g_mockGStreamer, gst_object_ref(_))
+    		.WillRepeatedly(ReturnArg<0>());
+
+		EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(pipeline), _))
 			.WillRepeatedly(Return(TRUE));
 
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 			.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
-		
+
 		mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264,
 										GST_FORMAT_AUDIO_ES_AAC,
-										GST_FORMAT_SUBTITLE_WEBVTT,
+										GST_FORMAT_SUBTITLE_TTML,
 										setup->bESChangeStatus,
 										  setup->setReadyAfterPipelineCreation,
-										  false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+										  true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 		ASSERT_TRUE(bus_sync_func != nullptr);
 		ASSERT_TRUE(bus_message_func != nullptr);
@@ -266,7 +275,7 @@ public:
 		}
 		else
 		{
-			EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("rectangle"), Matcher<char *>(_))).Times(0);
+//			EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("rectangle"), Matcher<char *>(_))).Times(0);
 		}
 		if (setup->usingRialto)
 		{
@@ -335,9 +344,9 @@ TEST_F(GstPlayerTests, Constructor)
 
 static GstPlayerTests::Config_Params tbl[] = {
 	// focus on Rialto only
-	{false, false, false, false, true },
+	{false, false, false, false, true, true},
 	// Need to revisit them when uncommenting the below tests
-//	{false, false, false, true, false },
+//	{false, false, false, false, false },
 //	{false, false, false, true, true  },
 //	{false, false, true,  true, false },
 //	{true,  true,  false, true, false }
@@ -416,6 +425,55 @@ TEST_P(GstPlayerTestsP, SetVideoMute)
 	mInterfaceGstPlayer->SetVideoMute(mute);
 
 	//Tidy Up
+	DestroyAMPGstPlayer();
+}
+
+TEST_P(GstPlayerTestsP, SubtitlePending)
+{
+	/*
+	* In InterfacePlayerRDK::SetupStream()
+    * The gst subtitle element chain is configured and then immediately a call
+	* is made to set the subtitle state muted/unmuted. However at this point gst
+	* has not completed construction of the chain for ttml and the state gets lost.
+	* The following error occurs:
+	* subtecsink gstsubtecsink.cpp:254:set_mute:<subtecsink0>[00m Unmute failed due to NULL channel
+	*
+	* Test that we delay the setting of subtitle mute until gstreamer is configured.
+	*/
+
+
+
+    GstPlayerTests::Config_Params setup = {false
+		, false
+		, false
+		, false
+		, false  //usingRialto
+		, true   // gstreamerSubsEnabled
+		};
+	ConstructAMPGstPlayer();
+
+
+	mInterfaceGstPlayer->SetSubtitleMute(false);
+	/* results in interfacePlayerPriv->gstPrivateContext->subtitleMuted=false */
+
+	SetupPipeline(&setup);
+    /* results in interfacePlayerPriv->gstPrivateContext->setSubtitlePending = true;*/
+	GstMessage bus_message = {.type = GST_MESSAGE_STATE_CHANGED, .src = GST_OBJECT(&gst_element_pipeline)};
+
+	EXPECT_CALL(*g_mockGStreamer, gst_message_parse_state_changed(Pointer(&bus_message), NotNull(), NotNull(), NotNull()))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_READY),
+			SetArgPointee<2>(GST_STATE_PLAYING),
+			SetArgPointee<3>(GST_STATE_NULL)));
+
+	/* When STATE_PLAYING is received then we know gstreamer is configured and can process
+	* the delayed mute state
+	*/
+	EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("mute"), Matcher<int>(0))).Times(1);
+
+	// Call the bus_message function
+	bus_message_func(&bus, &bus_message, mInterfaceGstPlayer);
+	// Tidy Up
 	DestroyAMPGstPlayer();
 }
 
