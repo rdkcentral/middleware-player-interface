@@ -3824,14 +3824,31 @@ void InterfacePlayerRDK::CancelProgressCallbackContext()
 		callbackContext->cancelled = true;
 		callbackContext->player = nullptr;
 	}
+	const guint progressTimerId = interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId;
 	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
-	std::unique_lock<std::mutex> lock(callbackContext->mutex);
-	if (!callbackContext->cv.wait_for(lock, std::chrono::seconds(5), [&callbackContext]() {
-		return 0 == callbackContext->activeCallbacks;
-	})) {
-		MW_LOG_WARN("Teardown timeout: callback context still has active callbacks (%zu). Possible I/O blockage or deadlock detected.", callbackContext->activeCallbacks);
+
+	// Avoid deadlock if cancellation is triggered re-entrantly from within
+	// the progress timer callback itself.
+	GSource *currentSource = g_main_current_source();
+	if (currentSource && (g_source_get_id(currentSource) == progressTimerId))
+	{
+		std::lock_guard<std::mutex> taskLock(interfacePlayerPriv->gstPrivateContext->TaskControlMutex);
+		if (mProgressCallbackContext == callbackContext)
+		{
+			mProgressCallbackContext.reset();
+		}
+		return;
 	}
-	lock.unlock();
+
+	{
+		std::unique_lock<std::mutex> lock(callbackContext->mutex);
+		constexpr auto kTeardownTimeout = std::chrono::seconds(5);
+		if (!callbackContext->cv.wait_for(lock, kTeardownTimeout, [&callbackContext]() {
+			return 0 == callbackContext->activeCallbacks;
+		})) {
+			MW_LOG_WARN("Teardown timeout: callback context still has active callbacks (%zu). Possible I/O blockage or deadlock detected.", callbackContext->activeCallbacks);
+		}
+	}
 	std::lock_guard<std::mutex> taskLock(interfacePlayerPriv->gstPrivateContext->TaskControlMutex);
 	if (mProgressCallbackContext == callbackContext)
 	{
