@@ -36,7 +36,7 @@
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
-
+#include <mutex>
  /*
 IARM Deprecation Note:
 IARM is to be deprecated in favor of DeviceSettings and Firebolt Device API.
@@ -63,6 +63,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 	, public device::Host::IVideoOutputPortEvents
 #endif
 {
+	std::mutex m_hdmiStatusMutex;
         enum InitState{
             NOT_INITIALIZED,
             FIREBOLT,
