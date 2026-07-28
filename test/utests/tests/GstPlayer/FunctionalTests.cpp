@@ -237,12 +237,16 @@ public:
 		}
 
 
-        /* subs using subtecbin*/
-		EXPECT_CALL(*g_mockGStreamer, gst_element_link_many(_, _))
-			.WillRepeatedly(Return(TRUE));
-		EXPECT_CALL(*g_mockGStreamer, gst_object_ref(_))
-    		.WillRepeatedly(ReturnArg<0>());
-
+		/* subs using subtecbin*/
+		if (setup->gstreamerSubsEnabled && !setup->usingRialto)
+		{
+			EXPECT_CALL(*g_mockGStreamer, gst_element_link_many(_, _))
+				.Times(testing::AnyNumber())
+				.WillRepeatedly(Return(TRUE));
+			EXPECT_CALL(*g_mockGStreamer, gst_object_ref(_))
+				.Times(testing::AnyNumber())
+				.WillRepeatedly(ReturnArg<0>());
+		}
 		EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(pipeline), _))
 			.WillRepeatedly(Return(TRUE));
 
