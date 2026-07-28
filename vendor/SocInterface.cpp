@@ -165,6 +165,8 @@ SocPlatformType SocInterface::InferPlatformFromDeviceProperties( void )
  */
 static std::shared_ptr<SocInterface> CreateForPlatform(SocPlatformType platformType)
 {
+
+#if !defined(__APPLE__) && !defined(UBUNTU)
 	switch (platformType)
 	{
 		case SOC_PLATFORM_AMLOGIC:
@@ -180,6 +182,9 @@ static std::shared_ptr<SocInterface> CreateForPlatform(SocPlatformType platformT
 			MW_LOG_MIL("Setting up SoC Interface for Default");
 			return std::make_shared<DefaultSocInterface>();
 	}
+#else
+		socInterface = std::make_shared<DefaultSocInterface>();
+#endif
 }
 
 
