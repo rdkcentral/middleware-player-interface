@@ -22,14 +22,13 @@ set(UTESTS_ROOT "../../")
 set(EXEC_NAME PlayerExternalsTests)
 
 include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/drm/ave ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle)
+include_directories(${PLAYER_ROOT}/externals)
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerLogManager)
-include_directories(${PLAYER_ROOT}/playerJsonObject)
+include_directories(${PLAYER_ROOT}/playerjsonobject)
 include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
-include_directories(${PLAYER_ROOT}/externals)
-
 
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})
@@ -42,11 +41,11 @@ include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES PlayerExternalsRun.cpp
-	PlayerThunderInterfaceFun.cpp
-	PlayerExternalsInterfaceFun.cpp
-	PlayerRFCFun.cpp
-	PlayerExternalsInterfaceBaseFun.cpp
-  PlayerExternalUtilsFun.cpp)
+	PlayerThunderInterfaceTests.cpp
+	PlayerExternalsInterfaceTests.cpp
+	PlayerRFCTests.cpp
+	PlayerExternalsInterfaceBaseTests.cpp
+	PlayerExternalUtilsTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		   ${PLAYER_ROOT}/externals/PlayerThunderInterface.cpp

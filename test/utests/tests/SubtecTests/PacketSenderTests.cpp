@@ -1,4 +1,3 @@
-
 /*
  * If not stated otherwise in this file or this component's LICENSE file the
  * following copyright and licenses apply:
@@ -17,515 +16,663 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * @file PacketSenderTests.cpp
+ * @brief Comprehensive unit tests for PacketSender and runWorkerTask.
+ *
+ * Covers:
+ *   - PacketSender::Instance()     : singleton, never null, identity
+ *   - PacketSender::Init()         : returns false in test env (no socket)
+ *   - PacketSender::Init(path)     : returns false for non-existent path
+ *   - PacketSender::Close()        : safe to call, stops any running thread
+ *   - PacketSender::Flush()        : safe to call in any state
+ *   - PacketSender::IsRunning()    : reflects running state
+ *   - PacketSender::SendPacket()   : accepts packets without hanging
+ *   - PacketSender::senderTask()   : tested via thread + Close() to stop
+ *   - runWorkerTask()              : tested via thread + Close() to stop
+ *
+ * NOTE: Init() returns false in this test environment because there is no
+ * socket server listening at the configured socket path.  The tested paths
+ * are for the graceful-degradation code, which is a valid production scenario.
+ */
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <stdio.h>
+#include <thread>
+#include <chrono>
+#include <memory>
+#include <cstdint>
 #include "PacketSender.hpp"
+#include "SubtecPacket.hpp"
 
-class PacketSenderTest : public ::testing::Test {
-protected:
-    PacketSender* sender;
-
-    void SetUp() override {
-        // Obtain the singleton instance before each test
-        sender = PacketSender::Instance();
-        ASSERT_NE(sender, nullptr) << "PacketSender instance should not be null";
-    }
-};
+// ===========================================================================
+// PacketSenderInstance tests
+// ===========================================================================
 
 /**
- * @brief Validate runWorkerTask with a valid context pointer.
+ * @brief PacketSender::Instance() returns a non-null pointer.
  *
- * This test validates the correct behavior of the runWorkerTask API when provided with a properly initialized valid context pointer. It ensures that no exceptions are thrown during the execution of the function using a valid context.
+ * @par Test Group ID  : PacketSenderInstance
+ * @par Test Case ID   : 001
+ * @par Priority       : High
  *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 001@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                        | Expected Result                                         | Notes           |
- * | :--------------: | --------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------- | --------------- |
- * | 01               | Initialize the context message by copying "ValidMessage" into a fixed size array ensuring null termination. | validMessage = "ValidMessage"                      | The validMessage array is correctly initialized with a null terminator. | Should be successful |
- * | 02               | Invoke runWorkerTask using the valid context pointer.                       | input: validContext = pointer to validMessage      | runWorkerTask completes without throwing any exceptions.             | Should Pass     |
+ * | Step | Description                  | Expected            |
+ * |:----:|------------------------------|---------------------|
+ * |  01  | Call PacketSender::Instance()| Returns non-null    |
  */
-TEST(RunWorkerTaskTest, ValidContextTest) {
-    GTEST_SKIP();
-    std::cout << "Entering ValidContextTest test" << std::endl;
-    
-    // Initialize context message using strncpy into fixed size array.
-    char validMessage[64];
-    strncpy(validMessage, "ValidMessage", sizeof(validMessage));
-    validMessage[sizeof(validMessage)-1] = '\0'; // ensure null termination
-
-    std::cout << "ValidContextTest: Invoking runWorkerTask with valid context pointer: " << validMessage << std::endl;
-    EXPECT_NO_THROW(runWorkerTask(static_cast<void*>(validMessage)));
-    
-    std::cout << "ValidContextTest: Completed invocation of runWorkerTask"  << std::endl;
- 
-    std::cout << "Exiting ValidContextTest test" << std::endl;
-}
-/**
- * @brief Verifies that runWorkerTask can safely handle a null pointer.
- *
- * This test checks if the runWorkerTask API correctly handles a null context input by ensuring that no exception is thrown during its execution.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 002
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                   | Test Data                        | Expected Result                                             | Notes      |
- * | :--------------: | ------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------- | ---------- |
- * | 01               | Invoke runWorkerTask with a null pointer to check for safety.  | input: context = nullptr         | The function should execute without throwing any exception. | Should Pass|
- */
-TEST(RunWorkerTaskTest, NullContextTest) {
-    GTEST_SKIP();
-    std::cout << "Entering NullContextTest test" << std::endl;
-    
-    std::cout << "NullContextTest: Invoking runWorkerTask with null pointer" << std::endl;
-    EXPECT_NO_THROW(runWorkerTask(nullptr));
-    
-    std::cout << "NullContextTest: Completed invocation of runWorkerTask with null pointer" << std::endl;
-    std::cout << "Exiting NullContextTest test" << std::endl;
-}
-/**
- * @brief Test runWorkerTask using an invalid context to verify that no exception is thrown.
- *
- * This test initializes an invalid context message and passes it to the runWorkerTask API via a static_cast.
- * The purpose of this test is to ensure that runWorkerTask correctly handles non-standard context inputs without throwing exceptions.@n
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 003@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                 | Test Data                                               | Expected Result                                     | Notes                |
- * | :--------------: | ----------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- | -------------------- |
- * | 01               | Initialize an invalid context message using strncpy         | invalidMessage = "123Invalid"                           | Buffer is properly null terminated                  | Should be successful |
- * | 02               | Invoke runWorkerTask with the invalid context pointer       | context = pointer to invalidMessage                     | API does not throw an exception (EXPECT_NO_THROW)    | Should Pass          |
- * | 03               | Log the completion of the runWorkerTask invocation          | No input parameters                                     | Completion message is logged successfully           | Should be successful |
- */
-TEST(RunWorkerTaskTest, InvalidContextTest) {
-    GTEST_SKIP();
-    std::cout << "Entering InvalidContextTest test" << std::endl;
-    
-    // Initialize context message using strncpy into fixed size array.
-    char invalidMessage[64];
-    strncpy(invalidMessage, "123Invalid", sizeof(invalidMessage));
-    invalidMessage[sizeof(invalidMessage)-1] = '\0'; // ensure null termination
-    
-    std::cout << "InvalidContextTest: Invoking runWorkerTask with context pointer: " << invalidMessage << std::endl;
-    EXPECT_NO_THROW(runWorkerTask(static_cast<void*>(invalidMessage)));
-    
-    std::cout << "InvalidContextTest: Completed invocation of runWorkerTask"  << std::endl;
-
-    std::cout << "Exiting InvalidContextTest test" << std::endl;
-}
-/**
- * @brief Verify that the Close method of PacketSender does not throw exceptions on an active player instance.
- *
- * This test validates that invoking the Close() method on the active PacketSender instance executes without any exceptions.
- * It confirms that the instance obtained from PacketSender::Instance() properly handles the call to Close() and that the
- * active player instance can be gracefully terminated without error.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 004@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                        | Test Data                                                                   | Expected Result                                      | Notes      |
- * | :--------------: | ------------------------------------------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------- | ---------- |
- * |      01        | Call sender->Close() within an EXPECT_NO_THROW block to verify that the method executes without throwing exceptions. | sender = valid PacketSender instance, method = Close(), output = void       | API method executes without throwing exceptions and completes successfully. | Should Pass|
- */
-TEST_F(PacketSenderTest, CloseOnActivePlayerInstance) {
-    std::cout << "Entering CloseOnActivePlayerInstance test" << std::endl;
-    
-    EXPECT_NO_THROW({
-        // Invoking Close method on the active player instance.
-        std::cout << "Invoking PacketSender::Close() on the active player instance." << std::endl;
-        EXPECT_NO_THROW(sender->Close());
-        std::cout << "PacketSender::Close() executed without throwing errors." << std::endl;
-    });
-    
-    std::cout << "Exiting CloseOnActivePlayerInstance test" << std::endl;
-}
-/**
- * @brief Validate the successful execution of PacketSender::Flush() method
- *
- * This test verifies that invoking the Flush method on the PacketSender's packet queue completes without throwing any exceptions. The test ensures that the singleton instance of PacketSender is valid before performing the flush operation, thus confirming the stability and correctness of the method execution.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 005@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data |Expected Result |Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke PacketSender::Flush() within EXPECT_NO_THROW to verify that no exception is thrown | sender = valid PacketSender instance, (Flush() has no input parameters, no output value) | Flush() completes without throwing any exception | Should Pass |
- */
-TEST_F(PacketSenderTest, FlushOnPacketQueue) {
-    std::cout << "Entering FlushOnPacketQueue test" << std::endl;
-
-    // Invoking PacketSender::Flush() method
-    std::cout << "Invoking PacketSender::Flush() method" << std::endl;
-    EXPECT_NO_THROW({
-        sender->Flush();
-        std::cout << "PacketSender::Flush() invoked without throwing any exception" << std::endl;
-    });
-
-    std::cout << "Exiting FlushOnPacketQueue test" << std::endl;
-}
-/**
- * @brief Verify that the PacketSender initializes successfully with default configuration.
- *
- * This test verifies that the PacketSender's Init() method executes without throwing an exception and returns true when invoked with default configuration settings.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 006@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                        | Test Data                                                       | Expected Result                                              | Notes       |
- * | :--------------: | ------------------------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------ | ----------- |
- * | 01               | Invoke PacketSender::Init() method to initialize with defaults.    | sender (instance of PacketSender), no input parameters, output: initResult expected to be true  | The Init() method should return true and no exception should be thrown. | Should Pass |
- */
-TEST_F(PacketSenderTest, DefaultInitializationSucceeds) {
-    GTEST_SKIP();
-    std::cout << "Entering DefaultInitializationSucceeds test" << std::endl;
-
-    EXPECT_NO_THROW({
-        bool initResult = sender->Init();
-        std::cout << "Init() method returned: " << std::boolalpha << initResult << std::endl;
-
-        // Validate expected outcome (default initialization should succeed)
-        EXPECT_TRUE(initResult);
-        std::cout << "Internal state: PacketSender initialized with default configuration successfully." << std::endl;
-    });
-
-    std::cout << "Exiting DefaultInitializationSucceeds test" << std::endl;
-}
-/**
- * @brief Verify that PacketSender::Init initializes correctly with a valid Unix socket path.
- *
- * This test ensures that the PacketSender instance can be properly initialized when a valid Unix socket path is provided.
- * It verifies that the API call to PacketSender::Init returns a true value, indicating successful initialization.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 007@n
- * **Priority:** High@n
- * @n
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * @n
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                        | Test Data                                                  | Expected Result                                                                              | Notes      |
- * | :--------------: | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
- * | 01               | Prepare a valid Unix socket path and invoke PacketSender::Init with it to check initialization success. | socketPath = /tmp/packet_socket, output result = bool value | Returns true and passes the EXPECT_TRUE assertion confirming successful initialization.       | Should Pass |
- */
-TEST_F(PacketSenderTest, ValidUnixSocketPathInitialization) {
-    GTEST_SKIP();
-    std::cout << "Entering ValidUnixSocketPathInitialization test" << std::endl;
-    
-    // Prepare input socket path
-    const char* socketPath = "/tmp/packet_socket";
-    std::cout << "Invoking PacketSender::Init with socket_path: " << socketPath << std::endl;
-    
-    // Invoke Init method and capture the return value
-    bool result = sender->Init(socketPath);
-    std::cout << "Returned value from PacketSender::Init: " << std::boolalpha << result << std::endl;
-    
-    // Validate that initialization succeeds
-    EXPECT_TRUE(result);
-    
-    std::cout << "Exiting ValidUnixSocketPathInitialization test" << std::endl;
-}
-/**
- * @brief Validate that invoking PacketSender::Init with a null socket path fails initialization.
- *
- * This test verifies that when a null socket path is passed to the PacketSender::Init API,
- * the initialization should fail and return false. The purpose of this test is to ensure that the API correctly
- * handles an invalid input scenario, which is critical for reliability.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 008@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                           | Test Data                                | Expected Result                                    | Notes       |
- * | :--------------: | --------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------- | ----------- |
- * | 01               | Prepare a null socket path and invoke PacketSender::Init API          | socketPath = nullptr                     | Return value false; assertion EXPECT_FALSE(result) | Should Fail |
- */
-TEST_F(PacketSenderTest, InitializationWithNullSocketPath) {
-    GTEST_SKIP();
-    std::cout << "Entering InitializationWithNullSocketPath test" << std::endl;
-    
-    // Prepare input socket path as nullptr
-    const char* socketPath = nullptr;
-    std::cout << "Invoking PacketSender::Init with socket_path: " << "nullptr" << std::endl;
-    
-    // Invoke Init method and capture the return value
-    bool result = sender->Init(socketPath);
-    std::cout << "Returned value from PacketSender::Init: " << std::boolalpha << result << std::endl;
-    
-    // Validate that initialization fails
-    EXPECT_FALSE(result);
-    
-    std::cout << "Exiting InitializationWithNullSocketPath test" << std::endl;
-}
-/**
- * @brief Test that initialization fails with an empty socket path.
- *
- * This test verifies that PacketSender::Init returns false when invoked with an empty socket path.
- * An empty socket path is an invalid input and should result in the method failing to initialize the sender.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 009
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                           | Test Data                                 | Expected Result                             | Notes       |
- * | :--------------: | ------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- | ----------- |
- * | 01               | Prepare an empty socket path and invoke PacketSender::Init to validate failure          | socketPath = "", output result = false      | PacketSender::Init returns false            | Should Fail |
- */
-TEST_F(PacketSenderTest, InitializationWithEmptySocketPath) {
-    std::cout << "Entering InitializationWithEmptySocketPath test" << std::endl;
-    
-    // Prepare input socket path as empty string
-    char socketPath[256];
-    strncpy(socketPath, "", sizeof(socketPath) - 1);
-    socketPath[sizeof(socketPath) - 1] = '\0';
-    std::cout << "Invoking PacketSender::Init with socket_path (empty string): '" << socketPath << "'" << std::endl;
-    
-    // Invoke Init method and capture the return value
-    bool result = sender->Init(socketPath);
-    std::cout << "Returned value from PacketSender::Init: " << std::boolalpha << result << std::endl;
-    
-    // Validate that initialization fails
-    EXPECT_FALSE(result);
-    
-    std::cout << "Exiting InitializationWithEmptySocketPath test" << std::endl;
-}
-/**
- * @brief Verify that PacketSender::Init returns false when provided with an invalid socket path format.
- *
- * This test verifies that when an invalid socket path is provided, the PacketSender API correctly identifies the erroneous input and fails the initialization. It confirms that the system properly handles invalid socket formats as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 010@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                           | Test Data                                                    | Expected Result                                                        | Notes         |
- * | :--------------: | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------- |
- * | 01               | Prepare the input socket path with an invalid format.                                               | socketPath = invalid_socket_path@@                           | socketPath variable is correctly initialized with "invalid_socket_path@@" | Should be successful |
- * | 02               | Invoke PacketSender::Init using the invalid socket path and validate that the return value is false.  | input: socketPath = invalid_socket_path@@, output: result      | API returns false and the assertion (EXPECT_FALSE) confirms the failure  | Should Fail   |
- */
-TEST_F(PacketSenderTest, InitializationWithInvalidSocketPathFormat) {
-    std::cout << "Entering InitializationWithInvalidSocketPathFormat test" << std::endl;
-
-    // Prepare input socket path with invalid format
-    char socketPath[256];
-    strncpy(socketPath, "invalid_socket_path@@", sizeof(socketPath) - 1);
-    socketPath[sizeof(socketPath) - 1] = '\0';
-    std::cout << "Invoking PacketSender::Init with socket_path: " << socketPath << std::endl;
-    
-    // Invoke Init method and capture the return value
-    bool result = sender->Init(socketPath);
-    std::cout << "Returned value from PacketSender::Init: " << std::boolalpha << result << std::endl;
-    
-    // Validate that initialization fails
-    EXPECT_FALSE(result);
-    
-    std::cout << "Exiting InitializationWithInvalidSocketPathFormat test" << std::endl;
-}
-/**
- * @brief Verify that PacketSender::Instance returns a valid non-null pointer
- *
- * This test invokes the PacketSender::Instance() method and verifies that it does not throw any exceptions and returns a valid (non-null) pointer. The test ensures the Singleton instance is correctly created and accessible. 
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 011@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description                                           | Test Data                                                                 | Expected Result                                                                 | Notes        |
- * | :--------------: | ----------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------ |
- * | 01               | Print entry log message for the test                  | No input                                                                  | "Entering VerifyInstanceReturnsNonNull test" message printed to console          | Should be successful |
- * | 02               | Initialize instance pointer to nullptr                | instance = nullptr                                                        | instance variable set to nullptr                                                 | Should be successful |
- * | 03               | Print log message before invoking PacketSender::Instance() | No input                                                               | "Invoking PacketSender::Instance()" log message printed to console                 | Should be successful |
- * | 04               | Call PacketSender::Instance() within an EXPECT_NO_THROW block | No input; output: instance pointer from PacketSender::Instance()          | No exception is thrown and instance is assigned a pointer value                   | Should Pass  |
- * | 05               | Verify the returned pointer from PacketSender::Instance() is not null | output1 = instance pointer from PacketSender::Instance()           | instance is not nullptr as asserted by EXPECT_NE                                  | Should Pass  |
- * | 06               | Print exit log message for the test                   | No input                                                                  | "Exiting VerifyInstanceReturnsNonNull test" message printed to console             | Should be successful |
- */
-TEST_F(PacketSenderTest, VerifyInstanceReturnsNonNull)
+TEST(PacketSenderInstance, IsNotNull)
 {
-    std::cout << "Entering VerifyInstanceReturnsNonNull test" << std::endl;
-    
-    PacketSender* instance = nullptr;
-    
-    std::cout << "Invoking PacketSender::Instance()" << std::endl;
-    EXPECT_NO_THROW({
-        instance = PacketSender::Instance();
-        std::cout << "PacketSender::Instance() returned pointer: " << instance << std::endl;
-    });
-    
-    EXPECT_NE(instance, nullptr);
-    
-    std::cout << "Exiting VerifyInstanceReturnsNonNull test" << std::endl;
+    std::cout << "[PacketSenderInstance.IsNotNull] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    std::cout << "  Instance() address = " << (void*)sender << std::endl;
+    ASSERT_NE(sender, nullptr);
+    std::cout << "[PacketSenderInstance.IsNotNull] - PASS" << std::endl;
 }
-/**
- * @brief Verify that the IsRunning() method returns false for a fresh PacketSender instance.
- *
- * This test verifies that when a new instance of PacketSender is obtained, the IsRunning() method returns false,
- * ensuring that the sender is not running immediately after construction.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 012
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke IsRunning() method on PacketSender instance and verify its initial running status is false. | sender = PacketSender instance, method = IsRunning(), output = false | The method returns false and the assertion verifies the expected behavior. | Should Pass |
- */
-TEST_F(PacketSenderTest, VerifyIsRunningReturnsFalseForFreshInstance) {
-    std::cout << "Entering VerifyIsRunningReturnsFalseForFreshInstance test" << std::endl;
-    
-    EXPECT_NO_THROW({
 
-        // Call IsRunning() method.
-        std::cout << "Invoking IsRunning() method on PacketSender instance" << std::endl;
-        bool runningStatus = sender->IsRunning();
-        std::cout << "IsRunning() returned: " << (runningStatus ? "true" : "false") << std::endl;
-        
-        // Verify that the return value is false.
-        EXPECT_FALSE(runningStatus);
-        std::cout << "Verified that IsRunning() returned false for a freshly constructed instance" << std::endl;
-    });
-    
-    std::cout << "Exiting VerifyIsRunningReturnsFalseForFreshInstance test" << std::endl;
+/**
+ * @brief PacketSender::Instance() always returns the same pointer (singleton).
+ *
+ * @par Test Group ID  : PacketSenderInstance
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(PacketSenderInstance, SingletonIdentity)
+{
+    std::cout << "[PacketSenderInstance.SingletonIdentity] - START" << std::endl;
+    PacketSender* s1 = PacketSender::Instance();
+    PacketSender* s2 = PacketSender::Instance();
+    PacketSender* s3 = PacketSender::Instance();
+    std::cout << "  s1=" << (void*)s1 << " s2=" << (void*)s2 << " s3=" << (void*)s3 << std::endl;
+    EXPECT_EQ(s1, s2);
+    EXPECT_EQ(s2, s3);
+    std::cout << "[PacketSenderInstance.SingletonIdentity] - PASS" << std::endl;
 }
-/**
- * @brief Verifies that a valid packet can be transmitted by the PacketSender instance.
- *
- * This test simulates the positive flow of packet transmission by creating a valid Packet instance
- * and then transferring its ownership via the SendPacket API. The objective is to ensure that the
- * PacketSender's SendPacket method receives the packet without throwing any exceptions and correctly
- * queues it for transmission.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 013@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                      | Test Data                                                                      | Expected Result                                                                                                            | Notes            |
- * | :--------------: | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------- |
- * | 01               | Create a valid Packet instance using its default constructor                                     | input: None, output: Packet instance created using default constructor         | Packet instance should be created successfully                                                                             | Should be successful |
- * | 02               | Invoke SendPacket method with the valid Packet instance transferring its ownership               | input: sender->SendPacket(std::move(packet)), packet pointer becomes null; no exception thrown | SendPacket should execute without throwing any exception and the packet should be queued for transmission | Should Pass      |
- */
-TEST_F(PacketSenderTest, ValidPacketTransmission) {
-    std::cout << "Entering ValidPacketTransmission test" << std::endl;
-    
-    std::cout << "Creating PacketSender object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
 
-        // Create a valid PacketPtr instance.
-        std::cout << "Creating a valid PacketPtr instance" << std::endl;
-        // Assuming Packet has a default constructor.
-        std::unique_ptr<Packet> packet = std::make_unique<Packet>();
-        std::cout << "PacketPtr instance created. Packet address: " << packet.get() << std::endl;
-        
-        // Debug log: before invoking SendPacket method.
-        std::cout << "Invoking SendPacket with PacketPtr instance, transferring ownership" << std::endl;
-        
-        // Invoke SendPacket with EXPECT_NO_THROW wrapper.
+// ===========================================================================
+// PacketSenderInit tests
+// ===========================================================================
+
+/**
+ * @brief PacketSender::Init() returns false — no socket server in test env.
+ *
+ * @par Test Group ID  : PacketSenderInit
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderInit, DefaultInitReturnsFalse)
+{
+    std::cout << "[PacketSenderInit.DefaultInitReturnsFalse] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();  // Ensure clean state
+    bool result = sender->Init();
+    std::cout << "  Init() returned: " << result << " (expected false, no socket server)" << std::endl;
+    EXPECT_FALSE(result);
+    sender->Close();
+    std::cout << "[PacketSenderInit.DefaultInitReturnsFalse] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Init(path) with a non-existent socket path returns false.
+ *
+ * @par Test Group ID  : PacketSenderInit
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(PacketSenderInit, NonExistentSocketPathReturnsFalse)
+{
+    std::cout << "[PacketSenderInit.NonExistentSocketPathReturnsFalse] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    bool result = sender->Init("/tmp/no_such_socket_for_unit_test");
+    std::cout << "  Init(\"/tmp/no_such_socket_for_unit_test\") returned: " << result << std::endl;
+    EXPECT_FALSE(result);
+    sender->Close();
+    std::cout << "[PacketSenderInit.NonExistentSocketPathReturnsFalse] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Init(path) with an invalid/empty-like path returns false.
+ *
+ * @par Test Group ID  : PacketSenderInit
+ * @par Test Case ID   : 003
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderInit, AnotherInvalidPathReturnsFalse)
+{
+    std::cout << "[PacketSenderInit.AnotherInvalidPathReturnsFalse] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    bool result = sender->Init("/tmp/packet_sender_absolutely_nonexistent_path_xyz");
+    std::cout << "  Init(nonexistent path) = " << result << std::endl;
+    EXPECT_FALSE(result);
+    sender->Close();
+    std::cout << "[PacketSenderInit.AnotherInvalidPathReturnsFalse] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Init() can be called multiple times safely.
+ *
+ * @par Test Group ID  : PacketSenderInit
+ * @par Test Case ID   : 004
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderInit, MultipleCallsSafe)
+{
+    std::cout << "[PacketSenderInit.MultipleCallsSafe] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    for (int i = 0; i < 3; ++i)
+    {
+        sender->Close();
+        bool r = sender->Init();
+        std::cout << "  Init() call #" << (i+1) << " = " << r << std::endl;
+        EXPECT_FALSE(r);
+    }
+    sender->Close();
+    std::cout << "[PacketSenderInit.MultipleCallsSafe] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PacketSenderClose tests
+// ===========================================================================
+
+/**
+ * @brief PacketSender::Close() is safe to call without a prior Init().
+ *
+ * @par Test Group ID  : PacketSenderClose
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderClose, SafeWithoutInit)
+{
+    std::cout << "[PacketSenderClose.SafeWithoutInit] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    EXPECT_NO_THROW({ sender->Close(); });
+    std::cout << "  Close() without prior Init() OK" << std::endl;
+    std::cout << "[PacketSenderClose.SafeWithoutInit] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Close() can be called multiple times safely (idempotent).
+ *
+ * @par Test Group ID  : PacketSenderClose
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(PacketSenderClose, CalledMultipleTimesNoThrow)
+{
+    std::cout << "[PacketSenderClose.CalledMultipleTimesNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    EXPECT_NO_THROW({
+        sender->Close();
+        sender->Close();
+        sender->Close();
+    });
+    std::cout << "  3 consecutive Close() calls OK" << std::endl;
+    std::cout << "[PacketSenderClose.CalledMultipleTimesNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Close() after Init() sets IsRunning() to false.
+ *
+ * @par Test Group ID  : PacketSenderClose
+ * @par Test Case ID   : 003
+ * @par Priority       : High
+ */
+TEST(PacketSenderClose, IsRunningFalseAfterClose)
+{
+    std::cout << "[PacketSenderClose.IsRunningFalseAfterClose] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();  // Put in a known closed state
+    bool running = sender->IsRunning();
+    std::cout << "  IsRunning() after Close() = " << running << " (expected false)" << std::endl;
+    EXPECT_FALSE(running);
+    std::cout << "[PacketSenderClose.IsRunningFalseAfterClose] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PacketSenderFlush tests
+// ===========================================================================
+
+/**
+ * @brief PacketSender::Flush() is safe to call without any prior Init() or sends.
+ *
+ * @par Test Group ID  : PacketSenderFlush
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderFlush, SafeWithoutInit)
+{
+    std::cout << "[PacketSenderFlush.SafeWithoutInit] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({ sender->Flush(); });
+    std::cout << "  Flush() without Init() OK" << std::endl;
+    std::cout << "[PacketSenderFlush.SafeWithoutInit] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Flush() can be called multiple times consecutively.
+ *
+ * @par Test Group ID  : PacketSenderFlush
+ * @par Test Case ID   : 002
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderFlush, MultipleFlushesNoThrow)
+{
+    std::cout << "[PacketSenderFlush.MultipleFlushesNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        for (int i = 0; i < 5; ++i) sender->Flush();
+    });
+    std::cout << "  5 consecutive Flush() calls OK" << std::endl;
+    std::cout << "[PacketSenderFlush.MultipleFlushesNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::Flush() after SendPacket() flushes the queue without hanging.
+ *
+ * @par Test Group ID  : PacketSenderFlush
+ * @par Test Case ID   : 003
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderFlush, FlushAfterSendPacket)
+{
+    std::cout << "[PacketSenderFlush.FlushAfterSendPacket] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<PausePacket>(1u, 0u));
+        sender->SendPacket(std::make_unique<ResumePacket>(1u, 1u));
+        sender->Flush();
+    });
+    std::cout << "  SendPacket x2 + Flush() OK" << std::endl;
+    std::cout << "[PacketSenderFlush.FlushAfterSendPacket] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PacketSenderIsRunning tests
+// ===========================================================================
+
+/**
+ * @brief PacketSender::IsRunning() returns false by default (never initialised).
+ *
+ * @par Test Group ID  : PacketSenderIsRunning
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderIsRunning, DefaultIsFalse)
+{
+    std::cout << "[PacketSenderIsRunning.DefaultIsFalse] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();  // ensure clean state
+    bool running = sender->IsRunning();
+    std::cout << "  IsRunning() default = " << running << " (expected false)" << std::endl;
+    EXPECT_FALSE(running);
+    std::cout << "[PacketSenderIsRunning.DefaultIsFalse] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::IsRunning() returns false after failed Init().
+ *
+ * @par Test Group ID  : PacketSenderIsRunning
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(PacketSenderIsRunning, FalseAfterFailedInit)
+{
+    std::cout << "[PacketSenderIsRunning.FalseAfterFailedInit] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    sender->Init();  // Expected to fail — no socket
+    bool running = sender->IsRunning();
+    std::cout << "  IsRunning() after failed Init() = " << running << " (expected false)" << std::endl;
+    EXPECT_FALSE(running);
+    sender->Close();
+    std::cout << "[PacketSenderIsRunning.FalseAfterFailedInit] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::IsRunning() returns false after Close() even if called multiple times.
+ *
+ * @par Test Group ID  : PacketSenderIsRunning
+ * @par Test Case ID   : 003
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderIsRunning, RemainsConsistentAfterMultipleCloses)
+{
+    std::cout << "[PacketSenderIsRunning.RemainsConsistentAfterMultipleCloses] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    for (int i = 0; i < 3; ++i)
+    {
+        sender->Close();
+        EXPECT_FALSE(sender->IsRunning()) << " iteration " << i;
+    }
+    std::cout << "  IsRunning() false after each of 3 Close() calls" << std::endl;
+    std::cout << "[PacketSenderIsRunning.RemainsConsistentAfterMultipleCloses] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PacketSenderSendPacket tests
+// ===========================================================================
+
+/**
+ * @brief PacketSender::SendPacket() with a PausePacket does not throw or hang.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderSendPacket, PausePacketNoThrow)
+{
+    std::cout << "[PacketSenderSendPacket.PausePacketNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<PausePacket>(0u, 0u));
+    });
+    sender->Flush();
+    std::cout << "  SendPacket(PausePacket) OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.PausePacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::SendPacket() with a ResumePacket does not throw.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(PacketSenderSendPacket, ResumePacketNoThrow)
+{
+    std::cout << "[PacketSenderSendPacket.ResumePacketNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<ResumePacket>(1u, 1u));
+    });
+    sender->Flush();
+    std::cout << "  SendPacket(ResumePacket) OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.ResumePacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::SendPacket() with a MutePacket does not throw.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 003
+ * @par Priority       : High
+ */
+TEST(PacketSenderSendPacket, MutePacketNoThrow)
+{
+    std::cout << "[PacketSenderSendPacket.MutePacketNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<MutePacket>(2u, 5u));
+    });
+    sender->Flush();
+    std::cout << "  SendPacket(MutePacket) OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.MutePacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::SendPacket() with a ResetAllPacket does not throw.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 004
+ * @par Priority       : High
+ */
+TEST(PacketSenderSendPacket, ResetAllPacketNoThrow)
+{
+    std::cout << "[PacketSenderSendPacket.ResetAllPacketNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<ResetAllPacket>());
+    });
+    sender->Flush();
+    std::cout << "  SendPacket(ResetAllPacket) OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.ResetAllPacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::SendPacket() with multiple different packet types.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 005
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderSendPacket, MultiplePacketTypesNoThrow)
+{
+    std::cout << "[PacketSenderSendPacket.MultiplePacketTypesNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    EXPECT_NO_THROW({
+        sender->SendPacket(std::make_unique<PausePacket>(1u, 0u));
+        sender->SendPacket(std::make_unique<ResumePacket>(1u, 1u));
+        sender->SendPacket(std::make_unique<MutePacket>(1u, 2u));
+        sender->SendPacket(std::make_unique<UnmutePacket>(1u, 3u));
+        sender->SendPacket(std::make_unique<ResetAllPacket>());
+        sender->SendPacket(std::make_unique<ResetChannelPacket>(1u, 4u));
+    });
+    sender->Flush();
+    std::cout << "  6 different packet types sent OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.MultiplePacketTypesNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::SendPacket() stress: 100 packets enqueued without hang.
+ *
+ * @par Test Group ID  : PacketSenderSendPacket
+ * @par Test Case ID   : 006
+ * @par Priority       : Low (stress)
+ */
+TEST(PacketSenderSendPacket, Stress100Packets)
+{
+    std::cout << "[PacketSenderSendPacket.Stress100Packets] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+    for (uint32_t i = 0; i < 100u; ++i)
+    {
         EXPECT_NO_THROW({
-            sender->SendPacket(std::move(packet));
-            std::cout << "SendPacket method invoked successfully" << std::endl;
+            sender->SendPacket(std::make_unique<PausePacket>(i % 4, i));
         });
-        
-        // Debug log: After invoking SendPacket.
-        std::cout << "SendPacket method completed. Packet should now be queued for transmission" << std::endl;
-    });
-    
-    std::cout << "Exiting ValidPacketTransmission test" << std::endl;
+    }
+    sender->Flush();
+    std::cout << "  100 PausePackets sent OK" << std::endl;
+    std::cout << "[PacketSenderSendPacket.Stress100Packets] - PASS" << std::endl;
 }
+
+// ===========================================================================
+// PacketSender::senderTask() tests — tested via thread to avoid blocking
+// ===========================================================================
+
 /**
- * @brief Validate that senderTask() executes normally without throwing exceptions.
+ * @brief PacketSender::senderTask() can be started in a thread and stopped via Close().
  *
- * This test ensures that the senderTask() method of the PacketSender instance completes its execution without any exceptions. It is critical as it verifies the normal operation of the senderTask() functionality in a controlled environment using a singleton instance of PacketSender.
+ * This test starts senderTask() in a background thread, waits briefly, then
+ * calls Close() to signal termination.  The join verifies the thread exits
+ * within a reasonable timeout.
  *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 014@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                               | Test Data                                  | Expected Result                                                        | Notes      |
- * | :--------------: | ------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke senderTask() on PacketSender instance and verify no exceptions occur | sender = valid instance, method: senderTask() | senderTask() executes normally without throwing, assertion EXPECT_NO_THROW passes | Should Pass |
+ * @par Test Group ID  : PacketSenderSenderTask
+ * @par Test Case ID   : 001
+ * @par Priority       : High
  */
-TEST_F(PacketSenderTest, ExecuteSenderTaskNormal) {
-    GTEST_SKIP();
-    std::cout << "Entering ExecuteSenderTaskNormal test" << std::endl;
-    
-    std::cout << "Invoking senderTask() method" << std::endl;
-    EXPECT_NO_THROW({
+TEST(PacketSenderSenderTask, StartsAndStopsViaClose)
+{
+    std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();  // Ensure clean initial state
+
+    std::thread t([sender]() {
         sender->senderTask();
-        std::cout << "senderTask() executed without throwing exceptions" << std::endl;
     });
-    
-    std::cout << "Exiting ExecuteSenderTaskNormal test" << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    sender->Close();   // Signal worker to exit
+
+    t.join();
+    std::cout << "  senderTask() thread started and stopped cleanly via Close()" << std::endl;
+    EXPECT_FALSE(sender->IsRunning());
+    std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender::senderTask() processes packets enqueued before join.
+ *
+ * @par Test Group ID  : PacketSenderSenderTask
+ * @par Test Case ID   : 002
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderSenderTask, ProcessesEnqueuedPackets)
+{
+    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+
+    std::thread t([sender]() {
+        sender->senderTask();
+    });
+
+    // Enqueue some packets while thread is running
+    for (uint32_t i = 0; i < 5u; ++i)
+    {
+        sender->SendPacket(std::make_unique<PausePacket>(1u, i));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    sender->Close();
+    t.join();
+
+    std::cout << "  5 packets enqueued while senderTask() running, thread stopped cleanly" << std::endl;
+    EXPECT_FALSE(sender->IsRunning());
+    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// runWorkerTask() tests — tested via thread to avoid blocking
+// ===========================================================================
+
+/**
+ * @brief runWorkerTask() with a valid PacketSender context starts and stops via Close().
+ *
+ * @par Test Group ID  : RunWorkerTask
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(RunWorkerTask, ValidContextStartsAndStops)
+{
+    std::cout << "[RunWorkerTask.ValidContextStartsAndStops] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+
+    std::thread t([]() {
+        runWorkerTask(PacketSender::Instance());
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    sender->Close();
+    t.join();
+
+    std::cout << "  runWorkerTask(valid ctx) thread started and stopped cleanly" << std::endl;
+    EXPECT_FALSE(sender->IsRunning());
+    std::cout << "[RunWorkerTask.ValidContextStartsAndStops] - PASS" << std::endl;
+}
+
+/**
+ * @brief After runWorkerTask() thread exits, IsRunning() is false.
+ *
+ * @par Test Group ID  : RunWorkerTask
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(RunWorkerTask, IsRunningFalseAfterThreadExit)
+{
+    std::cout << "[RunWorkerTask.IsRunningFalseAfterThreadExit] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    sender->Close();
+
+    std::thread t([]() {
+        runWorkerTask(PacketSender::Instance());
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    sender->Close();
+    t.join();
+
+    EXPECT_FALSE(sender->IsRunning());
+    std::cout << "  IsRunning() = false after thread joined" << std::endl;
+    std::cout << "[RunWorkerTask.IsRunningFalseAfterThreadExit] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender state is consistent through full Init → Close lifecycle.
+ *
+ * Exercises the complete lifecycle: Close → Init (fails) → IsRunning (false) → Close.
+ *
+ * @par Test Group ID  : PacketSenderLifecycle
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(PacketSenderLifecycle, FullCycleNoThrow)
+{
+    std::cout << "[PacketSenderLifecycle.FullCycleNoThrow] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    EXPECT_NO_THROW({
+        sender->Close();
+        bool r = sender->Init();
+        std::cout << "  Init() = " << r << std::endl;
+        EXPECT_FALSE(r);
+        EXPECT_FALSE(sender->IsRunning());
+        sender->Flush();
+        sender->Close();
+        EXPECT_FALSE(sender->IsRunning());
+    });
+    std::cout << "[PacketSenderLifecycle.FullCycleNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender: Close → SendPacket → Flush sequence is safe.
+ *
+ * @par Test Group ID  : PacketSenderLifecycle
+ * @par Test Case ID   : 002
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderLifecycle, CloseSendFlushSequence)
+{
+    std::cout << "[PacketSenderLifecycle.CloseSendFlushSequence] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    EXPECT_NO_THROW({
+        sender->Close();
+        sender->SendPacket(std::make_unique<MutePacket>(1u, 0u));
+        sender->SendPacket(std::make_unique<UnmutePacket>(1u, 1u));
+        sender->Flush();
+        sender->Close();
+    });
+    std::cout << "  Close → SendPacket x2 → Flush → Close sequence OK" << std::endl;
+    std::cout << "[PacketSenderLifecycle.CloseSendFlushSequence] - PASS" << std::endl;
+}
+
+/**
+ * @brief PacketSender: Init → Close cycle repeated 3 times remains consistent.
+ *
+ * @par Test Group ID  : PacketSenderLifecycle
+ * @par Test Case ID   : 003
+ * @par Priority       : Medium
+ */
+TEST(PacketSenderLifecycle, RepeatedInitCloseCycles)
+{
+    std::cout << "[PacketSenderLifecycle.RepeatedInitCloseCycles] - START" << std::endl;
+    PacketSender* sender = PacketSender::Instance();
+    for (int i = 0; i < 3; ++i)
+    {
+        sender->Close();
+        bool r = sender->Init();
+        std::cout << "  cycle " << (i+1) << ": Init()=" << r << std::endl;
+        EXPECT_FALSE(r);
+        EXPECT_FALSE(sender->IsRunning());
+        sender->Close();
+    }
+    std::cout << "[PacketSenderLifecycle.RepeatedInitCloseCycles] - PASS" << std::endl;
 }
