@@ -190,10 +190,10 @@ static void gst_cdmidecryptor_class_init(
 	base_transform_class->transform_ip = GST_DEBUG_FUNCPTR(
 			gst_cdmidecryptor_transform_ip);
 
-	if (socInterface)
-	{
-		socInterface->ConfigureAcceptCaps(base_transform_class, gst_cdmidecryptor_accept_caps);
-	}
+	// if (socInterface)
+	// {
+	// 	socInterface->ConfigureAcceptCaps(base_transform_class, gst_cdmidecryptor_accept_caps);
+	// }
 
 	base_transform_class->transform_ip_on_passthrough = FALSE;
 
@@ -439,11 +439,11 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 
 		gst_cdmicapsappendifnotduplicate(transformedCaps, out);
 
-		if (socInterface && socInterface->IsTransformCapsRequired())
-		{
-			if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps) && OCDMGstTransformCaps)
-				OCDMGstTransformCaps(&transformedCaps);
-		}
+		// if (socInterface && socInterface->IsTransformCapsRequired())
+		// {
+		// 	if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps) && OCDMGstTransformCaps)
+		// 		OCDMGstTransformCaps(&transformedCaps);
+		// }
 
 	}
 
@@ -536,8 +536,8 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	{
 		GST_DEBUG_OBJECT(cdmidecryptor,
 				"Failed to get GstProtection metadata from buffer %p, could be clear buffer",buffer);
-		if (socInterface && socInterface->IsDecryptRequired())
-		{
+		// if (socInterface && socInterface->IsDecryptRequired())
+		// {
 			// call decrypt even for clear samples in order to copy it to a secure buffer. If secure buffers are not supported
 			// decrypt() call will return without doing anything
 			/* DELIA-70726 fix: guard against the DrmSession being concurrently torn down
@@ -554,7 +554,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 				result = GST_FLOW_NOT_SUPPORTED;
 				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps is **** NULL **** (or session is being destroyed), returning GST_FLOW_NOT_SUPPORTED");
 			}
-		}
+		// }
 		goto free_resources;
 	}
 
