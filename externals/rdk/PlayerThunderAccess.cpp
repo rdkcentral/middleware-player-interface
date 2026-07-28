@@ -285,7 +285,7 @@ bool PlayerThunderAccess::InvokeJSONRPC(std::string method, const JsonObject &pa
         ret = false;
     }
 
-    result = result_internal;
+    result = std::move(result_internal);
     return ret;
 }
 
@@ -295,7 +295,7 @@ bool PlayerThunderAccess::SetVideoRectangle(int x, int y, int w, int h, std::str
     switch(shim)
     {
         case PlayerThunderAccessShim::VIDEOIN_SHIM:
-            bRet = SetVideoRectangle_VIDEOIN(x, y, w, h, videoInputType);
+            bRet = SetVideoRectangle_VIDEOIN(x, y, w, h, std::move(videoInputType));
             break;
         case PlayerThunderAccessShim::OTA_SHIM:
             bRet = SetVideoRectangle_OTA(x, y, w, h);
@@ -383,10 +383,10 @@ bool PlayerThunderAccess::GetScreenResolution(int & screenWidth, int & screenHei
 void PlayerThunderAccess::RegisterEvent_VIDEOIN(string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
 {
 	bool bSubscribed;
-	bSubscribed = SubscribeEvent(_T(eventName), functionHandler);
+	bSubscribed = SubscribeEvent(_T(eventName), std::move(functionHandler));
 	if(bSubscribed)
 	{
-		mRegisteredEvents.push_back(eventName);
+		mRegisteredEvents.push_back(std::move(eventName));
 	}
 }
 
@@ -396,16 +396,16 @@ void PlayerThunderAccess::RegisterEvent_VIDEOIN(string eventName, std::function<
 void PlayerThunderAccess::RegisterAllEventsVideoin(std::function<void(std::string)> OnSignalChangedCb, std::function<void(std::string)> OnInputStatusChangedCb)
 {
 
-    mOnSignalChangedCb = OnSignalChangedCb;
-    mOnInputStatusChangedCb = OnInputStatusChangedCb;
+    mOnSignalChangedCb = std::move(OnSignalChangedCb);
+    mOnInputStatusChangedCb = std::move(OnInputStatusChangedCb);
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> inputStatusChangedMethod = std::bind(&PlayerThunderAccess::OnInputStatusChanged, this, std::placeholders::_1);
 
-	RegisterEvent_VIDEOIN("onInputStatusChanged",inputStatusChangedMethod);
+	RegisterEvent_VIDEOIN("onInputStatusChanged",std::move(inputStatusChangedMethod));
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> signalChangedMethod = std::bind(&PlayerThunderAccess::OnSignalChanged, this, std::placeholders::_1);
 
-	RegisterEvent_VIDEOIN("onSignalChanged",signalChangedMethod);
+	RegisterEvent_VIDEOIN("onSignalChanged",std::move(signalChangedMethod));
 }
 
 /**
@@ -430,7 +430,7 @@ void PlayerThunderAccess::OnInputStatusChanged(const JsonObject& parameters)
 
     std::string strStatus = parameters["status"].String();
 
-    mOnInputStatusChangedCb(strStatus);
+    mOnInputStatusChangedCb(std::move(strStatus));
 }
 
 /** 
@@ -443,7 +443,7 @@ void PlayerThunderAccess::OnSignalChanged (const JsonObject& parameters)
     MW_LOG_WARN("%s",message.c_str());
     std::string strStatus = parameters["signalStatus"].String();
 
-    mOnSignalChangedCb(strStatus);
+    mOnSignalChangedCb(std::move(strStatus));
 }
 
 /**
@@ -482,9 +482,9 @@ void PlayerThunderAccess::StopHelperVideoin(std::string videoInputType)
 
 void PlayerThunderAccess::RegisterEventOnVideoStreamInfoUpdateHdmiin(std::function<void(PlayerVideoStreamInfoData)> videoInfoUpdatedMethodCb)
 {
-    mVideoInfoUpdatedMethodCb = videoInfoUpdatedMethodCb;
+    mVideoInfoUpdatedMethodCb = std::move(videoInfoUpdatedMethodCb);
     std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> videoInfoUpdatedMethod = std::bind(&PlayerThunderAccess::OnVideoStreamInfoUpdate, this, std::placeholders::_1);
-    RegisterEvent_VIDEOIN("videoStreamInfoUpdate", videoInfoUpdatedMethod);
+    RegisterEvent_VIDEOIN("videoStreamInfoUpdate", std::move(videoInfoUpdatedMethod));
 }
 
 /**
@@ -508,9 +508,9 @@ void PlayerThunderAccess::OnVideoStreamInfoUpdate(const JsonObject& parameters)
 
 void PlayerThunderAccess::RegisterOnPlayerStatusOta(std::function<void(PlayerStatusData)> onPlayerStatusCb)
 {
-    mOnPlayerStatusCb = onPlayerStatusCb;
+    mOnPlayerStatusCb = std::move(onPlayerStatusCb);
     std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> actualMethod = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_OTA, this, std::placeholders::_1);
-    mEventSubscribed = SubscribeEvent(_T("onPlayerStatus"), actualMethod);
+    mEventSubscribed = SubscribeEvent(_T("onPlayerStatus"), std::move(actualMethod));
 }
 
 void PlayerThunderAccess::onPlayerStatusHandler_OTA(const JsonObject& parameters)
@@ -551,7 +551,7 @@ void PlayerThunderAccess::onPlayerStatusHandler_OTA(const JsonObject& parameters
     data.aud_isAtmos =  audioInfoObj["isAtmos"].Boolean();
     data.aud_bitrate = audioInfoObj["bitrate"].Number();
 
-    mOnPlayerStatusCb(data);
+    mOnPlayerStatusCb(std::move(data));
 
 }
 
@@ -583,7 +583,7 @@ void PlayerThunderAccess::StartOta(std::string url, std::string waylandDisplay, 
 
     JsonObject result;
 
-    SetPreferredAudioLanguages_OTA(preferredLanguagesString, atsc_preferredLanguagesString, preferredRenditionString, atsc_preferredRenditionString);
+    SetPreferredAudioLanguages_OTA(std::move(preferredLanguagesString), std::move(atsc_preferredLanguagesString), std::move(preferredRenditionString), std::move(atsc_preferredRenditionString));
 
     JsonObject createParam;
     createParam["id"] = APP_ID;
@@ -758,7 +758,7 @@ std::string PlayerThunderAccess::GetAudioTracksOta(std::vector<PlayerAudioData> 
 
         PlayerAudioData temp(audioData["language"].String(), audioData["contentType"].String(), audioData["name"].String(), audioData["type"].String(), (int)audioData["pk"].Number(), audioData["mixType"].String());
 
-        audData.push_back(temp);
+        audData.push_back(std::move(temp));
 
     }
     return aTrackIdx;
@@ -836,7 +836,7 @@ bool PlayerThunderAccess::GetTextTracksOta(std::vector<PlayerTextData> txtData)
 
         PlayerTextData temp(textData["type"].String(), textData["language"].String(), (int)textData["ccServiceNumber"].Number(), textData["ccType"].String(), textData["name"].String(), (int)textData["pk"].Number());
 
-        txtData.push_back(temp);
+        txtData.push_back(std::move(temp));
 
         // txtTracks.push_back(TextTrackInfo(index, languageCode, true, empty, textData["name"].String(), serviceNo, empty, (int)textData["pk"].Number()));
         
@@ -917,7 +917,7 @@ void PlayerThunderAccess::onPlayerStatusHandler_RMF(const JsonObject& parameters
 
 	std::string title = parameters["title"].String();
 
-	mOnPlayerStatusHandlerCb(title);
+	mOnPlayerStatusHandlerCb(std::move(title));
 }
 
 void PlayerThunderAccess::onPlayerErrorHandler_RMF(const JsonObject& parameters) {
@@ -927,25 +927,25 @@ void PlayerThunderAccess::onPlayerErrorHandler_RMF(const JsonObject& parameters)
 	MW_LOG_WARN( "[RMF_SHIM]Received error : message : %s ",  message.c_str());
 
 	std::string error_message = parameters["source"].String() + ": " + parameters["title"].String() + "- " + parameters["message"].String();
-	mOnPlayerErrorHandlerCb(error_message);
+	mOnPlayerErrorHandlerCb(std::move(error_message));
 }
 
 bool PlayerThunderAccess::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
     bool bRet = true;
-    mOnPlayerStatusHandlerCb = onPlayerStatusHandlerCb;
-    mOnPlayerErrorHandlerCb = onPlayerErrorHandlerCb;
+    mOnPlayerStatusHandlerCb = std::move(onPlayerStatusHandlerCb);
+    mOnPlayerErrorHandlerCb = std::move(onPlayerErrorHandlerCb);
 
     JsonObject result;
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> eventHandler = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_RMF, this, std::placeholders::_1);
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> errorHandler = std::bind(&PlayerThunderAccess::onPlayerErrorHandler_RMF, this, std::placeholders::_1);
 
-	if(true != SubscribeEvent(_T("onStatusChanged"), eventHandler))
+	if(true != SubscribeEvent(_T("onStatusChanged"), std::move(eventHandler)))
 	{
 		MW_LOG_ERR("Failed to register for onStatusChanged notification from RMF plugin");
 	}
-	if(true != SubscribeEvent(_T("onError"), errorHandler))
+	if(true != SubscribeEvent(_T("onError"), std::move(errorHandler)))
 	{
 		MW_LOG_ERR("Failed to register for onError notification from RMF plugin");
 	}

@@ -1000,7 +1000,7 @@ TEST(PlayerIsoBmffBufferTests, EdgeCase_NestedContainers) {
         'm', 'o', 'o', 'v',
         
         // mvhd box inside moov
-        0x00, 0x00, 0x00, 0x64,  // mvhd size = 100
+        0x00, 0x00, 0x00, 0x6C,  // mvhd size = 108
         'm', 'v', 'h', 'd',
         0x00, 0x00, 0x00, 0x00,  // version + flags
         0x00, 0x00, 0x00, 0x00,  // creation_time
@@ -1054,7 +1054,7 @@ TEST(PlayerIsoBmffBufferTests, EdgeCase_NestedContainers) {
     
     // Test 4: Verify nested mvhd box header in buffer
     EXPECT_EQ(retrievedBuffer[8], 0x00);
-    EXPECT_EQ(retrievedBuffer[11], 0x64);  // mvhd size = 100
+    EXPECT_EQ(retrievedBuffer[11], 0x6C);  // mvhd size = 108
     EXPECT_EQ(retrievedBuffer[12], 'm');
     EXPECT_EQ(retrievedBuffer[13], 'v');
     EXPECT_EQ(retrievedBuffer[14], 'h');

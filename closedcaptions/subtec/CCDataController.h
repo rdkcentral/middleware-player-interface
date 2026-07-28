@@ -62,7 +62,7 @@ public:
     void sendPause();
     void sendResume();
     void sendResetChannelPacket();
-    void sendCCSetAttribute(gsw_CcAttributes * attrib, short type, gsw_CcType ccType);
+    void sendCCSetAttribute(gsw_CcAttributes * attrib, uint32_t type, gsw_CcType ccType);
 
     void ccSetDigitalChannel(unsigned int channel);
     void ccSetAnalogChannel(unsigned int channel);
