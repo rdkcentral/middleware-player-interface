@@ -38,24 +38,24 @@ Remove the entire folder externals/rdk/IARM
 #include <libIARM.h>
 #include <libIBus.h>
 #include <iarmUtil.h>
+#include <thread>
 #include "libIBusDaemon.h"
 #include <hostIf_tr69ReqHandler.h>
 #include "tr181api.h"
 #include "_base64.h"
-#include <thread>
 #ifdef USE_PREINIT_DECODING
 #include "power_controller.h"
-
-#include <system_error> // for std::system_error
+#include <system_error> // for std::system_error 
 #include <exception> // for std::exception base class
 #endif
+
 #include "PlayerLogManager.h"
 
 #include "PlayerExternalsRdkInterface.h"
 
 #include "PlayerExternalUtils.h"
 
-constexpr int POWER_CONTROLLER_CONNECT_MAX_RETRIES = 50; // ~15 seconds total
+constexpr int POWER_CONTROLLER_CONNECT_MAX_RETRIES = 50; // ~15 seconds total 
 constexpr useconds_t POWER_CONTROLLER_RETRY_SLEEP_MICROSECONDS = 300000; // 300 ms
 
 /**
@@ -111,8 +111,8 @@ DeviceIARMInterface::DeviceIARMInterface()
 {
 
     DeviceIARMInterface::IARMInit();
-
-
+    
+    
 }
 
 DeviceIARMInterface::~DeviceIARMInterface()
@@ -138,36 +138,36 @@ void DeviceIARMInterface::Initialize()
         s_pDeviceIARMInterface->RegisterDsMgrEventHandler();
         s_pDeviceIARMInterface->RegisterNtwMgrEventHandler();
     }
-
+    
 }
 
 #ifdef USE_PREINIT_DECODING
 void triggerFakeTune()
 {
-	try {
-        std::thread([]() {
+	try { 
+        std::thread([]() { 
             try {
                 std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
                 if(pInstance->GetDoFakeTuneCallBack())
                 {
-                    MW_LOG_INFO("Calling Fake tune callback");
+                    MW_LOG_INFO("Calling Fake tune callback"); 
                     pInstance->GetDoFakeTuneCallBack()();
                 }
                 else
                 {
-                    MW_LOG_WARN("Fake tune callback not set");
+                    MW_LOG_WARN("Fake tune callback not set"); 
                 }
-
-                MW_LOG_INFO("Fake tune thread completed successfully");
-            }
-            catch (const std::exception& e) {
-                MW_LOG_ERR("Fake tune thread failed: %s", e.what());
-            }
-        }).detach();
-        MW_LOG_INFO("Fake tune thread created and detached");
-    }
-    catch (const std::system_error& e) {
-        MW_LOG_ERR("Failed to create fake tune thread: %s", e.what());
+                
+                MW_LOG_INFO("Fake tune thread completed successfully"); 
+            } 
+            catch (const std::exception& e) { 
+                MW_LOG_ERR("Fake tune thread failed: %s", e.what()); 
+            } 
+        }).detach(); 
+        MW_LOG_INFO("Fake tune thread created and detached"); 
+    } 
+    catch (const std::system_error& e) { 
+        MW_LOG_ERR("Failed to create fake tune thread: %s", e.what()); 
     }
 }
 
@@ -195,7 +195,7 @@ void getPwrContInterface()
             retries++;
             // Do nothing
         }
-
+        
         if (retries >= POWER_CONTROLLER_CONNECT_MAX_RETRIES) {
             MW_LOG_ERR("Exceeded max retries (%d) for Connect", POWER_CONTROLLER_CONNECT_MAX_RETRIES);
             return;
@@ -212,7 +212,7 @@ void getPwrContInterface()
 void initPowerController()
 {
     MW_LOG_INFO("Enter ... initPowerController()");
-    // Get powercontroller thunder client interface in separate
+    // Get powercontroller thunder client interface in separate 
     try{
         std::thread pwrThread(getPwrContInterface);
         pwrThread.detach();
@@ -245,8 +245,8 @@ static void IARM_PowerChangeHandler (const PowerController_PowerState_t currentS
 {
 	MW_LOG_INFO("Entering IARM_PowerChangeHandler:State Changed currentState: %d, newState: %d",
 			currentState, newState);
-
-
+	
+	
 	std::shared_ptr<PlayerExternalsRdkInterface> pInstance =
 		PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 	if (newState != POWER_STATE_ON) {
@@ -258,7 +258,7 @@ static void IARM_PowerChangeHandler (const PowerController_PowerState_t currentS
 	}
 
 	bool isOnOrStandby = (newState == POWER_STATE_STANDBY || newState == POWER_STATE_ON);
-	if((currentState == POWER_STATE_STANDBY_DEEP_SLEEP && isOnOrStandby) ||
+	if((currentState == POWER_STATE_STANDBY_DEEP_SLEEP && isOnOrStandby) || 
         (prevState == POWER_STATE_STANDBY_DEEP_SLEEP && currentState == POWER_STATE_STANDBY_LIGHT_SLEEP && isOnOrStandby))
 	{
 		MW_LOG_INFO(" DEEPSLEEP : calling triggerFakeTune  \n");
@@ -394,7 +394,7 @@ static void getActiveInterfaceEventHandler (const char *owner, IARM_EventId_t ev
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
 	static char previousInterface[20] = {'\0'};
-
+	
 
 	if (strcmp (owner, "NET_SRV_MGR") != 0)
 		return;
@@ -416,8 +416,8 @@ static void getActiveInterfaceEventHandler (const char *owner, IARM_EventId_t ev
 	{
 		pInstance->SetActiveInterface(false);
 	}
-
-
+    
+	
 }
 
 #ifndef USE_DS_EVENT_SUPPORTED
@@ -428,7 +428,7 @@ static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *da
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
-
+    
     if (pInstance->GetPowerEvent())
     {
         MW_LOG_WARN(" Skipping HDMI event processing during power transition\n");
