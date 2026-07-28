@@ -247,7 +247,7 @@ public:
 				.Times(testing::AnyNumber())
 				.WillRepeatedly(ReturnArg<0>());
 		}
-		EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(pipeline), _))
+		EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(pipeline), NotNull()))
 			.WillRepeatedly(Return(TRUE));
 
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
