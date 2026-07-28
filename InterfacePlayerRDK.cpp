@@ -3340,7 +3340,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
 			bool isVideoMaster = true;
-			if (socInterface)
+			if (socInterface && gstPrivateContext->video_sink)
 			{
 				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
 			}
@@ -3370,13 +3370,19 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 					{
 						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d]", mediaType);
 					}
-					gst_sample_unref(sample);
+					if(sample)
+					{
+					    gst_sample_unref(sample);
+					}
 				}
 				else
 				{
 					MW_LOG_ERR("Failed to create sample for mediaType[%d]", mediaType);
 				}
-				gst_caps_unref(currentCaps);
+				if(currentCaps)
+				{
+				     gst_caps_unref(currentCaps);
+				}
 			}
 			else
 			{

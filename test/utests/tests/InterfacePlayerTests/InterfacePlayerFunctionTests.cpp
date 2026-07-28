@@ -1978,15 +1978,16 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};
-	GstSample fakeSample = {};
+//	GstSample fakeSample = {};
+	GstSample* fakeSample = reinterpret_cast<GstSample*>(0x1234);
 
 	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
 		.Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
 		.WillOnce(Return(&fakeCaps));
 	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
-		.WillOnce(Return(&fakeSample));
-	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(reinterpret_cast<GstSample*>(0x1234)));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, reinterpret_cast<GstSample*>(0x1234)))
 		.WillOnce(Return(GST_FLOW_OK));
 	// gst_sample_unref and gst_caps_unref expand to gst_mini_object_unref
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
@@ -2004,15 +2005,16 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};
-	GstSample fakeSample = {};
+	//GstSample fakeSample = {};
+	GstSample* fakeSample = reinterpret_cast<GstSample*>(0x1234);
 
 	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
 		.Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
 		.WillOnce(Return(&fakeCaps));
 	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
-		.WillOnce(Return(&fakeSample));
-	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(fakeSample));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, fakeSample))
 		.WillOnce(Return(GST_FLOW_ERROR));
 	// gst_sample_unref and gst_caps_unref still called even on push failure
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
