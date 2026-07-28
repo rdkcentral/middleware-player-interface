@@ -1,4 +1,3 @@
-
 /*
  * If not stated otherwise in this file or this component's LICENSE file the
  * following copyright and licenses apply:
@@ -17,1079 +16,878 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * @file TtmlPacketTests.cpp
+ * @brief Comprehensive unit tests for TTML packet types and TtmlChannel.
+ *
+ * Covers:
+ *   - TtmlSelectionPacket  : constructor, buffer layout (24 bytes), type, counter, channelId, width, height
+ *   - TtmlDataPacket       : constructor, variable-length buffer, type, channelId, dataOffset, payload
+ *   - TtmlTimestampPacket  : constructor, buffer layout (24 bytes), type, channelId, timestamp
+ *   - TtmlChannel          : SendSelectionPacket, SendDataPacket, SendTimestampPacket, multiple sends
+ */
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <stdio.h>
+#include <cstdint>
+#include <limits>
+#include <vector>
+#include <string>
 #include "TtmlPacket.hpp"
 
+// ---------------------------------------------------------------------------
+// Helper utilities
+// ---------------------------------------------------------------------------
 
-// Test Case: SendDataPacket with valid non-empty TTML data using default time offset
+/** @brief Decode a 4-byte little-endian word from a byte buffer at the given offset. */
+static uint32_t readLE32(const std::vector<uint8_t>& buf, size_t offset)
+{
+    return static_cast<uint32_t>(buf[offset])
+         | (static_cast<uint32_t>(buf[offset + 1]) << 8)
+         | (static_cast<uint32_t>(buf[offset + 2]) << 16)
+         | (static_cast<uint32_t>(buf[offset + 3]) << 24);
+}
+
+/** @brief Decode an 8-byte little-endian doubleword from a byte buffer at the given offset. */
+static uint64_t readLE64(const std::vector<uint8_t>& buf, size_t offset)
+{
+    return static_cast<uint64_t>(readLE32(buf, offset))
+         | (static_cast<uint64_t>(readLE32(buf, offset + 4)) << 32);
+}
+
+// PacketType numeric constants mirroring the PacketType enum in SubtecPacket.hpp
+static constexpr uint32_t TYPE_TTML_SELECTION  = 7u;
+static constexpr uint32_t TYPE_TTML_DATA       = 8u;
+static constexpr uint32_t TYPE_TTML_TIMESTAMP  = 9u;
+
+// ===========================================================================
+// TtmlSelectionPacket tests
+// ===========================================================================
+
 /**
- * @brief Validate that SendDataPacket accepts non-empty TTML data with a default time offset
+ * @brief TtmlSelectionPacket constructor does not throw.
  *
- * This test verifies that the SendDataPacket API in the TtmlChannel class accepts a non-empty TTML data packet and a default time offset of 0 without throwing any exceptions. The objective is to ensure that the function properly handles typical valid input parameters.
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 001
+ * @par Priority       : High
  *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 001
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                   | Test Data                                                       | Expected Result                                                | Notes        |
- * | :--------------: | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------- | ------------ |
- * | 01               | Initialize TtmlChannel and test data, then invoke the SendDataPacket API with default time offset | data = {0x01, 0x02, 0x03}, time_offset_ms = 0                     | No exception is thrown and API call completes successfully     | Should Pass  |
+ * | Step | Description                          | Expected                   |
+ * |:----:|--------------------------------------|---------------------------|
+ * |  01  | Construct with typical values        | No exception thrown        |
  */
-TEST(TtmlChannel, SendDataPacket_DefaultTimeOffset) {
-    std::cout << "Entering SendDataPacket_DefaultTimeOffset test" << std::endl;
+TEST(TtmlSelectionPacket, ConstructionNoThrow)
+{
+    std::cout << "[TtmlSelectionPacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ TtmlSelectionPacket pkt(1u, 0u, 1920u, 1080u); });
+    std::cout << "[TtmlSelectionPacket.ConstructionNoThrow] - PASS" << std::endl;
+}
 
-    // Create object of TtmlChannel using default constructor
-    TtmlChannel channel;
+/**
+ * @brief TtmlSelectionPacket buffer is exactly 24 bytes.
+ *
+ * Layout: type(4) + counter(4) + size(4) + channelId(4) + width(4) + height(4) = 24
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(TtmlSelectionPacket, BufferSizeIs24)
+{
+    std::cout << "[TtmlSelectionPacket.BufferSizeIs24] - START" << std::endl;
+    TtmlSelectionPacket pkt(1u, 0u, 1920u, 1080u);
+    size_t sz = pkt.getBytes().size();
+    std::cout << "  Buffer size = " << sz << " (expected 24)" << std::endl;
+    EXPECT_EQ(sz, 24u);
+    std::cout << "[TtmlSelectionPacket.BufferSizeIs24] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket reports the correct packet type.
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 003
+ * @par Priority       : High
+ */
+TEST(TtmlSelectionPacket, TypeIsTtmlSelection)
+{
+    std::cout << "[TtmlSelectionPacket.TypeIsTtmlSelection] - START" << std::endl;
+    TtmlSelectionPacket pkt(1u, 0u, 640u, 480u);
+    uint32_t t = pkt.getType();
+    std::cout << "  getType() = " << t << " (expected " << TYPE_TTML_SELECTION << ")" << std::endl;
+    EXPECT_EQ(t, TYPE_TTML_SELECTION);
+    std::cout << "[TtmlSelectionPacket.TypeIsTtmlSelection] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket getTypeString returns "TTML_SELECTION".
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 004
+ * @par Priority       : Medium
+ */
+TEST(TtmlSelectionPacket, TypeStringIsTtmlSelection)
+{
+    std::cout << "[TtmlSelectionPacket.TypeStringIsTtmlSelection] - START" << std::endl;
+    TtmlSelectionPacket pkt(1u, 0u, 640u, 480u);
+    std::string ts = pkt.getTypeString(pkt.getType());
+    std::cout << "  getTypeString() = \"" << ts << "\"" << std::endl;
+    EXPECT_EQ(ts, "TTML_SELECTION");
+    std::cout << "[TtmlSelectionPacket.TypeStringIsTtmlSelection] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket stores the counter value correctly.
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 005
+ * @par Priority       : High
+ */
+TEST(TtmlSelectionPacket, CounterStoredCorrectly)
+{
+    std::cout << "[TtmlSelectionPacket.CounterStoredCorrectly] - START" << std::endl;
+    const uint32_t counter = 77u;
+    TtmlSelectionPacket pkt(1u, counter, 800u, 600u);
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected " << counter << ")" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), counter);
+    // Also verify counter field at bytes [4..7]
+    uint32_t inBuf = readLE32(pkt.getBytes(), 4);
+    std::cout << "  buf[4..7] = " << inBuf << " (expected " << counter << ")" << std::endl;
+    EXPECT_EQ(inBuf, counter);
+    std::cout << "[TtmlSelectionPacket.CounterStoredCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket encodes channelId at bytes [12..15].
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 006
+ * @par Priority       : High
+ */
+TEST(TtmlSelectionPacket, ChannelIdEncodedCorrectly)
+{
+    std::cout << "[TtmlSelectionPacket.ChannelIdEncodedCorrectly] - START" << std::endl;
+    const uint32_t channelId = 42u;
+    TtmlSelectionPacket pkt(channelId, 0u, 800u, 600u);
+    uint32_t decoded = readLE32(pkt.getBytes(), 12);
+    std::cout << "  channelId=" << channelId << ", buf[12..15]=" << decoded << std::endl;
+    EXPECT_EQ(decoded, channelId);
+    std::cout << "[TtmlSelectionPacket.ChannelIdEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket encodes width at bytes [16..19] and height at [20..23].
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 007
+ * @par Priority       : High
+ */
+TEST(TtmlSelectionPacket, WidthAndHeightEncoded)
+{
+    std::cout << "[TtmlSelectionPacket.WidthAndHeightEncoded] - START" << std::endl;
+    const uint32_t W = 1920u, H = 1080u;
+    TtmlSelectionPacket pkt(1u, 0u, W, H);
+    uint32_t w = readLE32(pkt.getBytes(), 16);
+    uint32_t h = readLE32(pkt.getBytes(), 20);
+    std::cout << "  width=" << w << " (expected " << W << "), height=" << h << " (expected " << H << ")" << std::endl;
+    EXPECT_EQ(w, W);
+    EXPECT_EQ(h, H);
+    std::cout << "[TtmlSelectionPacket.WidthAndHeightEncoded] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket size field at bytes [8..11] is 12.
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 008
+ * @par Priority       : Medium
+ */
+TEST(TtmlSelectionPacket, SizeFieldIs12)
+{
+    std::cout << "[TtmlSelectionPacket.SizeFieldIs12] - START" << std::endl;
+    TtmlSelectionPacket pkt(1u, 0u, 800u, 600u);
+    uint32_t sizeField = readLE32(pkt.getBytes(), 8);
+    std::cout << "  size field = " << sizeField << " (expected 12)" << std::endl;
+    EXPECT_EQ(sizeField, 12u);
+    std::cout << "[TtmlSelectionPacket.SizeFieldIs12] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket accepts zero values for all parameters.
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 009
+ * @par Priority       : Medium
+ */
+TEST(TtmlSelectionPacket, ZeroValues)
+{
+    std::cout << "[TtmlSelectionPacket.ZeroValues] - START" << std::endl;
+    EXPECT_NO_THROW({
+        TtmlSelectionPacket pkt(0u, 0u, 0u, 0u);
+        EXPECT_EQ(pkt.getBytes().size(), 24u);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 12), 0u);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 16), 0u);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 20), 0u);
+    });
+    std::cout << "[TtmlSelectionPacket.ZeroValues] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlSelectionPacket accepts UINT32_MAX for all parameters.
+ *
+ * @par Test Group ID  : TtmlSelectionPacket
+ * @par Test Case ID   : 010
+ * @par Priority       : Medium
+ */
+TEST(TtmlSelectionPacket, MaxValues)
+{
+    std::cout << "[TtmlSelectionPacket.MaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({
+        TtmlSelectionPacket pkt(MAX, MAX, MAX, MAX);
+        EXPECT_EQ(pkt.getBytes().size(), 24u);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 12), MAX);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 16), MAX);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 20), MAX);
+    });
+    std::cout << "[TtmlSelectionPacket.MaxValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// TtmlDataPacket tests
+// ===========================================================================
+
+/**
+ * @brief TtmlDataPacket construction with non-empty payload does not throw.
+ *
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(TtmlDataPacket, ConstructionNoThrow)
+{
+    std::cout << "[TtmlDataPacket.ConstructionNoThrow] - START" << std::endl;
     std::vector<uint8_t> data = {0x01, 0x02, 0x03};
-    int64_t time_offset_ms = 0;
-    
-    std::cout << "Invoking SendDataPacket with data: ";
-    for (const auto &byte : data) {
-        std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
-    }
-    std::cout << std::dec << "and time_offset_ms: " << time_offset_ms << std::endl;
-    
     EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
+        TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
     });
-    
-    std::cout << "SendDataPacket invoked successfully with default time offset." << std::endl;
-    std::cout << "Exiting SendDataPacket_DefaultTimeOffset test" << std::endl;
+    std::cout << "[TtmlDataPacket.ConstructionNoThrow] - PASS" << std::endl;
 }
-/**
- * @brief Validate that SendDataPacket API handles valid TTML data with a positive time offset.
- *
- * This test verifies that the SendDataPacket function can successfully process a valid, non-empty TTML data packet with a positive time offset value. The test ensures that no exceptions are thrown during the operation, indicating correct handling of the input parameters.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 002@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                         | Test Data                                                                          | Expected Result                                                                               | Notes       |
- * | :--------------: | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------- |
- * | 01               | Initialize the TtmlChannel instance, prepare TTML data vector and set positive time offset | TtmlChannel instance, data = {0x10, 0x20, 0x30, 0x40}, time_offset_ms = 500          | API invocation executes without throwing an exception; EXPECT_NO_THROW assertion passes       | Should Pass |
- */
-TEST(TtmlChannel, SendDataPacket_PositiveTimeOffset) {
-    std::cout << "Entering SendDataPacket_PositiveTimeOffset test" << std::endl;
 
-    TtmlChannel channel;
-    std::vector<uint8_t> data = {0x10, 0x20, 0x30, 0x40};
-    int64_t time_offset_ms = 500;
-    
-    std::cout << "Invoking SendDataPacket with data: ";
-    for (const auto &byte : data) {
-        std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
-    }
-    std::cout << std::dec << "and time_offset_ms: " << time_offset_ms << std::endl;
-    
-    EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
-    });
-    
-    std::cout << "SendDataPacket invoked successfully with positive time offset." << std::endl;
-    std::cout << "Exiting SendDataPacket_PositiveTimeOffset test" << std::endl;
-}
 /**
- * @brief Test SendDataPacket with negative time offset to ensure robust handling of negative time values
+ * @brief TtmlDataPacket with 0-byte payload yields a 24-byte buffer.
  *
- * This test case verifies that the TtmlChannel::SendDataPacket API can process a negative time offset without throwing any exceptions.
- * The API is invoked with a pre-defined data vector and a negative time offset, and the test asserts that the function completes successfully.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 003
- * **Priority:** High
- * 
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                      | Test Data                                               | Expected Result                                              | Notes       |
- * | :--------------: | ---------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ----------- |
- * | 01               | Invoke SendDataPacket with a valid data vector and negative time offset | data = {0xFF, 0xEE, 0xDD}, time_offset_ms = -250        | API call should not throw any exceptions                     | Should Pass |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 002
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendDataPacket_NegativeTimeOffset) {
-    std::cout << "Entering SendDataPacket_NegativeTimeOffset test" << std::endl;
+TEST(TtmlDataPacket, EmptyDataBuffer24Bytes)
+{
+    std::cout << "[TtmlDataPacket.EmptyDataBuffer24Bytes] - START" << std::endl;
+    std::vector<uint8_t> empty;
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(empty));
+    size_t sz = pkt.getBytes().size();
+    std::cout << "  Buffer size with 0 data bytes: " << sz << " (expected 24)" << std::endl;
+    EXPECT_EQ(sz, 24u);
+    std::cout << "[TtmlDataPacket.EmptyDataBuffer24Bytes] - PASS" << std::endl;
+}
 
-    TtmlChannel channel;
-    std::vector<uint8_t> data = {0xFF, 0xEE, 0xDD};
-    int64_t time_offset_ms = -250;
-    
-    std::cout << "Invoking SendDataPacket with data: ";
-    for (const auto &byte : data) {
-        std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
-    }
-    std::cout << std::dec << "and time_offset_ms: " << time_offset_ms << std::endl;
-    
-    EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
-    });
-    
-    std::cout << "SendDataPacket invoked successfully with negative time offset." << std::endl;
-    std::cout << "Exiting SendDataPacket_NegativeTimeOffset test" << std::endl;
-}
 /**
- * @brief Test that SendDataPacket API handles an empty data vector and default time offset correctly.
+ * @brief TtmlDataPacket with N-byte payload yields a (24+N)-byte buffer.
  *
- * This test verifies that the TtmlChannel::SendDataPacket() method can accept an empty data vector and a default time offset (0 ms) without throwing any exceptions. Verifying this behavior is critical to ensure that the API gracefully handles edge cases where no data is provided.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 004@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                          | Expected Result                                               | Notes             |
- * | :--------------: | --------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------- | ----------------- |
- * | 01               | Display entry log message for the SendDataPacket test                       | None                                               | Entry message printed to standard output                      | Should be successful |
- * | 02               | Instantiate TtmlChannel object and initialize an empty data vector          | TtmlChannel channel, data = {}                     | Channel object created and data vector is empty               | Should be successful |
- * | 03               | Log details before invoking SendDataPacket, including time_offset_ms         | time_offset_ms = 0                                 | Pre-invocation log message printed                            | Should be successful |
- * | 04               | Call SendDataPacket API with empty data vector and default time offset         | data = {} (empty), time_offset_ms = 0              | No exception thrown; API processes call successfully          | Should Pass       |
- * | 05               | Print log confirming API call was successful                                | None                                               | Post-invocation success message printed                       | Should be successful |
- * | 06               | Display exit log message for the test case                                  | None                                               | Exit message printed to standard output                       | Should be successful |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 003
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendDataPacket_EmptyData_DefaultTimeOffset) {
-    std::cout << "Entering SendDataPacket_EmptyData_DefaultTimeOffset test" << std::endl;
+TEST(TtmlDataPacket, BufferSizeIncludesPayload)
+{
+    std::cout << "[TtmlDataPacket.BufferSizeIncludesPayload] - START" << std::endl;
+    const size_t N = 7;
+    std::vector<uint8_t> data(N, 0xAB);
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
+    size_t sz = pkt.getBytes().size();
+    std::cout << "  Buffer size with " << N << " data bytes: " << sz << " (expected " << (24 + N) << ")" << std::endl;
+    EXPECT_EQ(sz, 24u + N);
+    std::cout << "[TtmlDataPacket.BufferSizeIncludesPayload] - PASS" << std::endl;
+}
 
-    TtmlChannel channel;
-    std::vector<uint8_t> data = {}; // empty vector
-    int64_t time_offset_ms = 0;
-    
-    std::cout << "Invoking SendDataPacket with empty data vector and time_offset_ms: " << time_offset_ms << std::endl;
-    
-    EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
-    });
-    
-    std::cout << "SendDataPacket invoked successfully with empty data vector." << std::endl;
-    std::cout << "Exiting SendDataPacket_EmptyData_DefaultTimeOffset test" << std::endl;
-}
 /**
- * @brief Validate SendDataPacket handles extremely large positive time offset correctly
+ * @brief TtmlDataPacket reports the correct packet type.
  *
- * This test verifies that the TtmlChannel::SendDataPacket API correctly processes valid data and an extremely large positive time offset without throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 005@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                     | Test Data                                          | Expected Result                                             | Notes      |
- * | :--------------: | ----------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------- | ---------- |
- * | 01               | Instantiate TtmlChannel, prepare data vector and maximum positive time offset, and invoke SendDataPacket. | data = {0xAA,0xBB,0xCC}, time_offset_ms = 9223372036854775807 | API call completes without throwing exceptions           | Should Pass |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 004
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendDataPacket_ExtremelyLargePositiveTimeOffset) {
-    std::cout << "Entering SendDataPacket_ExtremelyLargePositiveTimeOffset test" << std::endl;
+TEST(TtmlDataPacket, TypeIsTtmlData)
+{
+    std::cout << "[TtmlDataPacket.TypeIsTtmlData] - START" << std::endl;
+    std::vector<uint8_t> data = {0x01};
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
+    uint32_t t = pkt.getType();
+    std::cout << "  getType() = " << t << " (expected " << TYPE_TTML_DATA << ")" << std::endl;
+    EXPECT_EQ(t, TYPE_TTML_DATA);
+    std::cout << "[TtmlDataPacket.TypeIsTtmlData] - PASS" << std::endl;
+}
 
-    TtmlChannel channel;
-    std::vector<uint8_t> data = {0xAA, 0xBB, 0xCC};
-    int64_t time_offset_ms = std::numeric_limits<int64_t>::max();
-    
-    std::cout << "Invoking SendDataPacket with data: ";
-    for (const auto &byte : data) {
-        std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
-    }
-    std::cout << std::dec << "and extremely large positive time_offset_ms: " << time_offset_ms << std::endl;
-    
-    EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
-    });
-    
-    std::cout << "SendDataPacket invoked successfully with extremely large positive time offset." << std::endl;
-    std::cout << "Exiting SendDataPacket_ExtremelyLargePositiveTimeOffset test" << std::endl;
-}
 /**
- * @brief Validate that TtmlChannel::SendDataPacket handles an extremely large negative time offset without throwing exceptions.
+ * @brief TtmlDataPacket stores counter correctly.
  *
- * This test verifies that when SendDataPacket is invoked with a valid data packet and an extremely large negative time offset (minimum int64_t value), the API executes without throwing any exceptions. The objective is to ensure that even with negative time offsets at limits, the channel correctly processes the input.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 006@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke SendDataPacket API with valid data and an extremely large negative time offset. | data = {0x11, 0x22, 0x33}, time_offset_ms = std::numeric_limits<int64_t>::min() | API executes without throwing exceptions; Assertion EXPECT_NO_THROW passes. | Should Pass |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 005
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendDataPacket_ExtremelyLargeNegativeTimeOffset) {
-    std::cout << "Entering SendDataPacket_ExtremelyLargeNegativeTimeOffset test" << std::endl;
+TEST(TtmlDataPacket, CounterStoredCorrectly)
+{
+    std::cout << "[TtmlDataPacket.CounterStoredCorrectly] - START" << std::endl;
+    const uint32_t counter = 55u;
+    std::vector<uint8_t> data = {0x00};
+    TtmlDataPacket pkt(1u, counter, 0, std::move(data));
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected " << counter << ")" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), counter);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 4), counter);
+    std::cout << "[TtmlDataPacket.CounterStoredCorrectly] - PASS" << std::endl;
+}
 
-    TtmlChannel channel;
-    std::vector<uint8_t> data = {0x11, 0x22, 0x33};
-    int64_t time_offset_ms = std::numeric_limits<int64_t>::min();
-    
-    std::cout << "Invoking SendDataPacket with data: ";
-    for (const auto &byte : data) {
-        std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
+/**
+ * @brief TtmlDataPacket encodes channelId at bytes [12..15].
+ *
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 006
+ * @par Priority       : High
+ */
+TEST(TtmlDataPacket, ChannelIdEncodedCorrectly)
+{
+    std::cout << "[TtmlDataPacket.ChannelIdEncodedCorrectly] - START" << std::endl;
+    const uint32_t channelId = 99u;
+    std::vector<uint8_t> data = {0x01, 0x02};
+    TtmlDataPacket pkt(channelId, 0u, 0, std::move(data));
+    uint32_t decoded = readLE32(pkt.getBytes(), 12);
+    std::cout << "  channelId=" << channelId << ", buf[12..15]=" << decoded << std::endl;
+    EXPECT_EQ(decoded, channelId);
+    std::cout << "[TtmlDataPacket.ChannelIdEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlDataPacket encodes dataOffset at bytes [16..23] as 64-bit LE.
+ *
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 007
+ * @par Priority       : High
+ */
+TEST(TtmlDataPacket, DataOffsetEncodedCorrectly)
+{
+    std::cout << "[TtmlDataPacket.DataOffsetEncodedCorrectly] - START" << std::endl;
+    const int64_t offset = 123456789LL;
+    std::vector<uint8_t> data = {0xAA};
+    TtmlDataPacket pkt(1u, 0u, offset, std::move(data));
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    std::cout << "  dataOffset=" << offset << ", decoded from buf[16..23]=" << (int64_t)decoded << std::endl;
+    EXPECT_EQ(static_cast<int64_t>(decoded), offset);
+    std::cout << "[TtmlDataPacket.DataOffsetEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlDataPacket payload bytes appear after the 24-byte header.
+ *
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 008
+ * @par Priority       : High
+ */
+TEST(TtmlDataPacket, PayloadBytesAtCorrectOffset)
+{
+    std::cout << "[TtmlDataPacket.PayloadBytesAtCorrectOffset] - START" << std::endl;
+    std::vector<uint8_t> data = {0xDE, 0xAD, 0xBE, 0xEF};
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
+    const auto& buf = pkt.getBytes();
+    ASSERT_EQ(buf.size(), 28u);
+    for (size_t i = 0; i < 4; ++i)
+    {
+        std::cout << "  buf[" << (24+i) << "] = 0x" << std::hex << (int)buf[24+i] << std::dec << std::endl;
     }
-    std::cout << std::dec << "and extremely large negative time_offset_ms: " << time_offset_ms << std::endl;
-    
-    EXPECT_NO_THROW({
-        channel.SendDataPacket(std::move(data), time_offset_ms);
-    });
-    
-    std::cout << "SendDataPacket invoked successfully with extremely large negative time offset." << std::endl;
-    std::cout << "Exiting SendDataPacket_ExtremelyLargeNegativeTimeOffset test" << std::endl;
+    EXPECT_EQ(buf[24], 0xDE);
+    EXPECT_EQ(buf[25], 0xAD);
+    EXPECT_EQ(buf[26], 0xBE);
+    EXPECT_EQ(buf[27], 0xEF);
+    std::cout << "[TtmlDataPacket.PayloadBytesAtCorrectOffset] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that SendSelectionPacket API correctly processes normal dimensions.
+ * @brief TtmlDataPacket size field equals (8 + 4 + dataLen).
  *
- * This test verifies that the SendSelectionPacket method of the TtmlChannel class is invoked
- * successfully with typical dimensions (1920x1080) without throwing any exceptions.
- * It ensures that the API handles standard input values and behaves as expected in a positive scenario.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 007
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                     | Test Data                          | Expected Result                                                         | Notes             |
- * | :--------------: | ---------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- | ----------------- |
- * |       01       | Create a TtmlChannel object using the default constructor         | None                               | Object is created without throwing an exception                         | Should be successful |
- * |       02       | Invoke SendSelectionPacket with typical dimensions (1920, 1080)     | width = 1920, height = 1080          | Method invocation completes without throwing an exception               | Should Pass       |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 009
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendSelectionPacket_NormalDimensions) {
-    std::cout << "Entering SendSelectionPacket_NormalDimensions test" << std::endl;
-    uint32_t width = 1920;
-    uint32_t height = 1080;
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_NormalDimensions test" << std::endl;
+TEST(TtmlDataPacket, SizeFieldIsCorrect)
+{
+    std::cout << "[TtmlDataPacket.SizeFieldIsCorrect] - START" << std::endl;
+    const size_t N = 5;
+    std::vector<uint8_t> data(N, 0x00);
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
+    uint32_t sizeField = readLE32(pkt.getBytes(), 8);
+    uint32_t expected = 8u + 4u + static_cast<uint32_t>(N);
+    std::cout << "  size field=" << sizeField << " (expected " << expected << ")" << std::endl;
+    EXPECT_EQ(sizeField, expected);
+    std::cout << "[TtmlDataPacket.SizeFieldIsCorrect] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that SendSelectionPacket handles zero dimensions correctly.
+ * @brief TtmlDataPacket with negative dataOffset is encoded correctly.
  *
- * This test verifies that calling the SendSelectionPacket API with both width and height set to zero does not throw any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 008@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                  | Expected Result                         | Notes      |
- * | :--------------: | ------------------------------------------------------------------- | -------------------------- | --------------------------------------- | ---------- |
- * | 01               | Create TtmlChannel object and invoke SendSelectionPacket with zero dimensions | width = 0, height = 0      | API should execute without throwing exceptions, and assertions pass | Should Pass |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 010
+ * @par Priority       : Medium
  */
-TEST(TtmlChannel, SendSelectionPacket_ZeroDimensions) {
-    std::cout << "Entering SendSelectionPacket_ZeroDimensions test" << std::endl;
-    uint32_t width = 0;
-    uint32_t height = 0;
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_ZeroDimensions test" << std::endl;
+TEST(TtmlDataPacket, NegativeDataOffset)
+{
+    std::cout << "[TtmlDataPacket.NegativeDataOffset] - START" << std::endl;
+    const int64_t offset = -1000LL;
+    std::vector<uint8_t> data = {0x01};
+    TtmlDataPacket pkt(1u, 0u, offset, std::move(data));
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    std::cout << "  offset=" << offset << ", decoded as int64_t=" << static_cast<int64_t>(decoded) << std::endl;
+    EXPECT_EQ(static_cast<int64_t>(decoded), offset);
+    std::cout << "[TtmlDataPacket.NegativeDataOffset] - PASS" << std::endl;
 }
+
 /**
- * @brief Test the SendSelectionPacket API with maximum allowed dimensions
+ * @brief TtmlDataPacket with large payload (1 KB) — verifies size and content.
  *
- * This test verifies that invoking SendSelectionPacket with maximum width and height does not throw any exceptions, ensuring that the API can handle extreme input values.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 009@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                      | Test Data                                                                                | Expected Result                                                     | Notes             |
- * | :---------------:| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------- |
- * | 01               | Create TtmlChannel object using default constructor              | None                                                                                     | Object is created without throwing exceptions                      | Should be successful |
- * | 02               | Invoke SendSelectionPacket with maximum width and height           | input1 = width = std::numeric_limits<uint32_t>::max(), input2 = height = std::numeric_limits<uint32_t>::max() | No exception is thrown during method invocation                     | Should Pass       |
+ * @par Test Group ID  : TtmlDataPacket
+ * @par Test Case ID   : 011
+ * @par Priority       : Medium (stress)
  */
-TEST(TtmlChannel, SendSelectionPacket_MaximumDimensions) {
-    std::cout << "Entering SendSelectionPacket_MaximumDimensions test" << std::endl;
-    uint32_t width = std::numeric_limits<uint32_t>::max();
-    uint32_t height = std::numeric_limits<uint32_t>::max();
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_MaximumDimensions test" << std::endl;
+TEST(TtmlDataPacket, LargePayload1KB)
+{
+    std::cout << "[TtmlDataPacket.LargePayload1KB] - START" << std::endl;
+    const size_t N = 1024;
+    std::vector<uint8_t> data(N);
+    for (size_t i = 0; i < N; ++i) data[i] = static_cast<uint8_t>(i & 0xFF);
+    TtmlDataPacket pkt(1u, 0u, 0, std::move(data));
+    EXPECT_EQ(pkt.getBytes().size(), 24u + N);
+    // Check first and last payload bytes
+    EXPECT_EQ(pkt.getBytes()[24], 0x00u);
+    EXPECT_EQ(pkt.getBytes()[24 + N - 1], static_cast<uint8_t>((N - 1) & 0xFF));
+    std::cout << "  Large payload 1KB OK, total buf size=" << pkt.getBytes().size() << std::endl;
+    std::cout << "[TtmlDataPacket.LargePayload1KB] - PASS" << std::endl;
 }
+
+// ===========================================================================
+// TtmlTimestampPacket tests
+// ===========================================================================
+
 /**
- * @brief Validate SendSelectionPacket API behavior when width is zero and height is non-zero.
+ * @brief TtmlTimestampPacket construction does not throw.
  *
- * Tests that the SendSelectionPacket function in TtmlChannel correctly handles the edge case where the width is zero while the height is non-zero, ensuring that the API can process these input values without throwing an exception.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 010
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Create a TtmlChannel object and invoke SendSelectionPacket with width set to 0 and height set to 1080 | input: width = 0, height = 1080 | Function call does not throw any exception; SendSelectionPacket executes successfully | Should Pass |
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 001
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendSelectionPacket_WidthZero_NonZeroHeight) {
-    std::cout << "Entering SendSelectionPacket_WidthZero_NonZeroHeight test" << std::endl;
-    uint32_t width = 0;
-    uint32_t height = 1080;
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_WidthZero_NonZeroHeight test" << std::endl;
+TEST(TtmlTimestampPacket, ConstructionNoThrow)
+{
+    std::cout << "[TtmlTimestampPacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ TtmlTimestampPacket pkt(1u, 0u, 90000ull); });
+    std::cout << "[TtmlTimestampPacket.ConstructionNoThrow] - PASS" << std::endl;
 }
+
 /**
- * @brief Validate SendSelectionPacket API with valid width and zero height
+ * @brief TtmlTimestampPacket buffer is exactly 24 bytes.
  *
- * This test ensures that when SendSelectionPacket is invoked using a non-zero width (1920) and a zero height, the API does not throw any exceptions. The test verifies that the API can handle an extreme ratio scenario where the height is zero without crashing or exhibiting unexpected behavior.
+ * Layout: type(4) + counter(4) + size(4) + channelId(4) + timestamp(8) = 24
  *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 011
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                             | Test Data                          | Expected Result                                         | Notes          |
- * | :--------------: | ------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------- | -------------- |
- * | 01               | Create TtmlChannel instance using default constructor   | None                               | TtmlChannel object is created successfully              | Should be successful |
- * | 02               | Invoke SendSelectionPacket with width=1920 and height=0   | width = 1920, height = 0             | API executes without throwing exceptions; assertion passes | Should Pass    |
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 002
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendSelectionPacket_NonZeroWidth_HeightZero) {
-    std::cout << "Entering SendSelectionPacket_NonZeroWidth_HeightZero test" << std::endl;
-    uint32_t width = 1920;
-    uint32_t height = 0;
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_NonZeroWidth_HeightZero test" << std::endl;
+TEST(TtmlTimestampPacket, BufferSizeIs24)
+{
+    std::cout << "[TtmlTimestampPacket.BufferSizeIs24] - START" << std::endl;
+    TtmlTimestampPacket pkt(1u, 0u, 1000ull);
+    size_t sz = pkt.getBytes().size();
+    std::cout << "  Buffer size = " << sz << " (expected 24)" << std::endl;
+    EXPECT_EQ(sz, 24u);
+    std::cout << "[TtmlTimestampPacket.BufferSizeIs24] - PASS" << std::endl;
 }
+
 /**
- * @brief Validate SendSelectionPacket with extreme dimension ratios
+ * @brief TtmlTimestampPacket reports the correct packet type.
  *
- * This test verifies whether the SendSelectionPacket function of the TtmlChannel class can handle extreme aspect ratios, specifically when the width is set to the maximum value for a 32-bit unsigned integer and the height is set to 1. The test ensures that no exceptions are thrown during object construction and the method call.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 012
- * **Priority:** High
- * 
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- * 
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :--------------: | ----------- | --------- | ------------- | ----- |
- * | 01 | Create a TtmlChannel object using the default constructor. | None | TtmlChannel object is created successfully without throwing an exception. | Should be successful |
- * | 02 | Invoke SendSelectionPacket with extreme ratio dimensions. | width = std::numeric_limits<uint32_t>::max(), height = 1 | Function executes without throwing an exception. | Should Pass |
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 003
+ * @par Priority       : High
  */
-TEST(TtmlChannel, SendSelectionPacket_ExtremeRatioDimensions) {
-    std::cout << "Entering SendSelectionPacket_ExtremeRatioDimensions test" << std::endl;
-    uint32_t width = std::numeric_limits<uint32_t>::max();
-    uint32_t height = 1;
-    std::cout << "Creating TtmlChannel object using default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        TtmlChannel ttml;
-        std::cout << "Invoking SendSelectionPacket with width: " << width << " and height: " << height << std::endl;
-        EXPECT_NO_THROW(ttml.SendSelectionPacket(width, height));
-        std::cout << "SendSelectionPacket invoked successfully with width: " << width << " and height: " << height << std::endl;
-    });
-    std::cout << "Exiting SendSelectionPacket_ExtremeRatioDimensions test" << std::endl;
+TEST(TtmlTimestampPacket, TypeIsTtmlTimestamp)
+{
+    std::cout << "[TtmlTimestampPacket.TypeIsTtmlTimestamp] - START" << std::endl;
+    TtmlTimestampPacket pkt(1u, 0u, 0ull);
+    uint32_t t = pkt.getType();
+    std::cout << "  getType() = " << t << " (expected " << TYPE_TTML_TIMESTAMP << ")" << std::endl;
+    EXPECT_EQ(t, TYPE_TTML_TIMESTAMP);
+    std::cout << "[TtmlTimestampPacket.TypeIsTtmlTimestamp] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that SendTimestampPacket correctly handles the zero timestamp case.
+ * @brief TtmlTimestampPacket getTypeString returns "TTML_TIMESTAMP".
  *
- * This test validates that invoking the SendTimestampPacket method with a timestamp value of zero does not throw any exceptions. It checks that the TtmlChannel object is created successfully and that calling the API with a zero timestamp is handled properly.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 013@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Create a TtmlChannel object using the default constructor. | None | TtmlChannel object is created without exception. | Should be successful |
- * | 02 | Set timestamp variable to zero and log the value. | timestamp = 0 | Timestamp variable is set to 0. | Should be successful |
- * | 03 | Invoke SendTimestampPacket with the timestamp value of zero. | input: timestamp = 0 | API call completes without throwing an exception. | Should Pass |
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 004
+ * @par Priority       : Medium
  */
-TEST(TtmlChannel, SendTimestampPacket_zero) {
-    std::cout << "Entering SendTimestampPacket_zero test" << std::endl;
-    
-    // Create TtmlChannel object using the default constructor and log the creation.
-    EXPECT_NO_THROW({
-        TtmlChannel channel;
-        std::cout << "TtmlChannel object created using default constructor." << std::endl;
-        
-        uint64_t timestamp = 0;
-        std::cout << "Invoking SendTimestampPacket with timestampMs = " << timestamp << std::endl;
-        
-        // Call SendTimestampPacket and check for exceptions.
+TEST(TtmlTimestampPacket, TypeStringIsTtmlTimestamp)
+{
+    std::cout << "[TtmlTimestampPacket.TypeStringIsTtmlTimestamp] - START" << std::endl;
+    TtmlTimestampPacket pkt(1u, 0u, 0ull);
+    std::string ts = pkt.getTypeString(pkt.getType());
+    std::cout << "  getTypeString() = \"" << ts << "\"" << std::endl;
+    EXPECT_EQ(ts, "TTML_TIMESTAMP");
+    std::cout << "[TtmlTimestampPacket.TypeStringIsTtmlTimestamp] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket stores the counter correctly.
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 005
+ * @par Priority       : High
+ */
+TEST(TtmlTimestampPacket, CounterStoredCorrectly)
+{
+    std::cout << "[TtmlTimestampPacket.CounterStoredCorrectly] - START" << std::endl;
+    const uint32_t counter = 13u;
+    TtmlTimestampPacket pkt(1u, counter, 0ull);
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected " << counter << ")" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), counter);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 4), counter);
+    std::cout << "[TtmlTimestampPacket.CounterStoredCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket encodes channelId at bytes [12..15].
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 006
+ * @par Priority       : High
+ */
+TEST(TtmlTimestampPacket, ChannelIdEncodedCorrectly)
+{
+    std::cout << "[TtmlTimestampPacket.ChannelIdEncodedCorrectly] - START" << std::endl;
+    const uint32_t channelId = 7u;
+    TtmlTimestampPacket pkt(channelId, 0u, 0ull);
+    uint32_t decoded = readLE32(pkt.getBytes(), 12);
+    std::cout << "  channelId=" << channelId << ", buf[12..15]=" << decoded << std::endl;
+    EXPECT_EQ(decoded, channelId);
+    std::cout << "[TtmlTimestampPacket.ChannelIdEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket encodes timestamp at bytes [16..23] as 64-bit LE.
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 007
+ * @par Priority       : High
+ */
+TEST(TtmlTimestampPacket, TimestampEncodedCorrectly)
+{
+    std::cout << "[TtmlTimestampPacket.TimestampEncodedCorrectly] - START" << std::endl;
+    const uint64_t ts = 987654321ull;
+    TtmlTimestampPacket pkt(1u, 0u, ts);
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    std::cout << "  timestamp=" << ts << ", decoded=" << decoded << std::endl;
+    EXPECT_EQ(decoded, ts);
+    std::cout << "[TtmlTimestampPacket.TimestampEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket size field at bytes [8..11] is 12.
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 008
+ * @par Priority       : Medium
+ */
+TEST(TtmlTimestampPacket, SizeFieldIs12)
+{
+    std::cout << "[TtmlTimestampPacket.SizeFieldIs12] - START" << std::endl;
+    TtmlTimestampPacket pkt(1u, 0u, 0ull);
+    uint32_t sizeField = readLE32(pkt.getBytes(), 8);
+    std::cout << "  size field = " << sizeField << " (expected 12)" << std::endl;
+    EXPECT_EQ(sizeField, 12u);
+    std::cout << "[TtmlTimestampPacket.SizeFieldIs12] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket with zero timestamp.
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 009
+ * @par Priority       : Medium
+ */
+TEST(TtmlTimestampPacket, ZeroTimestamp)
+{
+    std::cout << "[TtmlTimestampPacket.ZeroTimestamp] - START" << std::endl;
+    TtmlTimestampPacket pkt(0u, 0u, 0ull);
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    EXPECT_EQ(decoded, 0ull);
+    EXPECT_EQ(pkt.getBytes().size(), 24u);
+    std::cout << "  Zero timestamp encoded correctly" << std::endl;
+    std::cout << "[TtmlTimestampPacket.ZeroTimestamp] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket with UINT64_MAX timestamp.
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 010
+ * @par Priority       : Medium
+ */
+TEST(TtmlTimestampPacket, MaxTimestamp)
+{
+    std::cout << "[TtmlTimestampPacket.MaxTimestamp] - START" << std::endl;
+    const uint64_t MAX_TS = std::numeric_limits<uint64_t>::max();
+    TtmlTimestampPacket pkt(1u, 0u, MAX_TS);
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    std::cout << "  UINT64_MAX timestamp encoded correctly, decoded=" << decoded << std::endl;
+    EXPECT_EQ(decoded, MAX_TS);
+    std::cout << "[TtmlTimestampPacket.MaxTimestamp] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlTimestampPacket with large typical media timestamp (90 kHz PTS).
+ *
+ * @par Test Group ID  : TtmlTimestampPacket
+ * @par Test Case ID   : 011
+ * @par Priority       : Medium
+ */
+TEST(TtmlTimestampPacket, LargeMediaTimestamp)
+{
+    std::cout << "[TtmlTimestampPacket.LargeMediaTimestamp] - START" << std::endl;
+    // 1 hour at 90 kHz: 1 * 3600 * 90000 = 324000000
+    const uint64_t ts = 324000000ull;
+    TtmlTimestampPacket pkt(1u, 0u, ts);
+    uint64_t decoded = readLE64(pkt.getBytes(), 16);
+    EXPECT_EQ(decoded, ts);
+    std::cout << "  90kHz 1-hour PTS=" << ts << " OK" << std::endl;
+    std::cout << "[TtmlTimestampPacket.LargeMediaTimestamp] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// TtmlChannel tests
+// ===========================================================================
+
+/**
+ * @brief TtmlChannel can be constructed without throwing.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 001
+ * @par Priority       : High
+ */
+TEST(TtmlChannel, ConstructionNoThrow)
+{
+    std::cout << "[TtmlChannel.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ TtmlChannel ch; });
+    std::cout << "[TtmlChannel.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel::SendSelectionPacket does not throw or hang.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 002
+ * @par Priority       : High
+ */
+TEST(TtmlChannel, SendSelectionPacketNoThrow)
+{
+    std::cout << "[TtmlChannel.SendSelectionPacketNoThrow] - START" << std::endl;
+    TtmlChannel ch;
+    EXPECT_NO_THROW({ ch.SendSelectionPacket(1920u, 1080u); });
+    std::cout << "  SendSelectionPacket(1920, 1080) OK" << std::endl;
+    std::cout << "[TtmlChannel.SendSelectionPacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel::SendDataPacket with non-empty data does not throw.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 003
+ * @par Priority       : High
+ */
+TEST(TtmlChannel, SendDataPacketNoThrow)
+{
+    std::cout << "[TtmlChannel.SendDataPacketNoThrow] - START" << std::endl;
+    TtmlChannel ch;
+    std::vector<uint8_t> data = {0x01, 0x02, 0x03, 0x04, 0x05};
+    EXPECT_NO_THROW({ ch.SendDataPacket(std::move(data)); });
+    std::cout << "  SendDataPacket({5 bytes}) OK" << std::endl;
+    std::cout << "[TtmlChannel.SendDataPacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel::SendDataPacket with time_offset_ms does not throw.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 004
+ * @par Priority       : High
+ */
+TEST(TtmlChannel, SendDataPacketWithOffsetNoThrow)
+{
+    std::cout << "[TtmlChannel.SendDataPacketWithOffsetNoThrow] - START" << std::endl;
+    TtmlChannel ch;
+    std::vector<uint8_t> data = {0xDE, 0xAD};
+    EXPECT_NO_THROW({ ch.SendDataPacket(std::move(data), 500LL); });
+    std::cout << "  SendDataPacket with offset=500ms OK" << std::endl;
+    std::cout << "[TtmlChannel.SendDataPacketWithOffsetNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel::SendTimestampPacket does not throw.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 005
+ * @par Priority       : High
+ */
+TEST(TtmlChannel, SendTimestampPacketNoThrow)
+{
+    std::cout << "[TtmlChannel.SendTimestampPacketNoThrow] - START" << std::endl;
+    TtmlChannel ch;
+    EXPECT_NO_THROW({ ch.SendTimestampPacket(90000ull); });
+    std::cout << "  SendTimestampPacket(90000) OK" << std::endl;
+    std::cout << "[TtmlChannel.SendTimestampPacketNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel::SendDataPacket with empty data does not throw.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 006
+ * @par Priority       : Medium
+ */
+TEST(TtmlChannel, SendDataPacketEmptyDataNoThrow)
+{
+    std::cout << "[TtmlChannel.SendDataPacketEmptyDataNoThrow] - START" << std::endl;
+    TtmlChannel ch;
+    std::vector<uint8_t> empty;
+    EXPECT_NO_THROW({ ch.SendDataPacket(std::move(empty)); });
+    std::cout << "  SendDataPacket with empty vector OK" << std::endl;
+    std::cout << "[TtmlChannel.SendDataPacketEmptyDataNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel: multiple consecutive sends do not hang.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 007
+ * @par Priority       : Medium (stress)
+ */
+TEST(TtmlChannel, MultipleConsecutiveSendsNoHang)
+{
+    std::cout << "[TtmlChannel.MultipleConsecutiveSendsNoHang] - START" << std::endl;
+    TtmlChannel ch;
+    const int N = 20;
+    for (int i = 0; i < N; ++i)
+    {
+        std::vector<uint8_t> data(4, static_cast<uint8_t>(i));
+        EXPECT_NO_THROW({ ch.SendSelectionPacket(800u, 600u); });
+        EXPECT_NO_THROW({ ch.SendDataPacket(std::move(data), static_cast<int64_t>(i * 40)); });
+        EXPECT_NO_THROW({ ch.SendTimestampPacket(static_cast<uint64_t>(i * 1000)); });
+    }
+    std::cout << "  " << N << " iterations of all 3 send methods OK" << std::endl;
+    std::cout << "[TtmlChannel.MultipleConsecutiveSendsNoHang] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel destructor is safe after sends.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 008
+ * @par Priority       : Medium
+ */
+TEST(TtmlChannel, DestructorSafeAfterSends)
+{
+    std::cout << "[TtmlChannel.DestructorSafeAfterSends] - START" << std::endl;
+    {
+        TtmlChannel ch;
+        EXPECT_NO_THROW({ ch.SendSelectionPacket(1280u, 720u); });
+        std::vector<uint8_t> data = {0x11, 0x22};
+        EXPECT_NO_THROW({ ch.SendDataPacket(std::move(data)); });
+        EXPECT_NO_THROW({ ch.SendTimestampPacket(5000ull); });
+        // Channel destroyed at end of scope
+    }
+    std::cout << "  TtmlChannel destructor safe after 3 sends" << std::endl;
+    std::cout << "[TtmlChannel.DestructorSafeAfterSends] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel via base SubtecChannel pointer dispatches virtual methods correctly.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 009
+ * @par Priority       : Medium
+ */
+TEST(TtmlChannel, VirtualDispatchViaBasePointer)
+{
+    std::cout << "[TtmlChannel.VirtualDispatchViaBasePointer] - START" << std::endl;
+    {
+        std::unique_ptr<SubtecChannel> ch = std::make_unique<TtmlChannel>();
+        EXPECT_NO_THROW({ ch->SendSelectionPacket(640u, 480u); });
+        std::vector<uint8_t> data = {0xAA, 0xBB};
+        EXPECT_NO_THROW({ ch->SendDataPacket(std::move(data)); });
+        EXPECT_NO_THROW({ ch->SendTimestampPacket(1000ull); });
+    }
+    std::cout << "  Virtual dispatch via SubtecChannel* works correctly" << std::endl;
+    std::cout << "[TtmlChannel.VirtualDispatchViaBasePointer] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel: SendSelectionPacket with zero dimensions.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 010
+ * @par Priority       : Low (edge case)
+ */
+TEST(TtmlChannel, SendSelectionPacketZeroDimensions)
+{
+    std::cout << "[TtmlChannel.SendSelectionPacketZeroDimensions] - START" << std::endl;
+    TtmlChannel ch;
+    EXPECT_NO_THROW({ ch.SendSelectionPacket(0u, 0u); });
+    std::cout << "  SendSelectionPacket(0, 0) does not crash" << std::endl;
+    std::cout << "[TtmlChannel.SendSelectionPacketZeroDimensions] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel: SendTimestampPacket with zero timestamp.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 011
+ * @par Priority       : Low (edge case)
+ */
+TEST(TtmlChannel, SendTimestampPacketZero)
+{
+    std::cout << "[TtmlChannel.SendTimestampPacketZero] - START" << std::endl;
+    TtmlChannel ch;
+    EXPECT_NO_THROW({ ch.SendTimestampPacket(0ull); });
+    std::cout << "  SendTimestampPacket(0) OK" << std::endl;
+    std::cout << "[TtmlChannel.SendTimestampPacketZero] - PASS" << std::endl;
+}
+
+/**
+ * @brief TtmlChannel stress: 100 rapid selection+data+timestamp cycles.
+ *
+ * @par Test Group ID  : TtmlChannel
+ * @par Test Case ID   : 012
+ * @par Priority       : Low (stress)
+ */
+TEST(TtmlChannel, Stress100Cycles)
+{
+    std::cout << "[TtmlChannel.Stress100Cycles] - START" << std::endl;
+    TtmlChannel ch;
+    for (int i = 0; i < 100; ++i)
+    {
         EXPECT_NO_THROW({
-            channel.SendTimestampPacket(timestamp);
-            std::cout << "sendPacket<TtmlTimestampPacket> invoked with timestampMs = " << timestamp << std::endl;
+            ch.SendSelectionPacket(1280u, 720u);
+            std::vector<uint8_t> d(8, static_cast<uint8_t>(i));
+            ch.SendDataPacket(std::move(d), static_cast<int64_t>(i * 33));
+            ch.SendTimestampPacket(static_cast<uint64_t>(i) * 3000ull);
         });
-    });
-    
-    std::cout << "Exiting SendTimestampPacket_zero test" << std::endl;
-}
-/**
- * @brief Validate that SendTimestampPacket executes without exceptions when provided with a valid timestamp.
- *
- * This test verifies that a TtmlChannel object can be successfully created using its default constructor and that invoking the SendTimestampPacket method with a valid timestamp (123456789) does not throw any exceptions. This ensures that the basic functionality of sending a timestamp packet is working as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 014@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                                  | Expected Result                              | Notes         |
- * | :--------------: | ------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------- | ------------- |
- * | 01               | Create a TtmlChannel object using the default constructor.          | (No input parameters)                      | Object is created successfully without error | Should be successful |
- * | 02               | Invoke SendTimestampPacket with a valid timestamp value (123456789).   | timestamp = 123456789                      | SendTimestampPacket executes without throwing an exception. | Should Pass   |
- */
-TEST(TtmlChannel, SendTimestampPacket_positive) {
-    std::cout << "Entering SendTimestampPacket_positive test" << std::endl;
-    
-    // Create TtmlChannel object using the default constructor and log the creation.
-    EXPECT_NO_THROW({
-        TtmlChannel channel;
-        std::cout << "TtmlChannel object created using default constructor." << std::endl;
-        
-        uint64_t timestamp = 123456789;
-        std::cout << "Invoking SendTimestampPacket with timestampMs = " << timestamp << std::endl;
-        
-        // Call SendTimestampPacket and check for exceptions.
-        EXPECT_NO_THROW({
-            channel.SendTimestampPacket(timestamp);
-            std::cout << "sendPacket<TtmlTimestampPacket> invoked with timestampMs = " << timestamp << std::endl;
-        });
-    });
-    
-    std::cout << "Exiting SendTimestampPacket_positive test" << std::endl;
-}
-/**
- * @brief Verifies successful construction of a TtmlChannel object using its default constructor
- *
- * This test confirms that the TtmlChannel object can be instantiated without throwing any exceptions. 
- * It checks that the constructor is invoked properly and corresponding log messages are printed, ensuring basic functionality.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 015
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                           | Test Data                                        | Expected Result                                                                           | Notes            |
- * | :--------------: | ------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------- | ---------------- |
- * | 01               | Log the message indicating entry into the test       | None                                             | "Entering ConstructTtmlChannelSuccessfully test" printed                                  | Should be successful |
- * | 02               | Log the message indicating the invocation of the constructor | None                                       | "Invoking TtmlChannel() constructor" printed                                              | Should be successful |
- * | 03               | Invoke the TtmlChannel default constructor             | None                                             | No exception thrown; object constructed; "TtmlChannel object constructed successfully" printed | Should Pass      |
- * | 04               | Log the message indicating exit from the test          | None                                             | "Exiting ConstructTtmlChannelSuccessfully test" printed                                  | Should be successful |
- */
-TEST(TtmlChannel, ConstructTtmlChannelSuccessfully) {
-    std::cout << "Entering ConstructTtmlChannelSuccessfully test" << std::endl;
-    
-    // Log invocation of the TtmlChannel default constructor
-    std::cout << "Invoking TtmlChannel() constructor" << std::endl;
-    
-    // Construct TtmlChannel object and expect no exceptions.
-    EXPECT_NO_THROW({
-        TtmlChannel ttmlChannel;
-        std::cout << "TtmlChannel object constructed successfully" << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructTtmlChannelSuccessfully test" << std::endl;
-}
-/**
- * @brief Validates the construction of a TTML data packet with typical valid values.
- *
- * This test verifies that constructing a TTML data packet with valid input parameters such as a positive channelId,
- * a valid counter value, a proper data offset, and a non-empty data buffer completes successfully without throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 016@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Prepare input values and invoke TtmlDataPacket constructor with typical valid values | channelId = 10, counter = 20, dataOffset = 1000, dataBuffer = {0x01, 0x02, 0x03} | Packet is successfully constructed without exceptions | Should Pass |
- */
-TEST(TtmlDataPacket, TypicalValidValues) {
-    std::cout << "Entering TypicalValidValues test" << std::endl;
-    
-    // Prepare input values
-    std::uint32_t channelId = 10;
-    std::uint32_t counter = 20;
-    std::int64_t dataOffset = 1000;
-    std::vector<std::uint8_t> dataBuffer = {0x01, 0x02, 0x03};
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset
-              << " and dataBuffer values {0x01, 0x02, 0x03}" << std::endl;
-
-    // Create object and ensure no exception is thrown
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << "packet construction, completed " << std::endl;
-    });
-    
-    std::cout << "Exiting TypicalValidValues test" << std::endl;
-}
-/**
- * @brief Verify that TtmlDataPacket constructor handles a zero channel ID without throwing exceptions
- *
- * This test verifies that the TtmlDataPacket constructor executes correctly when provided with a zero channel ID.
- * It ensures that even with a channelId of 0 (which might be considered edge-case), the constructor is invoked without exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 017@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                  | Test Data                                                            | Expected Result                                                                             | Notes      |
- * | :--------------: | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke TtmlDataPacket constructor with channelId = 0, counter = 20, dataOffset = 1000, and dataBuffer = {0x01, 0x02, 0x03} | channelId = 0, counter = 20, dataOffset = 1000, dataBuffer = {0x01,0x02,0x03} | TtmlDataPacket is successfully constructed without throwing any exceptions (EXPECT_NO_THROW assertion) | Should Pass |
- */
-TEST(TtmlDataPacket, ZeroChannelId) {
-    std::cout << "Entering ZeroChannelId test" << std::endl;
-    
-    std::uint32_t channelId = 0;
-    std::uint32_t counter = 20;
-    std::int64_t dataOffset = 1000;
-    std::vector<std::uint8_t> dataBuffer = {0x01, 0x02, 0x03};
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset
-              << " and dataBuffer values {0x01, 0x02, 0x03}" << std::endl;
-    
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << " constructor invocation  completed  " <<std::endl;
-    });
-    
-    std::cout << "Exiting ZeroChannelId test" << std::endl;
-}
-/**
- * @brief Validate TtmlDataPacket constructor with a zero counter value
- *
- * This test verifies that the TtmlDataPacket constructor correctly creates an instance when provided with a zero counter value.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 018@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke TtmlDataPacket constructor with channelId=10, counter=0, dataOffset=1000, and dataBuffer={0x01,0x02,0x03} | channelId=10, counter=0, dataOffset=1000, dataBuffer={0x01,0x02,0x03} | No exception thrown; TtmlDataPacket instance successfully constructed | Should Pass |
- */
-TEST(TtmlDataPacket, ZeroCounter) {
-    std::cout << "Entering ZeroCounter test" << std::endl;
-    
-    std::uint32_t channelId = 10;
-    std::uint32_t counter = 0;
-    std::int64_t dataOffset = 1000;
-    std::vector<std::uint8_t> dataBuffer = {0x01, 0x02, 0x03};
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset 
-              << " and dataBuffer values {0x01, 0x02, 0x03}" << std::endl;
-    
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << " constructor invocation  completed  " << std::endl;
-    });
-    
-    std::cout << "Exiting ZeroCounter test" << std::endl;
-}
-/**
- * @brief Verify TtmlDataPacket construction with zero data offset
- *
- * This test verifies that the TtmlDataPacket is correctly constructed when dataOffset is set to zero. It ensures that invoking the constructor with a valid channelId, counter, zero dataOffset, and a non-empty dataBuffer does not throw any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 019@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Set test parameters including channelId, counter, dataOffset (0), and dataBuffer with {0x01, 0x02, 0x03} | channelId = 10, counter = 20, dataOffset = 0, dataBuffer = {0x01, 0x02, 0x03} | Parameters are correctly set | Should be successful |
- * | 02 | Invoke TtmlDataPacket constructor using the parameters and verify that no exceptions are thrown | Invocation of constructor with channelId, counter, dataOffset, dataBuffer | TtmlDataPacket object is constructed without exceptions | Should Pass |
- */
-TEST(TtmlDataPacket, ZeroDataOffset) {
-    std::cout << "Entering ZeroDataOffset test" << std::endl;
-    
-    std::uint32_t channelId = 10;
-    std::uint32_t counter = 20;
-    std::int64_t dataOffset = 0;
-    std::vector<std::uint8_t> dataBuffer = {0x01, 0x02, 0x03};
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset 
-              << " and dataBuffer values {0x01, 0x02, 0x03}" << std::endl;
-    
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << " constructor invocation  completed  " <<std::endl;
-    });
-    
-    std::cout << "Exiting ZeroDataOffset test" << std::endl;
-}
-/**
- * @brief Verify that constructing a TtmlDataPacket with an empty data buffer does not throw exceptions
- *
- * This test ensures that the TtmlDataPacket constructor properly handles an empty dataBuffer without raising any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 020@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                               | Expected Result                                                      | Notes      |
- * | :--------------: | --------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke TtmlDataPacket constructor with empty dataBuffer and given parameters| channelId = 10, counter = 20, dataOffset = 1000, dataBuffer = empty vector | The object is constructed without throwing any exceptions (EXPECT_NO_THROW passes) | Should Pass |
- */
-TEST(TtmlDataPacket, EmptyDataBuffer) {
-    std::cout << "Entering EmptyDataBuffer test" << std::endl;
-    
-    std::uint32_t channelId = 10;
-    std::uint32_t counter = 20;
-    std::int64_t dataOffset = 1000;
-    std::vector<std::uint8_t> dataBuffer;  // empty buffer
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset 
-              << " and an empty dataBuffer" << std::endl;
-    
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << " constructor invocation  completed  " <<std::endl;
-    });
-    
-    std::cout << "Exiting EmptyDataBuffer test" << std::endl;
-}
-/**
- * @brief Verify that TtmlDataPacket correctly handles a negative dataOffset value without throwing exceptions.
- *
- * This test case validates that providing a negative dataOffset during the construction of a TtmlDataPacket does not lead to any exceptions. The test logs entry and exit messages, sets predefined values, and checks that the constructor call completes normally with the given inputs.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 021@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Log the start of NegativeDataOffset test | None | "Entering NegativeDataOffset test" message printed on console | Should be successful |
- * | 02 | Define channelId, counter, negative dataOffset and dataBuffer; log details for constructor invocation | channelId = 123, counter = 456, dataOffset = -50, dataBuffer = {0x10, 0x20} | Values are set and logged correctly | Should be successful |
- * | 03 | Call TtmlDataPacket constructor with the negative dataOffset and check for exceptions | channelId = 123, counter = 456, dataOffset = -50, dataBuffer values {0x10, 0x20} | The EXPECT_NO_THROW block passes, indicating the constructor did not throw | Should Pass |
- * | 04 | Log the completion of NegativeDataOffset test | None | "Exiting NegativeDataOffset test" message printed on console | Should be successful |
- */
-TEST(TtmlDataPacket, NegativeDataOffset) {
-    std::cout << "Entering NegativeDataOffset test" << std::endl;
-    
-    std::uint32_t channelId = 123;
-    std::uint32_t counter = 456;
-    std::int64_t dataOffset = -50;
-    std::vector<std::uint8_t> dataBuffer = {0x10, 0x20};
-    std::cout << "Invoking TtmlDataPacket constructor with channelId=" << channelId
-              << ", counter=" << counter << ", dataOffset=" << dataOffset 
-              << " and dataBuffer values {0x10, 0x20}" << std::endl;
-    
-    EXPECT_NO_THROW({
-        TtmlDataPacket packet(channelId, counter, dataOffset, std::move(dataBuffer));
-        std::cout << " constructor invocation  completed  " <<std::endl;
-    });
-    
-    std::cout << "Exiting NegativeDataOffset test" << std::endl;
-}
-/**
- * @brief Verify that TtmlSelectionPacket constructor handles typical mid-range positive values without throwing exceptions
- *
- * This test verifies that the TtmlSelectionPacket constructor is able to construct an object without throwing any exceptions when provided with typical mid-range positive values. The test ensures that standard operational parameters are managed correctly by the API.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 022
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                       | Test Data                                             | Expected Result                                              | Notes      |
- * | :--------------: | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ | ---------- |
- * | 01               | Invoke TtmlSelectionPacket constructor with typical mid-range positive values and expect no exception. | channelId = 123, counter = 456, width = 640, height = 480 | No exception thrown; object constructed successfully          | Should Pass |
- */
-TEST(TtmlSelectionPacket, TypicalMidRange) {
-    std::cout << "Entering TypicalMidRange test" << std::endl;
-    EXPECT_NO_THROW({
-        uint32_t channelId = 123;
-        uint32_t counter = 456;
-        uint32_t width = 640;
-        uint32_t height = 480;
-        std::cout << "Invoking TtmlSelectionPacket constructor with parameters: "
-                  << "channelId = " << channelId << ", "
-                  << "counter = " << counter << ", "
-                  << "width = " << width << ", "
-                  << "height = " << height << std::endl;
-        TtmlSelectionPacket packet(channelId, counter, width, height);
-        std::cout << "TtmlSelectionPacket object constructed successfully with typical mid-range positive values." << std::endl;
-    });
-    std::cout << "Exiting TypicalMidRange test" << std::endl;
-}
-/**
- * @brief Verify constructor behavior with zero channelId.
- *
- * This test case validates that creating a TtmlSelectionPacket object with a channelId value of zero does not throw any exceptions. It ensures that a zero channelId is handled as a valid input.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 023
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                        | Test Data                                 | Expected Result                                                               | Notes      |
- * | :--------------: | ------------------------------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke TtmlSelectionPacket constructor with parameters including zero channelId. | channelId = 0, counter = 456, width = 640, height = 480 | Object constructed successfully without any exception thrown; EXPECT_NO_THROW passes. | Should Pass |
- */
-TEST(TtmlSelectionPacket, ZeroChannelId) {
-    std::cout << "Entering ZeroChannelId test" << std::endl;
-    EXPECT_NO_THROW({
-        uint32_t channelId = 0;
-        uint32_t counter = 456;
-        uint32_t width = 640;
-        uint32_t height = 480;
-        std::cout << "Invoking TtmlSelectionPacket constructor with parameters: "
-                  << "channelId = " << channelId << ", "
-                  << "counter = " << counter << ", "
-                  << "width = " << width << ", "
-                  << "height = " << height << std::endl;
-        TtmlSelectionPacket packet(channelId, counter, width, height);
-        std::cout << "TtmlSelectionPacket object constructed successfully with zero channelId." << std::endl;
-    });
-    std::cout << "Exiting ZeroChannelId test" << std::endl;
-}
-/**
- * @brief Test to verify that the TtmlSelectionPacket constructor handles a zero counter correctly without throwing an exception.
- *
- * This test verifies that constructing a TtmlSelectionPacket object with a counter value of zero and valid dimensions does not throw any exceptions. It ensures that the class can handle a zero counter scenario, which is a part of the expected functionality.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 024@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                           | Test Data                                              | Expected Result                                       | Notes       |
- * | :--------------: | ------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------- | ----------- |
- * | 01               | Invoke TtmlSelectionPacket constructor with zero counter and valid dimensions         | channelId = 123, counter = 0, width = 640, height = 480  | TtmlSelectionPacket constructed without exception     | Should Pass |
- */
-TEST(TtmlSelectionPacket, ZeroCounter) {
-    std::cout << "Entering ZeroCounter test" << std::endl;
-    EXPECT_NO_THROW({
-        uint32_t channelId = 123;
-        uint32_t counter = 0;
-        uint32_t width = 640;
-        uint32_t height = 480;
-        std::cout << "Invoking TtmlSelectionPacket constructor with parameters: "
-                  << "channelId = " << channelId << ", "
-                  << "counter = " << counter << ", "
-                  << "width = " << width << ", "
-                  << "height = " << height << std::endl;
-        TtmlSelectionPacket packet(channelId, counter, width, height);
-        std::cout << "TtmlSelectionPacket object constructed successfully with zero counter." << std::endl;
-    });
-    std::cout << "Exiting ZeroCounter test" << std::endl;
-}
-/**
- * @brief Test case to verify the TtmlSelectionPacket constructor handles a zero width scenario.
- *
- * This test checks that the TtmlSelectionPacket constructor does not throw an exception and constructs
- * the object successfully when provided with a width value of zero. This behavior ensures that even edge
- * cases with zero dimension parameters are handled correctly.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 025@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke TtmlSelectionPacket constructor with zero width parameter | channelId = 123, counter = 456, width = 0, height = 480 | API does not throw exception and object is constructed successfully | Should Pass |
- */
-TEST(TtmlSelectionPacket, ZeroWidth) {
-    std::cout << "Entering ZeroWidth test" << std::endl;
-    EXPECT_NO_THROW({
-        uint32_t channelId = 123;
-        uint32_t counter = 456;
-        uint32_t width = 0;
-        uint32_t height = 480;
-        std::cout << "Invoking TtmlSelectionPacket constructor with parameters: "
-                  << "channelId = " << channelId << ", "
-                  << "counter = " << counter << ", "
-                  << "width = " << width << ", "
-                  << "height = " << height << std::endl;
-        TtmlSelectionPacket packet(channelId, counter, width, height);
-        std::cout << "TtmlSelectionPacket object constructed successfully with zero width." << std::endl;
-    });
-    std::cout << "Exiting ZeroWidth test" << std::endl;
-}
-/**
- * @brief Test the TtmlSelectionPacket constructor with zero height.
- *
- * This test verifies that the TtmlSelectionPacket object can be constructed without throwing an exception even when the height parameter is zero. This is important to ensure that the constructor properly handles cases with a zero height without causing runtime errors.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 026@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                               | Test Data                                                       | Expected Result                                           | Notes       |
- * | :--------------: | ------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------- | ----------- |
- * | 01               | Invoke the TtmlSelectionPacket constructor with a zero height value.      | channelId = 123, counter = 456, width = 640, height = 0            | TtmlSelectionPacket object is constructed without exception | Should Pass |
- */
-TEST(TtmlSelectionPacket, ZeroHeight) {
-    std::cout << "Entering ZeroHeight test" << std::endl;
-    EXPECT_NO_THROW({
-        uint32_t channelId = 123;
-        uint32_t counter = 456;
-        uint32_t width = 640;
-        uint32_t height = 0;
-        std::cout << "Invoking TtmlSelectionPacket constructor with parameters: "
-                  << "channelId = " << channelId << ", "
-                  << "counter = " << counter << ", "
-                  << "width = " << width << ", "
-                  << "height = " << height << std::endl;
-        TtmlSelectionPacket packet(channelId, counter, width, height);
-        std::cout << "TtmlSelectionPacket object constructed successfully with zero height." << std::endl;
-    });
-    std::cout << "Exiting ZeroHeight test" << std::endl;
-}
-/**
- * @brief Validates successful construction of TtmlTimestampPacket with typical valid input values.
- *
- * This test verifies that providing standard valid parameters to the TtmlTimestampPacket constructor, such as channelId, counter, and timestamp, results in successful packet creation without throwing any exceptions. This ensures that the object is properly instantiated when valid values are provided.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 027
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                    | Expected Result                                                                         | Notes      |
- * | :--------------: | --------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke TtmlTimestampPacket constructor with channelId=123, counter=456, timestamp=789000 to validate successful construction | channelId = 123, counter = 456, timestamp = 789000 | Constructor completes without throwing any exception and the object is successfully constructed | Should Pass |
- */
-TEST(TtmlTimestampPacket, ConstructWithTypicalValidValues) {
-    std::cout << "Entering ConstructWithTypicalValidValues test" << std::endl;
-    std::uint32_t channelId = 123;
-    std::uint32_t counter = 456;
-    std::uint64_t timestamp = 789000;
-    std::cout << "Invoking TtmlTimestampPacket constructor with channelId: " << channelId
-              << ", counter: " << counter << ", timestamp: " << timestamp << std::endl;
-    EXPECT_NO_THROW({
-        TtmlTimestampPacket packet(channelId, counter, timestamp);
-        std::cout << "TtmlTimestampPacket constructed successfully with typical valid values." << std::endl;
-        // Debug: (Assuming retrieval of internal states if getters were available)
-    });
-    std::cout << "Exiting ConstructWithTypicalValidValues test" << std::endl;
-}
-/**
- * @brief Test constructing TtmlTimestampPacket with zero channelId to ensure proper object creation.
- *
- * This test verifies that the TtmlTimestampPacket constructor works as expected when a zero channelId is provided.
- * The test confirms that the constructor completes execution without throwing any exceptions,
- * ensuring that the implementation handles a channelId of zero correctly.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 028@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                | Test Data                                      |Expected Result                                               |Notes       |
- * | :----:           | ------------------------------------------------------------------------------------------ | ---------------------------------------------- |-------------------------------------------------------------- |----------- |
- * | 01               | Invoke TtmlTimestampPacket constructor with channelId=0, counter=456, and timestamp=789000.  | channelId = 0, counter = 456, timestamp = 789000 | Constructor completes without throwing any exceptions.       | Should Pass |
- */
-TEST(TtmlTimestampPacket, ConstructWithZeroChannelId) {
-    std::cout << "Entering ConstructWithZeroChannelId test" << std::endl;
-    std::uint32_t channelId = 0;
-    std::uint32_t counter = 456;
-    std::uint64_t timestamp = 789000;
-    std::cout << "Invoking TtmlTimestampPacket constructor with channelId: " << channelId
-              << ", counter: " << counter << ", timestamp: " << timestamp << std::endl;
-    EXPECT_NO_THROW({
-        TtmlTimestampPacket packet(channelId, counter, timestamp);
-        std::cout << "TtmlTimestampPacket constructed successfully with zero channelId." << std::endl;
-    });
-    std::cout << "Exiting ConstructWithZeroChannelId test" << std::endl;
-}
-/**
- * @brief Tests the TtmlTimestampPacket constructor when a counter value of zero is provided
- *
- * This test verifies that the TtmlTimestampPacket constructor does not throw any exceptions when invoked with a counter value of zero. It checks the proper initialization of the packet with the specified channelId, counter, and timestamp values.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 029@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Initialize test parameters and log the test entry. | channelId = 123, counter = 0, timestamp = 789000 | Logs the entering test message with provided parameters | Should be successful |
- * | 02 | Invoke the TtmlTimestampPacket constructor with the given parameters. | Input: channelId = 123, counter = 0, timestamp = 789000, Output: TtmlTimestampPacket instance | Constructor does not throw any exception and packet is created successfully | Should Pass |
- * | 03 | Log the test completion. | None | Logs the exiting test message | Should be successful |
- */
-TEST(TtmlTimestampPacket, ConstructWithZeroCounter) {
-    std::cout << "Entering ConstructWithZeroCounter test" << std::endl;
-    std::uint32_t channelId = 123;
-    std::uint32_t counter = 0;
-    std::uint64_t timestamp = 789000;
-    std::cout << "Invoking TtmlTimestampPacket constructor with channelId: " << channelId
-              << ", counter: " << counter << ", timestamp: " << timestamp << std::endl;
-    EXPECT_NO_THROW({
-        TtmlTimestampPacket packet(channelId, counter, timestamp);
-        std::cout << "TtmlTimestampPacket constructed successfully with zero counter." << std::endl;
-    });
-    std::cout << "Exiting ConstructWithZeroCounter test" << std::endl;
-}
-/**
- * @brief Validate that TtmlTimestampPacket can be constructed with a zero timestamp without throwing exceptions
- *
- * This test verifies the construction of a TtmlTimestampPacket object when the timestamp value is zero.
- * It ensures that even with a timestamp of zero, the constructor initializes the object properly and does not throw any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 030@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke TtmlTimestampPacket constructor with valid channelId, counter and a zero timestamp | channelId = 123, counter = 456, timestamp = 0 | TtmlTimestampPacket is constructed successfully without throwing an exception | Should Pass |
- */
-TEST(TtmlTimestampPacket, ConstructWithZeroTimestamp) {
-    std::cout << "Entering ConstructWithZeroTimestamp test" << std::endl;
-    std::uint32_t channelId = 123;
-    std::uint32_t counter = 456;
-    std::uint64_t timestamp = 0;
-    std::cout << "Invoking TtmlTimestampPacket constructor with channelId: " << channelId
-              << ", counter: " << counter << ", timestamp: " << timestamp << std::endl;
-    EXPECT_NO_THROW({
-        TtmlTimestampPacket packet(channelId, counter, timestamp);
-        std::cout << "TtmlTimestampPacket constructed successfully with zero timestamp." << std::endl;
-    });
-    std::cout << "Exiting ConstructWithZeroTimestamp test" << std::endl;
+    }
+    std::cout << "  100 selection+data+timestamp cycles OK" << std::endl;
+    std::cout << "[TtmlChannel.Stress100Cycles] - PASS" << std::endl;
 }
