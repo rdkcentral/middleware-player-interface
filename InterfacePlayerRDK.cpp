@@ -3471,6 +3471,16 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 
 	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
 			   gst_current, gst_pending);
+	
+	if (gst_current == GST_STATE_PAUSED && gst_pending  == GST_STATE_PAUSED)
+
+	{
+		// Pipeline wedged in PAUSED->PAUSED transition Force state reset by going through NULL state
+		MW_LOG_INFO("validateStateWithMsTimeout: PAUSED->PAUSED wedged, forcing reset");
+		SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_NULL);
+		SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED);
+	}
+
 	return gst_current;
 }
 
