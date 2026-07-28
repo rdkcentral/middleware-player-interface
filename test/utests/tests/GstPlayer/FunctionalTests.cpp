@@ -440,7 +440,7 @@ TEST_P(GstPlayerTestsP, SubtitlePending)
 	* is made to set the subtitle state muted/unmuted. However at this point gst
 	* has not completed construction of the chain for ttml and the state gets lost.
 	* The following error occurs:
-	* subtecsink gstsubtecsink.cpp:254:set_mute:<subtecsink0>[00m Unmute failed due to NULL channel
+	* subtecsink gstsubtecsink.cpp:254:set_mute:<subtecsink0>[00m Unmute failed due to NULL channel
 	*
 	* Test that we delay the setting of subtitle mute until gstreamer is configured.
 	*/
