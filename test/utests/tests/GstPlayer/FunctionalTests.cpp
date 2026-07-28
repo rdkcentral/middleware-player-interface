@@ -279,7 +279,7 @@ public:
 		}
 		else
 		{
-//			EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("rectangle"), Matcher<char *>(_))).Times(0);
+			EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("rectangle"), Matcher<char *>(_))).Times(0);
 		}
 		if (setup->usingRialto)
 		{
@@ -447,9 +447,10 @@ TEST_P(GstPlayerTestsP, SubtitlePending)
 
 
 
-    GstPlayerTests::Config_Params setup = {false
+    GstPlayerTests::Config_Params setup = {
+		false
 		, false
-		, false
+		, true   // enableRectangleProperty
 		, false
 		, false  //usingRialto
 		, true   // gstreamerSubsEnabled
