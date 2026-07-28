@@ -44,10 +44,11 @@ Remove the entire folder externals/rdk/IARM
 #include "_base64.h"
 #ifdef USE_PREINIT_DECODING
 #include "power_controller.h"
-#include <thread>
+
 #include <system_error> // for std::system_error 
 #include <exception> // for std::exception base class
 #endif
+#include <thread>
 #include "PlayerLogManager.h"
 
 #include "PlayerExternalsRdkInterface.h"
