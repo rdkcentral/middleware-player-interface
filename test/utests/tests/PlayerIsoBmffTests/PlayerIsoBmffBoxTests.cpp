@@ -1277,6 +1277,7 @@ TEST(PlayerIsoBmffBuffer, SetBuffer_Valid) {
     
     buffer.setBuffer(data, 256);
     
+    EXPECT_EQ(buffer.getBuffer(), data);
     EXPECT_EQ(buffer.getBufferSize(), 256);
     
     std::cout << "[PlayerIsoBmffBuffer] SetBuffer_Valid - PASS" << std::endl;
@@ -1820,14 +1821,17 @@ TEST(SencBox, Truncate_Valid) {
     std::cout << "[SencBox] Truncate_Valid - START" << std::endl;
     
     uint8_t buffer[200] = {0};
-    uint8_t sampleCount = 15;
+    // Initialize buffer with proper box structure
+    uint32_t sampleCount = 15;
+    uint8_t *sampleCountLoc = buffer + 8; // Point to location in buffer after version/flags
+    PLAYER_WRITE_U32(sampleCountLoc, sampleCount);  // Write sample count to buffer
     
     char btype[4];
     std::memset(btype, 0, sizeof(btype));
     std::strncpy(btype, "senc", sizeof(btype));
     
     FullIsoBmffBox fbox(150, btype, 0, 0x000002);
-    SencIsoBmffBox senc(fbox, &sampleCount, 15);
+    SencIsoBmffBox senc(fbox, sampleCountLoc, sampleCount);
     senc.setBase(buffer + 8);
     
     senc.truncate(2048);
@@ -1978,13 +1982,17 @@ TEST(SaizBox, Truncate_Valid) {
     std::cout << "[SaizBox] Truncate_Valid - START" << std::endl;
     
     uint8_t buffer[200] = {0};
-    uint8_t sampleCount = 10;
+    // Initialize buffer with proper box structure
+    uint32_t sampleCount = 10;
+    uint8_t *sampleCountLoc = buffer + 8; // Point to location in buffer
+    PLAYER_WRITE_U32(sampleCountLoc, sampleCount);  // Write sample count to buffer
+    
     char btype[4];
     std::memset(btype, 0, sizeof(btype));
     std::strncpy(btype, "saiz", sizeof(btype));
     
     FullIsoBmffBox fbox(150, btype, 0, 0);
-    SaizIsoBmffBox saiz(fbox, &sampleCount, 10, 128);
+    SaizIsoBmffBox saiz(fbox, sampleCountLoc, 10, 128);
     saiz.setBase(buffer + 8);
     
     saiz.truncate();
@@ -2351,6 +2359,7 @@ TEST(PlayerIsoBmffBufferExtended, LargeBuffer) {
     buffer.setBuffer(largeData.data(), largeData.size());
     
     EXPECT_EQ(buffer.getBufferSize(), 100000);
+    EXPECT_NE(buffer.getBuffer(), nullptr);
     
     std::cout << "[PlayerIsoBmffBufferExtended] LargeBuffer - PASS" << std::endl;
 }

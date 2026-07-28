@@ -299,6 +299,13 @@ public:
      * @retval PlayerExternalsInterface object
      */
     static std::shared_ptr<PlayerExternalsInterface> GetPlayerExternalsInterfaceInstance();
+
+    /**
+     * @fn createInstance
+     * @brief Creates a new independent (non-singleton) instance
+     * @retval PlayerExternalsInterface object
+     */
+    static std::shared_ptr<PlayerExternalsInterface> createInstance();
     /**
      * @fn IsPlayerExternalsInterfaceInstanceActive
      * @retval true or false
