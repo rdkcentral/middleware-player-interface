@@ -88,6 +88,10 @@ public:
 	MOCK_METHOD(void, gst_caps_set_simple, (GstCaps *, const char *));
 	MOCK_METHOD(GstBuffer*, gst_buffer_new_allocate, (GstAllocator *allocator, gsize size, GstAllocationParams *params));
 	MOCK_METHOD(void, gst_structure_set, (GstStructure * structure, const char * fieldname));
+	MOCK_METHOD(GstCaps *, gst_app_src_get_caps, (GstAppSrc *appsrc));
+	MOCK_METHOD(GstSample *, gst_sample_new, (GstBuffer *buffer, GstCaps *caps, const GstSegment *segment, GstStructure *info));
+	MOCK_METHOD(GstFlowReturn, gst_app_src_push_sample, (GstAppSrc *appsrc, GstSample *sample));
+
 	MOCK_METHOD(GstElement *, gst_bin_new, (const gchar * name));
 	MOCK_METHOD(gboolean, gst_element_link, (GstElement *src, GstElement *dest));
 	MOCK_METHOD(gboolean, gst_element_link_many, (GstElement *element_1, GstElement *element_2));
