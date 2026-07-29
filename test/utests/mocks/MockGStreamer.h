@@ -44,7 +44,7 @@ public:
 	MOCK_METHOD(gboolean, gst_bin_add, (GstBin *bin, GstElement *element));
 	MOCK_METHOD(void, gst_object_unref,(gpointer object));
 	MOCK_METHOD(void, gst_mini_object_unref,(GstMiniObject *mini_object));
-	
+
 	MOCK_METHOD(GstSample *,gst_app_sink_pull_sample,(GstAppSink *appsink));
 	MOCK_METHOD(GstStructure *,gst_app_sink_set_caps,(GstAppSink *appsink, const GstCaps *caps));
 	MOCK_METHOD(GstStructure *,gst_caps_get_structure,(const GstCaps *caps, guint index));
@@ -88,7 +88,14 @@ public:
 	MOCK_METHOD(void, gst_caps_set_simple, (GstCaps *, const char *));
 	MOCK_METHOD(GstBuffer*, gst_buffer_new_allocate, (GstAllocator *allocator, gsize size, GstAllocationParams *params));
 	MOCK_METHOD(void, gst_structure_set, (GstStructure * structure, const char * fieldname));
+	MOCK_METHOD(GstCaps *, gst_app_src_get_caps, (GstAppSrc *appsrc));
+	MOCK_METHOD(GstSample *, gst_sample_new, (GstBuffer *buffer, GstCaps *caps, const GstSegment *segment, GstStructure *info));
+	MOCK_METHOD(GstFlowReturn, gst_app_src_push_sample, (GstAppSrc *appsrc, GstSample *sample));
 
+	MOCK_METHOD(GstElement *, gst_bin_new, (const gchar * name));
+	MOCK_METHOD(gboolean, gst_element_link, (GstElement *src, GstElement *dest));
+	MOCK_METHOD(gboolean, gst_element_link_many, (GstElement *element_1, GstElement *element_2));
+	MOCK_METHOD(gpointer, gst_object_ref, (gpointer object));
 	/*
 gst_app_sink_get_type
 gst_app_sink_pull_sample

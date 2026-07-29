@@ -30,19 +30,22 @@ include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../middleware/subtec/libsubtec)
-    link_directories(${GSTREAMERBASE_LIBRARY_DIRS} ${GSTREAMER_LIBRARY_DIRS})
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../subtec/libsubtec)
+    # link_directories(${GSTREAMERBASE_LIBRARY_DIRS} ${GSTREAMER_LIBRARY_DIRS}) omitted:
+    # the Xcode generator appends $(CONFIGURATION) to these paths, producing spurious
+    # "search path not found" warnings for non-existent .../lib/Debug directories.
+    # Full-path _LINK_LIBRARIES variables are used instead (see GSTSUBTEC_DEPENDENCIES below).
     link_directories(${CMAKE_INSTALL_PREFIX})
 endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
 
-set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES})
+set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
 
 message(STATUS "GSTSUBTEC_DEPENDENCIES: ${GSTSUBTEC_DEPENDENCIES}")
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../middleware/subtec/libsubtec)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../subtec/libsubtec)
 target_link_libraries(gstsubtecsink PRIVATE subtec ${GSTSUBTEC_DEPENDENCIES})
 
 add_library(gstsubtecbin SHARED gstsubtecbin.cpp)

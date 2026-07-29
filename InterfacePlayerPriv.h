@@ -187,6 +187,7 @@ struct GstPlayerPriv
 	bool audioMuted;                                                                         /**< Audio mute status. */
 	std::mutex volumeMuteMutex;                                                      /**< Mutex to ensure setVolumeOrMuteUnMute is thread-safe. */
 	bool subtitleMuted;                                                                      /**< Subtitle mute status. */
+	bool setSubtitlePending;                                                         /**< true to delay subtitle setting until gstreamer pipeline ready. */
 	double audioVolume;                                                                      /**< Audio volume. */
 	guint eosCallbackIdleTaskId;                                             /**< ID of idle handler created for notifying EOS event. */
 	std::atomic<bool> eosCallbackIdleTaskPending;            /**< Set if any eos callback is pending. */
@@ -232,7 +233,7 @@ struct GstPlayerPriv
 		gpointer instance;
 		gulong id;
 		std::string name;
-		CallbackData(gpointer _instance, gulong _id, std::string _name) : instance(_instance), id(_id), name(_name) {};
+		CallbackData(gpointer _instance, gulong _id, std::string _name) : instance(_instance), id(_id), name(std::move(_name)) {};
 		CallbackData(const CallbackData &original) : instance(original.instance), id(original.id), name(original.name) {};
 		CallbackData(CallbackData &&original) : instance(original.instance), id(original.id), name(original.name) {};
 		CallbackData &operator=(const CallbackData &) = delete;

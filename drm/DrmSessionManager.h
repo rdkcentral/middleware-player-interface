@@ -31,6 +31,7 @@
 #include "GstUtils.h"
 #include <string>
 #include <atomic>
+#include <utility>
 #include "DrmHelper.h"
 
 #include "PlayerSecInterface.h"
@@ -59,10 +60,24 @@ struct DrmSessionContext
 	{
 		// Releases memory allocated after destructing any of these objects
 	}
+	DrmSessionContext(DrmSessionContext&& other) noexcept : data(std::move(other.data)), drmSession(other.drmSession)
+	{
+		other.drmSession = nullptr;
+	}
 	DrmSessionContext& operator=(const DrmSessionContext& other)
 	{
 		data = other.data;
 		drmSession = other.drmSession;
+		return *this;
+	}
+	DrmSessionContext& operator=(DrmSessionContext&& other) noexcept
+	{
+		if (this != &other)
+		{
+			data = std::move(other.data);
+			drmSession = other.drmSession;
+			other.drmSession = nullptr;
+		}
 		return *this;
 	}
 	~DrmSessionContext()

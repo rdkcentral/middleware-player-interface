@@ -56,15 +56,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IFirebolt)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IFirebolt)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    # Remove any pkg-config based GStreamer link libraries
-    set(GSTREAMER_LINK_LIBRARIES "")
-    set(GST_LIBRARIES "")
-    set(GSTREAMERBASE_LINK_LIBRARIES "")
-    set(GSTVIDEO_LINK_LIBRARIES "")
-    # Add GStreamer.framework to linker flags
-    set(OS_LD_FLAGS)
-    list(APPEND OS_LD_FLAGS -F/Library/Frameworks "-framework GStreamer")
-    list(APPEND LIB_EXT_DEPENDS ${OS_LD_FLAGS})
+    # Use full-path _LINK_LIBRARIES (Homebrew dylibs) instead of -framework GStreamer.
+    # The framework install is no longer required; Homebrew gstreamer provides the dylibs
+    # and pkg_check_modules populates _LINK_LIBRARIES with absolute paths that the linker
+    # can resolve without link_directories().
+    list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 else()
     list(APPEND LIB_EXT_DEPENDS ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 endif()

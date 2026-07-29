@@ -229,10 +229,9 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 						 * where input data changes e.g. following a call to updatePlaybackSession
 						 * the input data to the shared session is updated here*/
 						newSession = ContentSecurityManagerSession(response["sessionId"].Number(), 
-								ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetadata,
-									contMetaLen, licenseRequest, keySystemId,
-									mediaUsage, accessToken, isVideoMuted));
-
+							ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetaDataStr.c_str(),
+								contMetaLen, licenseRequestStr.c_str(), keySystemId,
+								mediaUsage, accessTokenStr.c_str(), isVideoMuted));
 						std::string license = response["license"].String();
 						MW_LOG_TRACE("SecManager obtained license with length: %d and data: %s",license.size(), license.c_str());
 						if (!license.empty())
@@ -537,27 +536,27 @@ void SecManagerThunder::RegisterAllEvents ()
 {
 	bool bSubscribed = false;
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> watermarkSessionMethod = std::bind(&SecManagerThunder::watermarkSessionHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onWatermarkSession"), watermarkSessionMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onWatermarkSession"), std::move(watermarkSessionMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onWatermarkSession");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> addWatermarkMethod = std::bind(&SecManagerThunder::addWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onAddWatermark"), addWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onAddWatermark"), std::move(addWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onAddWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> updateWatermarkMethod = std::bind(&SecManagerThunder::updateWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onUpdateWatermark"), updateWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onUpdateWatermark"), std::move(updateWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onUpdateWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> removeWatermarkMethod = std::bind(&SecManagerThunder::removeWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onRemoveWatermark"), removeWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onRemoveWatermark"), std::move(removeWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onRemoveWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> showWatermarkMethod = std::bind(&SecManagerThunder::showWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onDisplayWatermark"), showWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onDisplayWatermark"), std::move(showWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onDisplayWatermark");
 }
