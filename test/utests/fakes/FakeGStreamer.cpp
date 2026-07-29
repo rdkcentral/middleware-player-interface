@@ -316,6 +316,10 @@ GstQuery *gst_query_new_position(GstFormat format)
 gpointer gst_object_ref(gpointer object)
 {
 	TRACE_FUNC();
+	if (g_mockGStreamer != nullptr)
+	{
+		return g_mockGStreamer->gst_object_ref(object);
+	}
 	return NULL;
 }
 
@@ -385,13 +389,23 @@ void gst_bin_add_many(GstBin *bin, GstElement *element_1, ...)
 gboolean gst_element_link(GstElement *src, GstElement *dest)
 {
 	TRACE_FUNC();
-	return FALSE;
+	gboolean rtn = FALSE;
+	if (g_mockGStreamer != nullptr)
+	{
+		rtn = g_mockGStreamer->gst_element_link(src, dest);
+	}
+	return rtn;
 }
 
 gboolean gst_element_link_many(GstElement *element_1, GstElement *element_2, ...)
 {
 	TRACE_FUNC();
-	return FALSE;
+	gboolean rtn = FALSE;
+	if (g_mockGStreamer != nullptr)
+	{
+		rtn = g_mockGStreamer->gst_element_link_many(element_1, element_2 );
+	}
+	return rtn;
 }
 
 gboolean gst_element_sync_state_with_parent(GstElement *element)
@@ -968,6 +982,10 @@ gchar * gst_structure_to_string(const GstStructure *structure)
 GstElement * gst_bin_new (const gchar * name)
 {
 	TRACE_FUNC();
+	if (g_mockGStreamer != nullptr)
+		{
+			return g_mockGStreamer->gst_bin_new(name);
+		}
 	return NULL;
 }
 void gst_deinit (void)
