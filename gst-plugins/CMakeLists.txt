@@ -39,7 +39,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
     # appends $(CONFIGURATION) to these paths, causing spurious "search path
     # not found" warnings for non-existent .../lib/Debug directories.
     pkg_check_modules(UUID REQUIRED uuid)
-    link_directories(${UUID_LIBRARY_DIRS})
     set(OS_CXX_FLAGS "${OS_CXX_FLAGS} -g -x objective-c++")
     set(OS_LD_FLAGS "${OS_LD_FLAGS} -framework Cocoa")
     string(STRIP "${OS_LD_FLAGS}" OS_LD_FLAGS)
