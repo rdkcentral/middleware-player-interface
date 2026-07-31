@@ -3453,11 +3453,11 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	float timeout = 100.0;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gint gstGetStateCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
-
+	GstStateChangeReturn ret = GST_STATE_CHANGE_FAILURE;
 	do
 	{
 		if ((GST_STATE_CHANGE_SUCCESS
-			 == gst_element_get_state(privatePlayer->gstPrivateContext->pipeline, &gst_current, &gst_pending, timeout * GST_MSECOND))
+			 == ( ret = gst_element_get_state(privatePlayer->gstPrivateContext->pipeline, &gst_current, &gst_pending, timeout * GST_MSECOND)) )
 			&& (gst_current == stateToValidate))
 		{
 			GST_WARNING(
@@ -3472,13 +3472,10 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
 			   gst_current, gst_pending);
 	
-	if (gst_current == GST_STATE_PAUSED && gst_pending  == GST_STATE_PAUSED)
-
+	if (ret == GST_STATE_CHANGE_ASYNC && gst_current == GST_STATE_PAUSED && gst_pending == GST_STATE_PAUSED)
 	{
-		// Pipeline wedged in PAUSED->PAUSED transition Force state reset by going through NULL state
-		MW_LOG_INFO("validateStateWithMsTimeout: PAUSED->PAUSED wedged, forcing reset");
-		SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_NULL);
-		SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED);
+		MW_LOG_WARN("validateStateWithMsTimeout: PAUSED->PAUSED wedged detected, returning error to let AAMP recover");
+		return GST_STATE_VOID_PENDING;
 	}
 
 	return gst_current;
