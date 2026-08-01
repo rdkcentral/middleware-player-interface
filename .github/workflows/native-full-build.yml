@@ -25,6 +25,6 @@ jobs:
          sudo apt remove -y meson || true
          sudo pip3 install --upgrade meson
          hash -r
-         yes | ./install-middleware.sh -s subtec
+         yes | ./install-middleware.sh
         env:
           GITHUB_TOKEN: ${{ secrets.RDKCM_RDKE }}
