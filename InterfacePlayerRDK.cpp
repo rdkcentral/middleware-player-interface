@@ -505,6 +505,25 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		gst_context_unref(context);
 	}
 
+	// non-blocking state query — if pipeline is wedged in PAUSED->PAUSED,
+	// force NULL reset BEFORE issuing any new state transition.
+	// This prevents the double-wedge where ConfigurePipeline is called from a
+	// recovery re-seek while the pipeline is still physically stuck in PAUSED.
+	{
+		GstState cur = GST_STATE_NULL, pend = GST_STATE_NULL;
+		gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
+		                       &cur, &pend, 0 /* non-blocking */);
+		if (cur == GST_STATE_PAUSED && pend == GST_STATE_PAUSED)
+		{
+			MW_LOG_WARN("ConfigurePipeline: pipeline wedged (PAUSED->PAUSED), "
+			             "forcing NULL reset before state transition");
+			SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_NULL);
+			// Wait up to 200ms for NULL to complete before proceeding
+			gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
+			                       &cur, &pend, 200 * GST_MSECOND);
+		}
+	}
+
 	if (interfacePlayerPriv->gstPrivateContext->pauseOnStartPlayback && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED - pause on playback enabled");
@@ -3475,6 +3494,14 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	if (ret == GST_STATE_CHANGE_ASYNC && gst_current == GST_STATE_PAUSED && gst_pending == GST_STATE_PAUSED)
 	{
 		MW_LOG_WARN("validateStateWithMsTimeout: PAUSED->PAUSED wedged detected, returning error to let AAMP recover");
+		return GST_STATE_VOID_PENDING;
+	}
+
+	if (ret == GST_STATE_CHANGE_ASYNC && gst_current == GST_STATE_PLAYING	&& gst_pending == GST_STATE_PAUSED)
+	{
+		MW_LOG_WARN("validateStateWithMsTimeout: PLAYING->PAUSED transition timed out "
+		             "(State=%d, Pending=%d), returning error to let AAMP recover",
+		             gst_current, gst_pending);
 		return GST_STATE_VOID_PENDING;
 	}
 
