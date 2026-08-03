@@ -214,6 +214,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	closedcaptions/direct-rialto/IDirectRialtoCC.h
 	DESTINATION include)
 
 set(SOURCES
