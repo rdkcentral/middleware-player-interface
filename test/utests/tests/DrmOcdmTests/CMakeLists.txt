@@ -69,6 +69,7 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/DrmUtils.cpp
 					${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
 					${PLAYER_ROOT}/drm/helper/DrmHelperFactory.cpp
 					${PLAYER_ROOT}/drm/DrmSessionManager.cpp
+					${PLAYER_ROOT}/drm/DrmSession.cpp
 					${PLAYER_ROOT}/drm/DrmJsonObject.cpp
 					${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
 					${PLAYER_ROOT}/drm/ocdm/OcdmGstSessionAdapter.cpp

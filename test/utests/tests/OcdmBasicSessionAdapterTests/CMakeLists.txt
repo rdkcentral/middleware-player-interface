@@ -46,6 +46,7 @@ set(TEST_SOURCES FunctionalTests.cpp
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
                  ${PLAYER_ROOT}/drm/helper/DrmHelper.cpp
+                 ${PLAYER_ROOT}/drm/DrmSession.cpp
 		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		 ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
                  ${PLAYER_ROOT}/ProcessHandler.cpp

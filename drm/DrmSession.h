@@ -91,10 +91,7 @@ public:
 	 * @fn DrmSession
 	 * @param keySystem : DRM key system uuid
 	 */
-	DrmSession(const string &keySystem) :
-		m_keySystem(keySystem),
-		m_OutputProtectionEnabled(false),
-		mContentSecurityManagerSession() { };
+	DrmSession(const string &keySystem);
 
 	/**
 		 * @brief Copy constructor disabled
@@ -105,7 +102,7 @@ public:
 	/**
 	 * @fn ~DrmSession
 	 */
-	virtual ~DrmSession() = default;
+	virtual ~DrmSession();
 
 	/**
 	 * @brief assignment operator disabled
