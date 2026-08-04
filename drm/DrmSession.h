@@ -177,7 +177,7 @@ public:
 	 * @param caps : Caps of the media that is currently being decrypted
 	 * @retval Returns status of decrypt request.
 	 */
-	virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL) { return -1; };
+	virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
 
 	/**
 	 * @fn decrypt
@@ -188,7 +188,7 @@ public:
 	 * @param ppOpaqueData : pointer to opaque buffer in case of SVP.
 	 * @retval Returns status of decrypt request.
 	 */
-	virtual int decrypt(const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData) { return -1; };
+	virtual int decrypt(const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData);
 
 	/**
 	 * @brief Get the current state of DRM Session.
@@ -230,7 +230,7 @@ public:
 	 * @fn getKeySystem
 	 * @retval DRM system uuid
 	 */
-	string getKeySystem() { return m_keySystem; };
+	string getKeySystem();
 
 	/**
 	 * @brief Set the OutputProtection for DRM Session
