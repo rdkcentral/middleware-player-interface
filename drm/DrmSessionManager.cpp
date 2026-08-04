@@ -352,6 +352,12 @@ string _extractSubstring(string parentStr, string startStr, string endStr)
 bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &status)
 {
 	bool ret = false;
+	// createDrmSession() holds mDrmSessionLock for its whole duration (slot
+	// claim through license acquisition). Taking it here first blocks until
+	// any in-flight createDrmSession() call for this keyId has fully
+	// resolved, so the cachedKeyIDs state read below is a final outcome
+	// rather than a slot that has merely been claimed by another thread.
+	std::lock_guard<std::mutex> sessionGuard(mDrmSessionLock);
 	std::lock_guard<std::mutex> guard(cachedKeyMutex);
 	for (int sessionSlot = 0; sessionSlot < mMaxDRMSessions; sessionSlot++)
 	{
@@ -365,7 +371,7 @@ bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &
 		if (it != keyIDSlot.end())
 		{
 			std::string debugStr = PlayerLogManager::getHexDebugStr(keyIdArray);
-			status = !it->isFailedKeyId;
+			status = !it->isFailedKeyId && !cachedKeyIDs[sessionSlot].isFailedKeyEntries;
 			MW_LOG_INFO("Session created/in progress with same keyID %s at slot %d, status=%d", debugStr.c_str(), sessionSlot, status);
 			ret = true;
 			break;

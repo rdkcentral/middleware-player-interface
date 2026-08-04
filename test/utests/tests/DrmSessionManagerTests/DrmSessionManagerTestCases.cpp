@@ -493,6 +493,78 @@ TEST_F(DrmSessionManagerComplexTests, KeyIdEntries_PrimaryKeyFails_MarksEntireFa
 }
 
 /**
+ * @brief IsKeyIdProcessed should report success when a cached keyId's own
+ * entry and slot are both unmarked as failed.
+ */
+TEST_F(DrmSessionManagerComplexTests, IsKeyIdProcessed_CachedKeyNotFailed_ReportsSuccess)
+{
+	std::vector<uint8_t> keyId = {0x01, 0x02, 0x03, 0x04};
+
+	KeyIdEntries entries;
+	KeyIdEntry entry;
+	entry.keyId = keyId;
+	entry.isFailedKeyId = false;
+	entries.data.push_back(entry);
+	entries.isFailedKeyEntries = false;
+	mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+
+	bool status = false;
+	bool found = mDrmSessionManager->IsKeyIdProcessed(keyId, status);
+
+	EXPECT_TRUE(found);
+	EXPECT_TRUE(status);
+}
+
+/**
+ * @brief Regression test: a keyId whose per-entry isFailedKeyId flag is
+ * false must still be reported as failed when the whole slot has been
+ * marked isFailedKeyEntries (set on session/license failure paths that
+ * only set the slot-level flag). Prior to the fix, IsKeyIdProcessed only
+ * checked the per-entry flag and could incorrectly report a failed
+ * session as processed/successful.
+ */
+TEST_F(DrmSessionManagerComplexTests, IsKeyIdProcessed_SlotMarkedFailed_ReportsFailureEvenIfEntryFlagClear)
+{
+	std::vector<uint8_t> keyId = {0x05, 0x06, 0x07, 0x08};
+
+	KeyIdEntries entries;
+	KeyIdEntry entry;
+	entry.keyId = keyId;
+	entry.isFailedKeyId = false; // per-entry flag never set on this path
+	entries.data.push_back(entry);
+	entries.isFailedKeyEntries = true; // whole slot failed (e.g. license/session creation failure)
+	mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+
+	bool status = true; // pre-set to ensure it's actually written to false
+	bool found = mDrmSessionManager->IsKeyIdProcessed(keyId, status);
+
+	EXPECT_TRUE(found);
+	EXPECT_FALSE(status);
+}
+
+/**
+ * @brief IsKeyIdProcessed should report "not found" for a keyId that has
+ * never been cached in any slot.
+ */
+TEST_F(DrmSessionManagerComplexTests, IsKeyIdProcessed_UnknownKeyId_ReportsNotFound)
+{
+	std::vector<uint8_t> cachedKeyId = {0x01, 0x02, 0x03, 0x04};
+	std::vector<uint8_t> unknownKeyId = {0xAA, 0xBB, 0xCC, 0xDD};
+
+	KeyIdEntries entries;
+	KeyIdEntry entry;
+	entry.keyId = cachedKeyId;
+	entry.isFailedKeyId = false;
+	entries.data.push_back(entry);
+	mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+
+	bool status = false;
+	bool found = mDrmSessionManager->IsKeyIdProcessed(unknownKeyId, status);
+
+	EXPECT_FALSE(found);
+}
+
+/**
  * @brief Test hex string key ID vs binary key ID comparison
  */
 TEST_F(DrmSessionManagerComplexTests, KeyId_HexStringVsBinary_ComparisonLogic)
