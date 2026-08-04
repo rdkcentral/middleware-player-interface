@@ -5051,16 +5051,11 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameVMX) == true))
 				{
  					MW_LOG_MIL("InterfacePlayerRDK setting encrypted player (%p) instance for %s decryptor", pInterfacePlayerRDK->mEncrypt, GST_OBJECT_NAME(msg->src));
- 					GValue val = { 0, };
- 					g_value_init(&val, G_TYPE_POINTER);
-
-					g_value_set_pointer(&val, (gpointer) pInterfacePlayerRDK->mDRMSessionManager); // encryption is being passed by player
-
- 					g_object_set_property(G_OBJECT(msg->src), privatePlayer->mPlayerName.c_str(), &val);
-					GValue val_drm = { 0, };
-					g_value_init(&val_drm, G_TYPE_POINTER);
-					g_value_set_pointer(&val_drm, (gpointer) pInterfacePlayerRDK->mEncrypt);
-					g_object_set_property(G_OBJECT(msg->src), "drm-session-manager", &val_drm);
+ 					// Set both properties atomically to avoid potential use-after-free if property notifications trigger unrefs
+					g_object_set(msg->src,
+					             privatePlayer->mPlayerName.c_str(), pInterfacePlayerRDK->mDRMSessionManager,
+					             "drm-session-manager", pInterfacePlayerRDK->mEncrypt,
+					             NULL);
 				}
 			}
 			break;
