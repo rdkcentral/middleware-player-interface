@@ -323,10 +323,6 @@ public:
 	 *  @param[out]	status - processed status of the key id success/fail
 	 *  @return		bool - true if keyId is already marked as failed or processed,
 	 * 				false if key is not cached
-	 *  @note		Blocks until any concurrent createDrmSession() call has
-	 *  			completed (shares mDrmSessionLock with createDrmSession),
-	 *  			so callers get a final, non-racy outcome rather than a
-	 *  			snapshot of a slot that has merely been claimed.
 	 */
 	bool IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &status);
 	/**
