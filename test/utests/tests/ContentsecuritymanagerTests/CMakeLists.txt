@@ -25,7 +25,7 @@ include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/drm ${P
 include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerLogManager)
-include_directories(${PLAYER_ROOT}/playerJsonObject)
+include_directories(${PLAYER_ROOT}/playerjsonobject)
 include_directories(${PLAYER_ROOT}/baseConversion)
 include_directories(${PLAYER_ROOT}/playerisobmff)
 include_directories(${PLAYER_ROOT}/externals)
@@ -42,11 +42,13 @@ include_directories(SYSTEM ${UTESTS_ROOT}/mocks)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
-set(TEST_SOURCES PlayerContentSecurityRun.cpp
-		PlayerContentSecurityManagerFun.cpp
-		PlayerContentSecurityManagerSes.cpp
-	        PlayerMemoryUtilsFun.cpp
-		PlayerSecInterfaceFun.cpp)
+set(TEST_SOURCES 
+    PlayerContentSecurityRun.cpp
+    ContentSecurityManagerTests.cpp
+    ContentSecurityManagerSessionTests.cpp
+    PlayerSecInterfaceTests.cpp
+    PlayerMemoryUtilsTests.cpp
+)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 		   ${PLAYER_ROOT}/externals/contentsecuritymanager/ContentSecurityManager.cpp

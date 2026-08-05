@@ -1,4 +1,3 @@
-
 /*
  * If not stated otherwise in this file or this component's LICENSE file the
  * following copyright and licenses apply:
@@ -17,2114 +16,1348 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * @file SubtecPacketTests.cpp
+ * @brief Comprehensive unit tests for all Subtec packet types.
+ *
+ * Covers: Packet base class, DummyPacket, PausePacket, ResumePacket,
+ *         MutePacket, UnmutePacket, ResetAllPacket, ResetChannelPacket,
+ *         CCSetAttributePacket — constructors, buffer layout, type values,
+ *         counter accessors, edge cases and stress tests.
+ */
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <stdio.h>
-#include <SubtecPacket.hpp>
+#include <limits>
+#include <array>
+#include <cstdint>
+#include "SubtecPacket.hpp"
 
-class PacketChild : public Packet {
+// ---------------------------------------------------------------------------
+// Helper utilities
+// ---------------------------------------------------------------------------
+
+/** @brief Decode a 4-byte little-endian word from a byte buffer. */
+static uint32_t readLE32(const std::vector<uint8_t>& buf, size_t offset)
+{
+    return static_cast<uint32_t>(buf[offset])
+         | (static_cast<uint32_t>(buf[offset + 1]) << 8)
+         | (static_cast<uint32_t>(buf[offset + 2]) << 16)
+         | (static_cast<uint32_t>(buf[offset + 3]) << 24);
+}
+
+/** @brief Decode a 8-byte little-endian word from a byte buffer. */
+static uint64_t readLE64(const std::vector<uint8_t>& buf, size_t offset)
+{
+    return static_cast<uint64_t>(readLE32(buf, offset))
+         | (static_cast<uint64_t>(readLE32(buf, offset + 4)) << 32);
+}
+
+// PacketType numeric constants (mirror of Packet::PacketType enum)
+static constexpr uint32_t TYPE_ZERO              = 0;
+static constexpr uint32_t TYPE_PES_DATA          = 1;
+static constexpr uint32_t TYPE_TIMESTAMP         = 2;
+static constexpr uint32_t TYPE_RESET_ALL         = 3;
+static constexpr uint32_t TYPE_RESET_CHANNEL     = 4;
+static constexpr uint32_t TYPE_SUBTITLE_SELECTION= 5;
+static constexpr uint32_t TYPE_TELETEXT_SELECTION= 6;
+static constexpr uint32_t TYPE_TTML_SELECTION    = 7;
+static constexpr uint32_t TYPE_TTML_DATA         = 8;
+static constexpr uint32_t TYPE_TTML_TIMESTAMP    = 9;
+static constexpr uint32_t TYPE_CC_DATA           = 10;
+static constexpr uint32_t TYPE_PAUSE             = 11;
+static constexpr uint32_t TYPE_RESUME            = 12;
+static constexpr uint32_t TYPE_MUTE              = 13;
+static constexpr uint32_t TYPE_UNMUTE            = 14;
+static constexpr uint32_t TYPE_WEBVTT_SELECTION  = 15;
+static constexpr uint32_t TYPE_WEBVTT_DATA       = 16;
+static constexpr uint32_t TYPE_WEBVTT_TIMESTAMP  = 17;
+static constexpr uint32_t TYPE_CC_SET_ATTRIBUTE  = 18;
+
+// ===========================================================================
+// PacketBase tests — base Packet class
+// ===========================================================================
+
+/**
+ * @brief Default constructor sets counter to UINT32_MAX.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 001
+ * @par Priority: High
+ *
+ * | Step | Description | Expected |
+ * |:----:|-------------|---------|
+ * | 01 | Construct DummyPacket (inherits Packet()) | getCounter() == UINT32_MAX |
+ */
+TEST(PacketBase, DefaultConstructorCounterIsUINT32MAX)
+{
+    std::cout << "[PacketBase.DefaultConstructorCounterIsUINT32MAX] - START" << std::endl;
+    DummyPacket pkt;
+    const uint32_t expected = std::numeric_limits<uint32_t>::max();
+    std::cout << "  Expected counter: " << expected << std::endl;
+    std::cout << "  Actual counter:   " << pkt.getCounter() << std::endl;
+    EXPECT_EQ(pkt.getCounter(), expected);
+    std::cout << "[PacketBase.DefaultConstructorCounterIsUINT32MAX] - PASS" << std::endl;
+}
+
+/**
+ * @brief Counter constructor stores the given counter value.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 002
+ * @par Priority: High
+ *
+ * | Step | Description | Expected |
+ * |:----:|-------------|---------|
+ * | 01 | Construct PausePacket with counter=42 | getCounter()==42 |
+ */
+TEST(PacketBase, CounterConstructorStoresValue)
+{
+    std::cout << "[PacketBase.CounterConstructorStoresValue] - START" << std::endl;
+    PausePacket pkt(1u, 42u);
+    std::cout << "  Constructed PausePacket(channelId=1, counter=42)" << std::endl;
+    std::cout << "  getCounter() = " << pkt.getCounter() << std::endl;
+    EXPECT_EQ(pkt.getCounter(), 42u);
+    std::cout << "[PacketBase.CounterConstructorStoresValue] - PASS" << std::endl;
+}
+
+/**
+ * @brief Default Packet (via DummyPacket) has an empty buffer.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(PacketBase, DefaultConstructorBufferIsEmpty)
+{
+    std::cout << "[PacketBase.DefaultConstructorBufferIsEmpty] - START" << std::endl;
+    DummyPacket pkt;
+    std::cout << "  Buffer size: " << pkt.getBytes().size() << std::endl;
+    EXPECT_TRUE(pkt.getBytes().empty());
+    std::cout << "[PacketBase.DefaultConstructorBufferIsEmpty] - PASS" << std::endl;
+}
+
+/**
+ * @brief getTypeString returns correct string for all known packet types.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(PacketBase, GetTypeStringAllKnownTypes)
+{
+    std::cout << "[PacketBase.GetTypeStringAllKnownTypes] - START" << std::endl;
+    DummyPacket helper;
+
+    struct { uint32_t type; const char* expected; } cases[] = {
+        { TYPE_PES_DATA,           "PES_DATA"           },
+        { TYPE_TIMESTAMP,          "TIMESTAMP"          },
+        { TYPE_RESET_ALL,          "RESET_ALL"          },
+        { TYPE_RESET_CHANNEL,      "RESET_CHANNEL"      },
+        { TYPE_SUBTITLE_SELECTION, "SUBTITLE_SELECTION" },
+        { TYPE_TELETEXT_SELECTION, "TELETEXT_SELECTION" },
+        { TYPE_TTML_SELECTION,     "TTML_SELECTION"     },
+        { TYPE_TTML_DATA,          "TTML_DATA"          },
+        { TYPE_TTML_TIMESTAMP,     "TTML_TIMESTAMP"     },
+        { TYPE_CC_DATA,            "CC_DATA"            },
+        { TYPE_PAUSE,              "PAUSE"              },
+        { TYPE_RESUME,             "RESUME"             },
+        { TYPE_MUTE,               "MUTE"               },
+        { TYPE_UNMUTE,             "UNMUTE"             },
+        { TYPE_WEBVTT_SELECTION,   "WEBVTT_SELECTION"   },
+        { TYPE_WEBVTT_DATA,        "WEBVTT_DATA"        },
+        { TYPE_WEBVTT_TIMESTAMP,   "WEBVTT_TIMESTAMP"   },
+        { TYPE_CC_SET_ATTRIBUTE,   "CC_SET_ATTRIBUTE"   },
+    };
+
+    for (auto& c : cases)
+    {
+        std::string result = helper.getTypeString(c.type);
+        std::cout << "  type=" << c.type << " -> \"" << result << "\" (expected \"" << c.expected << "\")" << std::endl;
+        EXPECT_EQ(result, c.expected) << "  Failed for type " << c.type;
+    }
+    std::cout << "[PacketBase.GetTypeStringAllKnownTypes] - PASS" << std::endl;
+}
+
+/**
+ * @brief getTypeString returns "UNKNOWN" for an unrecognised type.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(PacketBase, GetTypeStringUnknownType)
+{
+    std::cout << "[PacketBase.GetTypeStringUnknownType] - START" << std::endl;
+    DummyPacket helper;
+    std::string result = helper.getTypeString(9999u);
+    std::cout << "  getTypeString(9999) = \"" << result << "\"" << std::endl;
+    EXPECT_EQ(result, "UNKNOWN");
+    std::cout << "[PacketBase.GetTypeStringUnknownType] - PASS" << std::endl;
+}
+
+/**
+ * @brief getTypeString returns "INVALID" for 0xFFFFFFFF.
+ *
+ * @par Test Group ID: PacketBase
+ * @par Test Case ID: 006
+ * @par Priority: Low
+ */
+TEST(PacketBase, GetTypeStringInvalidType)
+{
+    std::cout << "[PacketBase.GetTypeStringInvalidType] - START" << std::endl;
+    DummyPacket helper;
+    std::string result = helper.getTypeString(0xFFFFFFFFu);
+    std::cout << "  getTypeString(0xFFFFFFFF) = \"" << result << "\"" << std::endl;
+    EXPECT_EQ(result, "INVALID");
+    std::cout << "[PacketBase.GetTypeStringInvalidType] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// DummyPacket tests
+// ===========================================================================
+
+/**
+ * @brief DummyPacket default constructor does not throw.
+ *
+ * @par Test Group ID: DummyPacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(DummyPacket, DefaultConstructorNoThrow)
+{
+    std::cout << "[DummyPacket.DefaultConstructorNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({
+        DummyPacket pkt;
+        std::cout << "  DummyPacket constructed OK" << std::endl;
+    });
+    std::cout << "[DummyPacket.DefaultConstructorNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief DummyPacket buffer is empty after default construction.
+ *
+ * @par Test Group ID: DummyPacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(DummyPacket, BufferIsEmpty)
+{
+    std::cout << "[DummyPacket.BufferIsEmpty] - START" << std::endl;
+    DummyPacket pkt;
+    std::cout << "  getBytes().size() = " << pkt.getBytes().size() << std::endl;
+    EXPECT_TRUE(pkt.getBytes().empty());
+    EXPECT_EQ(pkt.getBytes().size(), 0u);
+    std::cout << "[DummyPacket.BufferIsEmpty] - PASS" << std::endl;
+}
+
+/**
+ * @brief DummyPacket getCounter returns UINT32_MAX.
+ *
+ * @par Test Group ID: DummyPacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(DummyPacket, CounterIsUINT32MAX)
+{
+    std::cout << "[DummyPacket.CounterIsUINT32MAX] - START" << std::endl;
+    DummyPacket pkt;
+    const uint32_t expected = std::numeric_limits<uint32_t>::max();
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected " << expected << ")" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), expected);
+    std::cout << "[DummyPacket.CounterIsUINT32MAX] - PASS" << std::endl;
+}
+
+/**
+ * @brief Multiple DummyPacket instances are independent.
+ *
+ * @par Test Group ID: DummyPacket
+ * @par Test Case ID: 004
+ * @par Priority: Medium
+ */
+TEST(DummyPacket, MultipleInstancesAreIndependent)
+{
+    std::cout << "[DummyPacket.MultipleInstancesAreIndependent] - START" << std::endl;
+    DummyPacket a, b, c;
+    EXPECT_EQ(a.getCounter(), b.getCounter());
+    EXPECT_EQ(b.getCounter(), c.getCounter());
+    EXPECT_TRUE(a.getBytes().empty());
+    EXPECT_TRUE(b.getBytes().empty());
+    EXPECT_TRUE(c.getBytes().empty());
+    std::cout << "  Three independent DummyPacket instances all have empty buffers  and UINT32_MAX counters" << std::endl;
+    std::cout << "[DummyPacket.MultipleInstancesAreIndependent] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PausePacket tests
+// ===========================================================================
+
+/**
+ * @brief PausePacket construction does not throw.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(PausePacket, ConstructionNoThrow)
+{
+    std::cout << "[PausePacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({
+        PausePacket pkt(1u, 10u);
+        std::cout << "  PausePacket(channelId=1, counter=10) constructed OK" << std::endl;
+    });
+    std::cout << "[PausePacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket buffer is exactly 16 bytes.
+ *
+ * Layout: type(4) + counter(4) + size(4) + channelId(4) = 16
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(PausePacket, BufferSizeIs16)
+{
+    std::cout << "[PausePacket.BufferSizeIs16] - START" << std::endl;
+    PausePacket pkt(1u, 10u);
+    std::cout << "  getBytes().size() = " << pkt.getBytes().size() << " (expected 16)" << std::endl;
+    EXPECT_EQ(pkt.getBytes().size(), 16u);
+    std::cout << "[PausePacket.BufferSizeIs16] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket getType() returns TYPE_PAUSE (11).
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(PausePacket, TypeIsPause)
+{
+    std::cout << "[PausePacket.TypeIsPause] - START" << std::endl;
+    PausePacket pkt(1u, 10u);
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_PAUSE << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_PAUSE);
+    std::cout << "[PausePacket.TypeIsPause] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket getCounter() returns the counter passed to the constructor.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(PausePacket, CounterStoredCorrectly)
+{
+    std::cout << "[PausePacket.CounterStoredCorrectly] - START" << std::endl;
+    PausePacket pkt(5u, 77u);
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected 77)" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), 77u);
+    std::cout << "[PausePacket.CounterStoredCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket buffer encodes channelId at bytes 12-15 in little-endian.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 005
+ * @par Priority: High
+ */
+TEST(PausePacket, ChannelIdEncodedAtCorrectOffset)
+{
+    std::cout << "[PausePacket.ChannelIdEncodedAtCorrectOffset] - START" << std::endl;
+    const uint32_t channelId = 42u;
+    PausePacket pkt(channelId, 1u);
+    const auto& buf = pkt.getBytes();
+    uint32_t decoded = readLE32(buf, 12);
+    std::cout << "  channelId in constructor: " << channelId
+              << ", decoded from buf[12..15]: " << decoded << std::endl;
+    EXPECT_EQ(decoded, channelId);
+    std::cout << "[PausePacket.ChannelIdEncodedAtCorrectOffset] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket size field at bytes 8-11 is always 4.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 006
+ * @par Priority: Medium
+ */
+TEST(PausePacket, SizeFieldIs4)
+{
+    std::cout << "[PausePacket.SizeFieldIs4] - START" << std::endl;
+    PausePacket pkt(1u, 1u);
+    const auto& buf = pkt.getBytes();
+    uint32_t sizeField = readLE32(buf, 8);
+    std::cout << "  size field at buf[8..11]: " << sizeField << " (expected 4)" << std::endl;
+    EXPECT_EQ(sizeField, 4u);
+    std::cout << "[PausePacket.SizeFieldIs4] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket accepts zero channelId and zero counter without issues.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 007
+ * @par Priority: Medium
+ */
+TEST(PausePacket, ZeroChannelIdAndCounter)
+{
+    std::cout << "[PausePacket.ZeroChannelIdAndCounter] - START" << std::endl;
+    EXPECT_NO_THROW({
+        PausePacket pkt(0u, 0u);
+        EXPECT_EQ(pkt.getBytes().size(), 16u);
+        EXPECT_EQ(pkt.getCounter(), 0u);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 12), 0u);
+        std::cout << "  PausePacket(0, 0) OK" << std::endl;
+    });
+    std::cout << "[PausePacket.ZeroChannelIdAndCounter] - PASS" << std::endl;
+}
+
+/**
+ * @brief PausePacket accepts UINT32_MAX for both channelId and counter.
+ *
+ * @par Test Group ID: PausePacket
+ * @par Test Case ID: 008
+ * @par Priority: Medium
+ */
+TEST(PausePacket, MaxChannelIdAndCounter)
+{
+    std::cout << "[PausePacket.MaxChannelIdAndCounter] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({
+        PausePacket pkt(MAX, MAX);
+        EXPECT_EQ(pkt.getBytes().size(), 16u);
+        EXPECT_EQ(pkt.getCounter(), MAX);
+        EXPECT_EQ(readLE32(pkt.getBytes(), 12), MAX);
+        std::cout << "  PausePacket(UINT32_MAX, UINT32_MAX) OK" << std::endl;
+    });
+    std::cout << "[PausePacket.MaxChannelIdAndCounter] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// ResumePacket tests
+// ===========================================================================
+
+/**
+ * @brief ResumePacket construction does not throw.
+ *
+ * @par Test Group ID: ResumePacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(ResumePacket, ConstructionNoThrow)
+{
+    std::cout << "[ResumePacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ ResumePacket pkt(1u, 10u); });
+    std::cout << "[ResumePacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResumePacket buffer is exactly 16 bytes.
+ *
+ * @par Test Group ID: ResumePacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(ResumePacket, BufferSizeIs16)
+{
+    std::cout << "[ResumePacket.BufferSizeIs16] - START" << std::endl;
+    ResumePacket pkt(2u, 5u);
+    EXPECT_EQ(pkt.getBytes().size(), 16u);
+    std::cout << "  Buffer size: " << pkt.getBytes().size() << std::endl;
+    std::cout << "[ResumePacket.BufferSizeIs16] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResumePacket getType() returns TYPE_RESUME (12).
+ *
+ * @par Test Group ID: ResumePacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(ResumePacket, TypeIsResume)
+{
+    std::cout << "[ResumePacket.TypeIsResume] - START" << std::endl;
+    ResumePacket pkt(1u, 1u);
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_RESUME << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_RESUME);
+    std::cout << "[ResumePacket.TypeIsResume] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResumePacket stores counter and channelId correctly.
+ *
+ * @par Test Group ID: ResumePacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(ResumePacket, CounterAndChannelIdCorrect)
+{
+    std::cout << "[ResumePacket.CounterAndChannelIdCorrect] - START" << std::endl;
+    ResumePacket pkt(99u, 55u);
+    EXPECT_EQ(pkt.getCounter(), 55u);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 12), 99u);
+    std::cout << "  counter=55, channelId=99 verified in buffer" << std::endl;
+    std::cout << "[ResumePacket.CounterAndChannelIdCorrect] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResumePacket handles zero and max values.
+ *
+ * @par Test Group ID: ResumePacket
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(ResumePacket, ZeroAndMaxValues)
+{
+    std::cout << "[ResumePacket.ZeroAndMaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({ ResumePacket pkt(0u, 0u); });
+    EXPECT_NO_THROW({ ResumePacket pkt(MAX, MAX); });
+    std::cout << "  Zero and max value construction OK" << std::endl;
+    std::cout << "[ResumePacket.ZeroAndMaxValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// MutePacket tests
+// ===========================================================================
+
+/**
+ * @brief MutePacket construction does not throw.
+ *
+ * @par Test Group ID: MutePacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(MutePacket, ConstructionNoThrow)
+{
+    std::cout << "[MutePacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ MutePacket pkt(1u, 10u); });
+    std::cout << "[MutePacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief MutePacket buffer is exactly 16 bytes.
+ *
+ * @par Test Group ID: MutePacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(MutePacket, BufferSizeIs16)
+{
+    std::cout << "[MutePacket.BufferSizeIs16] - START" << std::endl;
+    MutePacket pkt(1u, 1u);
+    EXPECT_EQ(pkt.getBytes().size(), 16u);
+    std::cout << "  Buffer size: " << pkt.getBytes().size() << std::endl;
+    std::cout << "[MutePacket.BufferSizeIs16] - PASS" << std::endl;
+}
+
+/**
+ * @brief MutePacket getType() returns TYPE_MUTE (13).
+ *
+ * @par Test Group ID: MutePacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(MutePacket, TypeIsMute)
+{
+    std::cout << "[MutePacket.TypeIsMute] - START" << std::endl;
+    MutePacket pkt(1u, 1u);
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_MUTE << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_MUTE);
+    std::cout << "[MutePacket.TypeIsMute] - PASS" << std::endl;
+}
+
+/**
+ * @brief MutePacket counter and channelId are encoded correctly.
+ *
+ * @par Test Group ID: MutePacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(MutePacket, CounterAndChannelIdCorrect)
+{
+    std::cout << "[MutePacket.CounterAndChannelIdCorrect] - START" << std::endl;
+    MutePacket pkt(11u, 22u);
+    EXPECT_EQ(pkt.getCounter(), 22u);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 12), 11u);
+    std::cout << "  counter=22, channelId=11 verified" << std::endl;
+    std::cout << "[MutePacket.CounterAndChannelIdCorrect] - PASS" << std::endl;
+}
+
+/**
+ * @brief MutePacket handles zero and max values.
+ *
+ * @par Test Group ID: MutePacket
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(MutePacket, ZeroAndMaxValues)
+{
+    std::cout << "[MutePacket.ZeroAndMaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({ MutePacket pkt(0u, 0u); });
+    EXPECT_NO_THROW({ MutePacket pkt(MAX, MAX); });
+    std::cout << "[MutePacket.ZeroAndMaxValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// UnmutePacket tests
+// ===========================================================================
+
+/**
+ * @brief UnmutePacket construction does not throw.
+ *
+ * @par Test Group ID: UnmutePacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(UnmutePacket, ConstructionNoThrow)
+{
+    std::cout << "[UnmutePacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ UnmutePacket pkt(1u, 10u); });
+    std::cout << "[UnmutePacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief UnmutePacket buffer is exactly 16 bytes.
+ *
+ * @par Test Group ID: UnmutePacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(UnmutePacket, BufferSizeIs16)
+{
+    std::cout << "[UnmutePacket.BufferSizeIs16] - START" << std::endl;
+    UnmutePacket pkt(1u, 1u);
+    EXPECT_EQ(pkt.getBytes().size(), 16u);
+    std::cout << "  Buffer size: " << pkt.getBytes().size() << std::endl;
+    std::cout << "[UnmutePacket.BufferSizeIs16] - PASS" << std::endl;
+}
+
+/**
+ * @brief UnmutePacket getType() returns TYPE_UNMUTE (14).
+ *
+ * @par Test Group ID: UnmutePacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(UnmutePacket, TypeIsUnmute)
+{
+    std::cout << "[UnmutePacket.TypeIsUnmute] - START" << std::endl;
+    UnmutePacket pkt(1u, 1u);
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_UNMUTE << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_UNMUTE);
+    std::cout << "[UnmutePacket.TypeIsUnmute] - PASS" << std::endl;
+}
+
+/**
+ * @brief UnmutePacket counter and channelId are encoded correctly.
+ *
+ * @par Test Group ID: UnmutePacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(UnmutePacket, CounterAndChannelIdCorrect)
+{
+    std::cout << "[UnmutePacket.CounterAndChannelIdCorrect] - START" << std::endl;
+    UnmutePacket pkt(33u, 44u);
+    EXPECT_EQ(pkt.getCounter(), 44u);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 12), 33u);
+    std::cout << "  counter=44, channelId=33 verified" << std::endl;
+    std::cout << "[UnmutePacket.CounterAndChannelIdCorrect] - PASS" << std::endl;
+}
+
+/**
+ * @brief UnmutePacket handles zero and max values.
+ *
+ * @par Test Group ID: UnmutePacket
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(UnmutePacket, ZeroAndMaxValues)
+{
+    std::cout << "[UnmutePacket.ZeroAndMaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({ UnmutePacket pkt(0u, 0u); });
+    EXPECT_NO_THROW({ UnmutePacket pkt(MAX, MAX); });
+    std::cout << "[UnmutePacket.ZeroAndMaxValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// ResetAllPacket tests
+// ===========================================================================
+
+/**
+ * @brief ResetAllPacket construction does not throw.
+ *
+ * @par Test Group ID: ResetAllPacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(ResetAllPacket, ConstructionNoThrow)
+{
+    std::cout << "[ResetAllPacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ ResetAllPacket pkt; });
+    std::cout << "[ResetAllPacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetAllPacket buffer is exactly 12 bytes.
+ *
+ * Layout: type(4) + counter(4) + size(4) = 12.
+ *
+ * @par Test Group ID: ResetAllPacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(ResetAllPacket, BufferSizeIs12)
+{
+    std::cout << "[ResetAllPacket.BufferSizeIs12] - START" << std::endl;
+    ResetAllPacket pkt;
+    std::cout << "  getBytes().size() = " << pkt.getBytes().size() << " (expected 12)" << std::endl;
+    EXPECT_EQ(pkt.getBytes().size(), 12u);
+    std::cout << "[ResetAllPacket.BufferSizeIs12] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetAllPacket getType() returns TYPE_RESET_ALL (3).
+ *
+ * @par Test Group ID: ResetAllPacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(ResetAllPacket, TypeIsResetAll)
+{
+    std::cout << "[ResetAllPacket.TypeIsResetAll] - START" << std::endl;
+    ResetAllPacket pkt;
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_RESET_ALL << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_RESET_ALL);
+    std::cout << "[ResetAllPacket.TypeIsResetAll] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetAllPacket counter is zero (fixed value).
+ *
+ * @par Test Group ID: ResetAllPacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(ResetAllPacket, CounterIsZero)
+{
+    std::cout << "[ResetAllPacket.CounterIsZero] - START" << std::endl;
+    ResetAllPacket pkt;
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected 0)" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), 0u);
+    std::cout << "[ResetAllPacket.CounterIsZero] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetAllPacket counter and size fields in buffer are both zero.
+ *
+ * @par Test Group ID: ResetAllPacket
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(ResetAllPacket, BufferFieldsAreZero)
+{
+    std::cout << "[ResetAllPacket.BufferFieldsAreZero] - START" << std::endl;
+    ResetAllPacket pkt;
+    const auto& buf = pkt.getBytes();
+    uint32_t counterField = readLE32(buf, 4);
+    uint32_t sizeField    = readLE32(buf, 8);
+    std::cout << "  counter field: " << counterField << " (expected 0)" << std::endl;
+    std::cout << "  size field:    " << sizeField    << " (expected 0)" << std::endl;
+    EXPECT_EQ(counterField, 0u);
+    EXPECT_EQ(sizeField,    0u);
+    std::cout << "[ResetAllPacket.BufferFieldsAreZero] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// ResetChannelPacket tests
+// ===========================================================================
+
+/**
+ * @brief ResetChannelPacket construction does not throw.
+ *
+ * @par Test Group ID: ResetChannelPacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(ResetChannelPacket, ConstructionNoThrow)
+{
+    std::cout << "[ResetChannelPacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({ ResetChannelPacket pkt(1u, 5u); });
+    std::cout << "[ResetChannelPacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetChannelPacket buffer is exactly 16 bytes.
+ *
+ * @par Test Group ID: ResetChannelPacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(ResetChannelPacket, BufferSizeIs16)
+{
+    std::cout << "[ResetChannelPacket.BufferSizeIs16] - START" << std::endl;
+    ResetChannelPacket pkt(1u, 5u);
+    EXPECT_EQ(pkt.getBytes().size(), 16u);
+    std::cout << "  Buffer size: " << pkt.getBytes().size() << std::endl;
+    std::cout << "[ResetChannelPacket.BufferSizeIs16] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetChannelPacket getType() returns TYPE_RESET_CHANNEL (4).
+ *
+ * @par Test Group ID: ResetChannelPacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(ResetChannelPacket, TypeIsResetChannel)
+{
+    std::cout << "[ResetChannelPacket.TypeIsResetChannel] - START" << std::endl;
+    ResetChannelPacket pkt(1u, 1u);
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_RESET_CHANNEL << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_RESET_CHANNEL);
+    std::cout << "[ResetChannelPacket.TypeIsResetChannel] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetChannelPacket counter and channelId are encoded correctly.
+ *
+ * @par Test Group ID: ResetChannelPacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(ResetChannelPacket, CounterAndChannelIdCorrect)
+{
+    std::cout << "[ResetChannelPacket.CounterAndChannelIdCorrect] - START" << std::endl;
+    ResetChannelPacket pkt(77u, 88u);
+    EXPECT_EQ(pkt.getCounter(), 88u);
+    EXPECT_EQ(readLE32(pkt.getBytes(), 12), 77u);
+    std::cout << "  counter=88, channelId=77 verified in buffer" << std::endl;
+    std::cout << "[ResetChannelPacket.CounterAndChannelIdCorrect] - PASS" << std::endl;
+}
+
+/**
+ * @brief ResetChannelPacket handles zero and max values.
+ *
+ * @par Test Group ID: ResetChannelPacket
+ * @par Test Case ID: 005
+ * @par Priority: Medium
+ */
+TEST(ResetChannelPacket, ZeroAndMaxValues)
+{
+    std::cout << "[ResetChannelPacket.ZeroAndMaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({ ResetChannelPacket pkt(0u, 0u); });
+    EXPECT_NO_THROW({ ResetChannelPacket pkt(MAX, MAX); });
+    std::cout << "[ResetChannelPacket.ZeroAndMaxValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// CCSetAttributePacket tests
+// ===========================================================================
+
+/** Helper: build a default attributesType filled with a given value. */
+static attributesType makeAttribs(uint32_t fill = 0u)
+{
+    attributesType arr;
+    arr.fill(fill);
+    return arr;
+}
+
+/**
+ * @brief CCSetAttributePacket construction does not throw.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 001
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, ConstructionNoThrow)
+{
+    std::cout << "[CCSetAttributePacket.ConstructionNoThrow] - START" << std::endl;
+    EXPECT_NO_THROW({
+        CCSetAttributePacket pkt(1u, 1u, 0u, 0u, makeAttribs(0u));
+        std::cout << "  CCSetAttributePacket constructed OK" << std::endl;
+    });
+    std::cout << "[CCSetAttributePacket.ConstructionNoThrow] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket buffer is exactly 80 bytes.
+ *
+ * Layout: type(4)+counter(4)+size(4)+channelId(4)+ccType(4)+attribType(4)+attributes(14*4=56) = 80.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 002
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, BufferSizeIs80)
+{
+    std::cout << "[CCSetAttributePacket.BufferSizeIs80] - START" << std::endl;
+    CCSetAttributePacket pkt(1u, 1u, 0u, 0u, makeAttribs(0u));
+    std::cout << "  getBytes().size() = " << pkt.getBytes().size() << " (expected 80)" << std::endl;
+    EXPECT_EQ(pkt.getBytes().size(), 80u);
+    std::cout << "[CCSetAttributePacket.BufferSizeIs80] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket getType() returns TYPE_CC_SET_ATTRIBUTE (18).
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 003
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, TypeIsCCSetAttribute)
+{
+    std::cout << "[CCSetAttributePacket.TypeIsCCSetAttribute] - START" << std::endl;
+    CCSetAttributePacket pkt(1u, 1u, 0u, 0u, makeAttribs(0u));
+    std::cout << "  getType() = " << pkt.getType() << " (expected " << TYPE_CC_SET_ATTRIBUTE << ")" << std::endl;
+    EXPECT_EQ(pkt.getType(), TYPE_CC_SET_ATTRIBUTE);
+    std::cout << "[CCSetAttributePacket.TypeIsCCSetAttribute] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket stores counter correctly.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 004
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, CounterStoredCorrectly)
+{
+    std::cout << "[CCSetAttributePacket.CounterStoredCorrectly] - START" << std::endl;
+    CCSetAttributePacket pkt(1u, 99u, 0u, 0u, makeAttribs(0u));
+    std::cout << "  getCounter() = " << pkt.getCounter() << " (expected 99)" << std::endl;
+    EXPECT_EQ(pkt.getCounter(), 99u);
+    std::cout << "[CCSetAttributePacket.CounterStoredCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket size field = (14+3)*4 = 68.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 005
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, SizeFieldIs68)
+{
+    std::cout << "[CCSetAttributePacket.SizeFieldIs68] - START" << std::endl;
+    CCSetAttributePacket pkt(1u, 1u, 0u, 0u, makeAttribs(0u));
+    const auto& buf = pkt.getBytes();
+    uint32_t sizeField = readLE32(buf, 8);
+    std::cout << "  size field: " << sizeField << " (expected 68)" << std::endl;
+    EXPECT_EQ(sizeField, 68u);
+    std::cout << "[CCSetAttributePacket.SizeFieldIs68] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket encodes channelId, ccType, attribType at correct offsets.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 006
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, FieldsEncodedAtCorrectOffsets)
+{
+    std::cout << "[CCSetAttributePacket.FieldsEncodedAtCorrectOffsets] - START" << std::endl;
+    const uint32_t ch = 7u, ctr = 3u, ccT = 1u, attT = 0xFu;
+    CCSetAttributePacket pkt(ch, ctr, ccT, attT, makeAttribs(0u));
+    const auto& buf = pkt.getBytes();
+    // type(4) + counter(4) + size(4) + channelId(4) + ccType(4) + attribType(4)
+    EXPECT_EQ(readLE32(buf, 12), ch);
+    EXPECT_EQ(readLE32(buf, 16), ccT);
+    EXPECT_EQ(readLE32(buf, 20), attT);
+    std::cout << "  channelId=" << ch << " ccType=" << ccT << " attribType=" << attT << " all verified" << std::endl;
+    std::cout << "[CCSetAttributePacket.FieldsEncodedAtCorrectOffsets] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket attribute values are encoded starting at byte 24.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 007
+ * @par Priority: High
+ */
+TEST(CCSetAttributePacket, AttributeValuesEncodedCorrectly)
+{
+    std::cout << "[CCSetAttributePacket.AttributeValuesEncodedCorrectly] - START" << std::endl;
+    attributesType attribs;
+    for (size_t i = 0; i < attribs.size(); ++i)
+        attribs[i] = static_cast<uint32_t>(100u * (i + 1));
+
+    CCSetAttributePacket pkt(1u, 1u, 0u, 0u, attribs);
+    const auto& buf = pkt.getBytes();
+    for (size_t i = 0; i < attribs.size(); ++i)
+    {
+        uint32_t decoded = readLE32(buf, 24 + i * 4);
+        std::cout << "  attribs[" << i << "]=" << attribs[i] << " decoded=" << decoded << std::endl;
+        EXPECT_EQ(decoded, attribs[i]);
+    }
+    std::cout << "[CCSetAttributePacket.AttributeValuesEncodedCorrectly] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket handles all-zero attribute values.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 008
+ * @par Priority: Medium
+ */
+TEST(CCSetAttributePacket, AllZeroAttributeValues)
+{
+    std::cout << "[CCSetAttributePacket.AllZeroAttributeValues] - START" << std::endl;
+    CCSetAttributePacket pkt(1u, 1u, 0u, 0u, makeAttribs(0u));
+    const auto& buf = pkt.getBytes();
+    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i)
+        EXPECT_EQ(readLE32(buf, 24 + i * 4), 0u) << "  attrib[" << i << "] not zero";
+    std::cout << "  All 14 attribute fields are zero" << std::endl;
+    std::cout << "[CCSetAttributePacket.AllZeroAttributeValues] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket handles UINT32_MAX for all parameters.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 009
+ * @par Priority: Medium
+ */
+TEST(CCSetAttributePacket, MaxValues)
+{
+    std::cout << "[CCSetAttributePacket.MaxValues] - START" << std::endl;
+    const uint32_t MAX = std::numeric_limits<uint32_t>::max();
+    EXPECT_NO_THROW({
+        CCSetAttributePacket pkt(MAX, MAX, MAX, MAX, makeAttribs(MAX));
+        EXPECT_EQ(pkt.getBytes().size(), 80u);
+        EXPECT_EQ(pkt.getCounter(), MAX);
+        std::cout << "  UINT32_MAX for all fields: OK" << std::endl;
+    });
+    std::cout << "[CCSetAttributePacket.MaxValues] - PASS" << std::endl;
+}
+
+/**
+ * @brief CCSetAttributePacket handles zero channelId.
+ *
+ * @par Test Group ID: CCSetAttributePacket
+ * @par Test Case ID: 010
+ * @par Priority: Medium
+ */
+TEST(CCSetAttributePacket, ZeroChannelId)
+{
+    std::cout << "[CCSetAttributePacket.ZeroChannelId] - START" << std::endl;
+    EXPECT_NO_THROW({
+        CCSetAttributePacket pkt(0u, 5u, 1u, 2u, makeAttribs(100u));
+        EXPECT_EQ(readLE32(pkt.getBytes(), 12), 0u);
+        std::cout << "  channelId=0 encoded correctly" << std::endl;
+    });
+    std::cout << "[CCSetAttributePacket.ZeroChannelId] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// Stress tests
+// ===========================================================================
+
+/**
+ * @brief Create 100 each of all packet types without resource leaks.
+ *
+ * @par Test Group ID: SubtecPacketStress
+ * @par Test Case ID: 001
+ * @par Priority: Medium
+ */
+TEST(SubtecPacketStress, Create100OfEachPacketType)
+{
+    std::cout << "[SubtecPacketStress.Create100OfEachPacketType] - START" << std::endl;
+    const int N = 100;
+    for (int i = 0; i < N; ++i)
+    {
+        DummyPacket         d;
+        PausePacket         pause(static_cast<uint32_t>(i), static_cast<uint32_t>(i));
+        ResumePacket        resume(static_cast<uint32_t>(i), static_cast<uint32_t>(i));
+        MutePacket          mute(static_cast<uint32_t>(i), static_cast<uint32_t>(i));
+        UnmutePacket        unmute(static_cast<uint32_t>(i), static_cast<uint32_t>(i));
+        ResetAllPacket      resetAll;
+        ResetChannelPacket  resetCh(static_cast<uint32_t>(i), static_cast<uint32_t>(i));
+        CCSetAttributePacket ccAttr(static_cast<uint32_t>(i), static_cast<uint32_t>(i),
+                                    0u, 0u, makeAttribs(static_cast<uint32_t>(i)));
+    }
+    std::cout << "  Successfully created " << N << " instances of each packet type" << std::endl;
+    std::cout << "[SubtecPacketStress.Create100OfEachPacketType] - PASS" << std::endl;
+}
+
+/**
+ * @brief getTypeString handles the full range of uint32_t values without crashing.
+ *
+ * @par Test Group ID: SubtecPacketStress
+ * @par Test Case ID: 002
+ * @par Priority: Low
+ */
+TEST(SubtecPacketStress, GetTypeStringBoundaryValues)
+{
+    std::cout << "[SubtecPacketStress.GetTypeStringBoundaryValues] - START" << std::endl;
+    DummyPacket p;
+    const uint32_t testVals[] = { 0u, 1u, 18u, 19u, 100u, 0xFFFFFFFFu };
+    for (auto v : testVals)
+    {
+        EXPECT_NO_THROW({
+            std::string s = p.getTypeString(v);
+            std::cout << "  getTypeString(" << v << ") = \"" << s << "\"" << std::endl;
+        });
+    }
+    std::cout << "[SubtecPacketStress.GetTypeStringBoundaryValues] - PASS" << std::endl;
+}
+
+// ===========================================================================
+// PacketProtectedMethods tests
+// Access protected helpers via a thin test subclass.
+// ===========================================================================
+
+/**
+ * @brief Thin subclass that exposes Packet's protected helpers for testing.
+ *
+ * The helpers getBuffer(), append32(), append64() and appendType() are
+ * protected — they can only be exercised through a class that inherits from
+ * Packet.  PacketTestHelper makes them public without modifying production
+ * code.
+ */
+class PacketTestHelper : public Packet
+{
 public:
     using Packet::getBuffer;
     using Packet::append32;
     using Packet::append64;
     using Packet::appendType;
-    using Packet::PacketType;
-    
-    void appendInvalid() {
-        appendType(PacketType::INVALID);
-    }
-   using PacketType = Packet::PacketType;
-   static std::vector<PacketType> validPacketTypes()
-    {
-        return {
-            PacketType::ZERO,
-            PacketType::PES_DATA,
-            PacketType::TIMESTAMP,
-            PacketType::RESET_ALL,
-            PacketType::RESET_CHANNEL,
-            PacketType::SUBTITLE_SELECTION,
-            PacketType::TELETEXT_SELECTION,
-            PacketType::TTML_SELECTION,
-            PacketType::TTML_DATA,
-            PacketType::TTML_TIMESTAMP,
-            PacketType::CC_DATA,
-            PacketType::PAUSE,
-            PacketType::RESUME,
-            PacketType::MUTE,
-            PacketType::UNMUTE,
-            PacketType::WEBVTT_SELECTION,
-            PacketType::WEBVTT_DATA,
-            PacketType::WEBVTT_TIMESTAMP,
-            PacketType::CC_SET_ATTRIBUTE
-        };
-    }
-    void append(PacketType type)
-    {
-        appendType(type);
-    }
-
+    using PacketType = Packet::PacketType;  // expose protected enum
 };
 
-class PacketTest : public ::testing::Test {
-protected:
-    PacketChild* packet;
-    void SetUp() override {
-        packet = new PacketChild();
-    }
-    void TearDown() override {
-        delete packet;
-    }
-   
-};
-
-#define NUMBER_OF_ATTRIBUTES 14
-using attributesType = std::array<uint32_t, NUMBER_OF_ATTRIBUTES>;
-
-// Test Case: Construct packet with channelId = 0
 /**
- * @brief Test the construction of CCSetAttributePacket when channelId is zero
+ * @brief getBuffer() on a freshly-constructed helper returns an empty buffer.
  *
- * This test verifies that the CCSetAttributePacket constructor properly handles a channelId of zero 
- * while being provided with valid counter, ccType, attribType and a valid set of attribute values. 
- * The objective is to ensure that the object is created without throwing any exceptions, given proper inputs.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 001
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke CCSetAttributePacket constructor with channelId=0, counter=1, ccType=2, attribType=3, and attributesValues populated with multiples of 100 (i.e., attributesValues[i] = 100*(i+1) for i in range of NUMBER_OF_ATTRIBUTES) | channelId = 0, counter = 1, ccType = 2, attribType = 3, attributesValues[i] = 100*(i+1) (for i = 0 to NUMBER_OF_ATTRIBUTES-1) | CCSetAttributePacket should be constructed without throwing any exception | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 001
+ * @par Priority       : High
  */
-TEST(CCSetAttributePacket, ConstructPacketChannelIdZero) {
-    std::cout << "Entering ConstructPacketChannelIdZero test" << std::endl;
-    
-    uint32_t channelId = 0;
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-    
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketChannelIdZero test" << std::endl;
-}
-/**
- * @brief Verify that CCSetAttributePacket is constructed successfully when counter is zero.
- *
- * This test ensures that the CCSetAttributePacket constructor does not throw an exception when invoked with a counter value of zero.
- * The test validates that the object is constructed correctly using a valid set of input parameters including a set of attribute values.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 002
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke CCSetAttributePacket constructor with channelId=10, counter=0, ccType=2, attribType=3 and attributesValues populated with multiples of 100 | channelId = 10, counter = 0, ccType = 2, attribType = 3, attributesValues = 100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400 | Constructor should execute without throwing any exception and construct the object successfully | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketCounterZero) {
-    std::cout << "Entering ConstructPacketCounterZero test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 0;
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketCounterZero test" << std::endl;
-}
-/**
- * @brief Verify CCSetAttributePacket construction with ccType zero
- *
- * This test verifies that the CCSetAttributePacket constructor does not throw any exception when invoked with ccType set to 0. It checks the correct construction by passing a specific set of input values including channelId, counter, ccType, attribType, and an array of attribute values.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 003@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke CCSetAttributePacket constructor with predefined input values. | channelId = 10, counter = 1, ccType = 0, attribType = 3, attributesValues = 100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400 | Constructor executes without throwing any exception. | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketCcTypeZero) {
-    std::cout << "Entering ConstructPacketCcTypeZero test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = 0;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketCcTypeZero test" << std::endl;
-}
-/**
- * @brief Verifies construction of CCSetAttributePacket when attribType is zero.
- *
- * This test ensures that the CCSetAttributePacket constructor correctly initializes the packet without throwing an exception when the attribType parameter is zero. It verifies that all input parameters, including a set of attribute values, are properly handled.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 004
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Initialize test variables and populate attributesValues with multiples of 100. | channelId = 10, counter = 1, ccType = 2, attribType = 0, attributesValues = {100, 200, 300, ..., 1400} | Variables are correctly initialized before object construction. | Should be successful |
- * | 02 | Log the initialization values to the console. | N/A | Console outputs display the initialized values including each entry of attributesValues. | Should be successful |
- * | 03 | Invoke the CCSetAttributePacket constructor inside EXPECT_NO_THROW and verify no exceptions are thrown. | Constructor arguments: channelId, counter, ccType, attribType, attributesValues | CCSetAttributePacket object is constructed successfully without throwing any exceptions. | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketAttribTypeZero) {
-    std::cout << "Entering ConstructPacketAttribTypeZero test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = 0;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketAttribTypeZero test" << std::endl;
-}
-/**
- * @brief Validate that the CCSetAttributePacket constructor successfully creates an object when provided with zero initialized attributes.
- *
- * This test verifies that the CCSetAttributePacket can be constructed without throwing any exceptions when the input attributes array is zero initialized. It also checks that the printed values correspond to the provided inputs.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 005@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                                                    | Test Data                                                                            | Expected Result                                                            | Notes       |
- * | :--------------: | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ----------- |
- * | 01               | Invoke the CCSetAttributePacket constructor with channelId = 10, counter = 1, ccType = 2, attribType = 3, and an array of zero initialized attributes, and verify that no exception is thrown during object construction. | channelId = 10, counter = 1, ccType = 2, attribType = 3, attributesValues[i] = 0 (for all i) | CCSetAttributePacket object is successfully constructed without any exceptions | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketZeroInitializedAttributes) {
-    std::cout << "Entering ConstructPacketZeroInitializedAttributes test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Zero initialize all elements
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = 0;
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketZeroInitializedAttributes test" << std::endl;
-}
-/**
- * @brief Validate that the CCSetAttributePacket constructor handles typical mid-range parameter values correctly.
- *
- * This test verifies that the constructor of CCSetAttributePacket successfully constructs a packet using mid-range values for channelId, counter, ccType, attribType, and attributesValues. It ensures that the object instantiation is exception safe by confirming that no exceptions are thrown during the constructor call.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 006
- * **Priority:** High
- * 
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- * 
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Set up typical mid-range values and invoke the CCSetAttributePacket constructor | channelId = 10, counter = 1, ccType = 2, attribType = 3, attributesValues = {100,200,...,1400} | Constructor successfully creates the object without throwing any exception; EXPECT_NO_THROW passes | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketTypicalMidRangeValues) {
-    std::cout << "Entering ConstructPacketTypicalMidRangeValues test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with typical mid-range values: 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketTypicalMidRangeValues test" << std::endl;
-}
-/**
- * @brief Test construction of CCSetAttributePacket with maximum channelId value
- *
- * This test verifies that the CCSetAttributePacket constructor can successfully create an object when the channelId is set to UINT32_MAX and valid attribute values are provided. The test ensures that no exceptions are thrown during object construction, confirming that the constructor correctly handles the extreme channelId value.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 007
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                                                    | Test Data                                                                                   | Expected Result                                                                                           | Notes      |
- * | :--------------: | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------- |
- * |       01       | Invoke CCSetAttributePacket constructor with channelId set to UINT32_MAX, counter = 1, ccType = 2, attribType = 3, and attributesValues filled with 100, 200, ..., 1400 | channelId = UINT32_MAX, counter = 1, ccType = 2, attribType = 3, attributesValues = [100,200,...,1400] | CCSetAttributePacket object is constructed without any exceptions (EXPECT_NO_THROW passes) | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketChannelIdMax) {
-    std::cout << "Entering ConstructPacketChannelIdMax test" << std::endl;
-    
-    uint32_t channelId = std::numeric_limits<uint32_t>::max();
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << " (UINT32_MAX), counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketChannelIdMax test" << std::endl;
-}
-/**
- * @brief Validates that the CCSetAttributePacket constructor properly handles the maximum counter value.
- *
- * This test verifies that when the CCSetAttributePacket constructor is invoked with a counter value of UINT32_MAX,
- * it creates an object successfully without throwing any exceptions. In addition, the test confirms that all attribute values are correctly set.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 008@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke the CCSetAttributePacket constructor with channelId=10, counter=UINT32_MAX, ccType=2, attribType=3, and attributesValues filled with values from 100 to 1400. | channelId = 10, counter = UINT32_MAX, ccType = 2, attribType = 3, attributesValues = [100,200,300,...,1400] | Constructor should not throw any exception; packet object should be constructed successfully. | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketCounterMax) {
-    std::cout << "Entering ConstructPacketCounterMax test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = std::numeric_limits<uint32_t>::max();
-    uint32_t ccType = 2;
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter << " (UINT32_MAX)"
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketCounterMax test" << std::endl;
-}
-/**
- * @brief Test the construction of a CCSetAttributePacket with maximum CC type value.
- *
- * This test verifies that a CCSetAttributePacket object is successfully constructed when provided with a maximum ccType value (UINT32_MAX) along with valid channelId, counter, attribType, and attribute values. The test ensures that no exceptions are thrown during the construction process.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 009@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Initialize test parameters including channelId, counter, ccType (UINT32_MAX), attribType, and attributesValues populated with multiples of 100. | channelId = 10, counter = 1, ccType = UINT32_MAX, attribType = 3, attributesValues[i] = 100*(i+1) for i in [0, NUMBER_OF_ATTRIBUTES-1] | Test parameters are correctly initialized. | Should be successful |
- * | 02 | Invoke the CCSetAttributePacket constructor with the initialized parameters and verify that no exception is thrown. | channelId = 10, counter = 1, ccType = UINT32_MAX, attribType = 3, attributesValues filled with values from 100 to 1400 | Object constructed without exceptions (EXPECT_NO_THROW passes). | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketCcTypeMax) {
-    std::cout << "Entering ConstructPacketCcTypeMax test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = std::numeric_limits<uint32_t>::max();
-    uint32_t attribType = 3;
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType << " (UINT32_MAX)"
-              << ", attribType = " << attribType << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketCcTypeMax test" << std::endl;
-}
-/**
- * @brief Test the construction of a CCSetAttributePacket with maximum attribute type value
- *
- * This test verifies that the CCSetAttributePacket constructor correctly handles the maximum possible value for attribType (UINT32_MAX) when provided with valid channelId, counter, ccType, and a valid array of attributesValues. It ensures that no exception is thrown during object instantiation.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 010@n
- * **Priority:** High@n
- * @n
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * @n
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |@n
- * | :--------------: | ----------- | --------- | --------------- | ----- |@n
- * | 01 | Prepare input parameters and invoke CCSetAttributePacket constructor with maximum attribType value and a set of attribute values | channelId = 10, counter = 1, ccType = 2, attribType = UINT32_MAX, attributesValues = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400] | Constructor completes without throwing an exception and the object is successfully created | Should Pass |
- */
-TEST(CCSetAttributePacket, ConstructPacketAttribTypeMax) {
-    std::cout << "Entering ConstructPacketAttribTypeMax test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 1;
-    uint32_t ccType = 2;
-    uint32_t attribType = std::numeric_limits<uint32_t>::max();
-    attributesType attributesValues;
-    // Fill attributesValues with values 100, 200, ..., 1400
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        attributesValues[i] = static_cast<uint32_t>(100 * (i + 1));
-    }
-    
-    std::cout << "Invoking CCSetAttributePacket constructor with channelId = " << channelId 
-              << ", counter = " << counter 
-              << ", ccType = " << ccType 
-              << ", attribType = " << attribType << " (UINT32_MAX)" << std::endl;
-              
-    for (size_t i = 0; i < NUMBER_OF_ATTRIBUTES; ++i) {
-        std::cout << "attributesValues[" << i << "] = " << attributesValues[i] << std::endl;
-    }
-              
-    EXPECT_NO_THROW({
-        CCSetAttributePacket packet(channelId, counter, ccType, attribType, attributesValues);
-        std::cout << "CCSetAttributePacket object constructed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructPacketAttribTypeMax test" << std::endl;
-}
-/**
- * @brief Validate that the DummyPacket default constructor initializes an object without throwing any exception.
- *
- * This test case verifies that invoking the default constructor of the DummyPacket class does not result in an exception.
- * The test ensures that the object is successfully created and demonstrates basic functionality.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 011@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                           | Test Data                                                              | Expected Result                                                        | Notes      |
- * | :--------------: | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke the DummyPacket default constructor within an EXPECT_NO_THROW block to ensure no exception is thrown. | API: DummyPacket(), input: none, output: dummyObj instance created       | DummyPacket object is created successfully without any exceptions.     | Should Pass |
- */
-TEST(DummyPacket, PositiveDefaultConstructor) {
-    std::cout << "Entering PositiveDefaultConstructor test" << std::endl;
-    
-    std::cout << "Invoking DummyPacket default constructor" << std::endl;
-    EXPECT_NO_THROW({
-        DummyPacket dummyObj;
-        std::cout << "DummyPacket object successfully created with default constructor" << std::endl;
-    });
-    
-    std::cout << "Exiting PositiveDefaultConstructor test" << std::endl;
-}
-/**
- * @brief Validate MutePacket object creation with minimal channel ID.
- *
- * This test case verifies that invoking the MutePacket constructor with a minimal channelId (0) 
- * and a valid counter (50) does not throw an exception, ensuring correct handling of lower boundary values.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 012
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                         | Expected Result                                               | Notes      |
- * | :--------------: | ------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------- | ---------- |
- * |      01        | Call the MutePacket constructor with minimal channelId and counter. | channelId = 0, counter = 50       | No exception thrown and MutePacket instance is successfully created. | Should Pass |
- */
-TEST(MutePacket, CreateMutePacketWithMinimalChannelId) {
-    std::cout << "Entering CreateMutePacketWithMinimalChannelId test" << std::endl;
-    uint32_t channelId = 0;
-    uint32_t counter = 50;
-    std::cout << "Invoking MutePacket constructor with channelId: " << channelId 
-              << ", counter: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        MutePacket mutePacket(channelId, counter);
-        std::cout << "MutePacket instance created successfully." << std::endl;
-    });
-    std::cout << "Exiting CreateMutePacketWithMinimalChannelId test" << std::endl;
-}
-/**
- * @brief Verify that creating a MutePacket object with minimal counter value does not throw exceptions
- *
- * This test validates that the MutePacket constructor works as expected when provided with a minimal counter value alongside a valid channelId. The test ensures that no exceptions are thrown during the creation of the MutePacket instance, thereby verifying proper initialization under these conditions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 013@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                                                     | Test Data                                         | Expected Result                                             | Notes            |
- * | :--------------: | ----------------------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------- | ---------------- |
- * | 01               | Initialize test parameters and log the entry of the test with channelId=100, counter=0.           | channelId = 100, counter = 0                        | Log message "Entering CreateMutePacketWithMinimalCounter test" | Should be successful |
- * | 02               | Invoke MutePacket constructor with channelId and counter, and verify no exception is thrown.      | channelId = 100, counter = 0, API: MutePacket constructor | MutePacket instance is created without throwing an exception   | Should Pass      |
- * | 03               | Log the exit of the test execution.                                                             | None                                              | Log message "Exiting CreateMutePacketWithMinimalCounter test" | Should be successful |
- */
-TEST(MutePacket, CreateMutePacketWithMinimalCounter) {
-    std::cout << "Entering CreateMutePacketWithMinimalCounter test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 0;
-    std::cout << "Invoking MutePacket constructor with channelId: " << channelId 
-              << ", counter: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        MutePacket mutePacket(channelId, counter);
-        std::cout << "MutePacket instance created successfully." << std::endl;
-    });
-    std::cout << "Exiting CreateMutePacketWithMinimalCounter test" << std::endl;
-}
-/**
- * @brief Test the creation of a MutePacket object using the maximum possible channel ID.
- *
- * This test verifies that the MutePacket constructor successfully creates an instance 
- * when provided with the maximum channel ID value (4294967295) and a valid counter value (50). 
- * The test ensures that no exceptions are thrown during the creation process, which validates 
- * the robustness of the constructor with boundary input values.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 014
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                              | Test Data                                   | Expected Result                                                                                         | Notes      |
- * | :--------------: | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke the MutePacket constructor with maximum channel ID (4294967295) and counter value (50)             | channelId = 4294967295, counter = 50          | MutePacket instance is created without throwing any exception                                          | Should Pass|
- */
-TEST(MutePacket, CreateMutePacketWithMaximumChannelId) {
-    std::cout << "Entering CreateMutePacketWithMaximumChannelId test" << std::endl;
-    uint32_t channelId = 4294967295;
-    uint32_t counter = 50;
-    std::cout << "Invoking MutePacket constructor with channelId: " << channelId 
-              << ", counter: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        MutePacket mutePacket(channelId, counter);
-        std::cout << "MutePacket instance created successfully." << std::endl;
-    });
-    std::cout << "Exiting CreateMutePacketWithMaximumChannelId test" << std::endl;
-}
-/**
- * @brief Validates that MutePacket object creation with a maximum counter value does not throw any exception.
- *
- * This test verifies that invoking the MutePacket constructor with a channel ID of 100 and the maximum unsigned 32-bit counter value (4294967295) does not result in any exceptions. This ensures that the API correctly handles boundary conditions for the counter parameter.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 015
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Setup test parameters with valid channelId and maximum counter value | channelId = 100, counter = 4294967295 | Test parameters are correctly set for API invocation | Should be successful |
- * | 02 | Invoke the MutePacket constructor and verify it does not throw an exception | Invocation: MutePacket(channelId, counter); output: mutePacket instance creation | No exception is thrown and the instance is created successfully | Should Pass |
- */
-TEST(MutePacket, CreateMutePacketWithMaximumCounter) {
-    std::cout << "Entering CreateMutePacketWithMaximumCounter test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 4294967295;
-    std::cout << "Invoking MutePacket constructor with channelId: " << channelId 
-              << ", counter: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        MutePacket mutePacket(channelId, counter);
-        std::cout << "MutePacket instance created successfully." << std::endl;
-    });
-    std::cout << "Exiting CreateMutePacketWithMaximumCounter test" << std::endl;
-}
-/**
- * @brief Validate correct instantiation of MutePacket by invoking its constructor with mid-range values.
- *
- * This test verifies that the MutePacket constructor successfully creates an instance when passed a mid-range channelId and counter value, ensuring that no exceptions are thrown during object creation.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 016@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                     | Test Data                                  | Expected Result                                          | Notes      |
- * | :--------------: | --------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------- | ---------- |
- * | 01               | Invoke the MutePacket constructor with mid-range values         | input channelId = 100, input counter = 50  | No exception thrown; MutePacket instance is created      | Should Pass|
- */
-TEST(MutePacket, CreateMutePacketWithMidRangeValues) {
-    std::cout << "Entering CreateMutePacketWithMidRangeValues test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 50;
-    std::cout << "Invoking MutePacket constructor with channelId: " << channelId 
-              << ", counter: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        MutePacket mutePacket(channelId, counter);
-        std::cout << "MutePacket instance created successfully." << std::endl;
-    });
-    std::cout << "Exiting CreateMutePacketWithMidRangeValues test" << std::endl;
-}
-/**
- * @brief Verify that the default constructor of Packet initializes the object correctly without throwing an exception.
- *
- * This test case verifies that invoking the default constructor Packet::Packet() does not throw any exceptions, ensuring that the object is instantiated without errors. The test is crucial as it confirms the basic functionality of the default constructor which is essential for the reliable creation of Packet objects.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 017
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke the default constructor Packet::Packet() within an EXPECT_NO_THROW block to ensure no exception occurs | input: none, output: Packet instance | Packet is constructed successfully without throwing any exception; assertion EXPECT_NO_THROW passes | Should Pass |
- */
-TEST(Packet, VerifyDefaultConstructorInitializes) {
-    std::cout << "Entering VerifyDefaultConstructorInitializes test" << std::endl;
-    std::cout << "Invoking default constructor Packet::Packet() ..." << std::endl;
-    EXPECT_NO_THROW({
-        Packet packet;
-        std::cout << "Default constructor invoked successfully." << std::endl;
-    });
-    std::cout << "Exiting VerifyDefaultConstructorInitializes test" << std::endl;
-}
-/**
- * @brief Test to validate Packet constructor with counter value zero.
- *
- * This test is designed to verify that the Packet class constructor properly handles a counter value of zero without throwing any exceptions. It ensures that the creation of a Packet instance is successful when the counter is set to zero.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 018
- * **Priority:** High
- * 
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                             | Test Data         | Expected Result                                                                                    | Notes      |
- * | :--------------: | ------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------- | ---------- |
- * | 01               | Call Packet constructor with counter value set to 0.    | counter = 0       | Packet instance is successfully created without throwing an exception, and no assertion fails.   | Should Pass|
- */
-TEST(Packet, ConstructWithZero) {
-    std::cout << "Entering ConstructWithZero test" << std::endl;
-    uint32_t counter = 0;
-    std::cout << "Preparing to invoke Packet constructor with counter value: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        std::cout << "Invoking Packet constructor" << std::endl;
-        Packet packet(counter);
-        std::cout << "Packet instance created with counter value: " << counter << std::endl;
-    });
-    std::cout << "Exiting ConstructWithZero test" << std::endl;
-}
-/**
- * @brief Tests Packet constructor with maximum counter value
- *
- * This test verifies that the Packet constructor can handle the maximum possible uint32_t counter value without throwing exceptions, ensuring robustness in handling edge cases.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 019@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                   | Test Data                        | Expected Result                                            | Notes     |
- * | :--------------: | ------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------- | --------- |
- * | 01               | Invoke Packet constructor with maximum counter value UINT32_MAX | counter = UINT32_MAX             | Constructor does not throw exception and Packet instance is created | Should Pass |
- */
-TEST(Packet, ConstructWithMaxCounter) {
-    std::cout << "Entering ConstructWithMaxCounter test" << std::endl;
-    uint32_t counter = UINT32_MAX;
-    std::cout << "Preparing to invoke Packet constructor with counter value: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        std::cout << "Invoking Packet constructor" << std::endl;
-        Packet packet(counter);
-        std::cout << "Packet instance created with counter value: " << counter << std::endl;
-    });
-    std::cout << "Exiting ConstructWithMaxCounter test" << std::endl;
-}
-/**
- * @brief Test Packet constructor with a typical counter value.
- *
- * This test verifies that the Packet constructor can handle a typical input (counter = 12345)
- * without throwing exceptions. It ensures that object instantiation functions correctly under normal conditions.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 020
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Call Packet constructor with a typical counter value and verify no exception is thrown. | input: counter = 12345 | Packet instance creation succeeds without exceptions. | Should Pass |
- */
-TEST(Packet, ConstructWithTypicalValue) {
-    std::cout << "Entering ConstructWithTypicalValue test" << std::endl;
-    uint32_t counter = 12345;
-    std::cout << "Preparing to invoke Packet constructor with counter value: " << counter << std::endl;
-    EXPECT_NO_THROW({
-        std::cout << "Invoking Packet constructor" << std::endl;
-        Packet packet(counter);
-        std::cout << "Packet instance created with counter value: " << counter << std::endl;
-    });
-    std::cout << "Exiting ConstructWithTypicalValue test" << std::endl;
-}
-/**
- * @brief This test verifies that Packet's getBytes() method returns a valid vector of bytes without throwing exceptions.
- *
- * This test creates a Packet object using the default constructor and then invokes the getBytes() method on it.
- * It checks that no exceptions are thrown during object creation and method invocation, and validates that the returned
- * vector has a non-negative size.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 021@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke the default constructor to create a Packet object. | No input, output: Packet object created | Packet object is created successfully without throwing exceptions. | Should Pass |
- * | 02 | Call the getBytes() method on the Packet object. | input: Packet object; output: vector<uint8_t> returned | getBytes() returns a valid vector of bytes. | Should Pass |
- * | 03 | Verify that the size of the returned vector is non-negative. | input: size = bytes.size() | Assertion check passes with size >= 0. | Should Pass |
- */
-TEST(Packet, VerifyGetBytesWorksProperly) {
-    std::cout << "Entering VerifyGetBytesWorksProperly test" << std::endl;
-
-    // Creating Packet object using default constructor
-    EXPECT_NO_THROW({
-        Packet packet;
-        std::cout << "Packet object created successfully using default constructor." << std::endl;
-
-        // Invoking getBytes() method
-        std::cout << "Invoking getBytes() method on Packet object." << std::endl;
-        const std::vector<uint8_t>& bytes = packet.getBytes();
-        std::cout << "getBytes() method invoked successfully." << std::endl;
-
-        // Logging the size of the returned vector
-        size_t size = bytes.size();
-        std::cout << "Retrieved bytes vector size: " << size << std::endl;
-
-        // Checking that the returned vector size is >= 0
-        EXPECT_GE(size, 0);
-    });
-
-    std::cout << "Exiting VerifyGetBytesWorksProperly test" << std::endl;
-}
-/**
- * @brief Tests that the default counter of a Packet object is 0 upon creation
- *
- * This test creates a Packet object using its default constructor and verifies that the getCounter() method returns the default counter value 0.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 022@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                      | Test Data                                                    | Expected Result                                          | Notes            |
- * | :--------------: | ---------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- | ---------------- |
- * | 01               | Invoke the default constructor to create a Packet object         | No input; output: Packet instance created                    | Packet object instantiated without errors             | Should Pass      |
- * | 02               | Call the getCounter() method on the Packet object                | Invocation: pkt.getCounter(), (output1 = counter, expected value = 0) | Returned counter value equals 0u                       | Should Pass      |
- * | 03               | Verify that the retrieved counter value equals the expected value 0 | Variable: counter = value obtained from getCounter() (counter = 0) | Assertion passes confirming counter equals 0u          | Should be successful |
- */
-TEST(Packet, RetrieveDefaultPacketCounter) {
-    GTEST_SKIP();
-    std::cout << "Entering RetrieveDefaultPacketCounter test" << std::endl;
-    
-    EXPECT_NO_THROW({
-        Packet pkt;
-        std::cout << "Invoked default constructor of Packet object." << std::endl;
-        
-        std::cout << "Invoking getCounter() method on Packet object." << std::endl;
-        std::uint32_t counter = pkt.getCounter();
-        std::cout << "Retrieved counter value: " << counter << std::endl;
-        
-        // Verifying the default counter value. Expected default value is 0.
-        EXPECT_EQ(counter, 0u);
-        std::cout << "Assertion passed: Retrieved counter value equals expected default value (0u)." << std::endl;
-    });
-    
-    std::cout << "Exiting RetrieveDefaultPacketCounter test" << std::endl;
-}
-/**
- * @brief Verify that the getType() method returns a non-negative type value.
- *
- * This test verifies that a Packet object created using the default constructor successfully invokes the getType() method and returns a valid type value that is greater than or equal to 0. The goal is to ensure that both object construction and API invocation work correctly under normal conditions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 023@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                                          | Expected Result                                        | Notes          |
- * | :--------------: | --------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------ | -------------- |
- * | 01               | Create a Packet object using the default constructor.                       | Invocation: Packet()                                               | Packet object is created without throwing an exception.| Should Pass    |
- * | 02               | Invoke the getType() method on the Packet object to retrieve its type value.  | Invocation: getType(), output: type (value returned by getType())    | getType() returns a valid unsigned integer value.      | Should Pass    |
- * | 03               | Validate that the returned type value is greater than or equal to 0.          | Input: type = returned value from getType()                          | The returned type value satisfies EXPECT_GE(type, 0u).   | Should be successful |
- */
-TEST(Packet, VerifyGetTypeWorksProperly) {
-    std::cout << "Entering VerifyGetTypeWorksProperly test" << std::endl;
-
-    // Create a Packet object using the default constructor.
-    EXPECT_NO_THROW({
-        Packet packet;
-        std::cout << "Packet object created using default constructor." << std::endl;
-        
-        // Invoke getType() and log the invocation.
-        std::cout << "Invoking getType() method on Packet object." << std::endl;
-        uint32_t type = packet.getType();
-        std::cout << "getType() returned value: " << type << std::endl;
-        
-        // Validate that the return value is >= 0.
-        std::cout << "Verifying that the returned type value (" << type << ") is >= 0." << std::endl;
-        EXPECT_GE(type, 0u);
-    });
-
-    std::cout << "Exiting VerifyGetTypeWorksProperly test" << std::endl;
-}
-/**
- * @brief Validate that Packet::getTypeString returns "UNKNOWN" for an undefined packet type
- *
- * Validate that when an undefined packet type (9999) is provided to Packet::getTypeString, the API does not throw an exception and returns "UNKNOWN". This test ensures proper handling of unrecognized packet types.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 024
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                              | Test Data                         | Expected Result                                              | Notes         |
- * | :--------------: | -------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------ | ------------- |
- * | 01               | Instantiate Packet object using default constructor      | None                              | Packet object created successfully                          | Should be successful |
- * | 02               | Invoke Packet::getTypeString with undefined packet type    | testValue = 9999                  | API returns the string "UNKNOWN" with no exception thrown     | Should Pass   |
- * | 03               | Verify the output of getTypeString call                  | output: result variable holds returned value | result equals "UNKNOWN"                                    | Should Pass   |
- */
-TEST(Packet, UndefinedPacketType) {
-    std::cout << "Entering UndefinedPacketType test" << std::endl;
-
-    // Create Packet object using default constructor (even though getTypeString is static)
-    Packet packet;
-    
-    uint32_t testValue = 9999;
-    std::cout << "Invoking Packet::getTypeString with input: " << testValue << std::endl;
-    
-    std::string result;
-    // Ensure no exception is thrown during invocation
-    EXPECT_NO_THROW(result = Packet::getTypeString(testValue));
-    
-    std::cout << "Returned value: " << result << std::endl;
-    EXPECT_EQ(result, "UNKNOWN");
-
-    std::cout << "Exiting UndefinedPacketType test" << std::endl;
-}
-/**
- * @brief Validate that Packet::getTypeString correctly maps PacketType values to their string representations.
- *
- * This test verifies that for each PacketType enum value, the Packet::getTypeString API returns the expected string value.
- * It ensures that the enum to string mapping remains consistent and that no exceptions are thrown when invoking the method.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 025
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Construct a Packet object and initialize the type mapping container | No input | Packet object is created and mapping container is initialized with 18 {PacketType, ExpectedString} pairs | Should be successful |
- * | 02 | Invoke getTypeString for PacketType::PES_DATA | input1 = typeValue = value of PacketType::PES_DATA, expectedString = PES_DATA | Returns "PES_DATA" without throwing exception | Should Pass |
- * | 03 | Invoke getTypeString for PacketType::TIMESTAMP | input1 = typeValue = value of PacketType::TIMESTAMP, expectedString = TIMESTAMP | Returns "TIMESTAMP" without throwing exception | Should Pass |
- * | 04 | Invoke getTypeString for PacketType::RESET_ALL | input1 = typeValue = value of PacketType::RESET_ALL, expectedString = RESET_ALL | Returns "RESET_ALL" without throwing exception | Should Pass |
- * | 05 | Invoke getTypeString for PacketType::RESET_CHANNEL | input1 = typeValue = value of PacketType::RESET_CHANNEL, expectedString = RESET_CHANNEL | Returns "RESET_CHANNEL" without throwing exception | Should Pass |
- * | 06 | Invoke getTypeString for PacketType::SUBTITLE_SELECTION | input1 = typeValue = value of PacketType::SUBTITLE_SELECTION, expectedString = SUBTITLE_SELECTION | Returns "SUBTITLE_SELECTION" without throwing exception | Should Pass |
- * | 07 | Invoke getTypeString for PacketType::TELETEXT_SELECTION | input1 = typeValue = value of PacketType::TELETEXT_SELECTION, expectedString = TELETEXT_SELECTION | Returns "TELETEXT_SELECTION" without throwing exception | Should Pass |
- * | 08 | Invoke getTypeString for PacketType::TTML_SELECTION | input1 = typeValue = value of PacketType::TTML_SELECTION, expectedString = TTML_SELECTION | Returns "TTML_SELECTION" without throwing exception | Should Pass |
- * | 09 | Invoke getTypeString for PacketType::TTML_DATA | input1 = typeValue = value of PacketType::TTML_DATA, expectedString = TTML_DATA | Returns "TTML_DATA" without throwing exception | Should Pass |
- * | 10 | Invoke getTypeString for PacketType::TTML_TIMESTAMP | input1 = typeValue = value of PacketType::TTML_TIMESTAMP, expectedString = TTML_TIMESTAMP | Returns "TTML_TIMESTAMP" without throwing exception | Should Pass |
- * | 11 | Invoke getTypeString for PacketType::WEBVTT_SELECTION | input1 = typeValue = value of PacketType::WEBVTT_SELECTION, expectedString = WEBVTT_SELECTION | Returns "WEBVTT_SELECTION" without throwing exception | Should Pass |
- * | 12 | Invoke getTypeString for PacketType::WEBVTT_DATA | input1 = typeValue = value of PacketType::WEBVTT_DATA, expectedString = WEBVTT_DATA | Returns "WEBVTT_DATA" without throwing exception | Should Pass |
- * | 13 | Invoke getTypeString for PacketType::WEBVTT_TIMESTAMP | input1 = typeValue = value of PacketType::WEBVTT_TIMESTAMP, expectedString = WEBVTT_TIMESTAMP | Returns "WEBVTT_TIMESTAMP" without throwing exception | Should Pass |
- * | 14 | Invoke getTypeString for PacketType::CC_DATA | input1 = typeValue = value of PacketType::CC_DATA, expectedString = CC_DATA | Returns "CC_DATA" without throwing exception | Should Pass |
- * | 15 | Invoke getTypeString for PacketType::PAUSE | input1 = typeValue = value of PacketType::PAUSE, expectedString = PAUSE | Returns "PAUSE" without throwing exception | Should Pass |
- * | 16 | Invoke getTypeString for PacketType::RESUME | input1 = typeValue = value of PacketType::RESUME, expectedString = RESUME | Returns "RESUME" without throwing exception | Should Pass |
- * | 17 | Invoke getTypeString for PacketType::MUTE | input1 = typeValue = value of PacketType::MUTE, expectedString = MUTE | Returns "MUTE" without throwing exception | Should Pass |
- * | 18 | Invoke getTypeString for PacketType::UNMUTE | input1 = typeValue = value of PacketType::UNMUTE, expectedString = UNMUTE | Returns "UNMUTE" without throwing exception | Should Pass |
- * | 19 | Invoke getTypeString for PacketType::CC_SET_ATTRIBUTE | input1 = typeValue = value of PacketType::CC_SET_ATTRIBUTE, expectedString = CC_SET_ATTRIBUTE | Returns "CC_SET_ATTRIBUTE" without throwing exception | Should Pass |
- */
-TEST(Packet, ValidPacketTypeMapping) {
-    std::cout << "Entering ValidPacketTypeMapping test" << std::endl;
-
-    // Create Packet object using default constructor (even though getTypeString is static)
-    Packet packet;
-    using PT = PacketChild::PacketType;
-    // Collection of {PacketType, ExpectedString} pairs; using uint32_t values from PacketType enum.
-    std::vector<std::pair<uint32_t, std::string>> typeMapping = {
-        {static_cast<uint32_t>(PT::PES_DATA), "PES_DATA"},
-        {static_cast<uint32_t>(PT::TIMESTAMP), "TIMESTAMP"},
-        {static_cast<uint32_t>(PT::RESET_ALL), "RESET_ALL"},
-        {static_cast<uint32_t>(PT::RESET_CHANNEL), "RESET_CHANNEL"},
-        {static_cast<uint32_t>(PT::SUBTITLE_SELECTION), "SUBTITLE_SELECTION"},
-        {static_cast<uint32_t>(PT::TELETEXT_SELECTION), "TELETEXT_SELECTION"},
-        {static_cast<uint32_t>(PT::TTML_SELECTION), "TTML_SELECTION"},
-        {static_cast<uint32_t>(PT::TTML_DATA), "TTML_DATA"},
-        {static_cast<uint32_t>(PT::TTML_TIMESTAMP), "TTML_TIMESTAMP"},
-        {static_cast<uint32_t>(PT::WEBVTT_SELECTION), "WEBVTT_SELECTION"},
-        {static_cast<uint32_t>(PT::WEBVTT_DATA), "WEBVTT_DATA"},
-        {static_cast<uint32_t>(PT::WEBVTT_TIMESTAMP), "WEBVTT_TIMESTAMP"},
-        {static_cast<uint32_t>(PT::CC_DATA), "CC_DATA"},
-        {static_cast<uint32_t>(PT::PAUSE), "PAUSE"},
-        {static_cast<uint32_t>(PT::RESUME), "RESUME"},
-        {static_cast<uint32_t>(PT::MUTE), "MUTE"},
-        {static_cast<uint32_t>(PT::UNMUTE), "UNMUTE"},
-        {static_cast<uint32_t>(PT::CC_SET_ATTRIBUTE), "CC_SET_ATTRIBUTE"}
-    };
-
-    // Iterate over each {PacketType, ExpectedString} pair, invoking getTypeString for each and verifying the result.
-    for (const auto& mapping : typeMapping) {
-        uint32_t typeValue = mapping.first;
-        std::string expectedString = mapping.second;
-        std::cout << "Invoking Packet::getTypeString with input: " << typeValue << std::endl;
-
-        std::string result;
-        EXPECT_NO_THROW(result = Packet::getTypeString(typeValue));
-        std::cout << "For input " << typeValue << ", returned value: " << result << std::endl;
-        std::cout << "Expected value: " << expectedString << std::endl;
-        EXPECT_EQ(result, expectedString);
-    }
-
-    std::cout << "Exiting ValidPacketTypeMapping test" << std::endl;
-}
-/**
- * @brief Validate appending a zero value to the packet.
- *
- * This test verifies that appending a zero value (0x00000000) using the append32 API to an initially empty packet does not throw any exceptions. The test ensures that the packet remains valid after the operation.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 026@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                              | Test Data                     | Expected Result                                        | Notes       |
- * | :--------------: | --------------------------------------------------------- | ----------------------------- | ------------------------------------------------------ | ----------- |
- * | 01               | Invoke append32 API with input value 0x00000000            | input1 = 0x00000000           | No exception thrown; packet updated successfully       | Should Pass |
- */
-TEST_F(PacketTest, AppendZeroValueTest) {
-    std::cout << "Entering AppendZeroValueTest test" << std::endl;
-    std::uint32_t value = 0x00000000;
-    std::cout << "Invoking append32 with value: 0x" << std::hex << value << std::dec << std::endl;
-    EXPECT_NO_THROW(packet->append32(value));
-    std::cout << "Exiting AppendZeroValueTest test" << std::endl;
-}
-/**
- * @brief Verify that PacketChild::append32 successfully appends the maximum unsigned 32-bit integer value without throwing an exception.
- *
- * This test validates that appending the maximum 32-bit unsigned integer value (0xFFFFFFFF) to a packet using the append32 function correctly handles boundary conditions by not throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 027@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                       | Test Data                                              | Expected Result                                  | Notes           |
- * | :--------------: | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------ | --------------- |
- * | 01               | Log the entry message indicating the start of AppendMaxUint32ValueTest                              | None                                                   | Entry message logged                             | Should be successful |
- * | 02               | Call packet->append32 with value 0xFFFFFFFF and verify that no exception is thrown                  | input value = 0xFFFFFFFF, output: none expected          | No exception thrown; EXPECT_NO_THROW passes      | Should Pass     |
- * | 03               | Log the exit message indicating the end of AppendMaxUint32ValueTest                                 | None                                                   | Exit message logged                              | Should be successful |
- */
-TEST_F(PacketTest, AppendMaxUint32ValueTest) {
-    std::cout << "Entering AppendMaxUint32ValueTest test" << std::endl;
-    std::uint32_t value = 0xFFFFFFFF;
-    std::cout << "Invoking append32 with value: 0x" << std::hex << value << std::dec << std::endl;
-    EXPECT_NO_THROW(packet->append32(value));
-    std::cout << "Exiting AppendMaxUint32ValueTest test" << std::endl;
-}
-/**
- * @brief Test the append32 method of PacketChild with a typical 32-bit value.
- *
- * This test verifies that the append32 function properly handles a typical 32-bit hexadecimal value (0x12345678) by not throwing any exceptions.
- * It also outputs log messages indicating the start and end of the test to validate the execution order.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 028@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data |Expected Result |Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Print entry test message "Entering AppendTypicalValueTest test" | None | "Entering AppendTypicalValueTest test" is displayed on the console | Should be successful |
- * | 02 | Print API invocation message "Invoking append32 with value: 0x12345678" | value = 0x12345678 | "Invoking append32 with value: 0x12345678" is displayed on the console | Should be successful |
- * | 03 | Invoke API append32 on PacketChild with a 32-bit value | input: value = 0x12345678, output: none | No exception is thrown; EXPECT_NO_THROW passes | Should Pass |
- * | 04 | Print exit test message "Exiting AppendTypicalValueTest test" | None | "Exiting AppendTypicalValueTest test" is displayed on the console | Should be successful |
- */
-TEST_F(PacketTest, AppendTypicalValueTest) {
-    std::cout << "Entering AppendTypicalValueTest test" << std::endl;
-    std::uint32_t value = 0x12345678;
-    std::cout << "Invoking append32 with value: 0x" << std::hex << value << std::dec << std::endl;
-    EXPECT_NO_THROW(packet->append32(value));
-    std::cout << "Exiting AppendTypicalValueTest test" << std::endl;
-}
-/**
- * @brief Test that appending zero value does not throw an exception.
- *
- * This test verifies that when the append64 API of the PacketChild class is invoked with a zero value, no exceptions are thrown. This confirms the method's ability to handle a zero input correctly.
- *
- * **Test Group ID:** Basic: 01 / Module (L2): 02 / Stress (L2): 03
- * **Test Case ID:** 029
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                      | Test Data                                   | Expected Result                                                    | Notes       |
- * | :--------------: | ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------ | ----------- |
- * | 01               | Call append64 API with a zero value              | input: value = 0, output: method execution  | No exception thrown; EXPECT_NO_THROW check passes                  | Should Pass |
- */
-TEST_F(PacketTest, AppendZero64) {
-    std::cout << "Entering AppendZero64 test" << std::endl;
-    
-    int64_t value = 0;
-    std::cout << "Invoking append64 with value: " << value << std::endl;
-    
-    EXPECT_NO_THROW({
-        packet->append64(value);
-        std::cout << "append64 executed successfully with value: " << value << std::endl;
-    });
-    
-    // If getBuffer method was available, we could log its state here.
-    std::cout << "Exiting AppendZero64 test" << std::endl;
-}
-/**
- * @brief Verify that the append64 method correctly appends a positive 64-bit integer without throwing exceptions.
- *
- * This test verifies that the PacketChild::append64 method correctly handles a positive 64-bit integer value. It ensures that the method executes without throwing any exceptions and confirms that the appending logic for the provided value functions as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 030@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:** 
- * | Variation / Step | Description                                                                     | Test Data                                                  | Expected Result                                                    | Notes           |
- * | :--------------: | ------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ | --------------- |
- * | 01               | Print message indicating entry into the AppendPositive64 test                   | None                                                       | Entry message is printed                                           | Should be successful |
- * | 02               | Initialize a 64-bit positive value and print the invocation message             | value = 1234567890123456789                                  | Initialization message displays the correct value                  | Should be successful |
- * | 03               | Invoke append64 with the initialized value and check that no exception is thrown  | input value = 1234567890123456789                            | append64 executes without throwing an exception                    | Should Pass     |
- * | 04               | Print message confirming that append64 executed successfully                    | None                                                       | Success message is printed                                         | Should be successful |
- * | 05               | Print message indicating exit from the AppendPositive64 test                    | None                                                       | Exit message is printed                                            | Should be successful |
- */
-TEST_F(PacketTest, AppendPositive64) {
-    std::cout << "Entering AppendPositive64 test" << std::endl;
-    
-    int64_t value = 1234567890123456789LL;
-    std::cout << "Invoking append64 with value: " << value << std::endl;
-    
-    EXPECT_NO_THROW({
-        packet->append64(value);
-        std::cout << "append64 executed successfully with value: " << value << std::endl;
-    });
-    
-    std::cout << "Exiting AppendPositive64 test" << std::endl;
-}
-/**
- * @brief Verifies that append64 correctly handles negative 64-bit integer input.
- *
- * This test ensures that when a negative value (-1) is passed to the append64 method of the PacketChild class,
- * the method executes without throwing an exception. It confirms that negative inputs are appropriately handled,
- * which is essential to maintain robust data packet processing.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 031@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:** 
- * | Variation / Step | Description                                                       | Test Data                                          | Expected Result                                                                        | Notes           |
- * | :--------------: | ----------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------- |
- * | 01               | Log the entry into the AppendNegative64 test                      | --                                                 | "Entering AppendNegative64 test" is printed                                            | Should be successful |
- * | 02               | Invoke append64 API with a negative 64-bit integer value (-1)       | input: value = -1, output: none                     | API call does not throw any exception and "append64 executed successfully with value: -1" is printed | Should Pass     |
- * | 03               | Log the exit from the AppendNegative64 test                       | --                                                 | "Exiting AppendNegative64 test" is printed                                             | Should be successful |
- */
-TEST_F(PacketTest, AppendNegative64) {
-    std::cout << "Entering AppendNegative64 test" << std::endl;
-    
-    int64_t value = -1;
-    std::cout << "Invoking append64 with value: " << value << std::endl;
-    
-    EXPECT_NO_THROW({
-        packet->append64(value);
-        std::cout << "append64 executed successfully with value: " << value << std::endl;
-    });
-    
-    std::cout << "Exiting AppendNegative64 test" << std::endl;
-}
-/**
- * @brief Validate that the append64 API correctly appends the maximum int64_t value without throwing an exception.
- *
- * This test verifies that when the maximum 64-bit integer value (9223372036854775807) is passed to the append64 API, the function executes without throwing an exception. It ensures proper handling of boundary values and logs the test entry and exit to validate the execution flow.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 032
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                  | Test Data                                              | Expected Result                                                  | Notes         |
- * | :--------------: | ------------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------- | ------------- |
- * | 01               | Start the AppendMax64 test and print the entry message       | No inputs                                              | Entry log printed correctly                                       | Should be successful |
- * | 02               | Invoke the append64 API with the maximum int64_t value (9223372036854775807) | input: value = 9223372036854775807, API: append64(value) | API executes without throwing any exception                       | Should Pass   |
- * | 03               | End the test by printing the exit message                    | No inputs                                              | Exit log printed correctly; no exceptions during API call         | Should be successful |
- */
-TEST_F(PacketTest, AppendMax64) {
-    std::cout << "Entering AppendMax64 test" << std::endl;
-    
-    int64_t value = std::numeric_limits<int64_t>::max(); // 9223372036854775807
-    std::cout << "Invoking append64 with value: " << value << std::endl;
-    
-    EXPECT_NO_THROW({
-        packet->append64(value);
-        std::cout << "append64 executed successfully with maximum value: " << value << std::endl;
-    });
-    
-    std::cout << "Exiting AppendMax64 test" << std::endl;
-}
-/**
- * @brief Test to verify that appending the minimum 64-bit integer value does not throw an exception.
- *
- * This test verifies that the append64 function correctly handles the minimum value for a 64-bit integer.
- * It confirms that the API call does not throw any exceptions when invoked with the minimum value.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 033@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                  | Test Data                                             | Expected Result                                          | Notes                |
- * | :--------------: | ------------------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------- | -------------------- |
- * | 01               | Log the entry message indicating the test start              | None                                                  | Entry log message printed                                | Should be successful |
- * | 02               | Invoke append64 API with the minimum int64_t value             | value = -9223372036854775808                           | Function executes without throwing any exception       | Should Pass          |
- * | 03               | Log the success message and indicate the test exit             | None                                                  | Exit log message printed                                 | Should be successful |
- */
-TEST_F(PacketTest, AppendMin64) {
-    std::cout << "Entering AppendMin64 test" << std::endl;
-    
-    int64_t value = std::numeric_limits<int64_t>::min(); // -9223372036854775808
-    std::cout << "Invoking append64 with value: " << value << std::endl;
-    
-    EXPECT_NO_THROW({
-        packet->append64(value);
-        std::cout << "append64 executed successfully with minimum value: " << value << std::endl;
-    });
-    
-    std::cout << "Exiting AppendMin64 test" << std::endl;
-}
-/**
- * @brief Verify appendType() handles valid packet types correctly
- *
- * This test verifies that the appendType() method in the PacketChild class properly handles all valid PacketType values without throwing exceptions. By iterating over a pre-defined set of valid packet types (excluding INVALID), the test confirms the method’s stability and correctness for positive input scenarios.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 034@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                         | Test Data                                                                                                                  | Expected Result                                                                                               | Notes             |
- * | :--------------: | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------- |
- * | 01               | Print entering test message to indicate the start of test execution.                                | None                                                                                                                     | "Entering AppendValidPacketTypes test" message printed.                                                     | Should be successful |
- * | 02               | Iterate through each valid PacketType, call appendType() and check that no exception is thrown.     | packet->appendType(type) where type = PacketType::ZERO, PacketType::PES_DATA, PacketType::TIMESTAMP, PacketType::RESET_ALL, PacketType::RESET_CHANNEL, PacketType::SUBTITLE_SELECTION, PacketType::TELETEXT_SELECTION, PacketType::TTML_SELECTION, PacketType::TTML_DATA, PacketType::TTML_TIMESTAMP, PacketType::CC_DATA, PacketType::PAUSE, PacketType::RESUME, PacketType::MUTE, PacketType::UNMUTE, PacketType::WEBVTT_SELECTION, PacketType::WEBVTT_DATA, PacketType::WEBVTT_TIMESTAMP, PacketType::CC_SET_ATTRIBUTE | appendType() executes without throwing an exception.                                                   | appendType() should execute without exception for all valid PacketType values.                               | Should Pass       |
- * | 03               | Print exiting test message to indicate the completion of test execution.                            | None                                                                                                                     | "Exiting AppendValidPacketTypes test" message printed.                                                       | Should be successful |
- */
-TEST_F(PacketTest, AppendValidPacketTypes)
+TEST(PacketProtectedMethods, GetBufferInitiallyEmpty)
 {
-    std::cout << "Entering AppendValidPacketTypes test" << std::endl;
-
-    for (const auto& type : PacketChild::validPacketTypes()) {
-        EXPECT_NO_THROW(packet->appendType(type));
-    }
-    std::cout << "Exiting AppendValidPacketTypes test" << std::endl;
+    std::cout << "[PacketProtectedMethods.GetBufferInitiallyEmpty] - START" << std::endl;
+    PacketTestHelper h;
+    const auto& buf = h.getBuffer();
+    std::cout << "  getBuffer().size() = " << buf.size() << " (expected 0)" << std::endl;
+    EXPECT_TRUE(buf.empty());
+    std::cout << "[PacketProtectedMethods.GetBufferInitiallyEmpty] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that appendType handles an invalid packet type appropriately.
+ * @brief getBuffer() returns the same underlying storage as getBytes().
  *
- * This test validates that calling the appendType function with a PacketType value of INVALID does not throw any exceptions.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 035
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                        | Test Data                                               | Expected Result                                                         | Notes       |
- * | :--------------: | ------------------------------------------------------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------- | ----------- |
- * | 01               | Call appendType with PacketType::INVALID and check for exceptions. | input = PacketType = INVALID, output = void             | Function executes without throwing an exception; EXPECT_NO_THROW passes. | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 002
+ * @par Priority       : Medium
  */
-TEST_F(PacketTest, AppendInvalidPacketType)
+TEST(PacketProtectedMethods, GetBufferMatchesGetBytes)
 {
-    std::cout << "Entering AppendInvalidPacketType test" << std::endl;
-    // Expect no exception when calling appendType with PacketType::INVALID
-    EXPECT_NO_THROW(packet->appendInvalid());
-    std::cout << "Exiting AppendInvalidPacketType test" << std::endl;
+    std::cout << "[PacketProtectedMethods.GetBufferMatchesGetBytes] - START" << std::endl;
+    PacketTestHelper h;
+    h.append32(0xDEADBEEFu);
+    EXPECT_EQ(h.getBuffer().size(), h.getBytes().size());
+    EXPECT_EQ(h.getBuffer(), h.getBytes());
+    std::cout << "  getBuffer() and getBytes() refer to same data after append32()" << std::endl;
+    std::cout << "[PacketProtectedMethods.GetBufferMatchesGetBytes] - PASS" << std::endl;
 }
-/**
- * @brief Validate that a newly instantiated Packet object's buffer is empty.
- *
- * This test verifies that invoking the getBuffer method on a freshly instantiated Packet object does not throw any exceptions and returns an empty buffer. It ensures that the initial state of the buffer meets the expected condition for further operations.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 036@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Print entering test message | log message = "Entering RetrieveEmptyBuffer test" | Console prints the entering message | Should be successful |
- * | 02 | Print invoking API message | log message = "Invoking Packet::getBuffer method on the packet object." | Console prints the invoking message | Should be successful |
- * | 03 | Invoke getBuffer and validate empty buffer | packet->getBuffer(), expected buffer size = 0 | API returns an empty vector with size 0 and no exception is thrown | Should Pass |
- * | 04 | Print exiting test message | log message = "Exiting RetrieveEmptyBuffer test" | Console prints the exiting message | Should be successful |
- */
-TEST_F(PacketTest, RetrieveEmptyBuffer) {
-    std::cout << "Entering RetrieveEmptyBuffer test" << std::endl;
 
-    std::cout << "Invoking Packet::getBuffer method on the packet object." << std::endl;
-    EXPECT_NO_THROW({
-        std::vector<uint8_t>& buffer = packet->getBuffer();
-        std::cout << "Retrieved buffer. Current buffer size: " << buffer.size() << std::endl;
-        EXPECT_EQ(buffer.size(), 0u) << "Expected buffer size to be 0 for a newly instantiated Packet object.";
-    });
-
-    std::cout << "Exiting RetrieveEmptyBuffer test" << std::endl;
-}
 /**
- * @brief Verify PausePacket construction with valid positive numbers.
+ * @brief append32() encodes a uint32_t as 4 little-endian bytes.
  *
- * This test verifies that constructing a PausePacket object using positive values for channelId and counter does not throw any exceptions,
- * ensuring the object is correctly initialized with valid inputs.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 037
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invokes PausePacket constructor with valid channelId and counter values. | channelId = 10, counter = 5 | PausePacket object is constructed successfully without throwing any exception. | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 003
+ * @par Priority       : High
  */
-TEST(PausePacket, ConstructWithValidPositiveNumbers) {
-    std::cout << "Entering ConstructWithValidPositiveNumbers test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 5;
-    std::cout << "Invoking PausePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        PausePacket packet(channelId, counter);
-        std::cout << "PausePacket object constructed successfully with channelId = " 
-                  << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithValidPositiveNumbers test" << std::endl;
-}
-/**
- * @brief Verify that PausePacket constructor properly handles zero channelId.
- *
- * This test checks whether the PausePacket object can be constructed successfully when the channelId is zero, ensuring that edge-case values are handled without exceptions during object creation.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 038@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                           | Test Data                     | Expected Result                                                    | Notes      |
- * | :--------------: | ------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------ | ---------- |
- * | 01               | Invoke PausePacket constructor with channelId set to 0 and counter set to 5           | channelId = 0, counter = 5      | PausePacket object is constructed successfully with no exceptions  | Should Pass|
- */
-TEST(PausePacket, ConstructWithZeroChannelId) {
-    std::cout << "Entering ConstructWithZeroChannelId test" << std::endl;
-    
-    uint32_t channelId = 0;
-    uint32_t counter = 5;
-    std::cout << "Invoking PausePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        PausePacket packet(channelId, counter);
-        std::cout << "PausePacket object constructed successfully with channelId = " 
-                  << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithZeroChannelId test" << std::endl;
-}
-/**
- * @brief Test to verify that constructing a PausePacket object with a zero counter value does not throw an exception.
- *
- * This test verifies that the PausePacket constructor can handle a scenario when the counter is zero. 
- * The test ensures that no exception is thrown during construction and that the object is correctly instantiated.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 039@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                              | Test Data                          | Expected Result                                                    | Notes       |
- * | :--------------: | -------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------ | ----------- |
- * | 01               | Invoke the PausePacket constructor with channelId and counter values | channelId = 10, counter = 0          | PausePacket object is constructed successfully without throwing an exception | Should Pass |
- */
-TEST(PausePacket, ConstructWithZeroCounter) {
-    std::cout << "Entering ConstructWithZeroCounter test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = 0;
-    std::cout << "Invoking PausePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        PausePacket packet(channelId, counter);
-        std::cout << "PausePacket object constructed successfully with channelId = " 
-                  << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithZeroCounter test" << std::endl;
-}
-/**
- * @brief Test the PausePacket constructor with the maximum channelId value
- *
- * This test verifies that a PausePacket object can be successfully constructed when the channelId is set to its maximum possible value. It ensures that the constructor handles extreme boundary conditions without throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 040@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Print the entry message indicating the start of the test. | None | Entry message "Entering ConstructWithMaxChannelId test" is printed to the console. | Should be successful |
- * | 02 | Initialize variables with channelId set to its maximum value and counter set to 5. | channelId = std::numeric_limits<uint32_t>::max(), counter = 5 | Variables are correctly set with the provided values. | Should be successful |
- * | 03 | Print the invocation message for the PausePacket constructor with the initialized values. | channelId = max value, counter = 5 | The invocation message with channelId and counter details is printed. | Should be successful |
- * | 04 | Invoke the PausePacket constructor inside an EXPECT_NO_THROW block to ensure no exception is thrown. | channelId = max value, counter = 5 | PausePacket is constructed successfully without throwing an exception. | Should Pass |
- * | 05 | Print the success message confirming the successful construction of the PausePacket object. | channelId = max value, counter = 5 | Success message indicating proper object construction is printed. | Should be successful |
- * | 06 | Print the exit message indicating the end of the test. | None | Exit message "Exiting ConstructWithMaxChannelId test" is printed to the console. | Should be successful |
- */
-TEST(PausePacket, ConstructWithMaxChannelId) {
-    std::cout << "Entering ConstructWithMaxChannelId test" << std::endl;
-    
-    uint32_t channelId = std::numeric_limits<uint32_t>::max();
-    uint32_t counter = 5;
-    std::cout << "Invoking PausePacket constructor with channelId = " << channelId 
-              << " (max value) and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        PausePacket packet(channelId, counter);
-        std::cout << "PausePacket object constructed successfully with channelId = " 
-                  << channelId << " (max value) and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithMaxChannelId test" << std::endl;
-}
-/**
- * @brief Verify that constructing a PausePacket object with the maximum counter value does not throw an exception
- *
- * This test case verifies that the PausePacket constructor can handle the maximum possible value for the counter parameter. It confirms that providing a valid channelId and a counter set to the maximum uint32_t value does not result in any exceptions. This is critical to ensure that the class correctly handles edge values and behaves as expected without crashing.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 041@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                 | Test Data                                           | Expected Result                               | Notes       |
- * | :--------------: | --------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------- | ----------- |
- * | 01               | Invoke PausePacket constructor with valid channelId and maximum counter value. | channelId = 10, counter = 4294967295 (max uint32_t) | No exception is thrown during object construction. | Should Pass |
- */
-TEST(PausePacket, ConstructWithMaxCounter) {
-    std::cout << "Entering ConstructWithMaxCounter test" << std::endl;
-    
-    uint32_t channelId = 10;
-    uint32_t counter = std::numeric_limits<uint32_t>::max();
-    std::cout << "Invoking PausePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << " (max value)" << std::endl;
-    
-    EXPECT_NO_THROW({
-        PausePacket packet(channelId, counter);
-        std::cout << "PausePacket object constructed successfully with channelId = " 
-                  << channelId << " and counter = " << counter << " (max value)" << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithMaxCounter test" << std::endl;
-}
-/**
- * @brief Verify that the default constructor of ResetAllPacket initializes the object correctly without throwing exceptions.
- *
- * This test verifies that invoking the default constructor of the ResetAllPacket class correctly constructs an instance without any exceptions.
- * It ensures that the internal buffer content and counter are initialized to their expected states upon construction.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 042@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                                  | Test Data                                     | Expected Result                                          | Notes       |
- * | :---------------:| ---------------------------------------------------------------------------------------------| --------------------------------------------- | ---------------------------------------------------------| ----------- |
- * | 01               | Invoke the default constructor of ResetAllPacket to create an object and verify no exception is thrown. | input: None, output: ResetAllPacket object   | The API should not throw an exception; object is constructed successfully. | Should Pass |
- */
-TEST(ResetAllPacket, DefaultConstructionInitializesResetAllPacketWithCorrectBufferContentAndCounterValue)
+TEST(PacketProtectedMethods, Append32EncodesLittleEndian)
 {
-    std::cout << "Entering DefaultConstructionInitializesResetAllPacketWithCorrectBufferContentAndCounterValue test" << std::endl;
-    
-    EXPECT_NO_THROW(
-        {
-            std::cout << "Invoking ResetAllPacket() default constructor." << std::endl;
-            ResetAllPacket packet;
-            std::cout << "Constructor invoked successfully. No exception thrown." << std::endl;
-        }
-    );
-    
-    std::cout << "Exiting DefaultConstructionInitializesResetAllPacketWithCorrectBufferContentAndCounterValue test" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append32EncodesLittleEndian] - START" << std::endl;
+    PacketTestHelper h;
+    const uint32_t val = 0x01020304u;
+    h.append32(val);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 4u);
+    EXPECT_EQ(buf[0], 0x04u);
+    EXPECT_EQ(buf[1], 0x03u);
+    EXPECT_EQ(buf[2], 0x02u);
+    EXPECT_EQ(buf[3], 0x01u);
+    EXPECT_EQ(readLE32(buf, 0), val);
+    std::cout << "  append32(0x01020304) encoded as LE bytes [04 03 02 01]" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append32EncodesLittleEndian] - PASS" << std::endl;
 }
+
 /**
- * @brief Validate that ResetChannelPacket constructor operates correctly with typical positive values
+ * @brief append32() called multiple times grows the buffer correctly.
  *
- * This test verifies that the ResetChannelPacket constructor, when provided with a typical positive channelId 
- * and counter value, executes without throwing an exception. The test ensures that the instance creation is safe 
- * and meets the operational expectations, as shown by the EXPECT_NO_THROW assertion.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 043@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke ResetChannelPacket constructor with channelId = 50 and counter = 100 | channelId = 50, counter = 100 | Constructor executes without throwing exception; EXPECT_NO_THROW passes | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 004
+ * @par Priority       : Medium
  */
-TEST(ResetChannelPacket, TypicalPositiveValues) {
-    std::cout << "Entering TypicalPositiveValues test" << std::endl;
-    
-    uint32_t channelId = 50;
-    uint32_t counter = 100;
-    std::cout << "Invoking ResetChannelPacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        ResetChannelPacket packet(channelId, counter);
-        std::cout << "ResetChannelPacket constructor executed successfully." << std::endl;
-    });
-    
-    std::cout << "Exiting TypicalPositiveValues test" << std::endl;
+TEST(PacketProtectedMethods, Append32MultipleCallsGrowBuffer)
+{
+    std::cout << "[PacketProtectedMethods.Append32MultipleCallsGrowBuffer] - START" << std::endl;
+    PacketTestHelper h;
+    h.append32(0xAAAAAAAAu);
+    h.append32(0xBBBBBBBBu);
+    h.append32(0xCCCCCCCCu);
+    const auto& buf = h.getBytes();
+    EXPECT_EQ(buf.size(), 12u);
+    EXPECT_EQ(readLE32(buf, 0), 0xAAAAAAAAu);
+    EXPECT_EQ(readLE32(buf, 4), 0xBBBBBBBBu);
+    EXPECT_EQ(readLE32(buf, 8), 0xCCCCCCCCu);
+    std::cout << "  3x append32() produced 12-byte buffer with correct values" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append32MultipleCallsGrowBuffer] - PASS" << std::endl;
 }
+
 /**
- * @brief Test ResetChannelPacket constructor with the minimum channel id
+ * @brief append32() with zero value encodes four zero bytes.
  *
- * This test verifies that the ResetChannelPacket constructor handles the minimum channel id value (0) along with a specific counter value (100) without throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 044@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Initialize channelId with 0 and counter with 100, then call ResetChannelPacket constructor | channelId = 0, counter = 100 | ResetChannelPacket constructor executes without throwing exceptions | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 005
+ * @par Priority       : Low
  */
-TEST(ResetChannelPacket, MinimumChannelId) {
-    std::cout << "Entering MinimumChannelId test" << std::endl;
-    
-    uint32_t channelId = 0;
-    uint32_t counter = 100;
-    std::cout << "Invoking ResetChannelPacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        ResetChannelPacket packet(channelId, counter);
-        std::cout << "ResetChannelPacket constructor executed successfully with channelId = 0." << std::endl;
-    });
-    
-    std::cout << "Exiting MinimumChannelId test" << std::endl;
+TEST(PacketProtectedMethods, Append32ZeroValueEncodes4Zeros)
+{
+    std::cout << "[PacketProtectedMethods.Append32ZeroValueEncodes4Zeros] - START" << std::endl;
+    PacketTestHelper h;
+    h.append32(0u);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 4u);
+    for (auto b : buf)
+        EXPECT_EQ(b, 0x00u);
+    std::cout << "  append32(0) encodes [00 00 00 00]" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append32ZeroValueEncodes4Zeros] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify ResetChannelPacket constructor handles minimum counter value correctly.
+ * @brief append64() encodes an int64_t as 8 little-endian bytes.
  *
- * This test verifies that the ResetChannelPacket constructor is able to handle the smallest valid counter value (i.e., zero) for a given channelId (50) without throwing an exception. The test confirms that initializing the packet under these boundary conditions succeeds and the constructor behaves as expected.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 045@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                             | Test Data                            | Expected Result                                                    | Notes          |
- * | :--------------: | ------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | -------------- |
- * | 01               | Initialize channelId and counter variables              | channelId = 50, counter = 0            | Variables set correctly to their minimum boundary values           | Should be successful |
- * | 02               | Invoke ResetChannelPacket constructor with the given values | channelId = 50, counter = 0            | Constructor execution does not throw any exceptions                 | Should Pass    |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 006
+ * @par Priority       : High
  */
-TEST(ResetChannelPacket, MinimumCounter) {
-    std::cout << "Entering MinimumCounter test" << std::endl;
-    
-    uint32_t channelId = 50;
-    uint32_t counter = 0;
-    std::cout << "Invoking ResetChannelPacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        ResetChannelPacket packet(channelId, counter);
-        std::cout << "ResetChannelPacket constructor executed successfully with counter = 0." << std::endl;
-    });
-    
-    std::cout << "Exiting MinimumCounter test" << std::endl;
+TEST(PacketProtectedMethods, Append64EncodesLittleEndian)
+{
+    std::cout << "[PacketProtectedMethods.Append64EncodesLittleEndian] - START" << std::endl;
+    PacketTestHelper h;
+    const int64_t val = 0x0102030405060708LL;
+    h.append64(val);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 8u);
+    EXPECT_EQ(readLE64(buf, 0), static_cast<uint64_t>(val));
+    std::cout << "  append64(0x0102030405060708) encoded as 8 LE bytes" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append64EncodesLittleEndian] - PASS" << std::endl;
 }
+
 /**
- * @brief Test ResetChannelPacket constructor with maximum channelId value
+ * @brief append64() with zero value encodes eight zero bytes.
  *
- * This test verifies that constructing a ResetChannelPacket object with the maximum possible channelId (4294967295U) and a valid counter (100) does not throw any exceptions, ensuring the API can handle edge-case channel identifiers.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 046@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                              | Test Data                                           | Expected Result                                                             | Notes      |
- * | :--------------: | ---------------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke ResetChannelPacket constructor with maximum channelId and a valid counter value.   | channelId = 4294967295, counter = 100               | Constructor does not throw any exception and passes EXPECT_NO_THROW check.   | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 007
+ * @par Priority       : Low
  */
-TEST(ResetChannelPacket, MaximumChannelId) {
-    std::cout << "Entering MaximumChannelId test" << std::endl;
-    
-    uint32_t channelId = 4294967295U;
-    uint32_t counter = 100;
-    std::cout << "Invoking ResetChannelPacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        ResetChannelPacket packet(channelId, counter);
-        std::cout << "ResetChannelPacket constructor executed successfully with maximum channelId." << std::endl;
-    });
-    
-    std::cout << "Exiting MaximumChannelId test" << std::endl;
+TEST(PacketProtectedMethods, Append64ZeroValueEncodes8Zeros)
+{
+    std::cout << "[PacketProtectedMethods.Append64ZeroValueEncodes8Zeros] - START" << std::endl;
+    PacketTestHelper h;
+    h.append64(0LL);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 8u);
+    for (auto b : buf)
+        EXPECT_EQ(b, 0x00u);
+    std::cout << "  append64(0) encodes 8 zero bytes" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append64ZeroValueEncodes8Zeros] - PASS" << std::endl;
 }
+
 /**
- * @brief Test ResetChannelPacket constructor with maximum counter value
+ * @brief append64() with negative value encodes correct two's-complement LE bytes.
  *
- * This test verifies that invoking the ResetChannelPacket constructor with a channel ID of 50 and the maximum counter value of 4294967295U does not throw an exception. It confirms that the API correctly handles edge-case input parameters.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 047@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                              | Test Data                                          | Expected Result                                                       | Notes       |
- * | :--------------: | ------------------------------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------- | ----------- |
- * | 01               | Invoke ResetChannelPacket constructor with channelId and maximum counter | input: channelId = 50, counter = 4294967295U         | API does not throw an exception, object is created successfully in the constructor | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 008
+ * @par Priority       : Medium
  */
-TEST(ResetChannelPacket, MaximumCounter) {
-    std::cout << "Entering MaximumCounter test" << std::endl;
-    
-    uint32_t channelId = 50;
-    uint32_t counter = 4294967295U;
-    std::cout << "Invoking ResetChannelPacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    
-    EXPECT_NO_THROW({
-        ResetChannelPacket packet(channelId, counter);
-        std::cout << "ResetChannelPacket constructor executed successfully with maximum counter." << std::endl;
-    });
-    
-    std::cout << "Exiting MaximumCounter test" << std::endl;
+TEST(PacketProtectedMethods, Append64NegativeValue)
+{
+    std::cout << "[PacketProtectedMethods.Append64NegativeValue] - START" << std::endl;
+    PacketTestHelper h;
+    const int64_t val = -1LL;
+    h.append64(val);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 8u);
+    // -1 in two's complement is all 0xFF bytes
+    for (auto b : buf)
+        EXPECT_EQ(b, 0xFFu);
+    std::cout << "  append64(-1) encodes 8x 0xFF bytes" << std::endl;
+    std::cout << "[PacketProtectedMethods.Append64NegativeValue] - PASS" << std::endl;
 }
+
 /**
- * @brief Validate ResumePacket construction with valid positive input values
+ * @brief appendType() encodes the packet type enum value as 4 little-endian bytes.
  *
- * This test verifies that the ResumePacket constructor correctly creates an object when provided with valid positive values for channelId and counter. The test ensures that no exceptions are thrown during the object construction, confirming the normal operation of the API under typical conditions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 048@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                         | Test Data                                  | Expected Result                                                         | Notes      |
- * | :--------------: | ------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke ResumePacket constructor with channelId = 100 and counter = 200 | channelId = 100, counter = 200               | ResumePacket object is created without throwing any exceptions; EXPECT_NO_THROW passes | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 009
+ * @par Priority       : High
  */
-TEST(ResumePacket, ValidInputPositiveValues) {
-    std::cout << "Entering ValidInputPositiveValues test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 200;
-    std::cout << "Invoking ResumePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        ResumePacket packet(channelId, counter);
-        std::cout << "ResumePacket object created successfully." << std::endl;
-    });
-    std::cout << "Exiting ValidInputPositiveValues test" << std::endl;
+TEST(PacketProtectedMethods, AppendTypeEncodesPauseType)
+{
+    std::cout << "[PacketProtectedMethods.AppendTypeEncodesPauseType] - START" << std::endl;
+    PacketTestHelper h;
+    h.appendType(PacketTestHelper::PacketType::PAUSE);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 4u);
+    EXPECT_EQ(readLE32(buf, 0), TYPE_PAUSE);
+    std::cout << "  appendType(PAUSE) encodes value=" << TYPE_PAUSE << std::endl;
+    std::cout << "[PacketProtectedMethods.AppendTypeEncodesPauseType] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that creating a ResumePacket object with a zero channel identifier does not throw an exception
+ * @brief appendType() encodes RESET_ALL type correctly.
  *
- * This test verifies that the ResumePacket constructor correctly handles the case where the channelId is set to zero without throwing any exceptions. Handling a zero channel ID is important for ensuring that the API can manage edge-case inputs, maintaining robust behavior even with boundary values.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 049@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                               | Test Data                           | Expected Result                                                                 | Notes      |
- * | :--------------: | ----------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------- | ---------- |
- * | 01               | Invoke ResumePacket constructor with channelId set to 0 and counter set to 200.           | channelId = 0, counter = 200          | ResumePacket object is created without exceptions and passes EXPECT_NO_THROW.   | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 010
+ * @par Priority       : Medium
  */
-TEST(ResumePacket, ZeroChannelId) {
-    std::cout << "Entering ZeroChannelId test" << std::endl;
-    uint32_t channelId = 0;
-    uint32_t counter = 200;
-    std::cout << "Invoking ResumePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        ResumePacket packet(channelId, counter);
-        std::cout << "ResumePacket object created successfully." << std::endl;
-    });
-    std::cout << "Exiting ZeroChannelId test" << std::endl;
+TEST(PacketProtectedMethods, AppendTypeEncodesResetAllType)
+{
+    std::cout << "[PacketProtectedMethods.AppendTypeEncodesResetAllType] - START" << std::endl;
+    PacketTestHelper h;
+    h.appendType(PacketTestHelper::PacketType::RESET_ALL);
+    const auto& buf = h.getBytes();
+    ASSERT_EQ(buf.size(), 4u);
+    EXPECT_EQ(readLE32(buf, 0), TYPE_RESET_ALL);
+    std::cout << "  appendType(RESET_ALL) encodes value=" << TYPE_RESET_ALL << std::endl;
+    std::cout << "[PacketProtectedMethods.AppendTypeEncodesResetAllType] - PASS" << std::endl;
 }
+
 /**
- * @brief Verify that ResumePacket is successfully created with a zero counter.
+ * @brief Mixed sequence: appendType + append32 + append64 produces correct layout.
  *
- * This test checks that the ResumePacket constructor does not throw an exception when provided with a valid channelId (100) and a counter value of zero. It ensures that the object handles a zero counter correctly.
- *
- * **Test Group ID:** Basic: 01
- * **Test Case ID:** 050
- * **Priority:** High
- *
- * **Pre-Conditions:** None
- * **Dependencies:** None
- * **User Interaction:** None
- *
- * **Test Procedure:**
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke ResumePacket constructor with channelId and counter | channelId = 100, counter = 0 | ResumePacket object is created without throwing any exception | Should Pass |
+ * @par Test Group ID  : PacketProtectedMethods
+ * @par Test Case ID   : 011
+ * @par Priority       : High
  */
-TEST(ResumePacket, ZeroCounter) {
-    std::cout << "Entering ZeroCounter test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 0;
-    std::cout << "Invoking ResumePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        ResumePacket packet(channelId, counter);
-        std::cout << "ResumePacket object created successfully." << std::endl;
-    });
-    std::cout << "Exiting ZeroCounter test" << std::endl;
-}
-/**
- * @brief Validate that ResumePacket constructor handles maximum channel ID and valid counter without throwing exceptions
- *
- * This test verifies that the ResumePacket constructor correctly accepts the maximum unsigned 32-bit integer value for channelId (4294967295) along with a valid counter value (200). The objective is to ensure that the API properly handles boundary conditions and constructs the object without throwing any exceptions.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 051@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                          | Test Data                                   | Expected Result                                                          | Notes      |
- * | :--------------: | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------ | ---------- |
- * | 01               | Invoke ResumePacket constructor with maximum channelId and a valid counter value     | channelId = 4294967295, counter = 200         | Object creation succeeds without throwing any exceptions                 | Should Pass|
- */
-TEST(ResumePacket, MaxChannelId) {
-    std::cout << "Entering MaxChannelId test" << std::endl;
-    uint32_t channelId = 4294967295u;
-    uint32_t counter = 200;
-    std::cout << "Invoking ResumePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        ResumePacket packet(channelId, counter);
-        std::cout << "ResumePacket object created successfully." << std::endl;
-    });
-    std::cout << "Exiting MaxChannelId test" << std::endl;
-}
-/**
- * @brief Verify ResumePacket constructor with maximum counter value.
- *
- * This test case verifies that the ResumePacket constructor does not throw an exception when called with a valid channelId and the maximum 32-bit unsigned integer value for counter. It ensures the integrity of object creation under boundary conditions for the counter.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 052@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description                                                              | Test Data                                          | Expected Result                                                                           | Notes       |
- * | :--------------: | ------------------------------------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------- |
- * | 01               | Invoke ResumePacket constructor with valid channelId and maximum counter | input: channelId = 100, counter = 4294967295         | ResumePacket constructor should not throw an exception; EXPECT_NO_THROW passes             | Should Pass |
- */
-TEST(ResumePacket, MaxCounter) {
-    std::cout << "Entering MaxCounter test" << std::endl;
-    uint32_t channelId = 100;
-    uint32_t counter = 4294967295u;
-    std::cout << "Invoking ResumePacket constructor with channelId = " << channelId 
-              << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        ResumePacket packet(channelId, counter);
-        std::cout << "ResumePacket object created successfully." << std::endl;
-    });
-    std::cout << "Exiting MaxCounter test" << std::endl;
-}
-/**
- * @brief Verify that constructing UnmutePacket with a channelId of 0 does not throw exceptions.
- *
- * This test verifies that creating an instance of UnmutePacket with a channelId value of 0 and a counter value of 67890 does not result in any exceptions. It ensures that the constructor handles a zero channelId correctly.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 053@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                        | Test Data                                               | Expected Result                                         | Notes        |
- * | :--------------: | ------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------- | ------------ |
- * |       01         | Initialize channelId and counter, then call UnmutePacket constructor | channelId = 0, counter = 67890                           | UnmutePacket object is created without throwing any exception | Should Pass  |
- */
-TEST(UnmutePacket, ConstructWithZeroChannelId) {
-    std::cout << "Entering ConstructWithZeroChannelId test" << std::endl;
-    
-    std::uint32_t channelId = 0;
-    std::uint32_t counter = 67890;
-    std::cout << "Input values - channelId: " << channelId << ", counter: " << counter << std::endl;
-    
-    std::cout << "Invoking UnmutePacket constructor with channelId = " << channelId << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        UnmutePacket packet(channelId, counter);
-        std::cout << "Successfully created UnmutePacket object with channelId = " << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithZeroChannelId test" << std::endl;
-}
-/**
- * @brief Verify UnmutePacket constructor does not throw when invoked with a zero counter
- *
- * This test validates that the UnmutePacket constructor, when provided with a valid channelId and a counter value of zero, correctly initializes the object without throwing any exceptions. The test ensures that the class handles zero counter values gracefully, which is critical for proper operation in scenarios where the counter might be zero.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 054@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                                       | Test Data                                 | Expected Result                                                 | Notes      |
- * | :--------------: | --------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------- | ---------- |
- * | 01               | Invoke UnmutePacket constructor with channelId set to 12345 and counter set to 0  | channelId = 12345, counter = 0, output = UnmutePacket object created | UnmutePacket object is successfully created without any exception | Should Pass |
- */
-TEST(UnmutePacket, ConstructWithZeroCounter) {
-    std::cout << "Entering ConstructWithZeroCounter test" << std::endl;
-    
-    std::uint32_t channelId = 12345;
-    std::uint32_t counter = 0;
-    std::cout << "Input values - channelId: " << channelId << ", counter: " << counter << std::endl;
-    
-    std::cout << "Invoking UnmutePacket constructor with channelId = " << channelId << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        UnmutePacket packet(channelId, counter);
-        std::cout << "Successfully created UnmutePacket object with channelId = " << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithZeroCounter test" << std::endl;
-}
-/**
- * @brief Test that constructs UnmutePacket with typical non-zero values
- *
- * This test validates that invoking the UnmutePacket constructor with typical non-zero values does not throw an exception.
- * It verifies the proper construction of the UnmutePacket object when valid inputs are provided.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 055@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**
- * | Variation / Step | Description                                                        | Test Data                                   | Expected Result                                                    | Notes       |
- * | :--------------: | ------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------ | ----------- |
- * | 01               | Invoke the UnmutePacket constructor with channelId and counter values | channelId = 12345, counter = 67890            | No exception is thrown; UnmutePacket object is created successfully | Should Pass |
- */
-TEST(UnmutePacket, ConstructWithTypicalNonZeroValues) {
-    std::cout << "Entering ConstructWithTypicalNonZeroValues test" << std::endl;
-    
-    std::uint32_t channelId = 12345;
-    std::uint32_t counter = 67890;
-    std::cout << "Input values - channelId: " << channelId << ", counter: " << counter << std::endl;
-    
-    std::cout << "Invoking UnmutePacket constructor with channelId = " << channelId << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        UnmutePacket packet(channelId, counter);
-        std::cout << "Successfully created UnmutePacket object with channelId = " << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithTypicalNonZeroValues test" << std::endl;
-}
-/**
- * @brief Validate construction of UnmutePacket with maximum channelId
- *
- * Validate that UnmutePacket's constructor correctly handles the maximum possible value for channelId (4294967295) along with a valid counter (67890) without throwing any exceptions. This test ensures that the boundary condition for the channelId is properly managed.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 056@n
- * **Priority:** High@n
- *
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- *
- * **Test Procedure:**@n
- * | Variation / Step | Description | Test Data | Expected Result | Notes |
- * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke UnmutePacket constructor with maximum channelId and counter | channelId = 4294967295, counter = 67890 | Successfully constructs UnmutePacket object without throwing exceptions | Should Pass |
- */
-TEST(UnmutePacket, ConstructWithMaxChannelId) {
-    std::cout << "Entering ConstructWithMaxChannelId test" << std::endl;
-    
-    std::uint32_t channelId = 4294967295u; // maximum value for uint32_t
-    std::uint32_t counter = 67890;
-    std::cout << "Input values - channelId: " << channelId << ", counter: " << counter << std::endl;
-    
-    std::cout << "Invoking UnmutePacket constructor with channelId = " << channelId << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        UnmutePacket packet(channelId, counter);
-        std::cout << "Successfully created UnmutePacket object with maximum channelId = " << channelId << " and counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithMaxChannelId test" << std::endl;
-}
-/**
- * @brief Test the UnmutePacket constructor with maximum counter value.
- *
- * This test verifies that the UnmutePacket constructor can successfully handle the maximum possible value for a uint32_t counter without throwing any exceptions. The objective is to ensure robust behavior when using extreme boundary inputs.
- *
- * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 057@n
- * **Priority:** High@n
- * 
- * **Pre-Conditions:** None@n
- * **Dependencies:** None@n
- * **User Interaction:** None@n
- * 
- * **Test Procedure:**
- * | Variation / Step | Description                                                                       | Test Data                                           | Expected Result                                                         | Notes       |
- * | :--------------: | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- | ----------- |
- * | 01               | Invoke UnmutePacket constructor with channelId = 12345 and counter = 4294967295u   | channelId = 12345, counter = 4294967295               | Constructor does not throw exception; UnmutePacket object is created successfully | Should Pass |
- */
-TEST(UnmutePacket, ConstructWithMaxCounter) {
-    std::cout << "Entering ConstructWithMaxCounter test" << std::endl;
-    
-    std::uint32_t channelId = 12345;
-    std::uint32_t counter = 4294967295u; // maximum value for uint32_t
-    std::cout << "Input values - channelId: " << channelId << ", counter: " << counter << std::endl;
-    
-    std::cout << "Invoking UnmutePacket constructor with channelId = " << channelId << " and counter = " << counter << std::endl;
-    EXPECT_NO_THROW({
-        UnmutePacket packet(channelId, counter);
-        std::cout << "Successfully created UnmutePacket object with channelId = " << channelId << " and maximum counter = " << counter << std::endl;
-    });
-    
-    std::cout << "Exiting ConstructWithMaxCounter test" << std::endl;
+TEST(PacketProtectedMethods, MixedAppendSequenceCorrectLayout)
+{
+    std::cout << "[PacketProtectedMethods.MixedAppendSequenceCorrectLayout] - START" << std::endl;
+    PacketTestHelper h;
+    h.appendType(PacketTestHelper::PacketType::TIMESTAMP);
+    h.append32(0xDEADBEEFu);
+    h.append64(0x0102030405060708LL);
+    const auto& buf = h.getBytes();
+    // 4 (type) + 4 (uint32) + 8 (int64) = 16 bytes
+    ASSERT_EQ(buf.size(), 16u);
+    EXPECT_EQ(readLE32(buf, 0), TYPE_TIMESTAMP);
+    EXPECT_EQ(readLE32(buf, 4), 0xDEADBEEFu);
+    EXPECT_EQ(readLE64(buf, 8), static_cast<uint64_t>(0x0102030405060708LL));
+    std::cout << "  Mixed appendType+append32+append64 produced correct 16-byte layout" << std::endl;
+    std::cout << "[PacketProtectedMethods.MixedAppendSequenceCorrectLayout] - PASS" << std::endl;
 }

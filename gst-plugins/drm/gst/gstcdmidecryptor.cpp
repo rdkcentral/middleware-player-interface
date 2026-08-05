@@ -463,6 +463,7 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 	GST_LOG_OBJECT(trans, "returning %" GST_PTR_FORMAT, transformedCaps);
 	if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps))
 	{
+		GstCaps* sinkCapsCopy = NULL;
 		g_mutex_lock(&cdmidecryptor->mutex);
 		// clean up previous caps
 		if (cdmidecryptor->sinkCaps)
@@ -471,9 +472,12 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 			cdmidecryptor->sinkCaps = NULL;
 		}
 		cdmidecryptor->sinkCaps = gst_caps_copy(transformedCaps);
-		g_cond_signal(&cdmidecryptor->sinkCapsCond);
-		g_mutex_unlock(&cdmidecryptor->mutex);
-		GST_DEBUG_OBJECT(trans, "Set sinkCaps to %" GST_PTR_FORMAT, cdmidecryptor->sinkCaps);
+                sinkCapsCopy = gst_caps_ref(cdmidecryptor->sinkCaps);  // take an extra ref to keep it alive
+                g_cond_signal(&cdmidecryptor->sinkCapsCond);
+                g_mutex_unlock(&cdmidecryptor->mutex);
+                GST_DEBUG_OBJECT(trans, "Set sinkCaps to %" GST_PTR_FORMAT, sinkCapsCopy);
+                gst_caps_unref(sinkCapsCopy);  // release the extra ref
+
 	}
 	return transformedCaps;
 }
@@ -538,12 +542,19 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 		{
 			// call decrypt even for clear samples in order to copy it to a secure buffer. If secure buffers are not supported
 			// decrypt() call will return without doing anything
-			if (cdmidecryptor->drmSession != NULL && cdmidecryptor->sinkCaps != NULL)
-			   errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
+			/* DELIA-70726 fix: guard against the DrmSession being concurrently torn down
+			 * (e.g. DrmSessionManager reusing/evicting the slot during a back-to-back
+			 * channel change) while this pipeline still has buffers in flight. */
+			if (cdmidecryptor->drmSession != NULL && cdmidecryptor->sinkCaps != NULL
+					&& cdmidecryptor->drmSession->AcquireForUse())
+			{
+				errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
+				cdmidecryptor->drmSession->ReleaseAfterUse();
+			}
 			else
-			{ /* If drmSession creation failed, then the call will be aborted here */
+			{ /* If drmSession creation failed, or is being destroyed, the call will be aborted here */
 				result = GST_FLOW_NOT_SUPPORTED;
-				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps is NULL, returning GST_FLOW_NOT_SUPPORTED");
+				GST_ERROR_OBJECT(cdmidecryptor, "drmSession or sinkCaps is **** NULL **** (or session is being destroyed), returning GST_FLOW_NOT_SUPPORTED");
 			}
 		}
 		goto free_resources;
@@ -564,12 +575,23 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	{
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n\nWaiting for key\n");
 	}
-	// The key might not have been received yet. Wait for it.
+	/* The key might not have been received yet. Use a bounded wait instead of an
+	 * indefinite g_cond_wait
+	 * A 10-second timeout bounds the worst-case
+	 * blocking and allows teardown to proceed cleanly. */
 	if (!cdmidecryptor->streamReceived)
-		g_cond_wait(&cdmidecryptor->condition,
-				&cdmidecryptor->mutex);
+	{
+		gint64 end_time = g_get_monotonic_time() + (10 * G_TIME_SPAN_SECOND);
+		if (!g_cond_wait_until(&cdmidecryptor->condition, &cdmidecryptor->mutex, end_time))
+		{GST_ERROR_OBJECT(cdmidecryptor,
+				"Aborting decrypt: streamReceived=%d canWait=%d (state change or timeout).",
+				cdmidecryptor->streamReceived, cdmidecryptor->canWait);
+			result = GST_FLOW_NOT_SUPPORTED;
+			goto free_resources;
+		}
+	}
 
-	if (!cdmidecryptor->streamReceived)
+	if (!cdmidecryptor->streamReceived || !cdmidecryptor->canWait)
 	{
 		GST_ERROR_OBJECT(cdmidecryptor,
 				"Condition signaled from state change transition. Aborting.");
@@ -661,8 +683,20 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	    result = GST_FLOW_NOT_SUPPORTED;
 	    goto free_resources;
 	}
-
+	/* DELIA-70726 fix: guard against the DrmSession being concurrently torn down
+	 * (e.g. DrmSessionManager reusing/evicting the slot during a back-to-back
+	 * channel change) while this pipeline still has buffers in flight. Without
+	 * this guard, the multiqueue/decryptor thread can call decrypt() on a
+	 * DrmSession that is being (or has already been) freed, causing a
+	 * use-after-free SIGSEGV inside OCDMSessionAdapter::verifyOutputProtection(). */
+	if (!cdmidecryptor->drmSession->AcquireForUse())
+	{
+		GST_ERROR_OBJECT(cdmidecryptor, "drmSession is being destroyed, aborting decrypt");
+		result = GST_FLOW_NOT_SUPPORTED;
+		goto free_resources;
+	}
 	errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
+	cdmidecryptor->drmSession->ReleaseAfterUse();
 
 	cdmidecryptor->streamEncrypted = true;
 	if (errorCode != 0 || cdmidecryptor->hdcpOpProtectionFailCount)
@@ -1032,6 +1066,10 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG_OBJECT(cdmidecryptor, "PAUSED->READY");
 		g_mutex_lock(&cdmidecryptor->mutex);
+		/* Reset streamReceived so that each PAUSED session re-waits for a fresh DRM
+		 * protection event. Without this, a reused element (e.g. after a seek or
+		 * replay) skips the key wait and proceeds with a stale/freed drmSession. */
+		cdmidecryptor->streamReceived = FALSE;
 		cdmidecryptor->canWait = false;
 		g_cond_signal(&cdmidecryptor->condition);
 		g_mutex_unlock(&cdmidecryptor->mutex);

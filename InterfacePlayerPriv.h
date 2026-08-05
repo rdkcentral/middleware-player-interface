@@ -187,6 +187,7 @@ struct GstPlayerPriv
 	bool audioMuted;                                                                         /**< Audio mute status. */
 	std::mutex volumeMuteMutex;                                                      /**< Mutex to ensure setVolumeOrMuteUnMute is thread-safe. */
 	bool subtitleMuted;                                                                      /**< Subtitle mute status. */
+	bool setSubtitlePending;                                                         /**< true to delay subtitle setting until gstreamer pipeline ready. */
 	double audioVolume;                                                                      /**< Audio volume. */
 	guint eosCallbackIdleTaskId;                                             /**< ID of idle handler created for notifying EOS event. */
 	std::atomic<bool> eosCallbackIdleTaskPending;            /**< Set if any eos callback is pending. */
@@ -206,7 +207,6 @@ struct GstPlayerPriv
 	gboolean buffering_in_progress;                                                  /**< buffering is in progress */
 	guint buffering_timeout_cnt;                                                     /**< make sure buffering_timeout doesn't get stuck */
 	GstState buffering_target_state;                                                 /**< the target state after buffering */
-	bool seekPausedState; 							/** < true when seek with keepPaused is active — guards buffering_timeout from setting PLAYING */
 	gint64 lastKnownPTS;                                                                     /**< To store the PTS of last displayed video */
 	long long ptsUpdatedTimeMS;                                                              /**< Timestamp when PTS was last updated */
 	guint ptsCheckForEosOnUnderflowIdleTaskId;                               /**< ID of task to ensure video PTS is not moving before notifying EOS on underflow. */

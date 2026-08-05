@@ -23,10 +23,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERAPP REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-base-1.0)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${GSTREAMER_INCLUDE_DIRS})
+include_directories(${GSTREAMERAPP_INCLUDE_DIRS})
 include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
@@ -40,7 +42,7 @@ endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar -DSUBTEC_PACKET_DEBUG")
 
-set(GSTSUBTEC_DEPENDENCIES ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+set(GSTSUBTEC_DEPENDENCIES ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERAPP_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
 add_library(gstsubtecsink SHARED gstsubtecsink.cpp)
 
