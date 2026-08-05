@@ -39,6 +39,11 @@
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry2.hpp"
+#endif
+#include "TelemetryMarkers.h"
+#include "PlayerTelemetry.h"
 /**
  * @brief KeyIdEntries constructor.
  */
@@ -233,22 +238,23 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
 		if (width == 0 || height == 0)
-        {
-    
-            std::map<std::string, int> intMetrics;
-            std::map<std::string, std::string> stringMetrics;
-            std::map<std::string, float> floatMetrics;
+		{
 
-            intMetrics["width"] = width;
-            intMetrics["height"] = height;
-            intMetrics["isRialto"] = isRialto ? 1 : 0; // keep only if isRialto is available in scope
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			std::map<std::string, int> intMetrics;
+			std::map<std::string, std::string> stringMetrics;
+			std::map<std::string, float> floatMetrics;
 
-            stringMetrics["component"] = "AampLicenseManager";
-            stringMetrics["action"] = "setVideoWindowSize";
-            stringMetrics["reason"] = "watermark_enabled_zero_dimension";
+			intMetrics["width"] = width;
+			intMetrics["height"] = height;
 
-             telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
-        }
+			stringMetrics["component"] = "AampLicenseManager";
+			stringMetrics["action"] = "setVideoWindowSize";
+			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
+
+			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
+#endif
+		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }
