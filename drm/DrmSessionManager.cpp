@@ -226,6 +226,23 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
+		if (width == 0 || height == 0)
+        {
+    
+            std::map<std::string, int> intMetrics;
+            std::map<std::string, std::string> stringMetrics;
+            std::map<std::string, float> floatMetrics;
+
+            intMetrics["width"] = width;
+            intMetrics["height"] = height;
+            intMetrics["isRialto"] = isRialto ? 1 : 0; // keep only if isRialto is available in scope
+
+            stringMetrics["component"] = "AampLicenseManager";
+            stringMetrics["action"] = "setVideoWindowSize";
+            stringMetrics["reason"] = "watermark_enabled_zero_dimension";
+
+             telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
+        }
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }
