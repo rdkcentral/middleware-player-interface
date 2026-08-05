@@ -252,6 +252,7 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 			stringMetrics["action"] = "setVideoWindowSize";
 			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
 
+	                PlayerTelemetry2 telemetry;
 			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
 #endif
 		}
