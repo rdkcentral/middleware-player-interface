@@ -1677,7 +1677,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 	GstStateChangeReturn ret;
 	ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
-	if (GST_STATE_CHANGE_ASYNC == ret && (keepPausedSeek || current == pending))
+	if (GST_STATE_CHANGE_ASYNC == ret && keepPausedSeek)
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Flush requested during in-flight state change (current=%s pending=%s) - waiting to settle",
 			gst_element_state_get_name(current), gst_element_state_get_name(pending));
@@ -3504,28 +3504,7 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			/* wait a bit longer for the state change to conclude */
 			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
 			{
-				/* RDKEMW-21923: pause-during-pause / resume-during-pause in-flight async case
- 				 * (validateStateWithMsTimeout logs State==Pending, e.g. State=3 Pending=3). Do not
- 				 * leave the pipeline mid-transition: if it already reached the target treat it as
- 				 * settled, otherwise re-issue the state once and wait again before reporting. 
-				 */
-				GstState cur = GST_STATE_VOID_PENDING, pend = GST_STATE_VOID_PENDING;
-				(void)gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &cur, &pend, 0);
-				
-				if (cur == nextState)
-				{
-					MW_LOG_WARN("InterfacePlayerRDK_Pause - GstState %d not reported settled but pipeline already at target; treating as settled", nextState);
-				}
-				else
-				{
-					MW_LOG_WARN("InterfacePlayerRDK_Pause - GstState %d not settled, re-issuing once", nextState);
-					(void)SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
-					
-					if (nextState != validateStateWithMsTimeout(this, nextState, 100))
-					{
-						MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
-					}
-				}
+				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d ret-false", nextState);
 				retValue = false;
 			}
 		}
