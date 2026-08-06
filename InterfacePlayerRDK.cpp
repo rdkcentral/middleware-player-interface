@@ -1677,12 +1677,29 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 	GstStateChangeReturn ret;
 	ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
+
 	if (GST_STATE_CHANGE_ASYNC == ret && keepPausedSeek)
 	{
-		MW_LOG_WARN("InterfacePlayerRDK: Flush requested during in-flight state change (current=%s pending=%s) - waiting to settle",
+		MW_LOG_WARN("InterfacePlayerRDK: Flush requested " "during in-flight state change " "(current=%s pending=%s) - waiting to settle",
 			gst_element_state_get_name(current), gst_element_state_get_name(pending));
 		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 300 * GST_MSECOND);
 	}
+	if (keepPausedSeek && current == GST_STATE_PAUSED)
+	{
+		/* gst_element_get_state SUCCESS means the pipeline bin reached PAUSED,
+		* but downstream elements (decoder, sinks) may still be completing
+		* async preroll. Issuing gst_element_seek(FLUSH) during active preroll
+		* causes PAUSED->PAUSED bus message and seek returning false on this
+		* platform (RialtoSink/playbin3). Wait up to 500ms for full settle. */
+		GstStateChangeReturn settleRet = gst_element_get_state(
+			interfacePlayerPriv->gstPrivateContext->pipeline,
+			&current, &pending, 500 * GST_MSECOND);
+		MW_LOG_WARN("InterfacePlayerRDK: Flush keepPausedSeek settle wait "
+			"complete: state=%s pending=%s ret=%d",
+			gst_element_state_get_name(current),
+			gst_element_state_get_name(pending), settleRet);
+	}
+
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Pipeline state %s, ret %u", gst_element_state_get_name(current), ret);
@@ -1755,12 +1772,34 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			}
 		}
 	}
-	if (!gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
-						  position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+	bool seekOk = gst_element_seek( interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH,
+    								GST_SEEK_TYPE_SET,
+									position * GST_SECOND,
+									GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+	if (!seekOk && keepPausedSeek)
+	{
+		/* Seek may have failed because an async preroll was still in flight
+		* despite the settle wait. Wait for pipeline to drain and retry once.
+		* This avoids the PAUSED->PAUSED wedge path and the expensive NULL
+		* reset in ConfigurePipeline. */
+		MW_LOG_WARN("InterfacePlayerRDK: Flush seek failed on keepPausedSeek "
+			"path — waiting for preroll drain and retrying seek once");
+		gst_element_get_state(
+			interfacePlayerPriv->gstPrivateContext->pipeline,
+			&current, &pending, 500 * GST_MSECOND);
+		
+		seekOk = gst_element_seek(	interfacePlayerPriv->gstPrivateContext->pipeline,
+					playRate, GST_FORMAT_TIME,
+					GST_SEEK_FLAG_FLUSH,
+					GST_SEEK_TYPE_SET,
+					position * GST_SECOND,
+					GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+		MW_LOG_WARN("InterfacePlayerRDK: Flush seek retry result=%d " "(state=%s pending=%s)", seekOk,	gst_element_state_get_name(current), gst_element_state_get_name(pending));
+	}
+	if (!seekOk)
 	{
 		MW_LOG_ERR("Seek failed");
 		SetPendingSeek(true);
-		//Save the updated seek position
 		SetSeekPosition(position);
 	}
 
