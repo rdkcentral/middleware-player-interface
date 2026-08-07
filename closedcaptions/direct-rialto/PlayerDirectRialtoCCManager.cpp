@@ -118,6 +118,17 @@ void PlayerDirectRialtoCCManager::Release(int id)
 	}
 }
 
+void PlayerDirectRialtoCCManager::InvalidateHandle(void *handle)
+{
+	std::lock_guard<std::mutex> lock(m_idLock);
+	if (handle != nullptr && handle == static_cast<void *>(m_control))
+	{
+		MW_LOG_WARN("handle=%p invalidated ahead of Release()", handle);
+		m_control = nullptr;
+	}
+}
+
+
 int PlayerDirectRialtoCCManager::SetTrack(
 	const std::string &track, CCFormat format)
 {

@@ -106,6 +106,19 @@ void PlayerRialtoCCManager::Release(int id)
 }
 
 /**
+ *  @brief Clear mSubtitleControlHandle if it currently equals handle
+ */
+void PlayerRialtoCCManager::InvalidateHandle(void *handle)
+{
+	std::lock_guard<std::mutex> lock(mIdLock);
+	if (handle != nullptr && handle == mSubtitleControlHandle)
+	{
+		MW_LOG_WARN("PlayerRialtoCCManager::handle:%p invalidated ahead of Release()", handle);
+		mSubtitleControlHandle = nullptr;
+	}
+}
+
+/**
  *  @brief Set CC track
  */
 int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat format)

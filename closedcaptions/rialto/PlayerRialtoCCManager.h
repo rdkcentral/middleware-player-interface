@@ -48,6 +48,9 @@ public:
 	 */
 	void Release(int iID) override;
 
+	/// @copydoc PlayerCCManagerBase::InvalidateHandle
+	void InvalidateHandle(void *handle) override;
+
 	/**
 	 * @fn GetId
 	 * @return int -  unique ID

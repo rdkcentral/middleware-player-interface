@@ -63,6 +63,9 @@ public:
 	/// @copydoc PlayerCCManagerBase::Release
 	void Release(int iID) override;
 
+	/// @copydoc PlayerCCManagerBase::InvalidateHandle
+	void InvalidateHandle(void *handle) override;
+
 	/// @copydoc PlayerCCManagerBase::SetTrack
 	int SetTrack(const std::string &track,
 	             CCFormat format = eCLOSEDCAPTION_FORMAT_DEFAULT) override;
