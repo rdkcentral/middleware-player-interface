@@ -44,6 +44,7 @@
 #include "PlayerCCManager.h"
 #include "IDirectRialtoCC.h"
 
+#include <atomic>
 #include <mutex>
 #include <set>
 
@@ -101,8 +102,10 @@ private:
 	                                      CCFormat format);
 
 	/// Non-owning pointer to the AampRialtoPlayer CC control interface.
-	/// Null until Initialize() is called (first PLAYING state).
-	IDirectRialtoCC *m_control{nullptr};
+	/// Null until Initialize() is called (first PLAYING state). Atomic since
+	/// InvalidateHandle() may run concurrently with the other accessors from
+	/// the handle owner's destructor.
+	std::atomic<IDirectRialtoCC *> m_control{nullptr};
 
 	/// Guards mId / mIdSet.
 	std::mutex m_idLock;

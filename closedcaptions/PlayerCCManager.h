@@ -80,7 +80,7 @@ public:
 	 *        multi-pipeline mode).
 	 * @param[in] handle - the handle being invalidated
 	 */
-	virtual void InvalidateHandle(void *handle) {}
+	virtual void InvalidateHandle(void *) {}
 
 	/**
 	 * @fn SetStatus

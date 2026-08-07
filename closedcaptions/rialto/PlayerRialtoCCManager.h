@@ -31,6 +31,7 @@
 
 #include <string>
 #include <set>
+#include <atomic>
 #include <mutex>
 
 /**
@@ -122,7 +123,9 @@ private:
 	void ResetState() override;
 
 private:
-	void *mSubtitleControlHandle{nullptr};
+	/// GstElement* decoder handle. Atomic since InvalidateHandle() may run
+	/// concurrently with the other accessors from the handle owner's destructor.
+	std::atomic<void *> mSubtitleControlHandle{nullptr};
 
 	std::mutex mIdLock{};
 	int mId{0};
