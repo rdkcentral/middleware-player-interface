@@ -107,6 +107,11 @@ if (CMAKE_WPEFRAMEWORK_REQUIRED)
     endif()
 endif()
 
+if(CMAKE_FIREBOLT_SUPPORTED)
+       message("CMAKE_FIREBOLT_SUPPORTED set")
+       set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DFIREBOLT_SUPPORTED=1")
+endif()
+
 set(SECMGR_SOURCES contentsecuritymanager/PlayerMemoryUtils.cpp
     contentsecuritymanager/PlayerSecInterface.cpp
     contentsecuritymanager/ContentSecurityManager.cpp

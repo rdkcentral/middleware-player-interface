@@ -90,7 +90,7 @@ typedef struct _IARM_BUS_NetSrvMgr_Iface_EventData_t {
 
 std::shared_ptr<DeviceIARMInterface> s_pDeviceIARMInterface = nullptr;
 
-#ifndef USE_DS_EVENT_SUPPORTED
+#ifndef FIREBOLT_SUPPORTED
 static void HDMIEventHandler(const char *owner, IARM_EventId_t eventId, void *data, size_t len);
 static void ResolutionHandler(const char *owner, IARM_EventId_t eventId, void *data, size_t len);
 #endif
@@ -310,7 +310,7 @@ void DeviceIARMInterface::IARMInit()
 
 void DeviceIARMInterface::RegisterDsMgrEventHandler()
 {
-#ifndef USE_DS_EVENT_SUPPORTED
+#ifndef FIREBOLT_SUPPORTED
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG, HDMIEventHandler);
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDCP_STATUS, HDMIEventHandler);
 	IARM_Bus_RegisterEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE, ResolutionHandler);
@@ -319,7 +319,7 @@ void DeviceIARMInterface::RegisterDsMgrEventHandler()
 
 void DeviceIARMInterface::RemoveEventHandlers()
 {
-#ifndef USE_DS_EVENT_SUPPORTED
+#ifndef FIREBOLT_SUPPORTED
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG, HDMIEventHandler);
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_HDCP_STATUS, HDMIEventHandler);
     IARM_Bus_RemoveEventHandler(IARM_BUS_DSMGR_NAME,IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE, ResolutionHandler);
@@ -420,7 +420,7 @@ static void getActiveInterfaceEventHandler (const char *owner, IARM_EventId_t ev
 	
 }
 
-#ifndef USE_DS_EVENT_SUPPORTED
+#ifndef FIREBOLT_SUPPORTED
 /**
  * @brief IARM event handler for HDCP and HDMI hot plug events
  */
