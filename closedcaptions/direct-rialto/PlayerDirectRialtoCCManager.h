@@ -44,6 +44,7 @@
 #include "PlayerCCManager.h"
 #include "IDirectRialtoCC.h"
 
+#include <atomic>
 #include <mutex>
 #include <set>
 
@@ -62,6 +63,9 @@ public:
 
 	/// @copydoc PlayerCCManagerBase::Release
 	void Release(int iID) override;
+
+	/// @copydoc PlayerCCManagerBase::InvalidateHandle
+	void InvalidateHandle(void *handle) override;
 
 	/// @copydoc PlayerCCManagerBase::SetTrack
 	int SetTrack(const std::string &track,
@@ -98,8 +102,10 @@ private:
 	                                      CCFormat format);
 
 	/// Non-owning pointer to the AampRialtoPlayer CC control interface.
-	/// Null until Initialize() is called (first PLAYING state).
-	IDirectRialtoCC *m_control{nullptr};
+	/// Null until Initialize() is called (first PLAYING state). Atomic since
+	/// InvalidateHandle() may run concurrently with the other accessors from
+	/// the handle owner's destructor.
+	std::atomic<IDirectRialtoCC *> m_control{nullptr};
 
 	/// Guards mId / mIdSet.
 	std::mutex m_idLock;

@@ -65,10 +65,10 @@ int PlayerDirectRialtoCCManager::Initialize(void *handle)
 	MW_LOG_INFO("ENTRY handle=%p", handle);
 
 	auto *newControl = static_cast<IDirectRialtoCC *>(handle);
-	const bool changedHandle = (newControl != m_control);
+	const bool changedHandle = (newControl != m_control.load());
 	m_control = newControl;
 
-	if (m_control == nullptr)
+	if (newControl == nullptr)
 	{
 		MW_LOG_WARN("Initialize called with null handle");
 		MW_LOG_INFO("EXIT");
@@ -118,6 +118,18 @@ void PlayerDirectRialtoCCManager::Release(int id)
 	}
 }
 
+void PlayerDirectRialtoCCManager::InvalidateHandle(void *handle)
+{
+	// m_control is atomic, so this can safely race with Initialize() /
+	// SetTrack() / StartRendering() / StopRendering() without m_idLock.
+	auto *expected = static_cast<IDirectRialtoCC *>(handle);
+	if (expected != nullptr && m_control.compare_exchange_strong(expected, nullptr))
+	{
+		MW_LOG_WARN("handle=%p invalidated ahead of Release()", handle);
+	}
+}
+
+
 int PlayerDirectRialtoCCManager::SetTrack(
 	const std::string &track, CCFormat format)
 {
@@ -127,7 +139,8 @@ int PlayerDirectRialtoCCManager::SetTrack(
 
 	MW_LOG_INFO("track=\"%s\" format=%d", track.c_str(), static_cast<int>(format));
 
-	if (m_control == nullptr)
+	IDirectRialtoCC *control = m_control.load();
+	if (control == nullptr)
 	{
 		MW_LOG_INFO("No control handle — track cached");
 		return 0;
@@ -135,31 +148,33 @@ int PlayerDirectRialtoCCManager::SetTrack(
 
 	const std::string identifier = mapTrackIdentifier(track, format);
 	MW_LOG_INFO("setTextTrackIdentifier=\"%s\"", identifier.c_str());
-	m_control->setTextTrackIdentifier(identifier);
+	control->setTextTrackIdentifier(identifier);
 	return 0;
 }
 
 void PlayerDirectRialtoCCManager::StartRendering()
 {
 	MW_LOG_INFO("ENTRY — unmuting CC");
-	if (m_control == nullptr)
+	IDirectRialtoCC *control = m_control.load();
+	if (control == nullptr)
 	{
 		MW_LOG_WARN("No control handle — cannot unmute");
 		return;
 	}
-	m_control->setCCMute(false);
+	control->setCCMute(false);
 	MW_LOG_INFO("EXIT");
 }
 
 void PlayerDirectRialtoCCManager::StopRendering()
 {
 	MW_LOG_INFO("ENTRY — muting CC");
-	if (m_control == nullptr)
+	IDirectRialtoCC *control = m_control.load();
+	if (control == nullptr)
 	{
 		MW_LOG_WARN("No control handle — cannot mute");
 		return;
 	}
-	m_control->setCCMute(true);
+	control->setCCMute(true);
 	MW_LOG_INFO("EXIT");
 }
 

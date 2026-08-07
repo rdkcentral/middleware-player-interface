@@ -72,6 +72,17 @@ public:
 	virtual void Release(int iID) = 0;
 
 	/**
+	 * @brief Clear the stored control handle if it currently equals handle.
+	 *        Called by the handle owner's destructor so a handle can never be
+	 *        used after the object it points to is freed, independent of
+	 *        whether the GetId()/Release() usage count has reached zero (it
+	 *        may not have, if another session is still registered - see
+	 *        multi-pipeline mode).
+	 * @param[in] handle - the handle being invalidated
+	 */
+	virtual void InvalidateHandle(void *) {}
+
+	/**
 	 * @fn SetStatus
 	 *
 	 * @param[in] enable - true to enable CC rendering
@@ -273,6 +284,15 @@ public:
 	 * @return PlayerCCManager - singleton instance
 	 */
 	static PlayerCCManagerBase * GetInstance();
+
+	/**
+	 * @fn HasInstance
+	 * @brief Check whether GetInstance() has already created the singleton,
+	 *        without creating it as a side effect.
+	 *
+	 * @return bool - true if an instance exists
+	 */
+	static bool HasInstance();
 
 	/**
 	 * @fn SetRialto

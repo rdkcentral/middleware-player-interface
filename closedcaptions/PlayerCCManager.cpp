@@ -861,6 +861,14 @@ PlayerCCManagerBase *PlayerCCManager::GetInstance()
 }
 
 /**
+ *  @brief Check whether the singleton has already been created
+ */
+bool PlayerCCManager::HasInstance()
+{
+	return mInstance != NULL;
+}
+
+/**
  *  @brief Reset the state.
  */
 void PlayerCCManagerBase::ResetState()
