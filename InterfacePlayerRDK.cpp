@@ -1684,7 +1684,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			gst_element_state_get_name(current), gst_element_state_get_name(pending));
 		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 300 * GST_MSECOND);
 	}
-	if (keepPausedSeek && current == GST_STATE_PAUSED)
+	if (keepPausedSeek && current == GST_STATE_PAUSED && ret == GST_STATE_CHANGE_ASYNC)
 	{
 		/* gst_element_get_state SUCCESS means the pipeline bin reached PAUSED,
 		* but downstream elements (decoder, sinks) may still be completing
@@ -1698,6 +1698,14 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			"complete: state=%s pending=%s ret=%d",
 			gst_element_state_get_name(current),
 			gst_element_state_get_name(pending), settleRet);
+
+		if (settleRet == GST_STATE_CHANGE_ASYNC)
+		{
+			MW_LOG_WARN("InterfacePlayerRDK: Flush settle timed out — deferring seek until ASYNC_DONE");
+			SetPendingSeek(true);
+			SetSeekPosition(position);
+			return true;
+		}
 	}
 
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
@@ -1776,7 +1784,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
     								GST_SEEK_TYPE_SET,
 									position * GST_SECOND,
 									GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
-	if (!seekOk && keepPausedSeek)
+	if (!seekOk && keepPausedSeek && ret == GST_STATE_CHANGE_ASYNC)
 	{
 		/* Seek may have failed because an async preroll was still in flight
 		* despite the settle wait. Wait for pipeline to drain and retry once.
@@ -1786,7 +1794,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			"path — waiting for preroll drain and retrying seek once");
 		gst_element_get_state(
 			interfacePlayerPriv->gstPrivateContext->pipeline,
-			&current, &pending, 500 * GST_MSECOND);
+			&current, &pending, 300 * GST_MSECOND);
 		
 		seekOk = gst_element_seek(	interfacePlayerPriv->gstPrivateContext->pipeline,
 					playRate, GST_FORMAT_TIME,
