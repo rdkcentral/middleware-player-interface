@@ -1706,6 +1706,8 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			SetSeekPosition(position);
 			return true;
 		}
+		// Keep ret consistent with updated current/pending for downstream logic
+		ret = settleRet;
 	}
 
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
