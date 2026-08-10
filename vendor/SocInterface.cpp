@@ -62,6 +62,9 @@ SocPlatformType InferPlatformFromPluginScan()
 	// Ensure GST is initialized
 	if (!gst_init_check(nullptr, nullptr, nullptr)) {
 		MW_LOG_ERR("gst_init_check() failed");
+		// Cannot safely call any GStreamer registry API without initialization.
+		// Return default to prevent SIGFPE in gst_registry_get/gst_registry_lookup_feature.
+		return platform;
 	}
 	static const std::pair<const char*, SocPlatformType> plugins[] = {
 		{"amlhalasink", SOC_PLATFORM_AMLOGIC},
@@ -186,8 +189,15 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 		{
 			if(!mIsRialtoMode)
 			{
-				MW_LOG_MIL("Performing InterfacePluginScan| Rialto-Enabled");
-				platformType = InferPlatformFromPluginScan();
+				if (gst_is_initialized())
+				{
+					MW_LOG_MIL("Performing InterfacePluginScan| Rialto-Enabled");
+					platformType = InferPlatformFromPluginScan();
+				}
+				else
+				{
+					MW_LOG_WARN("InferPlatformFromPluginScan skipped: GStreamer not initialized");
+				}
             }
 		}
 #if !defined(__APPLE__) && !defined(UBUNTU)
