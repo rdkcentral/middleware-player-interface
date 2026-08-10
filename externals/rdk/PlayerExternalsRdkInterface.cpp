@@ -73,23 +73,19 @@ void PlayerExternalsRdkInterface::Initialize()
     //initialize only if needed
     if(m_initialized != InitState::NOT_INITIALIZED)
     {
-        if(m_initialized == InitState::FIREBOLT && (m_use_firebolt_sdk || IsContainerEnvironment()))
+        #ifdef FIREBOLT_SUPPORTED
         {
             MW_PRE_LOGGER_LOG("Firebolt already Inited \n");
             //firebolt already inited
             return;
         }
-        else if(m_initialized == InitState::IARM && (!m_use_firebolt_sdk) && (!IsContainerEnvironment()))
+        #else
         {
             MW_PRE_LOGGER_LOG("IARM already Inited \n");
             //IARM already inited
             return;
         }
-        else
-        {
-            MW_PRE_LOGGER_LOG("m_use_firebolt_sdk or IsContainerEnvironment() has changed, init again \n");
-            //m_use_firebolt_sdk has changed init again
-        }
+
     }
     else
     {
@@ -102,10 +98,10 @@ void PlayerExternalsRdkInterface::Initialize()
         m_pDeviceInterfaceBase = nullptr;
     }
 
-    MW_PRE_LOGGER_LOG("m_use_firebolt_sdk : %d, IsContainerEnvironment() : %d \n", m_use_firebolt_sdk, IsContainerEnvironment());
+    MW_PRE_LOGGER_LOG("IsContainerEnvironment() : %d \n", IsContainerEnvironment());
 
     //remove-start
-    if(m_use_firebolt_sdk || IsContainerEnvironment()) //if explicitly config'd to or if in container go for firebolt
+    #ifdef FIREBOLT_SUPPORTED
     {
     //remove-end
         MW_PRE_LOGGER_LOG("Using Firebolt \n");
@@ -114,97 +110,35 @@ void PlayerExternalsRdkInterface::Initialize()
     //remove-start
         m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
     }
-    else
+    #else
     {
         MW_PRE_LOGGER_LOG("Using IARM \n");
         m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
         DeviceIARMInterface::Initialize();
         m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
     }
+    #endif
     //remove-end
 
     MW_PRE_LOGGER_LOG("Done getting interface \n");
 
-    SetHDMIStatus();
-#ifdef USE_DS_EVENT_SUPPORTED
-    RegisterDsClientEventHandler();
+#ifdef USE_DS_THUNDER_PLUGIN
+    if (!m_thunderEventHandlersRegistered) {
+        RegisterThunderEventHandlers();
+    } else {
+        MW_PRE_LOGGER_LOG("Thunder event handlers already registered\n");
+    }
 #endif
+
+    SetHDMIStatus();
 
     MW_PRE_LOGGER_LOG("Initializing completed \n");
 }
 
-#ifdef USE_DS_EVENT_SUPPORTED
-void PlayerExternalsRdkInterface::RegisterDsClientEventHandler()
-{
-	try {
-		device::Manager::Initialize();
-		device::Host::getInstance().Register(baseInterface<device::Host::IVideoOutputPortEvents>(),"PI::DisplayInfo");
-		device::Host::getInstance().Register(baseInterface<device::Host::IDisplayDeviceEvents>(), "PI::DisplaySettings");
-	}
-	catch (const std::exception& e) {
-		MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-	}
-	catch (...) {
-		MW_LOG_WARN("DeviceSettings unknown exception caught\n");
-	}
-}
-
-void PlayerExternalsRdkInterface::RemoveDsClientEventHandlers()
-{
-	try
-	{
-		device::Host::getInstance().UnRegister(baseInterface<device::Host::IVideoOutputPortEvents>());
-		device::Host::getInstance().UnRegister(baseInterface<device::Host::IDisplayDeviceEvents>());
-		device::Manager::DeInitialize();
-	}
-	catch (const std::exception& e)
-	{
-		MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-	}
-	catch(...)
-	{
-		MW_LOG_WARN("DeviceSettings unknown exception caught\n");
-	}
-}
-
-void PlayerExternalsRdkInterface::OnDisplayHDMIHotPlug(dsDisplayEvent_t displayEvent)
-{
-	const char *hdmihotplug = (displayEvent == dsDISPLAY_EVENT_CONNECTED) ? "connected" : "disconnected";
-	MW_LOG_WARN(" Received Display HDMI HotPlug event data:%d status: %s\n",
-			   (int)displayEvent, hdmihotplug);
-
-	SetHDMIStatus();
-}
-
-void PlayerExternalsRdkInterface::OnHDCPStatusChange(dsHdcpStatus_t hdcpStatus)
-{
-	const char *hdcpStatusStr = (hdcpStatus == dsHDCP_STATUS_AUTHENTICATED) ? "authenticated" : "authentication failure";
-	MW_LOG_WARN(" Received HDCP Status Change event data:%d status:%s\n",
-			  hdcpStatus, hdcpStatusStr);
-
-	SetHDMIStatus();
-}
-
-/**
- * @brief event handler for resolution changes
- */
-void PlayerExternalsRdkInterface::OnResolutionPostChange(int width, int height)
-{
-
-	MW_LOG_WARN(" Received Resolution Post Change event width : %d height : %d\n", width, height);
-	SetResolution(width, height);
-}
-
-void PlayerExternalsRdkInterface::OnResolutionPreChange(int width, int height)
-{
-	MW_LOG_WARN(" Received Resolution PreChange event \n");
-}
-#endif
-
 PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 {
-#ifdef USE_DS_EVENT_SUPPORTED
-	RemoveDsClientEventHandlers();
+#ifdef USE_DS_THUNDER_PLUGIN
+    RemoveThunderEventHandlers();
 #endif
     m_pDeviceInterfaceBase = nullptr;
     s_pPlayerIarmRdkOP = nullptr;
@@ -228,120 +162,168 @@ void PlayerExternalsRdkInterface::SetResolution(int width, int height)
  */
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
-    std::unique_lock<std::mutex> lock(m_hdmiStatusMutex, std::try_to_lock);
-    if (!lock.owns_lock()) {
-        MW_LOG_WARN("SetHDMIStatus: Already in progress on another thread, skipping\n");
-        return;
-    }
-    bool                    isConnected              = false;
-    bool                    isHDCPCompliant          = false;
-    bool                    isHDCPEnabled            = true;
-    dsHdcpProtocolVersion_t hdcpProtocol             = dsHDCP_VERSION_MAX;
-    dsHdcpProtocolVersion_t hdcpReceiverProtocol     = dsHDCP_VERSION_MAX;
-    dsHdcpProtocolVersion_t hdcpCurrentProtocol      = dsHDCP_VERSION_MAX;
+    #ifdef USE_DS_THUNDER_PLUGIN
+    /*
+     * Thunder path: replaces all libds (device::Manager / VideoOutputPort) calls.
+     * CSV mapping:
+     *   getHDCPCurrentProtocol  -> HdcpProfile.1  getHDCPStatus -> currentHDCPVersion
+     *   getHDCPReceiverProtocol -> HdcpProfile.1  getHDCPStatus -> receiverHDCPVersion
+     *   isContentProtected      -> HdcpProfile.1  getHDCPStatus -> isHDCPEnabled
+     *   isDisplayConnected      -> HdcpProfile.1  getHDCPStatus -> isConnected
+     *   getPixelResolution      -> DisplayInfo.1  displayinfo   -> width / height
+     */
+    bool isConnected  = false;
+    bool isHDCPEnabled = false;
+    HdcpProtocolVersion hdcpCurrentProtocol = HdcpProtocolVersion::V1X;
 
-
-
-
-    try {
-        //Get the HDMI port
-	device::Manager::Initialize();
-        std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
-        ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
-        isConnected        = vPort.isDisplayConnected();
-        hdcpProtocol       = (dsHdcpProtocolVersion_t)vPort.getHDCPProtocol();
-        if(isConnected) {
-            isHDCPCompliant          = (vPort.getHDCPStatus() == dsHDCP_STATUS_AUTHENTICATED);
-            isHDCPEnabled            = vPort.isContentProtected();
-            hdcpReceiverProtocol     = (dsHdcpProtocolVersion_t)vPort.getHDCPReceiverProtocol();
-            hdcpCurrentProtocol      = (dsHdcpProtocolVersion_t)vPort.getHDCPCurrentProtocol();
-            //get the resolution of the TV
-            int width,height;
-            int iResID = vPort.getResolution().getPixelResolution().getId();
-            if( device::PixelResolution::k720x480 == iResID )
-            {
-                width =  720;
-                height = 480;
-            }
-            else if(  device::PixelResolution::k720x576 == iResID )
-            {
-                width = 720;
-                height = 576;
-            }
-            else if(  device::PixelResolution::k1280x720 == iResID )
-            {
-                width =  1280;
-                height = 720;
-            }
-            else if(  device::PixelResolution::k1920x1080 == iResID )
-            {
-                width =  1920;
-                height = 1080;
-            }
-            else if(  device::PixelResolution::k3840x2160 == iResID )
-            {
-                width =  3840;
-                height = 2160;
-            }
-            else if(  device::PixelResolution::k4096x2160 == iResID )
-            {
-                width =  4096;
-                height = 2160;
-            }
-            else
-            {
-                width =  DISPLAY_WIDTH_UNKNOWN;
-                height = DISPLAY_HEIGHT_UNKNOWN;
-                std::string _res = vPort.getResolution().getName();
-                MW_LOG_ERR(" ERR parse failed for getResolution().getName():%s id:%d\n",(_res.empty() ? "NULL" : _res.c_str()),iResID);
-            }
-
-            SetResolution(width, height);
+    /* --- Query HDCP status via HdcpProfile.1 --- */
+    if (m_hdcpProfileThunder) {
+        JsonObject param, result;
+        if (m_hdcpProfileThunder->InvokeJSONRPC("getHDCPStatus", param, result)) {
+            isConnected   = result["isConnected"].Boolean();
+            isHDCPEnabled = result["isHDCPEnabled"].Boolean();
+            std::string currentVer = result["currentHDCPVersion"].String();
+            hdcpCurrentProtocol = (currentVer == "2.2") ? HdcpProtocolVersion::V2X : HdcpProtocolVersion::V1X;
+            MW_LOG_WARN("SetHDMIStatus: connected=%d enabled=%d currentHDCPVersion=%s\n",
+                        isConnected, isHDCPEnabled, currentVer.c_str());
+        } else {
+            MW_LOG_WARN("SetHDMIStatus: getHDCPStatus JSONRPC failed\n");
         }
-        else {
-            isHDCPCompliant = false;
-            isHDCPEnabled = false;
-            SetResolution(DISPLAY_RESOLUTION_NA,DISPLAY_RESOLUTION_NA);
-        }
+    } else {
+        MW_LOG_WARN("SetHDMIStatus: HdcpProfile Thunder object not initialised\n");
+    }
 
-	device::Manager::DeInitialize();
-    }
-    catch (const std::exception& e) {
-        MW_LOG_WARN("DeviceSettings exception caught: %s\n", e.what());
-    }
-    catch (...) {
-        MW_LOG_WARN("DeviceSettings unknown exception caught\n");
-	try { device::Manager::DeInitialize(); } catch (...) {}
+    /* --- Query pixel resolution via DisplayInfo.1 --- */
+    if (isConnected && m_displayInfoThunder) {
+        JsonObject param, result;
+        if (m_displayInfoThunder->InvokeJSONRPC("displayinfo", param, result)) {
+            int w = static_cast<int>(result["width"].Number());
+            int h = static_cast<int>(result["height"].Number());
+            MW_LOG_WARN("SetHDMIStatus: resolution %dx%d\n", w, h);
+            SetResolution(w, h);
+        } else {
+            MW_LOG_WARN("SetHDMIStatus: displayinfo JSONRPC failed\n");
+        }
+    } else if (!isConnected) {
+        SetResolution(DISPLAY_RESOLUTION_NA, DISPLAY_RESOLUTION_NA);
     }
 
     m_isHDCPEnabled = isHDCPEnabled;
-
-    if(m_isHDCPEnabled) {
-        if(hdcpCurrentProtocol == dsHDCP_VERSION_2X) {
-            m_hdcpCurrentProtocol = hdcpCurrentProtocol;
-        }
-        else {
-            m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
-        }
-        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    if (m_isHDCPEnabled) {
+        m_hdcpCurrentProtocol = hdcpCurrentProtocol;
+        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == HdcpProtocolVersion::V2X ? "2.x" : "1.4");
+    } else {
+        MW_LOG_WARN("HDCP is not enabled\n");
     }
-    else {
-        MW_LOG_WARN("DeviceSettings HDCP is not enabled\n");
+    if (!isConnected) {
+        m_hdcpCurrentProtocol = HdcpProtocolVersion::V1X;
+        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", static_cast<int>(m_hdcpCurrentProtocol));
     }
-
-    if(!isConnected) {
-        m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
-        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
-    }
-
-
-    return;
+    #endif
 }
 
-void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
+#ifdef USE_DS_THUNDER_PLUGIN
+/**
+ * @brief Create Thunder plugin objects and subscribe to HDMI/HDCP/resolution events.
+ * CSV mapping:
+ *   IARM_BUS_DSMGR_EVENT_HDCP_STATUS    -> HdcpProfile.1  onDisplayConnectionChanged
+ *   IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG   -> DisplaySettings.1 connectedVideoDisplaysUpdated
+ *   IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE -> DisplaySettings.1 resolutionChanged
+ *   IARM_BUS_DSMGR_EVENT_RES_PRECHANGE  -> DisplaySettings.1 resolutionPreChange
+ */
+void PlayerExternalsRdkInterface::RegisterThunderEventHandlers()
+{
+    if (m_thunderEventHandlersRegistered) {
+        MW_PRE_LOGGER_LOG("RegisterThunderEventHandlers skipped: already registered\n");
+        return;
+    }
+
+    /* ---- HdcpProfile.1 ---- */
+    m_hdcpProfileThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::HDCPPROFILE);
+    m_hdcpProfileThunder->ActivatePlugin();
+
+    /* onDisplayConnectionChanged: replaces IARM_BUS_DSMGR_EVENT_HDCP_STATUS */
+    m_hdcpProfileThunder->SubscribeEvent(
+        "onDisplayConnectionChanged",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] onDisplayConnectionChanged received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* ---- DisplaySettings.1 ---- */
+    m_dsThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DS);
+    m_dsThunder->ActivatePlugin();
+
+    /* connectedVideoDisplaysUpdated: replaces IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG */
+    m_dsThunder->SubscribeEvent(
+        "connectedVideoDisplaysUpdated",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] connectedVideoDisplaysUpdated received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* resolutionChanged: replaces IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE */
+    m_dsThunder->SubscribeEvent(
+        "resolutionChanged",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] resolutionChanged received\n");
+            auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+            if (pInstance) {
+                pInstance->SetHDMIStatus();
+            }
+        });
+
+    /* resolutionPreChange: replaces IARM_BUS_DSMGR_EVENT_RES_PRECHANGE */
+    m_dsThunder->SubscribeEvent(
+        "resolutionPreChange",
+        [](const WPEFramework::Core::JSON::VariantContainer& params) {
+            MW_LOG_WARN("[Thunder] resolutionPreChange received\n");
+        });
+
+    /* ---- DisplayInfo.1 ---- */
+    m_displayInfoThunder = std::make_unique<PlayerThunderAccess>(PlayerThunderAccessPlugin::DISPLAYINFO);
+    m_displayInfoThunder->ActivatePlugin();
+
+    m_thunderEventHandlersRegistered = true;
+}
+
+/**
+ * @brief Unsubscribe Thunder events and release plugin objects.
+ */
+void PlayerExternalsRdkInterface::RemoveThunderEventHandlers()
+{
+    if (!m_thunderEventHandlersRegistered) {
+        return;
+    }
+
+    if (m_hdcpProfileThunder) {
+        m_hdcpProfileThunder->UnSubscribeEvent("onDisplayConnectionChanged");
+        m_hdcpProfileThunder.reset();
+    }
+    if (m_dsThunder) {
+        m_dsThunder->UnSubscribeEvent("connectedVideoDisplaysUpdated");
+        m_dsThunder->UnSubscribeEvent("resolutionChanged");
+        m_dsThunder->UnSubscribeEvent("resolutionPreChange");
+        m_dsThunder.reset();
+    }
+    if (m_displayInfoThunder) {
+        m_displayInfoThunder.reset();
+    }
+
+    m_thunderEventHandlersRegistered = false;
+}
+#endif /* USE_DS_THUNDER_PLUGIN */
+
+void PlayerExternalsRdkInterface::setHdcpProtocol(HdcpProtocolVersion t_protocol)
 {
     m_hdcpCurrentProtocol = t_protocol;
-    MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == HdcpProtocolVersion::V2X ? "2.x" : "1.4");
 }
 
 std::shared_ptr<DeviceInterfaceBase> PlayerExternalsRdkInterface::GetDeviceInterface()
@@ -366,16 +348,12 @@ char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_
 
 void PlayerExternalsRdkInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
 {
-    MW_PRE_LOGGER_LOG("old : %d, new : %d \n", m_use_firebolt_sdk, t_use_firebolt_sdk);
-    if(m_use_firebolt_sdk != t_use_firebolt_sdk)
-    {
-        m_use_firebolt_sdk = t_use_firebolt_sdk;
-        //reinitialize
-        m_initialized = InitState::NOT_INITIALIZED;
-        Initialize();
-
-    }
-    
+    (void)t_use_firebolt_sdk;
+#ifdef FIREBOLT_SUPPORTED
+    MW_PRE_LOGGER_LOG("SetUseFireBoltSDK ignored: build uses FIREBOLT path selection\n");
+#else
+    MW_PRE_LOGGER_LOG("SetUseFireBoltSDK ignored: build uses IARM path selection\n");
+#endif
 }
 
 void PlayerExternalsRdkInterface::SetPowerEvent(bool powerEvt)

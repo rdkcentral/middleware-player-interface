@@ -74,11 +74,11 @@ class DeviceFireboltInterface : public DeviceInterfaceBase {
 
         void ConnectionChanged(const bool connected, int error);
 
-        void RegisterDsMgrEventHandler() override;
+        //void RegisterDsMgrEventHandler() override;
 
         void RegisterNtwMgrEventHandler() override;
 
-        void RemoveEventHandlers() override;
+        //void RemoveEventHandlers() override;
 
         void DestroyFireboltInstance();
 

@@ -137,6 +137,11 @@ class PlayerExternalsInterfaceBase
 
         virtual ~PlayerExternalsInterfaceBase(){}
 
+        /**
+         * @brief Deprecated runtime selector for Firebolt/IARM path.
+         * @deprecated Path selection is compile-time controlled by FIREBOLT_SUPPORTED.
+         *            Implementations may ignore this input.
+         */
         virtual void SetUseFireBoltSDK(bool t_use_firebolt_sdk) = 0;
 
 	virtual void SetPowerEvent(bool powerEvt) = 0;	

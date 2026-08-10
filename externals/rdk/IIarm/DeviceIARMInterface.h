@@ -54,11 +54,11 @@ class DeviceIARMInterface : public DeviceInterfaceBase{
 
     private:
 
-        void RegisterDsMgrEventHandler() override;
+        //void RegisterDsMgrEventHandler() override;
 
         void RegisterNtwMgrEventHandler() override;
 
-        void RemoveEventHandlers() override;
+        //void RemoveEventHandlers() override;
 
         DeviceIARMInterface();
 

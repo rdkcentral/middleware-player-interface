@@ -71,7 +71,7 @@ DeviceFireboltInterface::DeviceFireboltInterface()
 DeviceFireboltInterface::~DeviceFireboltInterface()
 {
 	MW_PRE_LOGGER_LOG("DeviceFireboltInterface destructor called \n");
-	RemoveEventHandlers();
+	Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();
 	m_pFireboltInterface = nullptr;
 }
 
@@ -81,7 +81,6 @@ void DeviceFireboltInterface::Initialize()
 	if(s_pDeviceFireboltInterface)
 	{
 		MW_PRE_LOGGER_LOG("Registering events \n");
-		s_pDeviceFireboltInterface->RegisterDsMgrEventHandler();
 		s_pDeviceFireboltInterface->RegisterNtwMgrEventHandler();
 	}
 	else
@@ -93,6 +92,7 @@ void DeviceFireboltInterface::Initialize()
 	
 }
 
+#if 0 // RegisterDsMgrEventHandler removed: declaration commented out in all headers
 
 void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 {
@@ -135,12 +135,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
     }
 
 }
-
-void DeviceFireboltInterface::RemoveEventHandlers()
-{
-	//removes everything ...
-    Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();        
-}
+#endif // RegisterDsMgrEventHandler disabled
 
 void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 {
@@ -231,12 +226,12 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 
     if(t_HDCPVersionMap.hdcp2_2)
 	{
-		pInstance->setHdcpProtocol(dsHDCP_VERSION_2X);
+		pInstance->setHdcpProtocol(HdcpProtocolVersion::V2X);
 		MW_LOG_INFO("HDCP protocol updated 2_2");
 	}
 	else if(t_HDCPVersionMap.hdcp1_4)
 	{
-		pInstance->setHdcpProtocol(dsHDCP_VERSION_1X);
+		pInstance->setHdcpProtocol(HdcpProtocolVersion::V1X);
 		MW_LOG_INFO("HDCP protocol updated 1_4");
 	}
 	else

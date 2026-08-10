@@ -153,6 +153,10 @@ bool PlayerExternalsInterface::IsConfigWifiCurlHeader()
     return bRet;
 }
 
+/**
+ * @brief Deprecated runtime selector for Firebolt/IARM path.
+ * @deprecated Path selection is compile-time controlled by FIREBOLT_SUPPORTED.
+ */
 void PlayerExternalsInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
 {
     m_pIarmInterface->SetUseFireBoltSDK(t_use_firebolt_sdk);
