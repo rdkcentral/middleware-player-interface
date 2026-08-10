@@ -128,7 +128,7 @@ if(CMAKE_IARM_MGR)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IIarm/DeviceIARMInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
-    list(APPEND LIB_EXT_DEPENDS -lIARMBus -lds -ldshalcli)
+    list(APPEND LIB_EXT_DEPENDS -lIARMBus)
 endif()
 
 if(CMAKE_PLAYER_RFC_REQUIRED)

@@ -200,6 +200,10 @@ class FakePlayerExternalsInterface : public PlayerExternalsInterfaceBase
          */
         bool GetActiveInterface()override{return false;}
 
+        /**
+         * @brief Deprecated runtime selector retained for interface compatibility.
+         * @deprecated Path selection is compile-time controlled by FIREBOLT_SUPPORTED.
+         */
         void SetUseFireBoltSDK(bool t_use_firebolt_sdk) override {}
 
 	void SetPowerEvent(bool powerEvt) override {}
@@ -324,7 +328,11 @@ public:
      */
     bool IsConfigWifiCurlHeader();
 
-
+    /**
+     * @brief Deprecated runtime selector for Firebolt/IARM path.
+     * @deprecated Path selection is compile-time controlled by FIREBOLT_SUPPORTED.
+     *            This API is retained only for backward compatibility.
+     */
     void SetUseFireBoltSDK(bool t_use_firebolt_sdk);
 
     void SetPowerEvent(bool powerEvt);

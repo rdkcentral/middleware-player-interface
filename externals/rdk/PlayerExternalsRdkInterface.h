@@ -22,8 +22,10 @@
  * @brief player interface with IARM specific to RDK
  */
 
-#ifndef PLAYER_IARM_RDK_INTERFACE_H
-#define PLAYER_IARM_RDK_INTERFACE_H
+#ifndef PLAYER_EXTERNALS_RDK_INTERFACE_H
+#define PLAYER_EXTERNALS_RDK_INTERFACE_H
+//these need to be deprecated when libds is deprecated?
+#ifndef USE_DS_THUNDER_PLUGIN
 #include "manager.hpp"
 #include "host.hpp"
 #include "videoResolution.hpp"
@@ -33,6 +35,10 @@
 #include "dsDisplay.h"
 #include "audioOutputPort.hpp"
 #include "dsAudio.h"
+
+#else
+#include "PlayerThunderAccess.h"
+#endif
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
@@ -56,9 +62,14 @@ Replace the section between the comment section replace-start, replace-with and 
 
 class DeviceInterfaceBase;
 
+enum class HdcpProtocolVersion : int {
+        V1X = 14,
+        V2X = 22
+};
+
 //class representing IARM interface in rdk
 class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifndef USE_DS_THUNDER_PLUGIN
 	, public device::Host::IDisplayDeviceEvents
 	, public device::Host::IVideoOutputPortEvents
 #endif
@@ -70,7 +81,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
             IARM
         };
     
-        dsHdcpProtocolVersion_t m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+        HdcpProtocolVersion m_hdcpCurrentProtocol = HdcpProtocolVersion::V1X;
 
         //replace-start
         std::shared_ptr<DeviceInterfaceBase> m_pDeviceInterfaceBase = nullptr;
@@ -79,8 +90,6 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         //replace-end
 
         //remove-start
-        bool m_use_firebolt_sdk = false;
-
         InitState m_initialized = NOT_INITIALIZED;
         //remove-end
 
@@ -89,10 +98,19 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         /**< Callback function for fake tune operations */
         std::function<void()> m_doFakeTuneCallback = nullptr;
 
+        #ifdef USE_DS_THUNDER_PLUGIN
+        std::unique_ptr<PlayerThunderAccess> m_hdcpProfileThunder;
+        std::unique_ptr<PlayerThunderAccess> m_dsThunder;
+        std::unique_ptr<PlayerThunderAccess> m_displayInfoThunder;
+        bool m_thunderEventHandlersRegistered = false;
+        void RegisterThunderEventHandlers();
+        void RemoveThunderEventHandlers();
+        #endif
+
         PlayerExternalsRdkInterface();
 
     public:
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifndef USE_DS_THUNDER_PLUGIN
 		template <typename T>
 		T* baseInterface()
 		{
@@ -146,7 +164,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
          * @brief Is current HDCP protocol 2.2
          * @return True if current HDCP protocol is 2.2. False, if not.
          */
-        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol == dsHDCP_VERSION_2X; }
+        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol == HdcpProtocolVersion::V2X; }
 
         /**
          * @fn GetActiveInterface
@@ -159,8 +177,12 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 
         std::shared_ptr<DeviceInterfaceBase> GetDeviceInterface();
 
-        void setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol);
+        void setHdcpProtocol(HdcpProtocolVersion t_protocol);
 
+        /**
+         * @brief Deprecated runtime selector retained for interface compatibility.
+         * @deprecated Path selection is compile-time controlled by FIREBOLT_SUPPORTED.
+         */
         void SetUseFireBoltSDK(bool t_use_firebolt_sdk) override;
 
 	void SetPowerEvent(bool powerEvt) override;
@@ -181,7 +203,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 
         ~PlayerExternalsRdkInterface();
 
-#ifdef USE_DS_EVENT_SUPPORTED
+#ifndef USE_DS_THUNDER_PLUGIN
         void RegisterDsClientEventHandler();
         void RemoveDsClientEventHandlers();
 
