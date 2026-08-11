@@ -189,6 +189,58 @@ char * DeviceFireboltInterface::GetTR181Config(const char * paramName, size_t & 
     return nullptr;
 }
 
+/**
+ * @brief Queries Device.hdcp and Device.videoResolution via Firebolt and updates player HDCP/resolution state.
+ * Implements xrn:firebolt:capability:device:info for SetHDMIStatus on RDK-E (USE_FIREBOLT) builds.
+ */
+void DeviceFireboltInterface::SetHDMIStatus()
+{
+    std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+
+    // Query current HDCP state via Firebolt Device.hdcp (xrn:firebolt:capability:device:info)
+    auto hdcpResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().hdcp();
+    if (hdcpResult)
+    {
+        const auto& hdcpMap = hdcpResult.value();
+        if (hdcpMap.hdcp2_2)
+        {
+            pInstance->SetHDCPEnabled(true);
+            pInstance->setHdcpProtocol(dsHDCP_VERSION_2X);
+            MW_LOG_WARN("DeviceFirebolt SetHDMIStatus: HDCP 2.2 detected");
+        }
+        else if (hdcpMap.hdcp1_4)
+        {
+            pInstance->SetHDCPEnabled(true);
+            pInstance->setHdcpProtocol(dsHDCP_VERSION_1X);
+            MW_LOG_WARN("DeviceFirebolt SetHDMIStatus: HDCP 1.4 detected");
+        }
+        else
+        {
+            pInstance->SetHDCPEnabled(false);
+            pInstance->setHdcpProtocol(dsHDCP_VERSION_1X);
+            MW_LOG_WARN("DeviceFirebolt SetHDMIStatus: HDCP not supported, defaulting to 1.4");
+        }
+    }
+    else
+    {
+        MW_LOG_ERR("DeviceFirebolt SetHDMIStatus: Failed to query HDCP: %d", static_cast<int>(hdcpResult.error()));
+    }
+
+    // Query current resolution via Firebolt Device.videoResolution (xrn:firebolt:capability:device:info)
+    auto resolutionResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
+    if (resolutionResult)
+    {
+        int width  = resolutionResult.value()[0];
+        int height = resolutionResult.value()[1];
+        pInstance->SetResolution(width, height);
+        MW_LOG_INFO("DeviceFirebolt SetHDMIStatus: Resolution [%d][%d]", width, height);
+    }
+    else
+    {
+        MW_LOG_ERR("DeviceFirebolt SetHDMIStatus: Failed to query resolution: %d", static_cast<int>(resolutionResult.error()));
+    }
+}
+
 static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::Device::NetworkInfoResult& t_NetworkInfoResult)
 {
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();

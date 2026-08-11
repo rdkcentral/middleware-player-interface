@@ -60,6 +60,9 @@ class DeviceFireboltInterface : public DeviceInterfaceBase {
 
         static void Initialize();
 
+        /** Queries Device.hdcp and Device.videoResolution via Firebolt and updates player state */
+        void SetHDMIStatus();
+
     private:
 
         std::shared_ptr<FireboltInterface> m_pFireboltInterface;
