@@ -36,6 +36,12 @@
 #endif
 #include "PlayerUtils.h"
 
+/**
+ * @brief Helpers to stringify the PLAYER_IF_BUILD_INFO compile definition.
+ */
+#define PI_X_STR(s) #s
+#define PI_MACRO_TO_STRING(s) PI_X_STR(s)
+
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
@@ -86,6 +92,28 @@ const char * CipherTypeToString(CipherType type)
 	return "unknown";
 }
 
+/**
+ * @brief Logs the player-interface build identification once per process.
+ *
+ * Emitted from the first InterfacePlayerRDK construction so that the exact
+ * library build (branch/commit/tag) can be identified from device logs,
+ * regardless of whether libplayergstinterface.so was loaded from a widget
+ * bundle or from firmware. Mirrors AAMP_BUILD_INFO in the aamp component.
+ */
+static void LogPlayerInterfaceBuildInfo(void)
+{
+	static std::once_flag sBuildInfoLogged;
+	std::call_once(sBuildInfoLogged, []()
+	{
+#ifdef PLAYER_IF_BUILD_INFO
+		std::string buildInfo = PI_MACRO_TO_STRING(PLAYER_IF_BUILD_INFO);
+		MW_LOG_MIL("PLAYER_IF_BUILD_INFO: %s", buildInfo.c_str());
+#else
+		MW_LOG_MIL("PLAYER_IF_BUILD_INFO: not-available");
+#endif
+	});
+}
+
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
@@ -93,6 +121,7 @@ mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSys
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false),
 mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 {
+	LogPlayerInterfaceBuildInfo();
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library");
 	m_gstConfigParam = new Configs();
