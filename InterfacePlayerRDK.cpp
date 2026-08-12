@@ -3504,7 +3504,27 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			/* wait a bit longer for the state change to conclude */
 			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
 			{
-				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d ret-false", nextState);
+			        /* RDKEMW-21923: discriminate using pendingState before deciding failure.
+ 				*   pend == nextState → async transition in-flight (prerolling); not an error.
+				*   pend != nextState → pipeline not heading to target; genuine wedge → retValue=false. 
+ */
+				GstState curState = GST_STATE_VOID_PENDING, pendState = GST_STATE_VOID_PENDING;
+				(void)gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
+                            &curState, &pendState, 0);
+if (pendState == nextState)
+{
+	MW_LOG_WARN("InterfacePlayerRDK_Pause - async in-flight (cur=%s pend=%s); not error",
+	            gst_element_state_get_name(curState),
+	            gst_element_state_get_name(pendState));
+}
+else
+{
+	MW_LOG_ERR("InterfacePlayerRDK_Pause - FAILED GstState %d (cur=%s pend=%s) ret-false",
+	           nextState,
+	           gst_element_state_get_name(curState),
+	           gst_element_state_get_name(pendState));
+	retValue = false;
+}
 				retValue = false;
 			}
 		}
@@ -5755,4 +5775,22 @@ static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMe
 
 		gst_buffer_add_protection_meta(buffer, metadata);
 	}
+}
+/**
+ * @brief Get the current state of the GStreamer pipeline.
+ * @param[out] currentState Pointer to store the current state of the pipeline.
+ * @param[out] pendingState Pointer to store the pending state of the pipeline.
+ * @return GstStateChangeReturn indicating the result of the state query.
+ */
+GstStateChangeReturn InterfacePlayerRDK::GetPipelineState(GstState *currentState, GstState *pendingState)
+{
+    if (interfacePlayerPriv->gstPrivateContext->pipeline)
+    {
+        return gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline,
+                                     currentState, pendingState, 100 * GST_MSECOND);
+    }
+    // No pipeline
+    if (currentState) *currentState = GST_STATE_NULL;
+    if (pendingState) *pendingState = GST_STATE_VOID_PENDING;
+    return GST_STATE_CHANGE_SUCCESS;
 }

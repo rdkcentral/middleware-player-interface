@@ -806,6 +806,15 @@ class InterfacePlayerRDK
 		 */
 		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
 
+		/**
+ 		* @brief Get the current state of the GStreamer pipeline.
+ 		* @param[out] currentState Pointer to store the current state of the pipeline.
+ 		* @param[out] pendingState Pointer to store the pending state of the pipeline.
+		* @return GstStateChangeReturn indicating the result of the state query.
+ 		*/
+		GstStateChangeReturn GetPipelineState(GstState *currentState, GstState *pendingState);
+
+
 	private:
 		InterfacePlayerPriv *interfacePlayerPriv;
 };
