@@ -125,7 +125,184 @@ static unsigned char* ReplaceKIDPsshData(const unsigned char *InputData, const s
 	return NULL;
 }
 
-static const gchar *srcMimeTypes[] = { "video/x-h264", "video/x-h264(memory:SecMem)", "audio/mpeg", "video/x-h265", "video/x-h265(memory:SecMem)", "audio/x-eac3", "audio/x-gst-fourcc-ec_3", "audio/x-ac3","audio/x-opus", nullptr };
+/* Base video/audio media types supported by all platforms */
+static const gchar *baseMimeTypes[] = {
+    "video/x-h264", "video/x-h265",
+    "audio/mpeg", "audio/x-eac3", "audio/x-gst-fourcc-ec_3", "audio/x-ac3", "audio/x-opus",
+    nullptr
+};
+
+/*
+ * Platform-aware OCDM caps transform function, resolved via dlsym at class_init.
+ * Each platform's OCDM implementation adds its secure-memory feature to the caps
+ * (e.g. "(memory:MediaTekSecure)" for MTK, "(memory:SecMem)" for Amlogic).
+ */
+static OpenCDMError(*OCDMGstTransformCaps)(GstCaps **) = nullptr;
+
+/*
+ * srcMimeTypes is built dynamically at init time to include platform-specific
+ * secure memory feature variants (e.g. "(memory:MediaTekSecure)", "(memory:SecMem)").
+ * This avoids hardcoding platform-specific memory feature strings here.
+ * Access only after gst_cdmidecryptor_init_src_mime_types() has been called.
+ */
+static GPtrArray *srcMimeTypesArray = nullptr;
+static const gchar **srcMimeTypes = nullptr;
+
+/*
+ * Platform secure memory feature string discovered at runtime by probing
+ * OCDMGstTransformCaps with a dummy caps. Empty string if not applicable.
+ * e.g. "memory:MediaTekSecure", "memory:SecMem"
+ */
+static gchar *platformSecureMemFeature = nullptr;
+
+/**
+ * Discover the platform-specific GStreamer memory feature string by probing
+ * OCDMGstTransformCaps with a dummy video/x-h264 caps.
+ * Sets platformSecureMemFeature if a non-ANY caps feature is found.
+ * Must be called after OCDMGstTransformCaps is resolved via dlsym.
+ */
+static void gst_cdmidecryptor_discover_platform_memory_feature(void)
+{
+	g_print("surya - gst_cdmidecryptor_discover_platform_memory_feature\n");
+    if (platformSecureMemFeature != nullptr)
+        return; /* already discovered */
+
+    if (!OCDMGstTransformCaps)
+    {
+        GST_INFO("OCDMGstTransformCaps not available; no platform memory feature to discover");
+        platformSecureMemFeature = g_strdup(""); /* mark as done, no feature */
+        return;
+    }
+
+    GstCaps *probeCaps = gst_caps_from_string("video/x-h264");
+    if (!probeCaps)
+    {
+        GST_WARNING("Failed to create probe caps for memory feature discovery");
+        platformSecureMemFeature = g_strdup("");
+        return;
+    }
+
+    OpenCDMError ret = OCDMGstTransformCaps(&probeCaps);
+    if (ret == ERROR_NONE && probeCaps && gst_caps_get_size(probeCaps) > 0)
+    {
+        /*
+         * Extract the memory feature by converting caps to string and parsing it.
+         * e.g. "video/x-h264(memory:MediaTekSecure)" → extract "memory:MediaTekSecure"
+         * This avoids gst_caps_features_nth / gst_caps_features_nth_name which are
+         * unavailable in older GStreamer versions.
+         */
+        gchar *capsStr = gst_caps_to_string(probeCaps);
+        if (capsStr)
+        {
+            /* Look for opening parenthesis of a caps feature */
+            const gchar *open = g_strstr_len(capsStr, -1, "(");
+            const gchar *close = open ? g_strstr_len(open, -1, ")") : NULL;
+            if (open && close && close > open + 1)
+            {
+                gchar *feature = g_strndup(open + 1, close - open - 1);
+                /* Ignore the standard system memory feature */
+                if (g_strcmp0(feature, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY) != 0)
+                {
+                    platformSecureMemFeature = feature;
+                    GST_INFO("gst_cdmidecryptor: discovered platform secure memory feature: '%s'", platformSecureMemFeature);
+                }
+                else
+                {
+                    g_free(feature);
+                }
+            }
+            g_free(capsStr);
+        }
+    }
+
+    gst_caps_unref(probeCaps);
+
+    if (!platformSecureMemFeature)
+    {
+        platformSecureMemFeature = g_strdup(""); /* no special memory feature on this platform */
+        GST_INFO("gst_cdmidecryptor: no platform-specific memory feature detected");
+    }
+
+}
+
+/**
+ * Build the srcMimeTypes array dynamically based on baseMimeTypes and
+ * the discovered platform memory feature. Only video types get the secure
+ * memory feature variant (audio does not use secure memory).
+ */
+static void gst_cdmidecryptor_init_src_mime_types(void)
+{
+	g_print("surya - patch applied for gst_cdmidecryptor_init_src_mime_types\n");
+    if (srcMimeTypesArray != nullptr)
+        return; /* already initialised */
+
+    srcMimeTypesArray = g_ptr_array_new_with_free_func(g_free);
+
+    for (int i = 0; baseMimeTypes[i]; i++)
+    {
+        /* Always add the plain (non-secure) variant */
+        g_ptr_array_add(srcMimeTypesArray, g_strdup(baseMimeTypes[i]));
+
+        /* For video types, also add the platform-specific secure memory variant */
+        if (platformSecureMemFeature && platformSecureMemFeature[0] != '\0' &&
+            g_str_has_prefix(baseMimeTypes[i], "video/"))
+        {
+            gchar *secureType = g_strdup_printf("%s(%s)", baseMimeTypes[i], platformSecureMemFeature);
+            g_ptr_array_add(srcMimeTypesArray, secureType);
+        }
+    }
+
+    /* null-terminate so it can be used as a C-style const gchar* array */
+    g_ptr_array_add(srcMimeTypesArray, nullptr);
+    srcMimeTypes = (const gchar **)srcMimeTypesArray->pdata;
+    GST_INFO("gst_cdmidecryptor: srcMimeTypes built with %u entries (platform feature: '%s')",
+             srcMimeTypesArray->len - 1,
+             platformSecureMemFeature ? platformSecureMemFeature : "(none)");
+}
+
+/**
+ * Public API: return the discovered platform memory feature string.
+ * Callers must NOT free the returned pointer.
+ */
+const gchar *gst_cdmidecryptor_get_platform_memory_feature(void)
+{
+	g_print("surya - Patch applied for gst_cdmidecryptor_get_platform_memory_feature\n");
+    return platformSecureMemFeature;
+}
+
+/**
+ * Public API: build a dynamic caps string for the src pad of a decryptor element.
+ *
+ * Produces plain variants for all base media types plus one
+ * "(memory:<feature>)" variant for each video type when platformMemFeature is set.
+ *
+ * Example output (MTK):
+ *   "video/x-h264; video/x-h264(memory:MediaTekSecure); audio/mpeg; ..."
+ *
+ * The caller is responsible for freeing the returned string with g_free().
+ */
+gchar *gst_cdmidecryptor_build_src_caps_string(const gchar *platformMemFeature)
+{
+    GString *capsStr = g_string_new(nullptr);
+    gboolean first = TRUE;
+	g_print("surya - Patch applied for gst_cdmidecryptor_build_src_caps_string\n");
+    for (int i = 0; baseMimeTypes[i]; i++)
+    {
+        if (!first)
+            g_string_append(capsStr, "; ");
+        g_string_append(capsStr, baseMimeTypes[i]);
+        first = FALSE;
+
+        /* Add secure-memory variant for video types */
+        if (platformMemFeature && platformMemFeature[0] != '\0' &&
+            g_str_has_prefix(baseMimeTypes[i], "video/"))
+        {
+            g_string_append_printf(capsStr, "; %s(%s)", baseMimeTypes[i], platformMemFeature);
+        }
+    }
+
+    return g_string_free(capsStr, FALSE); /* transfer: full */
+}
 
 /* class initialization */
 G_DEFINE_TYPE_WITH_CODE (GstCDMIDecryptor, gst_cdmidecryptor, GST_TYPE_BASE_TRANSFORM,
@@ -158,7 +335,6 @@ static void gst_cdmidecryptor_set_property(GObject * object,
 		guint prop_id, const GValue * value, GParamSpec * pspec);
 static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
 		GstPadDirection direction, GstCaps * caps);
-static OpenCDMError(*OCDMGstTransformCaps)(GstCaps **);
 
 static void gst_cdmidecryptor_class_init(
 		GstCDMIDecryptorClass *klass)
@@ -168,6 +344,26 @@ static void gst_cdmidecryptor_class_init(
 	std::shared_ptr<SocInterface> socInterface = SocInterface::CreateSocInterface();
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstBaseTransformClass *base_transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+
+	/*
+	 * Resolve OCDMGstTransformCaps and discover the platform memory feature
+	 * here in class_init (runs once, before any subclass class_init or
+	 * instance init) so that gst_cdmidecryptor_get_platform_memory_feature()
+	 * and gst_cdmidecryptor_build_src_caps_string() are ready for use by
+	 * subclass class_init implementations (widevine, playready, etc.).
+	 */
+	if (!OCDMGstTransformCaps)
+	{
+		g_print("surya - Patch applied for gst_cdmidecryptor_class_init\n");
+		const char *ocdmgsttransformcaps = "opencdm_gstreamer_transform_caps";
+		OCDMGstTransformCaps = (OpenCDMError (*)(GstCaps **))dlsym(RTLD_DEFAULT, ocdmgsttransformcaps);
+		if (OCDMGstTransformCaps)
+			GST_INFO("gst_cdmidecryptor_class_init: opencdm_gstreamer_transform_caps resolved");
+		else
+			GST_INFO("gst_cdmidecryptor_class_init: opencdm_gstreamer_transform_caps not found");
+	}
+	gst_cdmidecryptor_discover_platform_memory_feature();
+	gst_cdmidecryptor_init_src_mime_types();
 
 	gobject_class->set_property = gst_cdmidecryptor_set_property;
 	gobject_class->dispose = gst_cdmidecryptor_dispose;
@@ -209,7 +405,6 @@ static void gst_cdmidecryptor_init(
 		GstCDMIDecryptor *cdmidecryptor)
 {
 	DEBUG_FUNC();
-	const char* ocdmgsttransformcaps = "opencdm_gstreamer_transform_caps";
 	GstBaseTransform* base = GST_BASE_TRANSFORM(cdmidecryptor);
 
 	gst_base_transform_set_in_place(base, TRUE);
@@ -242,12 +437,12 @@ static void gst_cdmidecryptor_init(
 	cdmidecryptor->sinkCaps = NULL;
 	cdmidecryptor->svpCtx = NULL;
 
-	OCDMGstTransformCaps = (OpenCDMError(*)(GstCaps**))dlsym(RTLD_DEFAULT, ocdmgsttransformcaps);
-	if (OCDMGstTransformCaps)
-	GST_INFO_OBJECT(cdmidecryptor, "Has opencdm_gstreamer_transform_caps support \n");
-	else
-	GST_INFO_OBJECT(cdmidecryptor, "No opencdm_gstreamer_transform_caps support \n");
-	//GST_DEBUG_OBJECT(cdmidecryptor, "******************Init called**********************\n");
+	/* OCDMGstTransformCaps, platform memory feature, and srcMimeTypes are
+	 * all resolved once in gst_cdmidecryptor_class_init(). Nothing to do here. */
+	g_print("surya - Patch applied for gst_cdmidecryptor_init\n");
+	GST_INFO_OBJECT(cdmidecryptor, "cdmidecryptor init: platform memory feature = '%s'",
+					platformSecureMemFeature ? platformSecureMemFeature : "(not yet discovered)");
+	// GST_DEBUG_OBJECT(cdmidecryptor, "******************Init called**********************\n");;
 }
 
 void gst_cdmidecryptor_dispose(GObject * object)
@@ -315,33 +510,36 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 	GST_DEBUG_OBJECT(trans, "direction: %s, caps: %" GST_PTR_FORMAT " filter:"
 			" %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps, filter);
 
-	if(!cdmidecryptor->selectedProtection)
+	if(!cdmidecryptor->selectedProtection && caps && !gst_caps_is_empty(caps))
 	{
 		GstStructure *capstruct = gst_caps_get_structure(caps, 0);
-		const gchar* capsinfo = gst_structure_get_string(capstruct, "protection-system");
-		if(capsinfo != NULL)
-		{
-			if(!g_strcmp0(capsinfo, PLAYREADY_UUID))
+		if (capstruct)
+    	{
+			const gchar* capsinfo = gst_structure_get_string(capstruct, "protection-system");
+			if(capsinfo != NULL)
 			{
-				cdmidecryptor->selectedProtection = PLAYREADY_UUID;
+				if(!g_strcmp0(capsinfo, PLAYREADY_UUID))
+				{
+					cdmidecryptor->selectedProtection = PLAYREADY_UUID;
+				}
+				else if(!g_strcmp0(capsinfo, WIDEVINE_UUID))
+				{
+					cdmidecryptor->selectedProtection = WIDEVINE_UUID;
+				}
+				else if(!g_strcmp0(capsinfo, CLEARKEY_UUID))
+				{
+					cdmidecryptor->selectedProtection = CLEARKEY_UUID;
+					cdmidecryptor->ignoreSVP = true;
+				}
+				else if(!g_strcmp0(capsinfo, VERIMATRIX_UUID))
+				{
+					cdmidecryptor->selectedProtection = VERIMATRIX_UUID;
+				}
 			}
-			else if(!g_strcmp0(capsinfo, WIDEVINE_UUID))
+			else
 			{
-				cdmidecryptor->selectedProtection = WIDEVINE_UUID;
+				GST_DEBUG_OBJECT(trans, "can't find protection-system field from caps: %" GST_PTR_FORMAT, caps);
 			}
-			else if(!g_strcmp0(capsinfo, CLEARKEY_UUID))
-			{
-				 cdmidecryptor->selectedProtection = CLEARKEY_UUID;
-				 cdmidecryptor->ignoreSVP = true;
-			}
-			else if(!g_strcmp0(capsinfo, VERIMATRIX_UUID))
-			{
-				cdmidecryptor->selectedProtection = VERIMATRIX_UUID;
-			}
-		}
-		else
-		{
-			GST_DEBUG_OBJECT(trans, "can't find protection-system field from caps: %" GST_PTR_FORMAT, caps);
 		}
 	}
 
@@ -398,7 +596,7 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 				// Check if these caps are present in supported src pad caps in case direction is GST_PAD_SINK,
 				// we can allow caps in this case, since plugin will let the data passthrough
 				gboolean found = false;
-				for (int j = 0; srcMimeTypes[j]; j++)
+				for (int j = 0; srcMimeTypes && srcMimeTypes[j]; j++)
 				{
 					if (gst_structure_has_name(in, srcMimeTypes[j]))
 					{
@@ -439,12 +637,28 @@ gst_cdmidecryptor_transform_caps(GstBaseTransform * trans,
 
 		gst_cdmicapsappendifnotduplicate(transformedCaps, out);
 
+		g_print("surya - gst_cdmidecryptor_transform_caps: transformedCaps: %" GST_PTR_FORMAT, transformedCaps);
 		if (socInterface && socInterface->IsTransformCapsRequired())
 		{
-			if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps) && OCDMGstTransformCaps)
-				OCDMGstTransformCaps(&transformedCaps);
-		}
+			if (direction == GST_PAD_SINK && !gst_caps_is_empty(transformedCaps))
+			{
+				gchar *caps_before = gst_caps_to_string(transformedCaps);
+				g_print("surya - gst_cdmidecryptor_transform_caps: transformedCaps before OCDMGstTransformCaps: %s", caps_before);
+				g_free(caps_before);
 
+				if (OCDMGstTransformCaps)
+				{
+					OpenCDMError ret = OCDMGstTransformCaps(&transformedCaps);
+					gchar *caps_after = gst_caps_to_string(transformedCaps);
+					g_print("surya - gst_cdmidecryptor_transform_caps: transformedCaps after OCDMGstTransformCaps: %s", caps_after);
+					g_free(caps_after);
+				}
+				else
+				{
+					GST_WARNING("OCDMGstTransformCaps is NULL - skipping caps transform");
+				}
+			}
+		}
 	}
 
 	if (filter)
@@ -1110,55 +1324,189 @@ static void gst_cdmidecryptor_set_property(GObject * object,
 	}
 }
 
-static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
-		GstPadDirection direction, GstCaps * caps)
+// static gboolean gst_cdmidecryptor_accept_caps(GstBaseTransform * trans,
+// 		GstPadDirection direction, GstCaps * caps)
+// {
+// 	gboolean ret = TRUE;
+// 	GST_DEBUG_OBJECT (trans, "received accept caps with direction: %s caps: %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps);
+
+// 	GstCaps *allowedCaps = NULL;
+
+// 	if (direction == GST_PAD_SINK)
+// 	{
+// 		allowedCaps = gst_pad_query_caps(trans->sinkpad, caps);
+// 	}
+// 	else
+// 	{
+// 		allowedCaps = gst_pad_query_caps(trans->srcpad, caps);
+// 	}
+
+// 	if (!allowedCaps)
+// 	{
+// 		GST_ERROR_OBJECT(trans, "Error while query caps on %s pad of plugin with filter caps: %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps);
+// 		ret = FALSE;
+// 	}
+// 	else
+// 	{
+// 		GST_DEBUG_OBJECT(trans, "Allowed caps: %" GST_PTR_FORMAT, allowedCaps);
+// 		ret = gst_caps_is_subset(caps, allowedCaps);
+// 		gst_caps_unref(allowedCaps);
+// 	}
+
+// 	// Check if these are same as src pad caps in case direction is GST_PAD_SINK,
+// 	// we can let it through in this case
+// 	if (ret == FALSE && direction == GST_PAD_SINK)
+// 	{
+// 		guint size = gst_caps_get_size(caps);
+// 		for (guint i = 0; i < size; i++)
+// 		{
+// 			GstStructure* inCaps = gst_caps_get_structure(caps, i);
+// 			for (int j = 0; srcMimeTypes && srcMimeTypes[j]; j++)
+// 			{
+// 				if (gst_structure_has_name(inCaps, srcMimeTypes[j]))
+// 				{
+// 					GST_DEBUG_OBJECT(trans, "found the requested caps in supported src mime types (type:%s), respond as supported!", srcMimeTypes[j]);
+// 					ret = TRUE;
+// 					break;
+// 				}
+// 			}
+// 		}
+// 	}
+// 	GST_DEBUG_OBJECT(trans, "Return from accept_caps: %d", ret);
+// 	return ret;
+// }
+
+static gboolean
+gst_cdmidecryptor_accept_caps(GstBaseTransform *trans,
+                               GstPadDirection direction,
+                               GstCaps *caps)
 {
-	gboolean ret = TRUE;
-	GST_DEBUG_OBJECT (trans, "received accept caps with direction: %s caps: %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps);
+    GstCDMIDecryptor *cdmidecryptor = GST_CDMI_DECRYPTOR(trans);
+    gboolean ret = FALSE;
+    GstCaps *templateCaps = NULL;
+    GstPad *pad = NULL;
 
-	GstCaps *allowedCaps = NULL;
+    GST_DEBUG_OBJECT(
+        trans,
+        "received accept caps with direction: %s caps: %" GST_PTR_FORMAT,
+        (direction == GST_PAD_SRC) ? "src" : "sink",
+        caps);
 
-	if (direction == GST_PAD_SINK)
-	{
-		allowedCaps = gst_pad_query_caps(trans->sinkpad, caps);
-	}
-	else
-	{
-		allowedCaps = gst_pad_query_caps(trans->srcpad, caps);
-	}
+    /*
+     * An empty/NULL caps set cannot be accepted.
+     *
+     * More importantly, don't pass EMPTY caps into any additional
+     * caps-query/transform path.
+     */
+    if (!caps || gst_caps_is_empty(caps))
+    {
+        GST_DEBUG_OBJECT(trans,
+                         "Rejecting NULL/EMPTY caps");
+        return FALSE;
+    }
 
-	if (!allowedCaps)
-	{
-		GST_ERROR_OBJECT(trans, "Error while query caps on %s pad of plugin with filter caps: %" GST_PTR_FORMAT, (direction == GST_PAD_SRC) ? "src" : "sink", caps);
-		ret = FALSE;
-	}
-	else
-	{
-		GST_DEBUG_OBJECT(trans, "Allowed caps: %" GST_PTR_FORMAT, allowedCaps);
-		ret = gst_caps_is_subset(caps, allowedCaps);
-		gst_caps_unref(allowedCaps);
-	}
+    /*
+     * Check the capabilities advertised by THIS pad's pad template.
+     *
+     * Do not use gst_pad_query_caps() here. Calling query_caps() from
+     * accept_caps() can re-enter the BaseTransform caps negotiation
+     * machinery and result in recursive/indirect transform_caps()
+     * calls such as:
+     *
+     *     direction=src, caps=EMPTY
+     */
+    pad = (direction == GST_PAD_SRC) ?
+          trans->srcpad :
+          trans->sinkpad;
 
-	// Check if these are same as src pad caps in case direction is GST_PAD_SINK,
-	// we can let it through in this case
-	if (ret == FALSE && direction == GST_PAD_SINK)
-	{
-		guint size = gst_caps_get_size(caps);
-		for (guint i = 0; i < size; i++)
-		{
-			GstStructure* inCaps = gst_caps_get_structure(caps, i);
-			for (int j = 0; srcMimeTypes[j]; j++)
-			{
-				if (gst_structure_has_name(inCaps, srcMimeTypes[j]))
-				{
-					GST_DEBUG_OBJECT(trans, "found the requested caps in supported src mime types (type:%s), respond as supported!", srcMimeTypes[j]);
-					ret = TRUE;
-					break;
-				}
-			}
-		}
-	}
-	GST_DEBUG_OBJECT(trans, "Return from accept_caps: %d", ret);
-	return ret;
+    templateCaps = gst_pad_get_pad_template_caps(pad);
+
+    if (templateCaps)
+    {
+        GST_DEBUG_OBJECT(
+            trans,
+            "Pad template caps: %" GST_PTR_FORMAT,
+            templateCaps);
+
+        /*
+         * A more specific caps set is a subset of a more general
+         * template caps set.
+         *
+         * Example:
+         *
+         * requested:
+         *   application/x-cenc,
+         *   original-media-type=video/x-h264,
+         *   protection-system=Widevine,
+         *   width=768, ...
+         *
+         * template:
+         *   application/x-cenc,
+         *   original-media-type=video/x-h264,
+         *   protection-system=Widevine
+         *
+         * => requested caps are a valid subset.
+         */
+        ret = gst_caps_is_subset(caps, templateCaps);
+
+        GST_DEBUG_OBJECT(
+            trans,
+            "Caps subset check result: %d",
+            ret);
+
+        gst_caps_unref(templateCaps);
+        templateCaps = NULL;
+    }
+    else
+    {
+        GST_WARNING_OBJECT(
+            trans,
+            "Could not get pad template caps for %s pad",
+            (direction == GST_PAD_SRC) ? "src" : "sink");
+    }
+
+    /*
+     * Existing compatibility fallback:
+     *
+     * For sink-side caps, allow formats which are explicitly listed
+     * in srcMimeTypes even if they are not accepted by the normal
+     * template subset check.
+     */
+    if (!ret && direction == GST_PAD_SINK)
+    {
+        guint size = gst_caps_get_size(caps);
+
+        for (guint i = 0; i < size && !ret; ++i)
+        {
+            GstStructure *inCaps = gst_caps_get_structure(caps, i);
+
+            if (!inCaps)
+                continue;
+
+            for (int j = 0;
+                 srcMimeTypes && srcMimeTypes[j];
+                 ++j)
+            {
+                if (gst_structure_has_name(inCaps, srcMimeTypes[j]))
+                {
+                    GST_DEBUG_OBJECT(
+                        cdmidecryptor,
+                        "Found requested caps in supported src MIME "
+                        "types (type:%s), respond as supported!",
+                        srcMimeTypes[j]);
+
+                    ret = TRUE;
+                    break;
+                }
+            }
+        }
+    }
+
+    GST_DEBUG_OBJECT(
+        trans,
+        "Return from accept_caps: %d",
+        ret);
+
+    return ret;
 }
 #endif

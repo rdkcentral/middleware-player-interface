@@ -2036,6 +2036,13 @@ static void element_setup_cb(void *playbin, void *element, void *instance)
 	g_free(elemName);
 }
 
+static void element_setup_cb_svppay(GstElement *playbin, GstElement *element, gpointer user_data)
+{
+	const gchar *name = gst_element_get_name(element);
+	g_print("Patch applied: surya - element_setup_cb_svppay\n");
+    MW_LOG_INFO( "surya - Received element: %s", name);
+}
+
 /**
  * @brief Initialize properties/callback of appsrc
  * @param[in] _this pointer to InterfacePlayerRDK instance associated with the playback
@@ -2479,6 +2486,11 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 	{
 		// Send the media_stream object so that qtdemux can be instantly mapped to media type without caps/parent check
 		g_signal_connect(stream->sinkbin, "element_setup", G_CALLBACK(element_setup_cb), pInterfacePlayerRDK);
+	}
+	if(eGST_MEDIATYPE_VIDEO == streamId)
+	{
+		g_print("surya - patch applied: SVPPAY callback started\n");
+		g_signal_connect(stream->sinkbin, "element_setup", G_CALLBACK(element_setup_cb_svppay), pInterfacePlayerRDK);
 	}
 	if (eGST_MEDIATYPE_VIDEO == streamId && (mediaFormat==eGST_MEDIAFORMAT_DASH || mediaFormat==eGST_MEDIAFORMAT_HLS_MP4))
 	{

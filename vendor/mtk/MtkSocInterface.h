@@ -29,10 +29,10 @@
  */
 class MtkSocInterface : public SocInterface
 {
-	
+
 public:
 	MtkSocInterface();
-	
+
 	/**
 	 * @brief Check if AppSrc should be used.
 	 *
@@ -40,8 +40,8 @@ public:
 	 *
 	 * @return True if AppSrc should be used, false otherwise.
 	 */
-	bool UseAppSrc()override;
-	
+	bool UseAppSrc() override;
+
 	/**
 	 * @brief Check if Westeros sink should be used.
 	 *
@@ -49,14 +49,14 @@ public:
 	 *
 	 * @return True if Westeros sink should be used, false otherwise.
 	 */
-	bool UseWesterosSink()override{return false;}
-	
+	bool UseWesterosSink() override { return false; }
+
 	/**
 	 * @brief Get volume property name.
 	 * @return Volume property name.
 	 */
-	void SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume)override;
-	
+	void SetAudioProperty(const char *&volume, const char *&mute, bool &isSinkBinVolume) override;
+
 	/**
 	 * @brief Sets the playback rate for the given GStreamer elements.
 	 *
@@ -67,44 +67,44 @@ public:
 	 * @param audio_dec The audio decoder element.
 	 * @return True if the playback rate was set successfully, false otherwise.
 	 */
-	bool SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec) override;
-	
+	bool SetPlaybackRate(const std::vector<GstElement *> &sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec) override;
+
 	/**
 	 * @brief Set AC4 tracks.
 	 * @param src Source element.
 	 * @param trackId Track ID.
 	 */
 	void SetAC4Tracks(GstElement *src, int trackId) override;
-	
+
 	/**
 	 * @brief Set rate correction.
 	 * @return True on success, false otherwise.
 	 */
-	bool SetRateCorrection() override {return false;}
-	
-	void GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec)override{};
-	
+	bool SetRateCorrection() override { return false; }
+
+	void GetCCDecoderHandle(gpointer *dec_handle, GstElement *video_dec) override {};
+
 	/**
 	 * @brief Check if the given name is a video sink.
 	 * @param name Element name.
 	 * @return True if it's a video sink, false otherwise.
 	 */
-	bool IsVideoSink(const char* name) override;
-	
+	bool IsVideoSink(const char *name) override;
+
 	/**
 	 * @brief Check if the given name is an audio sink or audio decoder.
 	 * @param name Element name.
 	 * @return True if it's an audio sink or audio decoder, false otherwise.
 	 */
-	bool IsAudioSinkOrAudioDecoder(const char* name) override {return false;}
-	
+	bool IsAudioSinkOrAudioDecoder(const char *name) override { return false; }
+
 	/**
 	 * @brief Check if the given name is a video decoder.
 	 * @param name Element name.
 	 * @return True if it's a video decoder, false otherwise.
 	 */
-	bool IsVideoDecoder(const char* name) override;
-	
+	bool IsVideoDecoder(const char *name) override;
+
 	/**
 	 * @brief Configure the audio sink.
 	 * @param audio_sink Pointer to the audio sink element.
@@ -112,16 +112,16 @@ public:
 	 * @param decStreamSync Decoder stream synchronization flag.
 	 * @return True on success, false otherwise.
 	 */
-	bool ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync)override;
-	
+	bool ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync) override;
+
 	/**
 	 * @brief Check if the given name is an audio or video decoder.
 	 * @param name Element name.
 	 * @param IsWesteros Westeros flag.
 	 * @return True if it's an audio or video decoder, false otherwise.
 	 */
-	bool IsAudioOrVideoDecoder(const char* name) override;
-	
+	bool IsAudioOrVideoDecoder(const char *name) override;
+
 	/**
 	 * @brief Set playback flags.
 	 *
@@ -129,44 +129,51 @@ public:
 	 * @param flags Reference to the flags integer.
 	 * @param isSub Flag indicating whether the content is a subtitle.
 	 */
-	void SetPlaybackFlags(gint &flags, bool isSub)override;
-	
+	void SetPlaybackFlags(gint &flags, bool isSub) override;
+
 	/**
 	 * @brief checks if the firstFrame is received from the simulator
 	 */
-	bool IsSimulatorFirstFrame()override;
-	
+	bool IsSimulatorFirstFrame() override;
+
 	/**
 	 * @brief checks if the sink is from the simulator
 	 */
-	bool IsSimulatorSink()override;
-	
+	bool IsSimulatorSink() override;
+
 	/**
 	 * @brief Configure the plugin priority for PulseAudio.
 	 */
-	void ConfigurePluginPriority()override;
-	
+	void ConfigurePluginPriority() override;
+
 	/**
 	 * @brief checks if the teardown is required for simulator
 	 */
-	bool ShouldTearDownForTrickplay()override;
-	
+	bool ShouldTearDownForTrickplay() override;
+
 	/**
 	 * @brief checks if the video sample is from the simulator
 	 */
-	bool IsSimulatorVideoSample()override;
-	
+	bool IsSimulatorVideoSample() override;
+
 	/**
 	 * @brief checks if the video sample is from the simulator
 	 */
-	void SetH264Caps(GstCaps *caps)override;
-	
+	void SetH264Caps(GstCaps *caps) override;
+
 	/**
 	 *@brief Sets the HEVC caps for simulator
 	 */
-	void SetHevcCaps(GstCaps *caps)override;
-	
-	bool IsVideoMaster(GstElement *videoSink)override;
+	void SetHevcCaps(GstCaps *caps) override;
+
+	/**
+	 * @brief Indicates whether transform capabilities are required.
+	 * @return true if transform capabilities are required; otherwise, false
+	 */
+	bool IsTransformCapsRequired() const override{
+		return true; }
+
+	bool IsVideoMaster(GstElement *videoSink) override;
 };
 
 #endif
