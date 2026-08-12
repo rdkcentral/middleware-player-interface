@@ -2041,6 +2041,28 @@ static void element_setup_cb(void *playbin, void *element, void *instance)
 	g_free(elemName);
 }
 
+static void element_setup_cb_svppay(GstElement *playbin, GstElement *element, gpointer user_data)
+{
+	gchar *name = gst_element_get_name(element);
+	g_print("surya - element_setup_cb_svppay called for element: %s\n", gst_element_get_name(element));
+	// distinguish whether svppay was actually auto-plugged vs. some unrelated element_setup firing
+	if (name && gst_StartsWith(name, "svppay"))
+	{
+		GstPad *sinkpad = gst_element_get_static_pad(element, "sink");
+		GstCaps *negotiatedCaps = sinkpad ? gst_pad_get_current_caps(sinkpad) : NULL;
+		gchar *capsStr = negotiatedCaps ? gst_caps_to_string(negotiatedCaps) : g_strdup("(caps not yet negotiated)");
+		MW_LOG_MIL("svppay auto-plugged: name=%s sinkCaps=%s", name, capsStr);
+		g_free(capsStr);
+		if (negotiatedCaps) gst_caps_unref(negotiatedCaps);
+		if (sinkpad) gst_object_unref(sinkpad);
+	}
+	else
+	{
+		MW_LOG_INFO("element_setup fired for non-svppay element: %s", name ? name : "(null)");
+	}
+	g_free(name);
+}
+
 /**
  * @brief Initialize properties/callback of appsrc
  * @param[in] _this pointer to InterfacePlayerRDK instance associated with the playback
@@ -2484,6 +2506,11 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 	{
 		// Send the media_stream object so that qtdemux can be instantly mapped to media type without caps/parent check
 		g_signal_connect(stream->sinkbin, "element_setup", G_CALLBACK(element_setup_cb), pInterfacePlayerRDK);
+	}
+	if(eGST_MEDIATYPE_VIDEO == streamId)
+	{
+		MW_LOG_INFO("Connecting element_setup_cb_svppay for video sinkbin");
+		g_signal_connect(stream->sinkbin, "element_setup", G_CALLBACK(element_setup_cb_svppay), pInterfacePlayerRDK);
 	}
 	if (eGST_MEDIATYPE_VIDEO == streamId && (mediaFormat==eGST_MEDIAFORMAT_DASH || mediaFormat==eGST_MEDIAFORMAT_HLS_MP4))
 	{
