@@ -30,6 +30,7 @@
 #include <string>
 #include <fstream>
 #include <algorithm>
+#include <cerrno>
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -59,9 +60,20 @@ long ProcessHandler::convertPid(std::string& name)
 {
     char* p;
     long  pid = -1;
+    errno = 0;
     pid = strtol(name.c_str(), &p, BASE_NUMBER);
     if( *p != 0)
        pid = -1;
+    else if (errno == ERANGE)
+    {
+        MW_LOG_WARN("PID conversion out of range: %s", name.c_str());
+        pid = -1;
+    }
+    else if (errno != 0)
+    {
+        MW_LOG_WARN("PID conversion error (errno=%d): %s", errno, name.c_str());
+        pid = -1;
+    }
     return pid;
 }
 
