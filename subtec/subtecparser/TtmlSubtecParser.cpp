@@ -138,7 +138,12 @@ bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double 
 		isobuf.getMdatBoxSize(mdatLen);
 
 		mdat = (uint8_t *)malloc(mdatLen);
-		isobuf.parseMdatBox(mdat, mdatLen);
+		if (!mdat || !isobuf.parseMdatBox(mdat, mdatLen))
+		{
+			MW_LOG_ERR("TtmlSubtecParser::processData - failed to extract mdat payload, dropping fragment");
+			free(mdat);
+			return false;
+		}
 
 		std::vector<uint8_t> data(mdatLen);
 		data.assign(mdat, mdat+mdatLen);
