@@ -440,4 +440,4 @@ static void ResolutionHandler(const char *owner, IARM_EventId_t eventId, void *d
             break;
     }
 }
-#endif
+
