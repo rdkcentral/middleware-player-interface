@@ -107,11 +107,10 @@ void PlayerScheduler::ExecuteAsyncTask()
 	std::unique_lock<std::mutex>queueLock(mQMutex);
 	while (mSchedulerRunning)
 	{
-		if (mTaskQueue.empty())
-		{
-			mQCond.wait(queueLock);
-		}
-		else
+		// Wait with predicate to handle spurious wakeups atomically
+		mQCond.wait(queueLock, [this]{ return !mTaskQueue.empty() || !mSchedulerRunning; });
+		
+		if (!mTaskQueue.empty())
 		{
 			/* 
 			Take the execution lock before taking a task from the queue

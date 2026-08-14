@@ -373,7 +373,11 @@ gst_subtecsink_dispose (GObject * object)
 
   GST_DEBUG_OBJECT (subtecsink, "dispose");
 
-	if (subtecsink->m_channel) subtecsink->m_channel->SendResetAllPacket();
+	if (subtecsink->m_channel)
+  {
+    subtecsink->m_channel->SendResetAllPacket();
+    subtecsink->m_channel.reset();
+  }
 
   G_OBJECT_CLASS (gst_subtecsink_parent_class)->dispose (object);
 }
@@ -400,6 +404,11 @@ gst_subtecsink_set_caps (GstBaseSink * sink, GstCaps * caps)
   const gchar* caps_name = gst_structure_get_name(s);
 
   GST_DEBUG_OBJECT (subtecsink, "set_caps name %s", caps_name);
+
+  if (subtecsink->m_channel)
+  {
+    subtecsink->m_channel.reset();
+  }
 
   if (!strcmp("text/vtt", caps_name) || !strcmp("application/x-subtitle-vtt", caps_name))
     subtecsink->m_channel = SubtecChannel::SubtecChannelFactory(SubtecChannel::ChannelType::WEBVTT);
