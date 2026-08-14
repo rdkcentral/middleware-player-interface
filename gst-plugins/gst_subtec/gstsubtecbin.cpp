@@ -259,10 +259,15 @@ type_found (GstElement * typefind, guint probability,
 
         GST_DEBUG_OBJECT(subtecbin, "seek allowed caps %" GST_PTR_FORMAT, demux_caps);
         auto ttml_formatter_factory = gst_element_factory_find("vipertransform");
-        if (gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
+        if (ttml_formatter_factory != NULL)
         {
-          subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+          if (gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
+          {
+            subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+          }
+          gst_object_unref(ttml_formatter_factory);
         }
+        gst_caps_unref(demux_caps);
       }
     }
   }

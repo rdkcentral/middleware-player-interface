@@ -99,7 +99,15 @@ bool PlayerIsoBmffBuffer::parseBuffer(bool correctBoxSize, int newTrackId)
 		}
 		box->setOffset((uint32_t)curOffset);
 		boxes.push_back(box);
-		curOffset += box->getSize();
+		
+		uint32_t boxSize = box->getSize();
+		if (boxSize > bufSize - curOffset)
+		{
+			MW_LOG_WARN("Box extends past buffer bounds: offset=%zu, size=%u, bufSize=%zu", curOffset, boxSize, bufSize);
+			break;  // Stop parsing to prevent buffer overrun
+		}
+		
+		curOffset += boxSize;
 	}
 	return !!(boxes.size());
 }
@@ -230,8 +238,21 @@ bool PlayerIsoBmffBuffer::parseBoxInternal(const std::vector<player_isobmff::Iso
 		MW_LOG_TRACE("Offset[%u] Type[%s] Size[%u]", box->getOffset(), box->getType(), box->getSize());
 		if (IS_TYPE(box->getType(), name))
 		{
+			if (box->getSize() < BOX_HEADER_SIZE)
+			{
+				MW_LOG_ERR("Box size invalid (too small): size=%u, headerSize=%u", box->getSize(), BOX_HEADER_SIZE);
+				return false;
+			}
+			
 			size_t offset = box->getOffset() + BOX_HEADER_SIZE;
 			size = box->getSize() - BOX_HEADER_SIZE;
+			
+			if (offset > bufSize || size > bufSize - offset)
+			{
+				MW_LOG_ERR("Box content extends beyond buffer: offset=%zu, size=%zu, bufSize=%zu", offset, size, bufSize);
+				return false;
+			}
+			
 			memcpy(buf, buffer + offset, size);
 			return true;
 		}

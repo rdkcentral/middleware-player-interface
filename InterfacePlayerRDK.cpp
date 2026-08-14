@@ -292,6 +292,12 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline - null pointer detected: interfacePlayerPriv or gstPrivateContext is null");
+		return;
+	}
+
 	mFirstFrameRequired = FirstFrameFlag;
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
 	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
@@ -1828,6 +1834,11 @@ static void gst_enough_data(GstElement *source, void *_this)
 	if(pInterfacePlayerRDK)
 	{
 		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		if (!privatePlayer)
+		{
+			MW_LOG_ERR("gst_enough_data: privatePlayer is NULL");
+			return;
+		}
 		HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 		bool shouldProcessEnoughData = false;
 		{
@@ -1861,6 +1872,11 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 {
 	InterfacePlayerRDK* _this = (InterfacePlayerRDK*)PlayerInstance;
 	InterfacePlayerPriv* privatePlayer = _this->GetPrivatePlayer();
+	if (!privatePlayer)
+	{
+		MW_LOG_ERR("InitializeSourceForPlayer: privatePlayer is NULL");
+		return;
+	}
 	GstCaps * caps = NULL;
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
@@ -2090,8 +2106,16 @@ static void gst_found_source(GObject * object, GObject * orig, GParamSpec * pspe
 	{
 		gst_media_stream *stream;
 		stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+		stream->source = NULL;
 		g_object_get(orig, pspec->name, &stream->source, NULL);
-		gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(stream->source), mediaType);
+		if (stream->source)
+		{
+			gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(stream->source), mediaType);
+		}
+		else
+		{
+			MW_LOG_WARN("Failed to retrieve source property '%s' for media type %d", pspec->name, mediaType);
+		}
 	}
 }
 
@@ -2288,7 +2312,13 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 		{
 			if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
 			{
-				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(gst_element_factory_make("playbin", NULL)));
+				GstElement* playbin = gst_element_factory_make("playbin", NULL);
+				if (!playbin)
+				{
+					MW_LOG_ERR("Failed to create playbin for rialto subtitle sink");
+					return -1;
+				}
+				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(playbin));
 				MW_LOG_INFO("subs using rialto subtitle sink");
 				GstElement* textsink = gst_element_factory_make("rialtomsesubtitlesink", NULL);
 				if (textsink)
@@ -2342,23 +2372,36 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 	else
 	{
 		MW_LOG_INFO("using playbin");						/* Media is not subtitle, use the generic playbin */
-		stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(gst_element_factory_make("playbin", NULL)));	/* Creates a new element of "playbin" type and returns a new GstElement */
+		GstElement* playbin = gst_element_factory_make("playbin", NULL);	/* Creates a new element of "playbin" type and returns a new GstElement */
+		if (!playbin)
+		{
+			MW_LOG_ERR("Failed to create playbin element");
+			return -1;
+		}
+		stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(playbin));
 
 		if (m_gstConfigParam->tcpServerSink)
 		{
 			MW_LOG_INFO("using tcpserversink");
 			GstElement* sink = gst_element_factory_make("tcpserversink", NULL);
-			int tcp_port = m_gstConfigParam->tcpPort;
-			// TCPServerSinkPort of 0 is treated specially and should not be incremented for audio
-			if (eGST_MEDIATYPE_VIDEO == streamId)
+			if (sink)
 			{
-				g_object_set (G_OBJECT (sink), "port", tcp_port,"host","127.0.0.1",NULL);
-				g_object_set(stream->sinkbin, "video-sink", sink, NULL);
+				int tcp_port = m_gstConfigParam->tcpPort;
+				// TCPServerSinkPort of 0 is treated specially and should not be incremented for audio
+				if (eGST_MEDIATYPE_VIDEO == streamId)
+				{
+					g_object_set (G_OBJECT (sink), "port", tcp_port,"host","127.0.0.1",NULL);
+					g_object_set(stream->sinkbin, "video-sink", sink, NULL);
+				}
+				else if (eGST_MEDIATYPE_AUDIO == streamId)
+				{
+					g_object_set (G_OBJECT (sink), "port", (tcp_port>0)?tcp_port+1:tcp_port,"host","127.0.0.1",NULL);
+					g_object_set(stream->sinkbin, "audio-sink", sink, NULL);
+				}
 			}
-			else if (eGST_MEDIATYPE_AUDIO == streamId)
+			else
 			{
-				g_object_set (G_OBJECT (sink), "port", (tcp_port>0)?tcp_port+1:tcp_port,"host","127.0.0.1",NULL);
-				g_object_set(stream->sinkbin, "audio-sink", sink, NULL);
+				MW_LOG_WARN("Failed to create tcpserversink element");
 			}
 		}
 		else if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink && eGST_MEDIATYPE_VIDEO == streamId)
@@ -2425,15 +2468,21 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 			{
 				MW_LOG_MIL("using appsink");
 				GstElement* appsink = gst_element_factory_make("appsink", NULL);
-				assert(appsink);
-				GstCaps *caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", NULL);
-				gst_app_sink_set_caps (GST_APP_SINK(appsink), caps);
-				g_object_set (G_OBJECT(appsink), "emit-signals", TRUE, "sync", TRUE, NULL);
-				privatePlayer->SignalConnect(appsink, "new-sample", G_CALLBACK (InterfacePlayerRDK_OnVideoSample), this);
-				g_object_set(stream->sinkbin, "video-sink", appsink, NULL);
-				GstObject **oldobj = (GstObject **)&interfacePlayerPriv->gstPrivateContext->video_sink;
-				GstObject *newobj = (GstObject *)appsink;
-				gst_object_replace( oldobj, newobj );
+				if (appsink)
+				{
+					GstCaps *caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", NULL);
+					gst_app_sink_set_caps (GST_APP_SINK(appsink), caps);
+					g_object_set (G_OBJECT(appsink), "emit-signals", TRUE, "sync", TRUE, NULL);
+					privatePlayer->SignalConnect(appsink, "new-sample", G_CALLBACK (InterfacePlayerRDK_OnVideoSample), this);
+					g_object_set(stream->sinkbin, "video-sink", appsink, NULL);
+					GstObject **oldobj = (GstObject **)&interfacePlayerPriv->gstPrivateContext->video_sink;
+					GstObject *newobj = (GstObject *)appsink;
+					gst_object_replace( oldobj, newobj );
+				}
+				else
+				{
+					MW_LOG_ERR("Failed to create appsink element for video export");
+				}
 			}
 		}
 #endif
@@ -3607,7 +3656,14 @@ bool InterfacePlayerRDK::GetBufferControlData(int iMediaType)
 	GstState pending;
 	GstMediaType mediaType = (GstMediaType)iMediaType;
 	const gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[mediaType];
-	gst_element_get_state(stream->sinkbin, &current, &pending, 0);
+	GstStateChangeReturn stateRet = gst_element_get_state(stream->sinkbin, &current, &pending, 0);
+	
+	if (stateRet == GST_STATE_CHANGE_FAILURE)
+	{
+		MW_LOG_ERR("GetBufferControlData: Failed to get state for media type %d", iMediaType);
+		current = GST_STATE_NULL; 
+		pending = GST_STATE_VOID_PENDING;
+	}
 
 	/* Transitions to Paused can block due to lack of data
 	 ** state should match player's target play/pause state*/
