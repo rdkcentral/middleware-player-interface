@@ -51,7 +51,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager/IFirebolt)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IIarm)
+if(NOT USE_FIREBOLT)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IIarm)
+endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IFirebolt)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/IFirebolt)
 
@@ -113,15 +115,16 @@ set(SECMGR_SOURCES contentsecuritymanager/PlayerMemoryUtils.cpp
     contentsecuritymanager/ContentSecurityManagerSession.cpp
     ${MW_ROOT}/PlayerScheduler.cpp)
 
-if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR USE_FIREBOLT)
-	set(SECMGR_SOURCES ${SECMGR_SOURCES}  contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
+option(USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
+
+if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER)
+	if(USE_FIREBOLT)
+		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
 	endif()
 	if(CMAKE_USE_SECMANAGER)
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/ThunderAccessPlayer.cpp contentsecuritymanager/SecManagerThunder.cpp)
 	endif()
 endif()
-
-option(USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
 
 #IARM/RFC
 if(USE_FIREBOLT)
