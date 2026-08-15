@@ -117,10 +117,8 @@ set(SECMGR_SOURCES contentsecuritymanager/PlayerMemoryUtils.cpp
 
 option(USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
 
-if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER)
-	if(USE_FIREBOLT)
-		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
-	endif()
+if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR USE_FIREBOLT)
+	set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
 	if(CMAKE_USE_SECMANAGER)
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/ThunderAccessPlayer.cpp contentsecuritymanager/SecManagerThunder.cpp)
 	endif()
