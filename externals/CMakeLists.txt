@@ -113,8 +113,9 @@ set(SECMGR_SOURCES contentsecuritymanager/PlayerMemoryUtils.cpp
     contentsecuritymanager/ContentSecurityManagerSession.cpp
     ${MW_ROOT}/PlayerScheduler.cpp)
 
-if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER)
+if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR USE_FIREBOLT)
 	set(SECMGR_SOURCES ${SECMGR_SOURCES}  contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
+	endif()
 	if(CMAKE_USE_SECMANAGER)
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/ThunderAccessPlayer.cpp contentsecuritymanager/SecManagerThunder.cpp)
 	endif()
