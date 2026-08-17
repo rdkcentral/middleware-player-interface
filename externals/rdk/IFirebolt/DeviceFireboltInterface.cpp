@@ -195,6 +195,11 @@ char * DeviceFireboltInterface::GetTR181Config(const char * paramName, size_t & 
  */
 void DeviceFireboltInterface::SetHDMIStatus()
 {
+	std::unique_lock<std::mutex> lock(m_hdmiStatusMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        MW_LOG_WARN("DeviceFirebolt SetHDMIStatus: Already in progress on another thread, skipping");
+        return;
+    }
     std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
     // Query current HDCP state via Firebolt Device.hdcp (xrn:firebolt:capability:device:info)
