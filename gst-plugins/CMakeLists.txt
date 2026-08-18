@@ -75,7 +75,7 @@ set(GST_MIDDLEWARE_SOURCES gstinit.cpp
 
 if(CMAKE_CDM_DRM)
         message("CMAKE_CDM_DRM set")
-	set(GST_MIDDLEWARE_SOURCES "${GST_MIDDLEWARE_SOURCES}" drm/gst/gstcdmidecryptor.cpp drm/gst/gstplayreadydecryptor.cpp drm/gst/gstwidevinedecryptor.cpp drm/gst/gstclearkeydecryptor.cpp drm/gst/gstverimatrixdecryptor.cpp)
+	set(GST_MIDDLEWARE_SOURCES "${GST_MIDDLEWARE_SOURCES}" drm/gst/gstcdmidecryptor.cpp drm/gst/gstplayreadydecryptor.cpp drm/gst/gstwidevinedecryptor.cpp drm/gst/gstclearkeydecryptor.cpp drm/gst/gstverimatrixdecryptor.cpp drm/gst/gstdrmmultidecryptor.cpp)
 endif()
 
 message("AAMP consolidated build, enabling gst_subtec")

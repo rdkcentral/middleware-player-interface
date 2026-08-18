@@ -386,6 +386,26 @@ int OCDMGSTSessionAdapter::decrypt(GstBuffer *keyIDBuffer, GstBuffer *ivBuffer, 
 	return retValue;
 }
 
+int OCDMGSTSessionAdapter::decrypt(const std::vector<GstBuffer*> &vBuf, GstCaps* caps)
+{
+    int retValue = -1;
+
+      if (m_pOpenCDMSession)
+      {
+          if (!verifyOutputProtection())
+          {
+              return HDCP_COMPLIANCE_CHECK_FAILURE;
+          }
+          if (OCDMGSTSessionDecryptMulti && !gst_caps_is_empty(caps) && GST_IS_CAPS(caps)) {
+
+              retValue = OCDMGSTSessionDecryptMulti(m_pOpenCDMSession, vBuf, caps);
+          } else {
+              MW_LOG_WARN("decrypt not called - multi decrypt: %p, caps empty: %d", OCDMGSTSessionDecryptMulti, gst_caps_is_empty(caps));
+          }
+      }
+      return retValue;
+}
+
 int OCDMGSTSessionAdapter::decrypt(const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData)
 {
 	int retValue = -1;

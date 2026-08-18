@@ -61,6 +61,8 @@ static const char* GstPluginNamePR = "playreadydecryptor";
 static const char* GstPluginNameWV = "widevinedecryptor";
 static const char* GstPluginNameCK = "clearkeydecryptor";
 static const char* GstPluginNameVMX = "verimatrixdecryptor";
+static const char* GstPluginNameMulti = "drmmultidecryptor";
+
 #define GST_MIN_PTS_UPDATE_INTERVAL 4000                        /**< Time duration in milliseconds if exceeded and pts has not changed; it is concluded pts is not changing */
 
 #include <assert.h>
@@ -5048,7 +5050,8 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					(gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNamePR) == true ||
 					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameWV) == true ||
 					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameCK) == true ||
-					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameVMX) == true))
+					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameVMX) == true ||
+					 gst_StartsWith(GST_OBJECT_NAME(msg->src), GstPluginNameMulti) == true))
 				{
  					MW_LOG_MIL("InterfacePlayerRDK setting encrypted player (%p) instance for %s decryptor", pInterfacePlayerRDK->mEncrypt, GST_OBJECT_NAME(msg->src));
  					GValue val = { 0, };
