@@ -64,14 +64,14 @@ void PlayerExternalsRdkInterface::Initialize()
     MW_PRE_LOGGER_LOG("Initializing started \n");
 
 #ifdef USE_FIREBOLT
-    MW_PRE_LOGGER_LOG("Using Firebolt \n");
+    MW_LOG_WARN("[FIREBOLT]Using Firebolt \n");
     //initialize only if needed
     if(m_initialized != InitState::NOT_INITIALIZED)
     {
-        MW_PRE_LOGGER_LOG("Firebolt already Inited \n");
+        MW_LOG_WARN("[FIREBOLT] Firebolt already Inited \n");
             return;
     }
-    MW_PRE_LOGGER_LOG("Initializing \n");
+    MW_LOG_WARN("[FIREBOLT] Initializing \n");
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
     m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
@@ -84,7 +84,7 @@ void PlayerExternalsRdkInterface::Initialize()
     /*
     Remove the section between the comment section remove-start and remove-end when deprecating IARM
     */
-
+	MW_LOG_WARN("[FIREBOLT] THIS BLOCK OF CODE SHOULDN'T BE EXECUTED!!!!!");
     //remove-start
     //initialize only if needed
     if(m_initialized != InitState::NOT_INITIALIZED)
@@ -102,10 +102,11 @@ void PlayerExternalsRdkInterface::Initialize()
     //remove-end
 #endif // USE_FIREBOLT
 
-    MW_PRE_LOGGER_LOG("Done getting interface \n");
-
+    MW_LOG_WARN("[FIREBOLT] Done getting interface \n");
+	MW_LOG_WARN("[FIREBOLT]Next SETHDMISTATUS call should route through firebolt");
     SetHDMIStatus();
 #ifdef USE_DS_EVENT_SUPPORTED
+	MW_LOG_WARN("[FIREBOLT] This block of code shouldnt be executed");
     RegisterDsClientEventHandler();
 #endif
 
@@ -208,6 +209,7 @@ void PlayerExternalsRdkInterface::SetResolution(int width, int height)
 #ifdef USE_FIREBOLT
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
+	MW_LOG_WARN("[FIREBOLT] Inside sethdmistatus");
     auto* devIface = dynamic_cast<DeviceFireboltInterface*>(m_pDeviceInterfaceBase.get());
     if (devIface)
         devIface->SetHDMIStatus();
@@ -217,6 +219,7 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 #else
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
+	MW_LOG_WARN("[FIREBOLT] This block of code shouldnt be executed!!!!!!!!!!!");
     std::unique_lock<std::mutex> lock(m_hdmiStatusMutex, std::try_to_lock);
     if (!lock.owns_lock()) {
         MW_LOG_WARN("SetHDMIStatus: Already in progress on another thread, skipping\n");
