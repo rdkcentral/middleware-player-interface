@@ -124,7 +124,6 @@ endif()
 if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR USE_FIREBOLT)
 		# contentprotection.h requires firebolt-aamp-sdk; only compile on Firebolt builds
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
-	endif()
 	if(CMAKE_USE_SECMANAGER)
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/ThunderAccessPlayer.cpp contentsecuritymanager/SecManagerThunder.cpp)
 	endif()
