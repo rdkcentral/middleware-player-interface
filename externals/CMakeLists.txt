@@ -115,10 +115,13 @@ set(SECMGR_SOURCES contentsecuritymanager/PlayerMemoryUtils.cpp
     contentsecuritymanager/ContentSecurityManagerSession.cpp
     ${MW_ROOT}/PlayerScheduler.cpp)
 
-option(USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
+option(CMAKE_USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
+if(CMAKE_USE_FIREBOLT)
+       message("USE_FIREBOLT Set")
+       set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_FIREBOLT=1")
+endif()
 
-if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER)
-	if(USE_FIREBOLT)
+if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR USE_FIREBOLT)
 		# contentprotection.h requires firebolt-aamp-sdk; only compile on Firebolt builds
 		set(SECMGR_SOURCES ${SECMGR_SOURCES} contentsecuritymanager/IFirebolt/ContentProtectionFirebolt.cpp)
 	endif()
