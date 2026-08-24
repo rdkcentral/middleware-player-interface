@@ -1859,11 +1859,28 @@ static void gst_enough_data(GstElement *source, void *_this)
 }
 void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * source, int type)
 {
+
 	InterfacePlayerRDK* _this = (InterfacePlayerRDK*)PlayerInstance;
 	InterfacePlayerPriv* privatePlayer = _this->GetPrivatePlayer();
 	GstCaps * caps = NULL;
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+	bool hasQueuedProtectionEvent = false;
+	pthread_mutex_lock(&_this->mProtectionLock);
+	for (int i = 0; i < GST_TRACK_COUNT; i++)
+	{
+		if (privatePlayer->gstPrivateContext->protectionEvent[i] != NULL)
+		{
+			hasQueuedProtectionEvent = true;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&_this->mProtectionLock);
+	bool isElementaryAudioVideoFormat =
+		(mediaType == eGST_MEDIATYPE_VIDEO && stream->format >= GST_FORMAT_VIDEO_ES_H264 && stream->format <= GST_FORMAT_VIDEO_ES_MPEG2) ||
+		(mediaType == eGST_MEDIATYPE_AUDIO && stream->format >= GST_FORMAT_AUDIO_ES_MP3 && stream->format <= GST_FORMAT_AUDIO_ES_AC4);
+	bool shouldApplyEncryptedCaps = hasQueuedProtectionEvent && isElementaryAudioVideoFormat;
+	MW_LOG_MIL("InitializeSourceForPlayer entry type[%d] format[%d] protectionEvent[%d] elementary[%d]", mediaType, stream->format, hasQueuedProtectionEvent, isElementaryAudioVideoFormat);
 	privatePlayer->SignalConnect(source, "need-data", G_CALLBACK(gst_need_data), _this);
 	privatePlayer->SignalConnect(source, "enough-data", G_CALLBACK(gst_enough_data), _this);	/* Sets up the call back function for enough data event */
 	privatePlayer->SignalConnect(source, "seek-data", G_CALLBACK(gstappsrc_seek), _this);		/* Sets up the call back function for seek data event */
@@ -1905,6 +1922,24 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 
 	if (caps != NULL)
 	{
+		if (shouldApplyEncryptedCaps)
+		{
+			MW_LOG_MIL("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
+			GstStructure *structure = gst_caps_get_structure(caps, 0);
+			if (structure)
+			{
+				gst_structure_set(structure,
+					"original-media-type", G_TYPE_STRING, gst_structure_get_name(structure),
+					NULL);
+				if (mDrmSystem != NULL)
+				{
+					gst_structure_set(structure,
+						GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, mDrmSystem,
+						NULL);
+				}
+				gst_structure_set_name(structure, "application/x-cenc");
+			}
+		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
 		g_free(capsStr);

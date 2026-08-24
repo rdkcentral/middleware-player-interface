@@ -161,6 +161,7 @@ class InterfacePlayerRDK
 {
 	private:
 		bool trickTeardown;
+		bool mIsEncrypted;
 		std::mutex mMutex;
 		std::map<std::string, int> configMap;
 
@@ -352,7 +353,7 @@ class InterfacePlayerRDK
         	 * @param enableLiveLatency Whether to enable live-latency mode in the
         	 *        RialtoSink streams-info context. Defaults to false.
         	 */
-        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url, bool enableLiveLatency = false);
+        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url, bool enableLiveLatency = false, bool isEncrypted = false);
         	/**
         	 * @brief Enables or disables pausing on playback start.
         	 * @param enable True to enable pausing, false to disable.
