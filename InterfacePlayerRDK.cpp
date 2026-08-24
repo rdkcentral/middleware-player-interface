@@ -317,7 +317,14 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		newFormat[eGST_MEDIATYPE_SUBTITLE]=GST_FORMAT_INVALID;
 	}
 
-	if(!(m_gstConfigParam->useWesterosSink))
+	bool useWesterosSink = m_gstConfigParam->useWesterosSink;
+	if (!useWesterosSink && !m_gstConfigParam->useRialtoSink && interfacePlayerPriv->GetSocInterface()->UseWesterosSink())
+	{
+		MW_LOG_WARN("Platform requires westerossink; correcting cached sink state");
+		useWesterosSink = true;
+	}
+
+	if(!useWesterosSink)
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
 		interfacePlayerPriv->GetSocInterface()->SetWesterosSinkState(false);
