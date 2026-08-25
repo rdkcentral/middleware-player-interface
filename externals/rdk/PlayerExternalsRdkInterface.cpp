@@ -25,7 +25,6 @@
 #include "PlayerExternalUtils.h"
 #include "DeviceInterfaceBase.h"
 #ifdef USE_FIREBOLT
-#errrrrrrrrrrrrrrrrrrrrr
 #include "DeviceFireboltInterface.h"
 #else
 #include "DeviceIARMInterface.h"
