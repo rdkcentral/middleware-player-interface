@@ -132,7 +132,7 @@ if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR (CMAKE_USE_FIREBOLT AND NOT CM
 endif()
 
 #IARM/RFC
-if(CMAKE_USE_FIREBOLT)
+if(CMAKE_USE_FIREBOLT AND NOT CMAKE_PLATFORM_UBUNTU)
     # RDK-E: Firebolt-only; no IARM or ds
     message("USE_FIREBOLT set - RDK-E build: routing device APIs through Firebolt")
     add_definitions(-DUSE_FIREBOLT)
