@@ -61,7 +61,7 @@ PlayerExternalsRdkInterface::PlayerExternalsRdkInterface()
 
 void PlayerExternalsRdkInterface::Initialize()
 {
-    MW_PRE_LOGGER_LOG("Initializing started \n");
+    MW_LOG_WARN("[FIREBOLT] Initializing started, From here will branch to firebolt/iarm \n");
 
 #ifdef USE_FIREBOLT
     MW_LOG_WARN("[FIREBOLT]Using Firebolt \n");
