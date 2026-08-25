@@ -26,9 +26,7 @@
 #include "PlayerExternalUtils.h"
 #include <utility>
 
-#ifdef IARM_MGR
 #include "PlayerExternalsRdkInterface.h"
-#endif
 
 /**< Static variable for singleton */
 std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP = NULL;
