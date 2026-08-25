@@ -24,6 +24,9 @@
 
 #ifndef PLAYER_IARM_RDK_INTERFACE_H
 #define PLAYER_IARM_RDK_INTERFACE_H
+#ifdef USE_FIREBOLT
+#undef USE_DS_EVENT_SUPPORTED
+#endif
 #ifndef USE_FIREBOLT
 #include "manager.hpp"
 #include "host.hpp"
