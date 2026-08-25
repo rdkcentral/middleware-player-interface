@@ -65,7 +65,7 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar")
 
-if(CMAKE_IARM_MGR)
+if(NOT_CMAKE_USE_FIREBOLT)
 	message("CMAKE_IARM_MGR set")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIARM_MGR")
 endif()
