@@ -26,7 +26,9 @@
 #include "PlayerExternalUtils.h"
 #include <utility>
 
+#if defined(IARM_MGR) || defined(USE_FIREBOLT)
 #include "PlayerExternalsRdkInterface.h"
+#endif
 
 /**< Static variable for singleton */
 std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP = NULL;
@@ -36,7 +38,7 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP 
  */
 PlayerExternalsInterface::PlayerExternalsInterface()
 {
-#ifdef IARM_MGR
+#if defined(IARM_MGR) || defined(USE_FIREBOLT)
     MW_PRE_LOGGER_LOG("Device API IARM/Firebolt\n");
     m_pIarmInterface = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 #else

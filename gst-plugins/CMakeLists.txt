@@ -65,10 +65,12 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar")
 
-if(NOT CMAKE_USE_FIREBOLT)
-	message("CMAKE_IARM_MGR set")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIARM_MGR")
-endif()
+# IARM is deprecated for the Firebolt routing flow in this bran#ch.
+# Keep these lines commented to avoid enabling IARM-specific compilation.
+#if(NOT CMAKE_USE_FIREBOLT)
+#	message("CMAKE_IARM_MGR set")
+#	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIARM_MGR")
+#endif()
 
 set(GST_MIDDLEWARE_SOURCES gstinit.cpp
 	${MW_ROOT}/playerLogManager/PlayerLogManager.cpp)
