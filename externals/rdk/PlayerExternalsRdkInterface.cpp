@@ -354,6 +354,11 @@ void PlayerExternalsRdkInterface::SetActiveInterface(bool isWifi)
 
 char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_t & iConfigLen)
 {
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("GetTR181Config: device interface not initialized");
+        return nullptr;
+    }
     return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
 }
 
