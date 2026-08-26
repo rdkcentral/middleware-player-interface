@@ -24,8 +24,11 @@
 #include "PlayerExternalsRdkInterface.h"
 #include "PlayerExternalUtils.h"
 #include "DeviceInterfaceBase.h"
-#include "DeviceIARMInterface.h"
+#ifdef USE_FIREBOLT
 #include "DeviceFireboltInterface.h"
+#else
+#include "DeviceIARMInterface.h"
+#endif
 #include "PlayerExternalsInterface.h"
 #include <utility>
 
@@ -58,9 +61,22 @@ PlayerExternalsRdkInterface::PlayerExternalsRdkInterface()
 
 void PlayerExternalsRdkInterface::Initialize()
 {
+    MW_LOG_WARN("[FIREBOLT] Initializing started, From here will branch to firebolt/iarm \n");
 
-    MW_PRE_LOGGER_LOG("Initializing started \n");
-
+#ifdef USE_FIREBOLT
+    MW_LOG_WARN("[FIREBOLT]Using Firebolt \n");
+    //initialize only if needed
+    if(m_initialized != InitState::NOT_INITIALIZED)
+    {
+        MW_LOG_WARN("[FIREBOLT] Firebolt already Inited \n");
+            return;
+    }
+    MW_LOG_WARN("[FIREBOLT] Initializing \n");
+    // Reset before assigning new interface
+    m_pDeviceInterfaceBase = nullptr;
+    m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
+    DeviceFireboltInterface::Initialize();
+#else
     /*
     IARM Deprecation Note:
     IARM is to be deprecated in favor of DeviceSettings and Firebolt Device API.
@@ -68,65 +84,29 @@ void PlayerExternalsRdkInterface::Initialize()
     /*
     Remove the section between the comment section remove-start and remove-end when deprecating IARM
     */
-    
+	MW_LOG_WARN("[FIREBOLT] THIS BLOCK OF CODE SHOULDN'T BE EXECUTED!!!!!");
     //remove-start
     //initialize only if needed
     if(m_initialized != InitState::NOT_INITIALIZED)
     {
-        if(m_initialized == InitState::FIREBOLT && (m_use_firebolt_sdk || IsContainerEnvironment()))
-        {
-            MW_PRE_LOGGER_LOG("Firebolt already Inited \n");
-            //firebolt already inited
-            return;
-        }
-        else if(m_initialized == InitState::IARM && (!m_use_firebolt_sdk) && (!IsContainerEnvironment()))
-        {
-            MW_PRE_LOGGER_LOG("IARM already Inited \n");
-            //IARM already inited
-            return;
-        }
-        else
-        {
-            MW_PRE_LOGGER_LOG("m_use_firebolt_sdk or IsContainerEnvironment() has changed, init again \n");
-            //m_use_firebolt_sdk has changed init again
-        }
+        MW_PRE_LOGGER_LOG("IARM already Inited \n");
+        return;
     }
-    else
-    {
-        MW_PRE_LOGGER_LOG("Initializing \n");
-    }
+    MW_PRE_LOGGER_LOG("Initializing \n");
+    MW_PRE_LOGGER_LOG("Using IARM \n");
+    // Reset before assigning new interface
+    m_pDeviceInterfaceBase = nullptr;
+    m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
+    DeviceIARMInterface::Initialize();
+    m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
     //remove-end
-    
-    if(m_pDeviceInterfaceBase)
-    {
-        m_pDeviceInterfaceBase = nullptr;
-    }
+#endif // USE_FIREBOLT
 
-    MW_PRE_LOGGER_LOG("m_use_firebolt_sdk : %d, IsContainerEnvironment() : %d \n", m_use_firebolt_sdk, IsContainerEnvironment());
-
-    //remove-start
-    if(m_use_firebolt_sdk || IsContainerEnvironment()) //if explicitly config'd to or if in container go for firebolt
-    {
-    //remove-end
-        MW_PRE_LOGGER_LOG("Using Firebolt \n");
-        m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
-        DeviceFireboltInterface::Initialize();
-    //remove-start
-        m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
-    }
-    else
-    {
-        MW_PRE_LOGGER_LOG("Using IARM \n");
-        m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
-        DeviceIARMInterface::Initialize();
-        m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
-    }
-    //remove-end
-
-    MW_PRE_LOGGER_LOG("Done getting interface \n");
-
+    MW_LOG_WARN("[FIREBOLT] Done getting interface \n");
+	MW_LOG_WARN("[FIREBOLT]Next SETHDMISTATUS call should route through firebolt");
     SetHDMIStatus();
 #ifdef USE_DS_EVENT_SUPPORTED
+	MW_LOG_WARN("[FIREBOLT] This block of code shouldnt be executed");
     RegisterDsClientEventHandler();
 #endif
 
@@ -226,8 +206,20 @@ void PlayerExternalsRdkInterface::SetResolution(int width, int height)
 /**
  * @brief Set the HDCP status using data from DeviceSettings
  */
+#ifdef USE_FIREBOLT
 void PlayerExternalsRdkInterface::SetHDMIStatus()
 {
+	MW_LOG_WARN("[FIREBOLT] Inside sethdmistatus");
+    auto* devIface = dynamic_cast<DeviceFireboltInterface*>(m_pDeviceInterfaceBase.get());
+    if (devIface)
+        devIface->SetHDMIStatus();
+    else
+        MW_LOG_ERR("SetHDMIStatus: DeviceFireboltInterface not available");
+}
+#else
+void PlayerExternalsRdkInterface::SetHDMIStatus()
+{
+	MW_LOG_WARN("[FIREBOLT] This block of code shouldnt be executed!!!!!!!!!!!");
     std::unique_lock<std::mutex> lock(m_hdmiStatusMutex, std::try_to_lock);
     if (!lock.owns_lock()) {
         MW_LOG_WARN("SetHDMIStatus: Already in progress on another thread, skipping\n");
@@ -337,6 +329,7 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
     return;
 }
+#endif // USE_FIREBOLT
 
 void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
 {
@@ -361,11 +354,17 @@ void PlayerExternalsRdkInterface::SetActiveInterface(bool isWifi)
 
 char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_t & iConfigLen)
 {
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("GetTR181Config: device interface not initialized");
+        return nullptr;
+    }
     return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
 }
 
 void PlayerExternalsRdkInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
 {
+#ifndef USE_FIREBOLT
     MW_PRE_LOGGER_LOG("old : %d, new : %d \n", m_use_firebolt_sdk, t_use_firebolt_sdk);
     if(m_use_firebolt_sdk != t_use_firebolt_sdk)
     {
@@ -373,9 +372,8 @@ void PlayerExternalsRdkInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
         //reinitialize
         m_initialized = InitState::NOT_INITIALIZED;
         Initialize();
-
     }
-    
+#endif // USE_FIREBOLT
 }
 
 void PlayerExternalsRdkInterface::SetPowerEvent(bool powerEvt)

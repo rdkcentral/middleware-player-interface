@@ -24,6 +24,10 @@
 
 #ifndef PLAYER_IARM_RDK_INTERFACE_H
 #define PLAYER_IARM_RDK_INTERFACE_H
+#ifdef USE_FIREBOLT
+#undef USE_DS_EVENT_SUPPORTED
+#endif
+#ifndef USE_FIREBOLT
 #include "manager.hpp"
 #include "host.hpp"
 #include "videoResolution.hpp"
@@ -33,6 +37,14 @@
 #include "dsDisplay.h"
 #include "audioOutputPort.hpp"
 #include "dsAudio.h"
+#else
+/* Minimal HDCP version enum - DS headers not available for RDK-E (USE_FIREBOLT) builds */
+typedef enum {
+    dsHDCP_VERSION_1X = 0,
+    dsHDCP_VERSION_2X,
+    dsHDCP_VERSION_MAX
+} dsHdcpProtocolVersion_t;
+#endif
 
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
@@ -161,6 +173,8 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 
         void setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol);
 
+        void SetHDCPEnabled(bool enabled) { m_isHDCPEnabled = enabled; }
+
         void SetUseFireBoltSDK(bool t_use_firebolt_sdk) override;
 
 	void SetPowerEvent(bool powerEvt) override;
@@ -193,6 +207,8 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         /* IDisplayDeviceEvents */
         void OnDisplayHDMIHotPlug(dsDisplayEvent_t displayEvent) override;
 #endif
+
+
 };
 
 
