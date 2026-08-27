@@ -180,7 +180,7 @@ endif()
 set_target_properties(playerfbinterface PROPERTIES PUBLIC_HEADER 
   "PlayerThunderInterface.h;PlayerThunderAccessBase.h;PlayerExternalsInterfaceBase.h;PlayerExternalsInterface.h;PlayerRfc.h;contentsecuritymanager/ContentSecurityManagerSession.h;contentsecuritymanager/PlayerSecInterface.h;contentsecuritymanager/ContentSecurityManager.h;contentsecuritymanager/PlayerMemoryUtils.h;Module.h;PlayerExternalUtils.h")
 
-if(CMAKE_IARM_MGR)
+if(CMAKE_IARM_MGR OR CMAKE_USE_FIREBOLT)
     # Append additional header(s) for IARM_MGR
     set_property(TARGET playerfbinterface APPEND PROPERTY PUBLIC_HEADER "rdk/PlayerExternalsRdkInterface.h")
 endif()
