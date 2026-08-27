@@ -289,7 +289,7 @@ void DeviceFireboltInterface::SetHDMIStatus()
     }
 
     // Query current resolution via Firebolt Device.videoResolution (xrn:firebolt:capability:device:info)
-    auto resolutionResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
+    auto resolutionResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().screenResolution();
     if (resolutionResult)
     {
         int width  = resolutionResult.value()[0];
@@ -382,14 +382,14 @@ static void ResolutionHandlerFirebolt(const std::string& t_res)
 
 	MW_LOG_WARN("[FIREBOLT] Resolution payload parse failed, falling back to Device.videoResolution");
 
-	auto currentResolution = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
+	auto currentResolution = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().screenResolution();
 
 	if(currentResolution)
 	{
 		width = currentResolution.value()[0];
 		height = currentResolution.value()[1];
 		pInstance->SetResolution(width, height);
-		MW_LOG_INFO("[FIREBOLT] Updating resolution from Device.videoResolution [%d][%d]", width, height);
+		MW_LOG_INFO("[FIREBOLT] Updating resolution from Device.screenResolution [%d][%d]", width, height);
 	}
 	else
 	{
