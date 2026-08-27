@@ -43,6 +43,7 @@ IFirebolt folder to be deleted, as IARM is no longer available as an alternative
 #include <mutex>
 #include <chrono>
 #include <condition_variable>
+#include <cctype>
 
 std::shared_ptr<DeviceFireboltInterface> s_pDeviceFireboltInterface = nullptr;
 
@@ -52,6 +53,59 @@ std::condition_variable mFireboltConnectionCV;
 static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_HDCPVersionMap);
 static void ResolutionHandlerFirebolt(const std::string& t_res);
 static void getActiveInterfaceEventHandlerFirebolt (const Firebolt::Device::NetworkInfoResult& t_NetworkInfoResult);
+
+static bool TryParseResolutionFromPayload(const std::string& payload, int& width, int& height)
+{
+	int first = -1;
+	int second = -1;
+	int current = -1;
+
+	for (char ch : payload)
+	{
+		if (std::isdigit(static_cast<unsigned char>(ch)))
+		{
+			if (current < 0)
+			{
+				current = 0;
+			}
+			current = (current * 10) + (ch - '0');
+		}
+		else if (current >= 0)
+		{
+			if (first < 0)
+			{
+				first = current;
+			}
+			else
+			{
+				second = current;
+				break;
+			}
+			current = -1;
+		}
+	}
+
+	if (second < 0 && current >= 0)
+	{
+		if (first < 0)
+		{
+			first = current;
+		}
+		else
+		{
+			second = current;
+		}
+	}
+
+	if (first > 0 && second > 0)
+	{
+		width = first;
+		height = second;
+		return true;
+	}
+
+	return false;
+}
 
 std::shared_ptr<DeviceFireboltInterface> DeviceFireboltInterface::GetInstance()
 {
@@ -317,16 +371,25 @@ static void ResolutionHandlerFirebolt(const std::string& t_res)
 	int height = 720;
 
 	MW_LOG_WARN("[FIREBOLT]Resolution: %s", t_res.c_str());
+	std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 
-	auto curr_network = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
-
-	if(curr_network)
+	if (TryParseResolutionFromPayload(t_res, width, height))
 	{
-		std::shared_ptr<PlayerExternalsRdkInterface> pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
-		width = curr_network.value()[0];
-		height = curr_network.value()[1];
 		pInstance->SetResolution(width, height);
-		MW_LOG_INFO("Updating resolution [%d][%d]", curr_network.value()[0], curr_network.value()[1]);
+		MW_LOG_INFO("[FIREBOLT] Updating resolution from event payload [%d][%d]", width, height);
+		return;
+	}
+
+	MW_LOG_WARN("[FIREBOLT] Resolution payload parse failed, falling back to Device.videoResolution");
+
+	auto currentResolution = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolution();
+
+	if(currentResolution)
+	{
+		width = currentResolution.value()[0];
+		height = currentResolution.value()[1];
+		pInstance->SetResolution(width, height);
+		MW_LOG_INFO("[FIREBOLT] Updating resolution from Device.videoResolution [%d][%d]", width, height);
 	}
 	else
 	{

@@ -1,0 +1,5 @@
+[ThunderLink.cpp:1780] resolutionChanged to 720p50
+2026-08-27T19:13:22.685Z com.sky.as.apps_Netflix[3213]:  thunderEventCallback: 244 Received Thunder event Display Resolution Changed
+2026-08-27T19:13:22.687Z com.sky.as.apps_Netflix[3213]:  00:03:25.327 [sky-nrdplugin:0xaeeff2e0] DPI_VIDEOOUTPUT(warn):  deviceConfigurationChange():InterfaceVideoOutput.cpp: 53 Received  resolution change calling Setsupported
+2026-08-27T19:13:22.924Z com.sky.as.apps_com.xumo.ipa[3213]:  [PLAYER_IF][641][WARN][f2adfeea][operator()][125][Event] Video resolution changed: [1920,1080]
+2026-08-27T19:13:22.926Z com.sky.as.apps_com.xumo.ipa[3213]:  [PLAYER_IF][642][WARN][f2adfeea][ResolutionHandlerFirebolt][319][FIREBOLT]Resolution: [1920,1080]
