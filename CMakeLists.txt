@@ -22,6 +22,64 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ---------------------------------------------------------------------------
+# Player Interface build-time version / Git metadata
+# Values are baked into version.h at compile time — no runtime git needed.
+# ---------------------------------------------------------------------------
+set(PI_VERSION "${CMAKE_PROJECT_VERSION}")
+
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} tag --points-at HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+else()
+    set(PI_GIT_REVISION "unknown")
+    set(PI_GIT_TAG      "unknown")
+    set(PI_GIT_BRANCH   "unknown")
+endif()
+
+if(NOT PI_GIT_REVISION)
+    set(PI_GIT_REVISION "unknown")
+endif()
+if(NOT PI_GIT_TAG)
+    set(PI_GIT_TAG "none")
+endif()
+if(NOT PI_GIT_BRANCH)
+    set(PI_GIT_BRANCH "unknown")
+endif()
+
+message(STATUS "[PlayerInterface] Version   : ${PI_VERSION}")
+message(STATUS "[PlayerInterface] Git Rev   : ${PI_GIT_REVISION}")
+message(STATUS "[PlayerInterface] Git Tag   : ${PI_GIT_TAG}")
+message(STATUS "[PlayerInterface] Git Branch: ${PI_GIT_BRANCH}")
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/version.h"
+    @ONLY
+)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+# ---------------------------------------------------------------------------
+
 # Set default install prefix
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
@@ -217,6 +275,10 @@ install(FILES closedcaptions/CCTrackInfo.h
 	playerisobmff/playerisobmffbox.h
 	DESTINATION include)
 
+# Install the generated version header
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/version.h"
+    DESTINATION include)
+
 set(SOURCES
 	InterfacePlayerRDK.cpp
 	SocUtils.cpp
@@ -309,7 +371,7 @@ endif()
 if(CMAKE_USE_OPENCDM_ADAPTER)
 	message("Using OPEN CDM ADAPTER")
 	# Include OpenCDM-related source files
-	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} 
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES}
 		drm/ocdm/opencdmsessionadapter.cpp
 		drm/ocdm/OcdmBasicSessionAdapter.cpp
 		drm/ocdm/OcdmGstSessionAdapter.cpp
