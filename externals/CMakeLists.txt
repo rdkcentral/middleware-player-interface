@@ -127,7 +127,7 @@ if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR CMAKE_USE_FIREBOLT)
 endif()
 
 #IARM/RFC
-if(CMAKE_IARM_MGR)
+else()
     message("PLAYER IARM_MGR set")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
