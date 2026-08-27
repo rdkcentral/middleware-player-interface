@@ -220,7 +220,8 @@ void DeviceFireboltInterface::SetHDMIStatus()
         {
             pInstance->SetHDCPEnabled(true);
             pInstance->setHdcpProtocol(dsHDCP_VERSION_1X);
-			MW_LOG_WARN("[FIREBOLT] SetHDMIStatus: HDCP 2.2 detected");        }
+			MW_LOG_WARN("[FIREBOLT] SetHDMIStatus: HDCP 1.4 detected");
+        }
         else
         {
             pInstance->SetHDCPEnabled(false);
