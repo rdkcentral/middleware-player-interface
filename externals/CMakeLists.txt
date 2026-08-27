@@ -138,7 +138,7 @@ if(USE_FIREBOLT)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
 	list(APPEND LIB_EXT_DEPENDS -ldshalcli)
-elseif(CMAKE_IARM_MGR)
+else()
     # RDK-V: IARM + DeviceSettings libraries
     message("PLAYER IARM_MGR set")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
