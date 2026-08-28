@@ -127,11 +127,11 @@ if(USE_FIREBOLT)
     # RDK-E: Firebolt-only; no IARM, DS, or dshalcli
     message("USE_FIREBOLT set - RDK-E build: routing device APIs through Firebolt")
     add_definitions(-DUSE_FIREBOLT)
-    set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_FIREBOLT")
+    set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_FIREBOLT=1")
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
-elseif(CMAKE_IARM_MGR)
+else()
     # RDK-V: IARM + DeviceSettings libraries
     message("PLAYER IARM_MGR set")
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
