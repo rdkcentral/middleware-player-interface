@@ -26,7 +26,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Player Interface build-time version / Git metadata
 # Values are baked into version.h at compile time — no runtime git needed.
 # ---------------------------------------------------------------------------
-set(PI_VERSION "${CMAKE_PROJECT_VERSION}")
+
+if(NOT DEFINED PI_VERSION OR PI_VERSION STREQUAL "")
+    set(PI_VERSION "${CMAKE_PROJECT_VERSION}")
+endif()
 
 find_package(Git QUIET)
 if(GIT_FOUND)
