@@ -76,6 +76,7 @@ void PlayerExternalsRdkInterface::Initialize()
     m_pDeviceInterfaceBase = nullptr;
     m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
     DeviceFireboltInterface::Initialize();
+    m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
 #else
     /*
     IARM Deprecation Note:

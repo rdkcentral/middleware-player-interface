@@ -65,6 +65,9 @@ class DeviceFireboltInterface : public DeviceInterfaceBase {
         void SetHDMIStatus();
 
     private:
+        std::mutex m_initMutex;
+        bool m_isInitialized{false};
+
         std::mutex m_hdmiStatusMutex;
 
         std::shared_ptr<FireboltInterface> m_pFireboltInterface;
