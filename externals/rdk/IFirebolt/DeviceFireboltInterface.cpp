@@ -246,7 +246,7 @@ char * DeviceFireboltInterface::GetTR181Config(const char * paramName, size_t & 
 }
 
 /**
- * @brief Queries Device.hdcp and Display.videoResolutions via Firebolt and updates player HDCP/resolution state.
+ * @brief Queries Device.hdcp and Device.videoResolution via Firebolt and updates player HDCP/resolution state.
  * Implements xrn:firebolt:capability:device:info for SetHDMIStatus on RDK-E (USE_FIREBOLT) builds.
  */
 void DeviceFireboltInterface::SetHDMIStatus()
@@ -288,8 +288,8 @@ void DeviceFireboltInterface::SetHDMIStatus()
         MW_LOG_ERR("[FIREBOLT] DeviceFirebolt SetHDMIStatus: Failed to query HDCP: %d", static_cast<int>(hdcpResult.error()));
     }
 
-	// Query current resolution via Firebolt Display.videoResolutions (xrn:firebolt:capability:display:info)
-	auto resolutionResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolutions();
+    // Query current resolution via Firebolt Device.videoResolution (xrn:firebolt:capability:device:info)
+    auto resolutionResult = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().screenResolution();
     if (resolutionResult)
     {
         int width  = resolutionResult.value()[0];
@@ -380,16 +380,16 @@ static void ResolutionHandlerFirebolt(const std::string& t_res)
 		return;
 	}
 
-	MW_LOG_WARN("[FIREBOLT] Resolution payload parse failed, falling back to Display.videoResolutions");
+	MW_LOG_WARN("[FIREBOLT] Resolution payload parse failed, falling back to Device.videoResolution");
 
-	auto currentResolution = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().videoResolutions();
+	auto currentResolution = Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().screenResolution();
 
 	if(currentResolution)
 	{
 		width = currentResolution.value()[0];
 		height = currentResolution.value()[1];
 		pInstance->SetResolution(width, height);
-		MW_LOG_INFO("[FIREBOLT] Updating resolution from Display.videoResolutions [%d][%d]", width, height);
+		MW_LOG_INFO("[FIREBOLT] Updating resolution from Device.screenResolution [%d][%d]", width, height);
 	}
 	else
 	{
