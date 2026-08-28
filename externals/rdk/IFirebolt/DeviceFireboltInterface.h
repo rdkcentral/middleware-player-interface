@@ -40,6 +40,7 @@ IFirebolt folder to be deleted, as IARM is no longer available as an alternative
 #include "DeviceInterfaceBase.h"
 #include "FireboltInterface.h"
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,7 @@ class DeviceFireboltInterface : public DeviceInterfaceBase {
         void SetHDMIStatus();
 
     private:
+        std::mutex m_hdmiStatusMutex;
 
         std::shared_ptr<FireboltInterface> m_pFireboltInterface;
 
