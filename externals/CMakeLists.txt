@@ -142,7 +142,7 @@ if(CMAKE_USE_FIREBOLT)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
-	#list(APPEND LIB_EXT_DEPENDS -ldshalcli)
+	list(APPEND LIB_EXT_DEPENDS -ldshalcli)
 else()
     # RDK-V: IARM + DeviceSettings libraries
     message("PLAYER IARM_MGR set")
