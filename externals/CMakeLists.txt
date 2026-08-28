@@ -133,8 +133,6 @@ if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR CMAKE_USE_FIREBOLT)
 	endif()
 endif()
 
-option(USE_FIREBOLT "Enable Firebolt SDK for RDK-E builds (disables IARM/DS linking)" OFF)
-
 #IARM/RFC
 if(CMAKE_USE_FIREBOLT)
     # RDK-E: Firebolt-only; no IARM or ds
