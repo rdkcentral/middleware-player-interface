@@ -303,10 +303,10 @@ std::vector<uint8_t> RawKeyToKeyId(const uint8_t* key, std::size_t keySize)
  */
 void PrintPlayerInterfaceVersion()
 {
-    printf("###################################################\n");
-    printf("[PlayerInterface] Version   : %s\n", PLAYERINTERFACE_VERSION);
-    printf("[PlayerInterface] Git Rev   : %s\n", PLAYERINTERFACE_GIT_REVISION);
-    printf("[PlayerInterface] Git Tag   : %s\n", PLAYERINTERFACE_GIT_TAG);
-    printf("[PlayerInterface] Git Branch: %s\n", PLAYERINTERFACE_GIT_BRANCH);
-    printf("###################################################\n");
+    MW_LOG_MIL("###################################################\n");
+ //   MW_LOG_MIL("[PlayerInterface] Version   : %s\n", PLAYERINTERFACE_VERSION);
+    MW_LOG_MIL("[PlayerInterface] Git Rev   : %s\n", PLAYERINTERFACE_GIT_REVISION);
+    MW_LOG_MIL("[PlayerInterface] Git Tag   : %s\n", PLAYERINTERFACE_GIT_TAG);
+   // MW_LOG_MIL("[PlayerInterface] Git Branch: %s\n", PLAYERINTERFACE_GIT_BRANCH);
+    MW_LOG_MIL("###################################################\n");
 }
