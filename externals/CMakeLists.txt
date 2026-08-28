@@ -137,8 +137,6 @@ else()
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IIarm/DeviceIARMInterface.cpp)
-    set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
-    set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
     list(APPEND LIB_EXT_DEPENDS -lIARMBus -lds -ldshalcli)
 endif()
 
