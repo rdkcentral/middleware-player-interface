@@ -51,7 +51,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/contentsecuritymanager/IFirebolt)
-if(NOT CMAKE_USE_FIREBOLT)
+if(NOT CMAKE_USE_FIREBOLT AND NOT CMAKE_PLATFORM_UBUNTU AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IIarm)
 endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rdk/IFirebolt)
@@ -138,9 +138,13 @@ if(CMAKE_USE_FIREBOLT)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IFirebolt/DeviceFireboltInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" IFirebolt/FireboltInterface.cpp)
+elseif(CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Native builds: use fake externals implementation (no IARM headers/libs).
+    message("Native build detected - skipping IARM/DeviceSettings backend in externals")
 else()
     # RDK-V: IARM + DeviceSettings libraries
     message("PLAYER IARM_MGR set")
+    set(CMAKE_IARM_MGR 1)
     set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DIARM_MGR=1")
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/PlayerExternalsRdkInterface.cpp)
     set(EXT_SOURCES "${EXT_SOURCES}" rdk/IIarm/DeviceIARMInterface.cpp)
@@ -175,8 +179,7 @@ endif()
 set_target_properties(playerfbinterface PROPERTIES PUBLIC_HEADER 
   "PlayerThunderInterface.h;PlayerThunderAccessBase.h;PlayerExternalsInterfaceBase.h;PlayerExternalsInterface.h;PlayerRfc.h;contentsecuritymanager/ContentSecurityManagerSession.h;contentsecuritymanager/PlayerSecInterface.h;contentsecuritymanager/ContentSecurityManager.h;contentsecuritymanager/PlayerMemoryUtils.h;Module.h;PlayerExternalUtils.h")
 
-if(CMAKE_IARM_MGR)
-    # Append additional header(s) for IARM_MGR
+if(CMAKE_IARM_MGR OR CMAKE_USE_FIREBOLT)
     set_property(TARGET playerfbinterface APPEND PROPERTY PUBLIC_HEADER "rdk/PlayerExternalsRdkInterface.h")
 endif()
 
