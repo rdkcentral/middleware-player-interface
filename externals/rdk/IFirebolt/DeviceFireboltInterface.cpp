@@ -80,9 +80,16 @@ void DeviceFireboltInterface::Initialize()
 	MW_PRE_LOGGER_LOG("Initialize \n");
 	if(s_pDeviceFireboltInterface)
 	{
+		std::lock_guard<std::mutex> lock(s_pDeviceFireboltInterface->m_initMutex);
+		if (s_pDeviceFireboltInterface->m_isInitialized)
+		{
+			MW_PRE_LOGGER_LOG("Initialize skipped: Firebolt events already registered \n");
+			return;
+		}
 		MW_PRE_LOGGER_LOG("Registering events \n");
 		s_pDeviceFireboltInterface->RegisterDsMgrEventHandler();
 		s_pDeviceFireboltInterface->RegisterNtwMgrEventHandler();
+		s_pDeviceFireboltInterface->m_isInitialized = true;
 	}
 	else
 	{
@@ -138,6 +145,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 
 void DeviceFireboltInterface::RemoveEventHandlers()
 {
+	m_isInitialized = false;
 	//removes everything ...
     Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();        
 }
