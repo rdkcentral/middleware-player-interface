@@ -127,7 +127,8 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 InterfacePlayerPriv::InterfacePlayerPriv(bool isRialto):mPlayerName()
 {
 	gstPrivateContext = new GstPlayerPriv();
-	socInterface = SocInterface::CreateSocInterface(isRialto);
+	InterfacePlayerRDK::InitializePlayerGstreamerPlugins();
+	(void)SocInterface::CreateSocInterface(isRialto);  // trigger singleton init/replacement, do not cache
 
 }
 
@@ -316,16 +317,24 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		newFormat[eGST_MEDIATYPE_SUBTITLE]=GST_FORMAT_INVALID;
 	}
 
-	if(!(m_gstConfigParam->useWesterosSink))
+	bool useWesterosSink = m_gstConfigParam->useWesterosSink;
+	if (!useWesterosSink && !m_gstConfigParam->useRialtoSink && interfacePlayerPriv->GetSocInterface()->UseWesterosSink())
+	{
+		MW_LOG_WARN("Platform requires westerossink; correcting cached sink state");
+		useWesterosSink = true;
+	}
+
+	if(!useWesterosSink)
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
-		interfacePlayerPriv->gstPrivateContext->firstTuneWithWesterosSinkOff = interfacePlayerPriv->socInterface->IsFirstTuneWithWesteros();
+		interfacePlayerPriv->GetSocInterface()->SetWesterosSinkState(false);
+		interfacePlayerPriv->gstPrivateContext->firstTuneWithWesterosSinkOff = interfacePlayerPriv->GetSocInterface()->IsFirstTuneWithWesteros();
 	}
 
 	else
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = true;
-		interfacePlayerPriv->socInterface->SetWesterosSinkState(true);
+		interfacePlayerPriv->GetSocInterface()->SetWesterosSinkState(true);
 	}
 
 	if(!(m_gstConfigParam->useRialtoSink))
@@ -400,7 +409,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 				MW_LOG_MIL("Skipping reconfiguration for stream %d - both format invalid/unknown",i);
 			}
 		}
-		if(interfacePlayerPriv->socInterface->ShouldTearDownForTrickplay())
+		if(interfacePlayerPriv->GetSocInterface()->ShouldTearDownForTrickplay())
 		{
 		if(interfacePlayerPriv->gstPrivateContext->rate > 1 || interfacePlayerPriv->gstPrivateContext->rate < 0)
 		{
@@ -1668,7 +1677,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	bool bAsyncModify = false;
 	if (!interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
 	{
-		bAsyncModify = interfacePlayerPriv->socInterface->DisableAsyncAudio(interfacePlayerPriv->gstPrivateContext->audio_sink, rate, isAppSeek);
+		bAsyncModify = interfacePlayerPriv->GetSocInterface()->DisableAsyncAudio(interfacePlayerPriv->gstPrivateContext->audio_sink, rate, isAppSeek);
 		// Send EOS to audio sink to prevent flush getting blocked waiting for preroll
 		if (interfacePlayerPriv->gstPrivateContext->audio_sink)
 		{
@@ -1730,7 +1739,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 
 	if ((stream->format == GST_FORMAT_ISO_BMFF || interfacePlayerPriv->gstPrivateContext->isMp4DemuxPlayback) && (eGST_MEDIAFORMAT_PROGRESSIVE != static_cast<GstMediaFormat>(m_gstConfigParam->media)))
 	{
-		if ((interfacePlayerPriv->socInterface->IsSimulatorSink() || interfacePlayerPriv->gstPrivateContext->usingRialtoSink) && rate != GST_NORMAL_PLAY_RATE)
+		if ((interfacePlayerPriv->GetSocInterface()->IsSimulatorSink() || interfacePlayerPriv->gstPrivateContext->usingRialtoSink) && rate != GST_NORMAL_PLAY_RATE)
 		{
 			const bool isTrickplay = (rate != GST_NORMAL_PLAY_RATE);
 			const bool isLiveMedia = (static_cast<GstMediaFormat>(m_gstConfigParam->media) == eGST_MEDIAFORMAT_OTA);
@@ -1772,7 +1781,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 
 	if(bAsyncModify)
 	{
-		interfacePlayerPriv->socInterface->SetSinkAsync(interfacePlayerPriv->gstPrivateContext->audio_sink, (gboolean)TRUE);
+		interfacePlayerPriv->GetSocInterface()->SetSinkAsync(interfacePlayerPriv->gstPrivateContext->audio_sink, (gboolean)TRUE);
 	}
 	interfacePlayerPriv->gstPrivateContext->eosSignalled = false;
 	interfacePlayerPriv->gstPrivateContext->numberOfVideoBuffersSent = 0;
@@ -1906,7 +1915,7 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		MW_LOG_INFO("Setting gst Video buffer max bytes to %d", MaxGstVideoBufBytes);
 		g_object_set(source, "max-bytes", (guint64)MaxGstVideoBufBytes, NULL);			/* Sets the maximum video buffer bytes as per configuration*/
 		if( privatePlayer->gstPrivateContext->usingRialtoSink &&
-		   !privatePlayer->socInterface->IsVideoMaster(privatePlayer->gstPrivateContext->video_sink) )
+		   !privatePlayer->GetSocInterface()->IsVideoMaster(privatePlayer->gstPrivateContext->video_sink) )
 		{
 			// This property is required so that the segment event sent via gst_app_src_push_sample
 			MW_LOG_INFO("Setting handle-segment-change to 1");
@@ -2446,7 +2455,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 		}
 		else if (interfacePlayerPriv->gstPrivateContext->using_westerossink && eGST_MEDIATYPE_VIDEO == streamId)
 		{
-			GstElement* vidsink = interfacePlayerPriv->socInterface->GetVideoSink(stream->sinkbin);
+			GstElement* vidsink = interfacePlayerPriv->GetSocInterface()->GetVideoSink(stream->sinkbin);
 			(void)vidsink;
 		}
 
@@ -2477,7 +2486,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 	MW_LOG_MIL("playbin flags1: 0x%x", flags);
 
 	bool isSub = (eGST_MEDIATYPE_SUBTITLE == streamId);
-	privatePlayer->socInterface->SetPlaybackFlags(flags, isSub);
+	privatePlayer->GetSocInterface()->SetPlaybackFlags(flags, isSub);
 	g_object_set(stream->sinkbin, "flags", flags, NULL); // needed?
 	
 	GstMediaFormat mediaFormat = (GstMediaFormat)m_gstConfigParam->media;
@@ -2517,11 +2526,11 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 		// enable multiqueue
 		int MaxGstVideoBufBytes = m_gstConfigParam->videoBufBytes;
 		MW_LOG_INFO("Setting gst Video buffer size bytes to %d", MaxGstVideoBufBytes);
-		privatePlayer->socInterface->SetVideoBufferSize(stream->sinkbin, MaxGstVideoBufBytes);
+		privatePlayer->GetSocInterface()->SetVideoBufferSize(stream->sinkbin, MaxGstVideoBufBytes);
 	}
 	if (eGST_MEDIATYPE_AUDIO == streamId)
 	{
-		privatePlayer->socInterface->ConfigurePluginPriority();
+		privatePlayer->GetSocInterface()->ConfigurePluginPriority();
 	}
 	gst_element_sync_state_with_parent(stream->sinkbin);
 	return 0;
@@ -2707,7 +2716,7 @@ GstPlaybackQualityStruct* InterfacePlayerRDK::GetVideoPlaybackQuality(void)
 	{
 		if(current == GST_STATE_PLAYING || current == GST_STATE_PAUSED)
 		{
-			if((interfacePlayerPriv->socInterface->IsPlaybackQualityFromSink()))
+			if((interfacePlayerPriv->GetSocInterface()->IsPlaybackQualityFromSink()))
 			{
 				element = interfacePlayerPriv->gstPrivateContext->video_sink;
 			}
@@ -3014,7 +3023,7 @@ unsigned long InterfacePlayerRDK::GetCCDecoderHandle()
 	{
 		if(interfacePlayerPriv->gstPrivateContext->video_dec != NULL)
 		{
-			interfacePlayerPriv->socInterface->GetCCDecoderHandle(&dec_handle, interfacePlayerPriv->gstPrivateContext->video_dec);
+			interfacePlayerPriv->GetSocInterface()->GetCCDecoderHandle(&dec_handle, interfacePlayerPriv->gstPrivateContext->video_dec);
 		}
 		MW_LOG_INFO("CC Decoder handle received %p for video_dec %p", dec_handle, interfacePlayerPriv->gstPrivateContext->video_dec);
 	}
@@ -3275,7 +3284,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 		{
 			notifyFirstBufferProcessed = true;
 		}
-		resetTrickUTC = interfacePlayerPriv->socInterface->ResetTrickUTC();
+		resetTrickUTC = interfacePlayerPriv->GetSocInterface()->ResetTrickUTC();
 	}
 	if (eGST_MEDIATYPE_VIDEO == mediaType)
 	{
@@ -3323,14 +3332,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
 			bool isVideoMaster = true;
-			if (socInterface)
-			{
-				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
-			}
-			else
-			{
-				MW_LOG_WARN("socInterface is null, assuming video master");
-			}
+			isVideoMaster = GetSocInterface()->IsVideoMaster(gstPrivateContext->video_sink);
 
 			// set applied_rate to trickplay rate if video sink doesn't use vmaster
 			// so that it can correctly handle there being no audio
@@ -3503,7 +3505,7 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 		}
 		else if (GST_STATE_CHANGE_SUCCESS != rc)
 		{
-			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
+			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d ", rc);
 		}
 		
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
@@ -4031,7 +4033,7 @@ bool GstPlayer_isVideoOrAudioDecoder(const char *name, InterfacePlayerRDK *pInte
 	// This support is available in plugins in RDK builds and hence checking only for such plugin instances here
 	// For platforms that doesnt support callback, we use GST_STATE_PLAYING state change of playbin to notify first frame to app
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	return privatePlayer->socInterface->IsAudioOrVideoDecoder(name);
+	return privatePlayer->GetSocInterface()->IsAudioOrVideoDecoder(name);
 }
 
 /**
@@ -4043,7 +4045,7 @@ bool GstPlayer_isVideoOrAudioDecoder(const char *name, InterfacePlayerRDK *pInte
 bool GstPlayer_isVideoDecoder(const char* name, InterfacePlayerRDK * pInterfacePlayerRDK)
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	return privatePlayer->socInterface->IsVideoDecoder(name);
+	return privatePlayer->GetSocInterface()->IsVideoDecoder(name);
 }
 
 /**
@@ -4101,7 +4103,7 @@ static GstPadProbeReturn GstPlayer_HandleInstantRateChangeSeekProbe(GstPad* pad,
 bool GstPlayer_isVideoSink(const char* name, InterfacePlayerRDK* pInterfacePlayerRDK)
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	return privatePlayer->socInterface->IsVideoSink(name);
+	return privatePlayer->GetSocInterface()->IsVideoSink(name);
 }
 
 /**
@@ -4171,7 +4173,7 @@ bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePr
 long long InterfacePlayerRDK::GetVideoPTS(void)
 {
 	long long currentPTS = 0;
-	currentPTS = interfacePlayerPriv->socInterface->GetVideoPts(interfacePlayerPriv->gstPrivateContext->video_sink, interfacePlayerPriv->gstPrivateContext->video_dec, interfacePlayerPriv->gstPrivateContext->using_westerossink);
+	currentPTS = interfacePlayerPriv->GetSocInterface()->GetVideoPts(interfacePlayerPriv->gstPrivateContext->video_sink, interfacePlayerPriv->gstPrivateContext->video_dec, interfacePlayerPriv->gstPrivateContext->using_westerossink);
 	if (currentPTS == -1)
 	{
 		/* The 'video-pts' property is not supported on this platform.
@@ -4269,7 +4271,7 @@ static gboolean VideoDecoderPtsCheckerForEOS(gpointer user_data)
 bool GstPlayer_isAudioSinkOrAudioDecoder(const char* name, InterfacePlayerRDK * pInterfacePlayerRDK)
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	return privatePlayer->socInterface->IsAudioSinkOrAudioDecoder(name);
+	return privatePlayer->GetSocInterface()->IsAudioSinkOrAudioDecoder(name);
 }
 
 
@@ -4295,7 +4297,7 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		GstMediaType type = eGST_MEDIATYPE_DEFAULT;  //CID:89173 - Resolve Uninit
 		bool isVideo = false;
 
-		if (privatePlayer->socInterface->IsVideoSinkHandleErrors())
+		if (privatePlayer->GetSocInterface()->IsVideoSinkHandleErrors())
 		{
 			isVideo = GstPlayer_isVideoSink(GST_ELEMENT_NAME(object), pInterfacePlayerRDK);
 		}
@@ -4368,7 +4370,7 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 	MW_LOG_ERR("Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
-	if (privatePlayer->socInterface->IsVideoSinkHandleErrors())
+	if (privatePlayer->GetSocInterface()->IsVideoSinkHandleErrors())
 	{
 		isVideo = GstPlayer_isVideoSink(GST_ELEMENT_NAME(object), pInterfacePlayerRDK);
 	}
@@ -4514,11 +4516,11 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			{
 				privatePlayer->gstPrivateContext->pauseOnStartPlayback = false;
 
-				busEvent.setPlaybackRate = privatePlayer->socInterface->SetPlatformPlaybackRate();
+				busEvent.setPlaybackRate = privatePlayer->GetSocInterface()->SetPlatformPlaybackRate();
 				if(pInterfacePlayerRDK->m_gstConfigParam->audioOnlyMode && !privatePlayer->gstPrivateContext->firstAudioFrameReceived && privatePlayer->gstPrivateContext->NumberOfTracks==1)
 				{
 					gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO];
-					bool ret = privatePlayer->socInterface->AudioOnlyMode(stream->sinkbin);
+					bool ret = privatePlayer->GetSocInterface()->AudioOnlyMode(stream->sinkbin);
 					if(ret)
 					{
 						MW_LOG_MIL("Audio only playback detected, hence notify first frame");
@@ -4539,14 +4541,14 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 					privatePlayer->gstPrivateContext->firstAudioFrameReceived = true;
 					pInterfacePlayerRDK->NotifyFirstFrame(eGST_MEDIATYPE_VIDEO);
 				}
-				else if(privatePlayer->gstPrivateContext->firstTuneWithWesterosSinkOff && privatePlayer->socInterface->NotifyVideoFirstFrame())
+				else if(privatePlayer->gstPrivateContext->firstTuneWithWesterosSinkOff && privatePlayer->GetSocInterface()->NotifyVideoFirstFrame())
 				{
 					privatePlayer->gstPrivateContext->firstTuneWithWesterosSinkOff = false;
 					privatePlayer->gstPrivateContext->firstVideoFrameReceived = true;
 					privatePlayer->gstPrivateContext->firstAudioFrameReceived = true;
 					pInterfacePlayerRDK->NotifyFirstFrame(eGST_MEDIATYPE_VIDEO);
 				}
-				else if(privatePlayer->socInterface->IsSimulatorFirstFrame())
+				else if(privatePlayer->GetSocInterface()->IsSimulatorFirstFrame())
 				{
 					if(!privatePlayer->gstPrivateContext->firstFrameReceived)
 					{
@@ -4594,7 +4596,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				{
 					if(gst_StartsWith(GST_OBJECT_NAME(msg->src), "source"))
 					{
-						GstPad* sourceEleSrcPad = privatePlayer->socInterface->GetSourcePad(GST_ELEMENT(msg->src));
+						GstPad* sourceEleSrcPad = privatePlayer->GetSocInterface()->GetSourcePad(GST_ELEMENT(msg->src));
 						if(sourceEleSrcPad)
 						{
 							gst_pad_add_probe (
@@ -4609,7 +4611,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				}
 
 			}
-			if((NULL != msg->src) && ((privatePlayer->socInterface->IsVideoSinkHandleErrors() && GstPlayer_isVideoSink(GST_OBJECT_NAME(msg->src), pInterfacePlayerRDK)) || (!privatePlayer->socInterface->IsVideoSinkHandleErrors() && GstPlayer_isVideoOrAudioDecoder(GST_OBJECT_NAME(msg->src),pInterfacePlayerRDK))) && (!privatePlayer->gstPrivateContext->usingRialtoSink))
+			if((NULL != msg->src) && ((privatePlayer->GetSocInterface()->IsVideoSinkHandleErrors() && GstPlayer_isVideoSink(GST_OBJECT_NAME(msg->src), pInterfacePlayerRDK)) || (!privatePlayer->GetSocInterface()->IsVideoSinkHandleErrors() && GstPlayer_isVideoOrAudioDecoder(GST_OBJECT_NAME(msg->src),pInterfacePlayerRDK))) && (!privatePlayer->gstPrivateContext->usingRialtoSink))
 			{
 				if (old_state == GST_STATE_NULL && new_state == GST_STATE_READY)
 				{
@@ -4617,7 +4619,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 						G_CALLBACK(GstPlayer_OnGstBufferUnderflowCb), pInterfacePlayerRDK);
 						privatePlayer->SignalConnect(msg->src, "pts-error-callback",
 													   G_CALLBACK(GstPlayer_OnGstPtsErrorCb), pInterfacePlayerRDK);
-					if (!privatePlayer->socInterface->IsVideoSinkHandleErrors() && GstPlayer_isVideoDecoder(GST_OBJECT_NAME(msg->src), pInterfacePlayerRDK))
+					if (!privatePlayer->GetSocInterface()->IsVideoSinkHandleErrors() && GstPlayer_isVideoDecoder(GST_OBJECT_NAME(msg->src), pInterfacePlayerRDK))
 					{
 						privatePlayer->SignalConnect(msg->src, "decode-error-callback",
 														   G_CALLBACK(GstPlayer_OnGstDecodeErrorCb), pInterfacePlayerRDK);
@@ -4737,7 +4739,7 @@ bool InterfacePlayerRDK::SetPlayBackRate(double rate)
 			sources.push_back(interfacePlayerPriv->gstPrivateContext->stream[iTrack].source);
 		}
 	}
-	ret = interfacePlayerPriv->socInterface->SetPlaybackRate(sources, interfacePlayerPriv->gstPrivateContext->pipeline, rate, interfacePlayerPriv->gstPrivateContext->video_dec,interfacePlayerPriv->gstPrivateContext->audio_dec);
+	ret = interfacePlayerPriv->GetSocInterface()->SetPlaybackRate(sources, interfacePlayerPriv->gstPrivateContext->pipeline, rate, interfacePlayerPriv->gstPrivateContext->video_dec,interfacePlayerPriv->gstPrivateContext->audio_dec);
 	return ret;
 }
 
@@ -4768,7 +4770,7 @@ void InterfacePlayerRDK::SetVolumeOrMuteUnMute(void)
 
 	else
 	{
-		interfacePlayerPriv->socInterface->SetAudioProperty(volumePropertyName, mutePropertyName, isSinkBinVolume);
+		interfacePlayerPriv->GetSocInterface()->SetAudioProperty(volumePropertyName, mutePropertyName, isSinkBinVolume);
 		if(isSinkBinVolume)
 		{
 			//some platforms sets volume/mute property on sinkbin rather then audio sink
@@ -4861,7 +4863,7 @@ static gboolean buffering_timeout (gpointer data)
 				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
 				gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
 				SetStateWithWarnings (privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state);
-				isRateCorrectionDefaultOnPlaying =  privatePlayer->socInterface->SetRateCorrection();
+				isRateCorrectionDefaultOnPlaying =  privatePlayer->GetSocInterface()->SetRateCorrection();
 				
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				isPlayerReady = true;
@@ -5034,7 +5036,7 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					 note: alternate "window-set" works as well
 					 */
 					gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_sink, msg->src);
-					privatePlayer->socInterface->DiscoverVideoSinkProperties(
+					privatePlayer->GetSocInterface()->DiscoverVideoSinkProperties(
 						privatePlayer->gstPrivateContext->video_sink);
 
 					if (privatePlayer->gstPrivateContext->usingRialtoSink)
@@ -5076,7 +5078,7 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					}
 					else
 					{
-						bool status = privatePlayer->socInterface->ConfigureAudioSink(&privatePlayer->gstPrivateContext->audio_sink, msg->src, pInterfacePlayerRDK->m_gstConfigParam->audioDecoderStreamSync);
+						bool status = privatePlayer->GetSocInterface()->ConfigureAudioSink(&privatePlayer->gstPrivateContext->audio_sink, msg->src, pInterfacePlayerRDK->m_gstConfigParam->audioDecoderStreamSync);
 						if(status)
 						{
 							pInterfacePlayerRDK->SetVolumeOrMuteUnMute();
@@ -5093,18 +5095,18 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					{ // video
 						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_dec, msg->src);
 						type_check_instance("bus_sync_handle: video_dec ", privatePlayer->gstPrivateContext->video_dec);
-						privatePlayer->socInterface->DiscoverVideoDecoderProperties(
+						privatePlayer->GetSocInterface()->DiscoverVideoDecoderProperties(
 							privatePlayer->gstPrivateContext->video_dec);
 						privatePlayer->SignalConnect(privatePlayer->gstPrivateContext->video_dec, "first-video-frame-callback",
 									G_CALLBACK(GstPlayer_OnFirstVideoFrameCallback), pInterfacePlayerRDK);
-						privatePlayer->socInterface->SetDecodeError(msg->src);
+						privatePlayer->GetSocInterface()->SetDecodeError(msg->src);
 					}
 					else
 					{ // audio
 						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->audio_dec, msg->src);
 						type_check_instance("bus_sync_handle: audio_dec ", privatePlayer->gstPrivateContext->audio_dec);
 
-						if(privatePlayer->socInterface->HasFirstAudioFrameCallback())
+						if(privatePlayer->GetSocInterface()->HasFirstAudioFrameCallback())
 						{
 							privatePlayer->SignalConnect(msg->src, "first-audio-frame-callback",
 															   G_CALLBACK(GstPlayer_OnAudioFirstFrameAudDecoder), pInterfacePlayerRDK);
@@ -5112,7 +5114,7 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 						int trackId = privatePlayer->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].trackId;
 						if (trackId >= 0) /** AC4 track selected **/
 						{
-							privatePlayer->socInterface->SetAC4Tracks(GST_ELEMENT(msg->src), trackId);
+							privatePlayer->GetSocInterface()->SetAC4Tracks(GST_ELEMENT(msg->src), trackId);
 						}
 
 					}
@@ -5125,9 +5127,9 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 						privatePlayer->SignalConnect(msg->src, "timecode-callback",
 														   G_CALLBACK(GstPlayer_redButtonCallback), pInterfacePlayerRDK);
 					}
-					privatePlayer->socInterface->SetFreerunThreshold(msg->src);
+					privatePlayer->GetSocInterface()->SetFreerunThreshold(msg->src);
 				}
-				if(!privatePlayer->socInterface->HasFirstAudioFrameCallback())
+				if(!privatePlayer->GetSocInterface()->HasFirstAudioFrameCallback())
 				{
 					if ((NULL != msg->src) && gst_StartsWith(GST_OBJECT_NAME(msg->src), "rtkaudiosink"))
 					{
@@ -5543,7 +5545,7 @@ double InterfacePlayerRDK::FlushTrack(int mediaType, double pos, double audioDel
 
 	if(eGST_MEDIATYPE_AUDIO == type)
 	{
-		interfacePlayerPriv->socInterface->SetSeamlessSwitch(this->interfacePlayerPriv->gstPrivateContext->audio_sink, TRUE);
+		interfacePlayerPriv->GetSocInterface()->SetSeamlessSwitch(this->interfacePlayerPriv->gstPrivateContext->audio_sink, TRUE);
 		interfacePlayerPriv->gstPrivateContext->filterAudioDemuxBuffers = true;
 		pos = pos + audioDelta;
 
