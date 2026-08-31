@@ -140,7 +140,6 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 	{
 		MW_PRE_LOGGER_LOG("Failed to get video resolution %d\n", static_cast<int>(result.error()) );
     }
-
 }
 
 void DeviceFireboltInterface::RemoveEventHandlers()
