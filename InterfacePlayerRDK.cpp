@@ -1435,6 +1435,34 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
+	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
+	// (see InterfacePlayerRDK.h) and is used directly below to index
+	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
+	// with no range check (0 <= type < GST_TRACK_COUNT). Any caller passing an
+	// out-of-range value (bad enum cast, corrupted state, future track-type addition)
+	// causes an out-of-bounds read/write on `stream` and on `interfacePlayerPriv->
+	// gstPrivateContext->stream[type].bufferUnderrun`/`.eosReached` a few lines below.
+	// Condition that actually triggers the bug: (type < 0 || type >= GST_TRACK_COUNT).
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	if (type < 0 || type >= GST_TRACK_COUNT)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: invalid type %d, out of range [0,%d)", type, GST_TRACK_COUNT);
+
+		std::map<std::string, int> intMetrics;
+                std::map<std::string, std::string> stringMetrics;
+                std::map<std::string, float> floatMetrics;
+                
+                intMetrics["type"] = type;
+                intMetrics["gstTrackCount"] = GST_TRACK_COUNT;
+                stringMetrics["api"] = "TearDownStream";
+                stringMetrics["error"] = "out_of_bounds_array_access";
+                
+                PlayerTelemetry2 telemetry;
+                telemetry.send("MW_INVALID_TRACK_TYPE", intMetrics, stringMetrics, floatMetrics);
+
+		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
+	}
+#endif
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
@@ -3492,9 +3520,40 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	 * Don't worry if you see only one protection event queued here.
 	 */
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
+
+
+	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `mediaType` is a raw int on this public API
+ 	// (see InterfacePlayerRDK.h) and `type` is used below to index
+ 	// gstPrivateContext->protectionEvent[GST_TRACK_COUNT] (fixed size 3,
+ 	// InterfacePlayerPriv.h) with no range check. Condition that triggers the bug:
+ 	// (mediaType < 0 || mediaType >= GST_TRACK_COUNT).
+ 	if (mediaType < 0 || mediaType >= GST_TRACK_COUNT)
+ 	{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		// ISSUE [TELEMETRY FORMAT]: emits invalid-media-type telemetry when the
+		// public QueueProtectionEvent() API is called with an out-of-range
+		// `mediaType`. Integer metrics capture the supplied mediaType and valid
+		// upper bound GST_TRACK_COUNT; string metrics identify the API and error
+		// class; float metrics are intentionally empty.
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> stringMetrics;
+		std::map<std::string, float> floatMetrics;
+		intMetrics["mediaType"] = mediaType;
+		intMetrics["gstTrackCount"] = GST_TRACK_COUNT;
+		stringMetrics["api"] = "QueueProtectionEvent";
+		stringMetrics["error"] = "out_of_bounds_array_access";
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_INVALID_MEDIA_TYPE", intMetrics, stringMetrics, floatMetrics);
+		// ISSUE MARKER: telemetry sent here for invalid QueueProtectionEvent() mediaType
+#endif
+		MW_LOG_ERR("InterfacePlayerRDK::QueueProtectionEvent: invalid mediaType %d, out of range [0,%d)", mediaType, GST_TRACK_COUNT);
+ 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
+ 	}
+
 	pthread_mutex_lock(&mProtectionLock);
 	if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
 	{
+
 		MW_LOG_MIL("Previously cached protection event is present for type(%d), clearing!", type);
 		gst_event_unref(interfacePlayerPriv->gstPrivateContext->protectionEvent[type]);
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = NULL;
@@ -3510,6 +3569,33 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 
 		pssi = gst_buffer_new_wrapped(PLAYER_G_MEMDUP (initData, initDataSize), (gsize)initDataSize);
 		pthread_mutex_lock(&mProtectionLock);
+		if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
+		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			// ISSUE [TELEMETRY FORMAT]: emits race/leak telemetry when the
+			// protectionEvent[type] slot is observed as repopulated before the
+			// new assignment, indicating a concurrent QueueProtectionEvent()
+			// interleaving on the same media type. Integer metrics capture the
+			// media type and init-data size; string metrics identify the API and
+			// error class; float metrics are intentionally empty.
+			std::map<std::string, int> intMetrics;
+			std::map<std::string, std::string> stringMetrics;
+			std::map<std::string, float> floatMetrics;
+
+			intMetrics["mediaType"] = static_cast<int>(type);
+			intMetrics["initDataSize"] = static_cast<int>(initDataSize);
+			stringMetrics["api"] = "QueueProtectionEvent";
+			stringMetrics["error"] = "race_condition_leak";
+
+			PlayerTelemetry2 telemetry;
+			telemetry.send("MW_QUEUE_PROTECTION_EVENT_RACE", intMetrics, stringMetrics, floatMetrics);
+			// ISSUE MARKER: telemetry sent here for concurrent protectionEvent[type] overwrite risk
+#endif
+			// ISSUE MARKER: race condition window from above manifests here -- a
+			// concurrent caller's event for the same `type` would be leaked by this
+			// unconditional overwrite (no gst_event_unref of the prior value).
+			MW_LOG_WARN("InterfacePlayerRDK::QueueProtectionEvent: protectionEvent[%d] was repopulated by a concurrent call; overwriting will leak it", type);
+		}
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = gst_event_new_protection (protSystemId, pssi, formatType.c_str());
 		pthread_mutex_unlock(&mProtectionLock);
 
@@ -3570,6 +3656,23 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 
 	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
 			   gst_current, gst_pending);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	if ((gst_current == GST_STATE_PAUSED) && (gst_pending == GST_STATE_PLAYING))
+	{
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> stringMetrics;
+		std::map<std::string, float> floatMetrics;
+
+		intMetrics["currentState"] = static_cast<int>(gst_current);
+		intMetrics["pendingState"] = static_cast<int>(gst_pending);
+		intMetrics["targetState"] = static_cast<int>(stateToValidate);
+		stringMetrics["api"] = "validateStateWithMsTimeout";
+		stringMetrics["error"] = "paused_to_playing_timeout";
+
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_VALIDATE_STATE_TIMEOUT", intMetrics, stringMetrics, floatMetrics);
+	}
+#endif
 	return gst_current;
 }
 
