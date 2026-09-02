@@ -41,6 +41,8 @@
 #include "TelemetryMarkers.h"
 #include "PlayerTelemetry.h"
 
+int TuneCount = 0;
+int TuneCount1 = 0;
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
@@ -1435,6 +1437,13 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
+	TuneCount1++;	
+
+	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount1++);
+	if (TuneCount1 == 10)
+	{
+	   type =4;
+	}
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
 	// (see InterfacePlayerRDK.h) and is used directly below to index
 	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
@@ -3521,6 +3530,14 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	 */
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 
+ 
+	TuneCount++;	
+
+	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount++);
+	if (TuneCount == 15)
+	{
+		mediaType = 255;
+	}
 
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `mediaType` is a raw int on this public API
  	// (see InterfacePlayerRDK.h) and `type` is used below to index
