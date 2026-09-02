@@ -46,6 +46,7 @@ int TuneCount1 = 0;
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
+#define FIRST_FRAME_TIMEOUT_MS 10000   /**< timeout to wait for first frame after tune start */
 #define NORMAL_PLAY_RATE 1
 #define DEFAULT_TIMEOUT_FOR_SOURCE_SETUP (1000)          /**< Default timeout value in milliseconds */
 #define DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS 12         /**< Currently MAX FRAG DURATION + 2*/
@@ -170,6 +171,7 @@ GstPlayerPriv::GstPlayerPriv() : monitorAVstate(), pipeline(NULL), bus(NULL),
 total_bytes(0), n_audio(0), current_audio(0),
 periodicProgressCallbackIdleTaskId(GST_TASK_ID_INVALID),
 bufferingTimeoutTimerId(GST_TASK_ID_INVALID), video_dec(NULL), audio_dec(NULL), TaskControlMutex(), firstProgressCallbackIdleTask("FirstProgressCallback"),
+firstFrameTimeoutTimerId(GST_TASK_ID_INVALID),
 video_sink(NULL), audio_sink(NULL), subtitle_sink(NULL), task_pool(NULL),
 rate(GST_NORMAL_PLAY_RATE), zoom(GST_VIDEO_ZOOM_NONE), videoMuted(false), audioMuted(false), volumeMuteMutex(), subtitleMuted(true), setSubtitlePending(false),
 audioVolume(1.0), eosCallbackIdleTaskId(GST_TASK_ID_INVALID), eosCallbackIdleTaskPending(false),
@@ -301,6 +303,8 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
  */
 static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMetadata &drmMetadata);
 
+static gboolean FirstFrameTimeoutCallback(gpointer user_data);
+
 /**
  * @brief Configures the GStreamer pipeline.
  * @param format Video format.
@@ -323,6 +327,23 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
 	mFirstFrameRequired = FirstFrameFlag;
+
+	/* First-frame watchdog: tune not completed if callback never arrives */
+	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	{
+		/* reset for new tune attempt */
+		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
+		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
+		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false;
+
+		/* one-shot timer; only add if not already running */
+		if (interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId == GST_TASK_ID_INVALID)
+		{
+			TimerAdd(FirstFrameTimeoutCallback, FIRST_FRAME_TIMEOUT_MS,
+					 interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId,
+					 this, "firstFrameTimeoutTimerId");
+		}
+	}
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
 	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
 	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
@@ -1440,7 +1461,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	TuneCount1++;	
 
 	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount1++);
-	if (TuneCount1 == 10)
+	if (TuneCount1 == 100)
 	{
 	   type =4;
 	}
@@ -4073,6 +4094,13 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 {
 	bool notifyFirstBuffer = false;
 	bool audioOnly = false;
+
+	/* first frame arrived; cancel watchdog */
+	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	{
+		TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+	}
+
 	bool requireFirstVideoFrameDisplay = false;
 	if (!interfacePlayerPriv->gstPrivateContext->firstFrameReceived && (interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived
 												   || (1 == interfacePlayerPriv->gstPrivateContext->NumberOfTracks && (interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived || interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived))))
@@ -5067,6 +5095,63 @@ void type_check_instance(const char * str, GstElement * elem)
 	MW_LOG_MIL("%s %p type_check %d", str, elem, G_TYPE_CHECK_INSTANCE (elem));
 }
 
+/**
+ * @brief First-frame watchdog timeout callback
+ *        Raises tune-not-completed / first-frame-not-rendered failure.
+ */
+static gboolean FirstFrameTimeoutCallback(gpointer user_data)
+{
+	InterfacePlayerRDK *p = static_cast<InterfacePlayerRDK*>(user_data);
+	if (!p)
+	{
+		return G_SOURCE_REMOVE;
+	}
+
+	InterfacePlayerPriv* privatePlayer = p->GetPrivatePlayer();
+	if (!privatePlayer || !privatePlayer->gstPrivateContext)
+	{
+		return G_SOURCE_REMOVE;
+	}
+
+	/* one-shot timer bookkeeping */
+	privatePlayer->gstPrivateContext->firstFrameTimeoutTimerId = GST_TASK_ID_INVALID;
+
+	/* avoid false positive if intentionally paused before first frame */
+	if (privatePlayer->gstPrivateContext->pauseOnStartPlayback)
+	{
+		MW_LOG_WARN("FirstFrameTimeoutCallback ignored: pauseOnStartPlayback enabled");
+		return G_SOURCE_REMOVE;
+	}
+
+	/* audio-only tune can complete with first audio frame */
+	const bool audioOnlySatisfied =
+		(p->m_gstConfigParam->audioOnlyMode &&
+		 privatePlayer->gstPrivateContext->firstAudioFrameReceived);
+
+	if (!privatePlayer->gstPrivateContext->firstFrameReceived && !audioOnlySatisfied)
+	{
+		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", FIRST_FRAME_TIMEOUT_MS);
+
+		TelemetryPayload payload;
+		payload.add("reason", "first_frame_not_rendered");
+		payload.add("timeoutMs", FIRST_FRAME_TIMEOUT_MS);
+		PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PIPELINE_STATE_CHANGE_FAILURE, payload);
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		std::map<std::string, int> i;
+		std::map<std::string, std::string> s;
+		std::map<std::string, float> f;
+		i["timeoutMs"] = FIRST_FRAME_TIMEOUT_MS;
+		i["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
+		s["api"] = "FirstFrameTimeoutCallback";
+		s["error"] = "first_frame_not_rendered";
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_VIDEO_START_FAILURE", i, s, f);
+#endif
+	}
+
+	return G_SOURCE_REMOVE;
+}
 static gboolean buffering_timeout (gpointer data)
 {
 	InterfacePlayerRDK * pInterfacePlayerRDK = (InterfacePlayerRDK *) data;
