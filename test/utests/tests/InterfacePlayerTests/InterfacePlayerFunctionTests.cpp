@@ -29,37 +29,6 @@
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
-#include "SocInterface.h"
-
-/**
- * Minimal SocInterface mock for GetVideoPTS tests.
- * Only GetVideoPts is mocked; all other methods delegate to the base fake.
- */
-class MockSocInterfaceForPts : public SocInterface
-{
-public:
-	MOCK_METHOD(long long, GetVideoPts,
-		(GstElement *video_sink, GstElement *video_dec, bool isWesteros),
-		(override));
-	/* Pure virtual stubs required to make this class instantiable. */
-	MOCK_METHOD(bool, SetPlaybackRate,
-		(const std::vector<GstElement*>& sources, GstElement *pipeline,
-		 double rate, GstElement *video_dec, GstElement *audio_dec), (override));
-	MOCK_METHOD(bool, SetRateCorrection, (), (override));
-	MOCK_METHOD(bool, IsVideoSink, (const char* name), (override));
-	MOCK_METHOD(bool, IsAudioSinkOrAudioDecoder, (const char* name), (override));
-	MOCK_METHOD(bool, IsVideoDecoder, (const char* name), (override));
-	MOCK_METHOD(bool, ConfigureAudioSink,
-		(GstElement **audio_sink, GstObject *src, bool decStreamSync), (override));
-	MOCK_METHOD(bool, IsAudioOrVideoDecoder, (const char* name), (override));
-	MOCK_METHOD(void, GetCCDecoderHandle,
-		(gpointer *dec_handle, GstElement *video_dec), (override));
-	MOCK_METHOD(bool, IsVideoMaster, (GstElement *videoSink), (override));
-	MOCK_METHOD(void, SetAudioProperty,
-		(const char * &volume, const char * &mute, bool& isSinkBinVolume), (override));
-	MOCK_METHOD(void, SetPlaybackFlags, (gint &flags, bool isSub), (override));
-};
-
 
 using ::testing::NiceMock;
 using ::testing::StrictMock;
@@ -1946,6 +1915,81 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_VideoMediaType)
 	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);	//failure
 }
 
+TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_CapsNull)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstClockTime startPts = 1000;
+	GstClockTime stopPts = 2000;
+	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->usingRialtoSink = true;
+
+	// gst_app_src_get_caps returns NULL - segment cannot be pushed
+	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
+		.Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
+		.WillOnce(Return(nullptr));
+
+	// gst_sample_new and gst_app_src_push_sample should NOT be called
+	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(_, _, _, _))
+		.Times(0);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, _))
+		.Times(0);
+
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+}
+
+TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstClockTime startPts = 1000;
+	GstClockTime stopPts = 2000;
+	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->usingRialtoSink = true;
+
+	GstCaps fakeCaps = {};
+	GstSample fakeSample = {};
+
+	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
+		.Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
+		.WillOnce(Return(&fakeCaps));
+	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
+		.WillOnce(Return(&fakeSample));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(GST_FLOW_OK));
+	// gst_sample_unref and gst_caps_unref expand to gst_mini_object_unref
+	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
+		.Times(2);
+
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+}
+
+TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstClockTime startPts = 1000;
+	GstClockTime stopPts = 2000;
+	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->usingRialtoSink = true;
+
+	GstCaps fakeCaps = {};
+	GstSample fakeSample = {};
+
+	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
+		.Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
+		.WillOnce(Return(&fakeCaps));
+	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
+		.WillOnce(Return(&fakeSample));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(GST_FLOW_ERROR));
+	// gst_sample_unref and gst_caps_unref still called even on push failure
+	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
+		.Times(2);
+
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+}
+
 TEST_F(InterfacePlayerTests, Queue_and_ClearProtectionEvent)
 {
 	std::string formatType = "cenc";
@@ -1985,10 +2029,7 @@ TEST_F(InterfacePlayerTests, Pause_Success)
 	mPlayerContext->pipeline = &gst_element_pipeline;
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, NotNull(), NotNull(), _))
-		.WillRepeatedly(DoAll(
-			SetArgPointee<1>(GST_STATE_PAUSED),
-			SetArgPointee<2>(GST_STATE_NULL),
-			Return(GST_STATE_CHANGE_SUCCESS)));
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(_, GST_STATE_PAUSED))
 		.WillOnce(Return(GST_STATE_CHANGE_ASYNC));
