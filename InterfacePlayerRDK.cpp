@@ -1461,7 +1461,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	TuneCount1++;	
 
 	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount1++);
-	if (TuneCount1 == 100)
+	if (TuneCount1 == 10)
 	{
 	   type =4;
 	}
