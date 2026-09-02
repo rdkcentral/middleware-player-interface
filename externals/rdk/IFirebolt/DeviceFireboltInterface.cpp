@@ -145,6 +145,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 
 void DeviceFireboltInterface::RemoveEventHandlers()
 {
+	std::lock_guard<std::mutex> lock(m_initMutex);
 	m_isInitialized = false;
 	//removes everything ...
     Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().unsubscribeAll();        
