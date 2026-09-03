@@ -1509,8 +1509,8 @@ void InterfacePlayerRDK::TearDownStream(int type)
         bool injectedInvalidType = false;
 
         MW_LOG_MIL("TearDownStream count incremented %u", tearDownCount);
-        // Inject an invalid stream type at the required call count.
-        // For example, set the condition to `tuneCount == 10`.
+	 // /tmp/teardownstream-inject-count specifies the TearDownStream
+        // invocation on which to inject the invalid stream type.
 	if (ShouldInjectTearDownStreamError(tearDownCount))
         {
                 type = 4;
@@ -1534,6 +1534,8 @@ void InterfacePlayerRDK::TearDownStream(int type)
                 
                 intMetrics["type"] = type;
                 intMetrics["gstTrackCount"] = GST_TRACK_COUNT;
+		intMetrics["injected"] = injectedInvalidType ? 1 : 0;
+                intMetrics["tearDownCount"] = static_cast<int>(tearDownCount);
                 stringMetrics["api"] = "TearDownStream";
                 stringMetrics["error"] = "out_of_bounds_array_access";
                 
