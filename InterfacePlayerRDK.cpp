@@ -86,6 +86,65 @@ const char * CipherTypeToString(CipherType type)
 	return "unknown";
 }
 
+static void ApplyEncryptedCaps(GstCaps *caps, const char *drmSystem)
+{
+	if (caps == NULL)
+	{
+		return;
+	}
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	if (structure)
+	{
+		gst_structure_set(structure,
+			"original-media-type", G_TYPE_STRING, gst_structure_get_name(structure),
+			NULL);
+		if (drmSystem != NULL)
+		{
+			gst_structure_set(structure,
+				GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, drmSystem,
+				NULL);
+		}
+		// Same for both cenc and cbcs
+		gst_structure_set_name(structure, "application/x-cenc");
+	}
+}
+
+static bool HasQueuedProtectionEvent(const GstPlayerPriv *gstPrivateContext, pthread_mutex_t& protectionLock)
+{
+	bool hasQueuedProtectionEvent = false;
+	pthread_mutex_lock(&protectionLock);
+	for (int i = 0; i < GST_TRACK_COUNT; i++)
+	{
+		if (gstPrivateContext->protectionEvent[i] != NULL)
+		{
+			hasQueuedProtectionEvent = true;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&protectionLock);
+	return hasQueuedProtectionEvent;
+}
+
+static bool IsElementaryAudioVideoFormat(GstStreamOutputFormat format)
+{
+	switch (format)
+	{
+		case GST_FORMAT_AUDIO_ES_MP3:
+		case GST_FORMAT_AUDIO_ES_AAC:
+		case GST_FORMAT_AUDIO_ES_AAC_RAW:
+		case GST_FORMAT_AUDIO_ES_AC3:
+		case GST_FORMAT_AUDIO_ES_EC3:
+		case GST_FORMAT_AUDIO_ES_ATMOS:
+		case GST_FORMAT_AUDIO_ES_AC4:
+		case GST_FORMAT_VIDEO_ES_H264:
+		case GST_FORMAT_VIDEO_ES_HEVC:
+		case GST_FORMAT_VIDEO_ES_MPEG2:
+			return true;
+		default:
+			return false;
+	}
+}
+
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
@@ -1864,6 +1923,10 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 	GstCaps * caps = NULL;
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+	const bool hasQueuedProtectionEvent = HasQueuedProtectionEvent(privatePlayer->gstPrivateContext, _this->mProtectionLock);
+	const bool isElementaryAudioVideoFormat = IsElementaryAudioVideoFormat(stream->format);
+	const bool shouldApplyEncryptedCaps = m_gstConfigParam->enableEncryptedCaps && hasQueuedProtectionEvent && isElementaryAudioVideoFormat;
+	MW_LOG_MIL("InitializeSourceForPlayer entry type[%d] format[%d] hasQueuedProtectionEvent[%d] elementary[%d] encryptedCapsEnabled[%d]", mediaType, stream->format, hasQueuedProtectionEvent, isElementaryAudioVideoFormat, m_gstConfigParam->enableEncryptedCaps);
 	privatePlayer->SignalConnect(source, "need-data", G_CALLBACK(gst_need_data), _this);
 	privatePlayer->SignalConnect(source, "enough-data", G_CALLBACK(gst_enough_data), _this);	/* Sets up the call back function for enough data event */
 	privatePlayer->SignalConnect(source, "seek-data", G_CALLBACK(gstappsrc_seek), _this);		/* Sets up the call back function for seek data event */
@@ -1905,6 +1968,11 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 
 	if (caps != NULL)
 	{
+		if (shouldApplyEncryptedCaps)
+		{
+			MW_LOG_MIL("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
+			ApplyEncryptedCaps(caps, mDrmSystem);
+		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
 		g_free(capsStr);
@@ -5561,21 +5629,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			GstStructure *s = gst_caps_get_structure (caps, 0);
-			if (s)
-			{
-				gst_structure_set (s,
-					"original-media-type", G_TYPE_STRING, gst_structure_get_name (s),
-					NULL);
-				if (mDrmSystem != NULL)
-				{
-					gst_structure_set (s,
-						GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, mDrmSystem,
-						NULL);
-				}
-				// Same for both cenc and cbcs
-				gst_structure_set_name (s, "application/x-cenc");
-			}
+			ApplyEncryptedCaps(caps, mDrmSystem);
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
