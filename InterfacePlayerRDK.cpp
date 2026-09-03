@@ -18,6 +18,8 @@
  */
 
 #include <iostream>
+#include <atomic>
+#include <fstream>
 #include "InterfacePlayerRDK.h"
 #include "InterfacePlayerPriv.h"
 #include <string.h>
@@ -45,6 +47,8 @@
 namespace
 {
 std::atomic_uint32_t gTuneErrorInjectionCount{0};
+std::atomic_uint32_t gTearDownStreamInjectionCount{0};
+constexpr const char* kTearDownStreamInjectionFile = "/tmp/teardownstream-inject-count";
 constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 
 bool ShouldInjectTuneError(uint32_t tuneCount)
@@ -59,6 +63,20 @@ bool ShouldInjectTuneError(uint32_t tuneCount)
     }
 
     return tuneCount == injectAtCount;
+}
+
+bool ShouldInjectTearDownStreamError(uint32_t tearDownCount)
+{
+    std::ifstream injectionFile(kTearDownStreamInjectionFile);
+    uint32_t injectAtCount = 0;
+
+    // Missing, unreadable, empty, or non-numeric file disables injection.
+    if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+    {
+        return false;
+    }
+
+    return tearDownCount == injectAtCount;
 }
 } // namespace
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
@@ -1476,14 +1494,6 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
-	TuneCount1++;	
-
-	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount1);
-	
-	if (TuneCount1 == 10)
-	{
-	   type =4;
-	}
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
 	// (see InterfacePlayerRDK.h) and is used directly below to index
 	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
@@ -1492,11 +1502,32 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	// causes an out-of-bounds read/write on `stream` and on `interfacePlayerPriv->
 	// gstPrivateContext->stream[type].bufferUnderrun`/`.eosReached` a few lines below.
 	// Condition that actually triggers the bug: (type < 0 || type >= GST_TRACK_COUNT).
-#ifdef PLAYER_TELEMETRY_SUPPORT
+	//
+	
+        const int originalType = type;
+        const uint32_t tearDownCount = ++gTearDownStreamInjectionCount;
+        bool injectedInvalidType = false;
+
+        MW_LOG_MIL("TearDownStream count incremented %u", tearDownCount);
+        // Inject an invalid stream type at the required call count.
+        // For example, set the condition to `tuneCount == 10`.
+	if (ShouldInjectTearDownStreamError(tearDownCount))
+        {
+                type = 4;
+                injectedInvalidType = true;
+                MW_LOG_WARN("TearDownStream: injecting invalid type=%d "
+                            "at count=%u; original type=%d",
+		  type, tearDownCount, originalType);
+        }
+
+
 	if (type < 0 || type >= GST_TRACK_COUNT)
 	{
-		MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: invalid type %d, out of range [0,%d)", type, GST_TRACK_COUNT);
 
+		  MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: invalid type %d, "
+                           "out of range [0,%d), injected=%d",
+                           type, GST_TRACK_COUNT, injectedInvalidType);
+#ifdef PLAYER_TELEMETRY_SUPPORT
 		std::map<std::string, int> intMetrics;
                 std::map<std::string, std::string> stringMetrics;
                 std::map<std::string, float> floatMetrics;
@@ -1508,10 +1539,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
                 
                 PlayerTelemetry2 telemetry;
                 telemetry.send("MW_INVALID_TRACK_TYPE", intMetrics, stringMetrics, floatMetrics);
+#endif
 
 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
 	}
-#endif
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);

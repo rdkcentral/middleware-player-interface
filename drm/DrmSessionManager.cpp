@@ -29,6 +29,8 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include <atomic>
+#include <fstream>
 #include "ContentSecurityManager.h"
 #include "TelemetryMarkers.h"
 #include "PlayerTelemetry.h"
@@ -39,6 +41,27 @@
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
+
+namespace
+{
+std::atomic_uint32_t gVideoWindowSizeInjectionCount{0};
+constexpr const char* kVideoWindowSizeInjectionFile =
+	"/tmp/videowindowsize-inject-count";
+
+bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
+{
+	std::ifstream injectionFile(kVideoWindowSizeInjectionFile);
+	uint32_t injectAtCount = 0;
+
+	// Missing, unreadable, empty, or non-numeric file disables injection.
+	if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+	{
+		return false;
+	}
+
+	return callCount == injectAtCount;
+}
+} // namespace
 #ifdef PLAYER_TELEMETRY_SUPPORT
 #include "PlayerTelemetry2.hpp"
 #endif
@@ -237,6 +260,23 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
+		const int originalWidth = width;
+		const int originalHeight = height;
+		const uint32_t callCount = ++gVideoWindowSizeInjectionCount;
+		bool injectedZeroDimension = false;
+
+		// /tmp/videowindowsize-inject-count specifies the invocation on
+		// which zero-size telemetry should be injected.
+		if (ShouldInjectVideoWindowSizeError(callCount))
+		{
+			width = 0;
+			height = 0;
+			injectedZeroDimension = true;
+			MW_LOG_WARN("setVideoWindowSize: injecting zero dimensions at "
+						"count=%u; original width=%d height=%d",
+						callCount, originalWidth, originalHeight);
+		}
+
 		if (width == 0 || height == 0)
 		{
 
@@ -248,6 +288,10 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 			intMetrics["width"] = width;
 			intMetrics["height"] = height;
 
+			intMetrics["injected"] = injectedZeroDimension ? 1 : 0;
+			intMetrics["setVideoWindowSizeCount"] =
+				static_cast<int>(callCount);
+
 			stringMetrics["component"] = "AampLicenseManager";
 			stringMetrics["action"] = "setVideoWindowSize";
 			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
@@ -255,6 +299,14 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	                PlayerTelemetry2 telemetry;
 			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
 #endif
+			
+			// Do not send intentionally injected dimensions to SecManager.
+			// Genuine zero dimensions retain the existing behavior.
+			if (injectedZeroDimension)
+			{
+				width = originalWidth;
+				height = originalHeight;
+			}
 		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
