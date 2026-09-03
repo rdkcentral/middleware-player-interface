@@ -41,8 +41,26 @@
 #include "TelemetryMarkers.h"
 #include "PlayerTelemetry.h"
 
-int TuneCount = 0;
-int TuneCount1 = 0;
+
+namespace
+{
+std::atomic_uint32_t gTuneErrorInjectionCount{0};
+constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
+
+bool ShouldInjectTuneError(uint32_t tuneCount)
+{
+    std::ifstream injectionFile(kTuneErrorInjectionFile);
+    uint32_t injectAtCount = 0;
+
+    // Missing, unreadable, empty, or non-numeric file means injection is off.
+    if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+    {
+        return false;
+    }
+
+    return tuneCount == injectAtCount;
+}
+} // namespace
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
@@ -3550,16 +3568,21 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	/* There is a possibility that only single protection event is queued for multiple type since they are encrypted using same id.
 	 * Don't worry if you see only one protection event queued here.
 	 */
-	GstMediaType type = static_cast<GstMediaType>(mediaType);
 
- 
-	TuneCount++;	
+	const int originalMediaType = mediaType;
+        const uint32_t tuneCount = ++gTuneErrorInjectionCount;
+        bool injectInvalidMediaType = false;
 
-	MW_LOG_MIL("TearDownStream count incremented %d", TuneCount++);
-	if (TuneCount == 15)
+        // /tmp/readvariable contains the QueueProtectionEvent call count.
+        // Example: "15" injects the telemetry error at call 15.
+        if (ShouldInjectTuneError(tuneCount))
 	{
-		mediaType = 255;
-	}
+                injectInvalidMediaType = true;
+                mediaType = 255; // Used only for the validation/telemetry block below.
+                MW_LOG_WARN("QueueProtectionEvent: injecting invalid media type: "
+                            "count=%u, injected=%d, original=%d",
+                            tuneCount, mediaType, originalMediaType);
+        }
 
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `mediaType` is a raw int on this public API
  	// (see InterfacePlayerRDK.h) and `type` is used below to index
@@ -3586,8 +3609,17 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 		// ISSUE MARKER: telemetry sent here for invalid QueueProtectionEvent() mediaType
 #endif
 		MW_LOG_ERR("InterfacePlayerRDK::QueueProtectionEvent: invalid mediaType %d, out of range [0,%d)", mediaType, GST_TRACK_COUNT);
- 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
- 	}
+                
+		if (!injectInvalidMediaType)
+                {
+                        return; // Actual caller error: do not access the array.
+                }
+
+                // Test injection: telemetry is complete; resume valid player flow.
+                mediaType = originalMediaType;
+        }
+
+        GstMediaType type = static_cast<GstMediaType>(mediaType);
 
 	pthread_mutex_lock(&mProtectionLock);
 	if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
