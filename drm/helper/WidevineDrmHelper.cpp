@@ -31,7 +31,6 @@
 #include "PlayerLogManager.h"
 #include "DrmConstants.h"
 
-
 #define MultiChar_Constant(TEXT) ( \
 (static_cast<uint32_t>(TEXT[0]) << 0x18) | \
 (static_cast<uint32_t>(TEXT[1]) << 0x10) | \
@@ -188,12 +187,6 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 {
 	mDefaultKeySlot = -1;
 	std::vector<uint8_t> defaultKeyID(cencData.begin(), cencData.end());
-	// Telemetry: log cencData format to check if UUID-to-binary conversion is needed
-	bool isUuidFormat = (cencData.size() == 36 && cencData[8] == '-' && cencData[13] == '-' && cencData[18] == '-' && cencData[23] == '-');
-	MW_LOG_WARN("setDefaultKeyID: cencData size=%zu isUuidFormat=%d data=%s",
-		cencData.size(), isUuidFormat, PlayerLogManager::getHexDebugStr(defaultKeyID).c_str());
-
-#if 0 //dn808
 	// Also convert UUID string (e.g. "f3dff538-b8c9-58e4-e8cd-96cf811d32dc") to 16-byte binary
 	// for comparison against binary keyIDs parsed from PSSH
 	std::vector<uint8_t> defaultKeyIDBinary;
@@ -223,12 +216,11 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 			defaultKeyIDBinary.push_back(static_cast<uint8_t>(v));
 		}
 	}
-#endif
 	if(!mKeyIDs.empty())
 	{
 		for(auto& it : mKeyIDs)
 		{
-			if(defaultKeyID == it.second )
+			if(defaultKeyID == it.second || defaultKeyIDBinary == it.second)
 			{
 				mDefaultKeySlot = it.first;
 				MW_LOG_WARN("setDefaultKeyID : %s slot : %d", PlayerLogManager::getHexDebugStr(it.second).c_str(), mDefaultKeySlot);
@@ -238,30 +230,6 @@ void WidevineDrmHelper::setDefaultKeyID(const std::string& cencData)
 	}
 	if (mDefaultKeySlot < 0 && !mKeyIDs.empty())
 	{
-		// Telemetry: log when no match found - indicates UUID binary comparison may be needed
-		MW_LOG_ERR("setDefaultKeyID: TELEMETRY - no key match for cencData=%s isUuidFormat=%d keyIDCount=%zu",
-			cencData.c_str(), isUuidFormat, mKeyIDs.size());
-		for (const auto& it : mKeyIDs)
-		{
-			MW_LOG_ERR("setDefaultKeyID: TELEMETRY - available keyID[%d]=%s", it.first, PlayerLogManager::getHexDebugStr(it.second).c_str());
-		}
-#ifdef PLAYER_TELEMETRY_SUPPORT
-		{
-			std::map<std::string, int> intMetrics;
-			std::map<std::string, std::string> stringMetrics;
-			std::map<std::string, float> floatMetrics;
-
-			intMetrics["isUuidFormat"] = isUuidFormat ? 1 : 0;
-			intMetrics["keyIDCount"] = (int)mKeyIDs.size();
-			intMetrics["cencDataSize"] = (int)cencData.size();
-			stringMetrics["cencData"] = cencData;
-			stringMetrics["defaultKeyHex"] = PlayerLogManager::getHexDebugStr(defaultKeyID);
-			stringMetrics["source"] = "setDefaultKeyID_noMatch";
-
-			PlayerTelemetry2 telemetry;
-			telemetry.send(TELEMETRY_EVENT_DRM_KEY_MISMATCH, intMetrics, stringMetrics, floatMetrics);
-		}
-#endif
 		mDefaultKeySlot = mKeyIDs.begin()->first;
 		MW_LOG_WARN("setDefaultKeyID: no match found for cencData, defaulting to first slot %d", mDefaultKeySlot);
 	}
