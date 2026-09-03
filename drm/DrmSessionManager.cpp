@@ -63,8 +63,6 @@ bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
 #ifdef PLAYER_TELEMETRY_SUPPORT
 #include "PlayerTelemetry2.hpp"
 #endif
-#include "TelemetryMarkers.h"
-#include "PlayerTelemetry.h"
 /**
  * @brief KeyIdEntries constructor.
  */

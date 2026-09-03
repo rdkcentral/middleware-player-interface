@@ -12,6 +12,13 @@
 #include <map>
 #include "PlayerLogManager.h"
 
+
+/* ── Lifecycle events ─────────────────────────────────────────────────────── */
+#define TELEMETRY_EVENT_INITIALIZED        "INTERFACE_INITIALIZED" /**< InterfacePlayerRDK constructor completed */
+
+/* ── Media / buffering events ─────────────────────────────────────────────── */
+#define TELEMETRY_EVENT_BUFFERING_STARTED  "BUFFERING_STARTED"  /**< Pre-roll buffering begins */
+#define TELEMETRY_EVENT_BUFFERING_ENDED    "BUFFERING_ENDED"    /**< Sufficient frames buffered; pipeline unpaused */
 // Note that RDK telemetry 2.0 support is per process basic, 
 // this class is created to take care of un initialization of telemetry but having object as global variable 
 // when process goes down, destructor of this class will be called and it will uninitialize the telemetry. 
