@@ -46,7 +46,7 @@ int TuneCount1 = 0;
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
-#define FIRST_FRAME_TIMEOUT_MS 10000   /**< timeout to wait for first frame after tune start */
+#define FIRST_FRAME_TIMEOUT_MS 250   /**< timeout to wait for first frame after tune start */
 #define NORMAL_PLAY_RATE 1
 #define DEFAULT_TIMEOUT_FOR_SOURCE_SETUP (1000)          /**< Default timeout value in milliseconds */
 #define DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS 12         /**< Currently MAX FRAG DURATION + 2*/
