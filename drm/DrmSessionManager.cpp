@@ -32,8 +32,6 @@
 #include <atomic>
 #include <fstream>
 #include "ContentSecurityManager.h"
-#include "TelemetryMarkers.h"
-#include "PlayerTelemetry.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
 #define SESSION_TOKEN_URL "http://localhost:50050/authService/getSessionToken"

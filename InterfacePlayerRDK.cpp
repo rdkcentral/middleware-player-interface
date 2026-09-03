@@ -165,7 +165,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
-	PlayerTelemetry::sendEvent(TELEMETRY_EVENT_SHUTDOWN);
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
@@ -1596,7 +1595,6 @@ void InterfacePlayerRDK::TearDownStream(int type)
 void InterfacePlayerRDK::Stop(bool keepLastFrame)
 {
 	std::lock_guard<std::mutex> lock(mMutex);
-	PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PLAYBACK_STOPPED);
 	/*  make the execution of this function more deterministic and
 	 *  reduce scope for potential pipeline lockups*/
 
@@ -3782,7 +3780,6 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 		}
 		else
 		{
-			PlayerTelemetry::sendEvent(pause ? TELEMETRY_EVENT_PLAYBACK_PAUSED : TELEMETRY_EVENT_PLAYBACK_RESUMED);
 		}
 
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
@@ -5601,7 +5598,6 @@ void InterfacePlayerRDK::NotifyEOS()
 			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = true;
 			// eosSignalled is reset once the async task is completed either in Configure/Flush/ResetEOSSignalled, so set the flag before scheduling the task
 			interfacePlayerPriv->gstPrivateContext->eosSignalled = true;
-			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PLAYBACK_COMPLETED);
 			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = mScheduler.ScheduleTask(PlayerAsyncTaskObj(IdleCallbackOnEOS, (void *)this, "IdleCallbackOnEOS"));
 			if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId == PLAYER_TASK_ID_INVALID && true == interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 			{
