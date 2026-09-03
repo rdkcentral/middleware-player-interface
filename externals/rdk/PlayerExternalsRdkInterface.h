@@ -41,6 +41,7 @@ typedef enum {
     dsHDCP_VERSION_2X,
     dsHDCP_VERSION_MAX
 } dsHdcpProtocolVersion_t;
+
 #ifdef USE_DS_EVENT_SUPPORTED
 #undef USE_DS_EVENT_SUPPORTED
 #endif
