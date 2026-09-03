@@ -148,11 +148,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
 #endif
 	
-	TelemetryPayload initPayload;
-	initPayload.add("component", "InterfacePlayerRDK");
-	initPayload.add("action", "constructor");
-	initPayload.add("isRialto", isRialto ? 1 : 0);
-	PlayerTelemetry::sendEvent(TELEMETRY_EVENT_INITIALIZED, initPayload);
 #ifdef PLAYER_TELEMETRY_SUPPORT
 	std::map<std::string, int> intMetrics;
 	std::map<std::string, std::string> stringMetrics;
@@ -506,12 +501,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		if (!configureStream[i] && bESChangeStatus && (eGST_MEDIATYPE_AUDIO == i))
 		{
 			MW_LOG_MIL("AudioType Changed. Force configure pipeline");
-			{
-				TelemetryPayload trackSwitchedPayload;
-				trackSwitchedPayload.add("trackType", "audio");
-				trackSwitchedPayload.add("trackId", trackId);
-				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_TRACK_SWITCHED, trackSwitchedPayload);
-			}
 			configureStream[i] = true;
 		}
 
@@ -608,13 +597,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PAUSED failed");
-			{
-				TelemetryPayload pauseOnStartPayload;
-				pauseOnStartPayload.add("fromState", "NULL");
-				pauseOnStartPayload.add("toState", "PAUSED");
-				pauseOnStartPayload.add("context", "ConfigurePipeline_pauseOnStart");
-				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PIPELINE_STATE_CHANGE_FAILURE, pauseOnStartPayload);
-			}
 		}
 	}
 	/* If buffering is enabled, set the pipeline in Paused state, once sufficient content has been buffered the pipeline will be set to GST_STATE_PLAYING */
@@ -628,13 +610,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_PAUSED failed");
-			{
-				TelemetryPayload bufferingPausePayload;
-				bufferingPausePayload.add("fromState", "NULL");
-				bufferingPausePayload.add("toState", "PAUSED");
-				bufferingPausePayload.add("context", "ConfigurePipeline_buffering");
-				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PIPELINE_STATE_CHANGE_FAILURE, bufferingPausePayload);
-			}
 		}
 		else
 		{
@@ -1892,12 +1867,6 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	 */
 	ResetGstEvents();
 	MW_LOG_INFO("InterfacePlayerRDK: Pipeline flush seek - start = %f rate = %d", position, rate);
-	{
-		TelemetryPayload seekStartedPayload;
-		seekStartedPayload.add("position", position);
-		seekStartedPayload.add("rate", rate);
-		PlayerTelemetry::sendEvent(TELEMETRY_EVENT_SEEK_STARTED, seekStartedPayload);
-	}
 	double playRate = 1.0;
 	if (eGST_MEDIAFORMAT_PROGRESSIVE == static_cast<GstMediaFormat>(m_gstConfigParam->media))
 	{
@@ -1935,10 +1904,6 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 	else
 	{
-		TelemetryPayload seekCompletedPayload;
-		seekCompletedPayload.add("position", position);
-		seekCompletedPayload.add("rate", rate);
-		PlayerTelemetry::sendEvent(TELEMETRY_EVENT_SEEK_COMPLETED, seekCompletedPayload);
 	}
 
 	if ((interfacePlayerPriv->gstPrivateContext->usingRialtoSink) &&
@@ -3814,12 +3779,6 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 		else if (GST_STATE_CHANGE_SUCCESS != rc)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
-			{
-				TelemetryPayload pauseFailPayload;
-				pauseFailPayload.add("toState", pause ? "PAUSED" : "PLAYING");
-				pauseFailPayload.add("context", "Pause_failure");
-				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PIPELINE_STATE_CHANGE_FAILURE, pauseFailPayload);
-			}
 		}
 		else
 		{
@@ -4708,12 +4667,6 @@ static void GstPlayer_OnGstDecodeErrorCb(GstElement* object, guint arg0, gpointe
 		pInterfacePlayerRDK->OnGstDecodeErrorCb(privatePlayer->gstPrivateContext->decodeErrorCBCount);
 		privatePlayer->gstPrivateContext->decodeErrorMsgTimeMS = NOW_STEADY_TS_MS;
 		MW_LOG_ERR("Got Decode Error message from %s total_cb=%d timeMs=%d", GST_ELEMENT_NAME(object),  privatePlayer->gstPrivateContext->decodeErrorCBCount, GST_MIN_DECODE_ERROR_INTERVAL);
-		{
-			TelemetryPayload decodeErrPayload;
-			decodeErrPayload.add("element", GST_ELEMENT_NAME(object) ? GST_ELEMENT_NAME(object) : "unknown");
-			decodeErrPayload.add("count", privatePlayer->gstPrivateContext->decodeErrorCBCount);
-			PlayerTelemetry::sendEvent(TELEMETRY_EVENT_DECODE_ERROR, decodeErrPayload);
-		}
 		privatePlayer->gstPrivateContext->decodeErrorCBCount = 0;
 #ifdef USE_EXTERNAL_STATS
 		INC_DECODE_ERROR(); // Increment the decoder error for low level AV metric
@@ -4984,11 +4937,6 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			busEvent.dbg_info = "N/A";
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
 			MW_LOG_MIL("GST_MESSAGE_EOS");
-			{
-				TelemetryPayload eosPayload;
-				eosPayload.add("element", GST_OBJECT_NAME(msg->src) ? GST_OBJECT_NAME(msg->src) : "unknown");
-				PlayerTelemetry::sendEvent(TELEMETRY_EVENT_EOS_DETECTED, eosPayload);
-			}
 			pInterfacePlayerRDK->NotifyEOS();
 			break;
 
@@ -5196,10 +5144,6 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 	{
 		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", FIRST_FRAME_TIMEOUT_MS);
 
-		TelemetryPayload payload;
-		payload.add("reason", "first_frame_not_rendered");
-		payload.add("timeoutMs", FIRST_FRAME_TIMEOUT_MS);
-		PlayerTelemetry::sendEvent(TELEMETRY_EVENT_PIPELINE_STATE_CHANGE_FAILURE, payload);
 
 #ifdef PLAYER_TELEMETRY_SUPPORT
 		std::map<std::string, int> i;
