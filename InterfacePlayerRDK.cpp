@@ -40,8 +40,6 @@
 #include "player-xternal-stats.h"
 #endif
 #include "PlayerUtils.h"
-#include "TelemetryMarkers.h"
-#include "PlayerTelemetry.h"
 
 
 namespace
