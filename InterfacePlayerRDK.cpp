@@ -66,6 +66,7 @@ static const char* GstPluginNameVMX = "verimatrixdecryptor";
 #include <assert.h>
 #define GST_NORMAL_PLAY_RATE		1
 
+MW_LOG_INFO("This is to test PR");
 std::pair <CipherType, const char *> CipherToStringMap[] = {
 	{CIPHER_TYPE_CENC, "cenc"},
 	{CIPHER_TYPE_CBC1, "cbc1"},
