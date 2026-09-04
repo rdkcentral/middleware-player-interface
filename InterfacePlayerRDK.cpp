@@ -94,7 +94,8 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
-	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 0.2.0-r5_VIPA");
+	MW_LOG_MIL("InterfacePlayerRDK constructed using external library");
+	PrintPlayerInterfaceVersion();
 	m_gstConfigParam = new Configs();
 	m_gstConfigParam->framesToQueue = SocUtils::RequiredQueuedFrames();
 	pthread_mutex_init(&mProtectionLock, NULL);

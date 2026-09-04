@@ -23,6 +23,9 @@
  */
 #include "PlayerUtils.h"
 #include "_base64.h"
+#include <cstdio>
+
+#include "version.h"
 
 /**
  * @brief Check if string start with a prefix
@@ -290,4 +293,18 @@ std::vector<uint8_t> RawKeyToKeyId(const uint8_t* key, std::size_t keySize)
     }
 
     return out;
+}
+/**
+ * @brief Prints the PlayerInterface library build version, git revision,
+ *        git tag and git branch to stdout. Values are baked in at compile
+ *        time by CMake via version.h.in -> version.h.
+ */
+void PrintPlayerInterfaceVersion()
+{
+    MW_LOG_MIL("###################################################\n");
+ //   MW_LOG_MIL("[PlayerInterface] Version   : %s\n", PLAYERINTERFACE_VERSION);
+    MW_LOG_MIL("[PlayerInterface] Git Rev   : %s\n", PLAYERINTERFACE_GIT_REVISION);
+    MW_LOG_MIL("[PlayerInterface] Git Tag   : %s\n", PLAYERINTERFACE_GIT_TAG);
+   // MW_LOG_MIL("[PlayerInterface] Git Branch: %s\n", PLAYERINTERFACE_GIT_BRANCH);
+    MW_LOG_MIL("###################################################\n");
 }

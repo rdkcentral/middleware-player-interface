@@ -35,6 +35,7 @@
 #include <cstring>
 #include <vector>
 
+#include <PlayerLogManager.h>
 //Delete non-array object
 #define MW_SAFE_DELETE(ptr) { delete(ptr); ptr = NULL; }
 //Delete Array object
@@ -109,6 +110,13 @@ void trim(std::string& src);
  * @return Vector containing the key ID in ASCII hex format
  */
 std::vector<uint8_t> RawKeyToKeyId(const uint8_t* key, size_t keySize);
+
+/**
+ * @fn PrintPlayerInterfaceVersion
+ * @brief Prints PlayerInterface version, git revision, tag and branch to stdout.
+ *        Call once during library initialisation.
+ */
+void PrintPlayerInterfaceVersion();
 
 #endif  /* __PLAYER_UTILS_H__ */
 
