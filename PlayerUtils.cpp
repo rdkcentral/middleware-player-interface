@@ -23,9 +23,7 @@
  */
 #include "PlayerUtils.h"
 #include "_base64.h"
-/*
- * (all existing content unchanged — append below RawKeyToKeyId)
- */
+#include <cstdio>
 
 #include "version.h"
 
