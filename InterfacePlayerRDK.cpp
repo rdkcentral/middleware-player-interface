@@ -1964,6 +1964,14 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 	else
 	{
 		caps = GetCaps(static_cast<GstStreamOutputFormat>(stream->format));
+		// mp4demux always feeds one complete EC3 frame per buffer; the legacy raw MPEG-TS
+		// HLS path (excluded here) is PES-aligned, not frame-aligned, and needs ac3parse to
+		// keep scanning for sync words. Matches the framed=true SetStreamCaps() sets later.
+		if (caps != NULL && stream->format == GST_FORMAT_AUDIO_ES_EC3 &&
+			static_cast<GstMediaFormat>(m_gstConfigParam->media) != eGST_MEDIAFORMAT_HLS)
+		{
+			gst_caps_set_simple(caps, "framed", G_TYPE_BOOLEAN, TRUE, NULL);
+		}
 	}
 
 	if (caps != NULL)
