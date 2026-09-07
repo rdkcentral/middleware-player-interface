@@ -502,6 +502,8 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	GstBuffer* subsamplesBuffer = NULL;
 	GstMapInfo subSamplesMap;
 	GstProtectionMeta* protectionMeta = NULL;
+	DrmSession* drmSession = NULL;
+	GstCaps* sinkCaps = NULL;
 	gboolean mutexLocked = FALSE;
 	int errorCode;
 
@@ -540,14 +542,18 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 		{
 			// call decrypt even for clear samples in order to copy it to a secure buffer. If secure buffers are not supported
 			// decrypt() call will return without doing anything
-			/* DELIA-70726 fix: guard against the DrmSession being concurrently torn down
-			 * (e.g. DrmSessionManager reusing/evicting the slot during a back-to-back
-			 * channel change) while this pipeline still has buffers in flight. */
-			if (cdmidecryptor->drmSession != NULL && cdmidecryptor->sinkCaps != NULL
-					&& cdmidecryptor->drmSession->AcquireForUse())
+			drmSession = cdmidecryptor->drmSession;
+			if (drmSession != NULL && cdmidecryptor->sinkCaps != NULL && drmSession->AcquireForUse())
 			{
-				errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
-				cdmidecryptor->drmSession->ReleaseAfterUse();
+				sinkCaps = gst_caps_ref(cdmidecryptor->sinkCaps);
+				g_mutex_unlock(&cdmidecryptor->mutex);
+				mutexLocked = FALSE;
+				errorCode = drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, sinkCaps);
+				drmSession->ReleaseAfterUse();
+				gst_caps_unref(sinkCaps);
+				sinkCaps = NULL;
+				g_mutex_lock(&cdmidecryptor->mutex);
+				mutexLocked = TRUE;
 			}
 			else
 			{ /* If drmSession creation failed, or is being destroyed, the call will be aborted here */
@@ -573,10 +579,20 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	{
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n\nWaiting for key\n");
 	}
-	// The key might not have been received yet. Wait for it.
+	/* Wait until key/protection is available, but also re-check canWait on wakeups so
+	 * state transitions (PAUSED->READY) can break the wait without blocking teardown. */
 	if (!cdmidecryptor->streamReceived)
-		g_cond_wait(&cdmidecryptor->condition,
-				&cdmidecryptor->mutex);
+	{
+		gint64 waitUntil = g_get_monotonic_time() + (10 * G_TIME_SPAN_SECOND);
+		while (!cdmidecryptor->streamReceived && cdmidecryptor->canWait)
+		{
+			if (!g_cond_wait_until(&cdmidecryptor->condition, &cdmidecryptor->mutex, waitUntil))
+			{
+				GST_ERROR_OBJECT(cdmidecryptor, "Timed out waiting for protection event");
+				break;
+			}
+		}
+	}
 
 	if (!cdmidecryptor->streamReceived)
 	{
@@ -676,14 +692,22 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	 * this guard, the multiqueue/decryptor thread can call decrypt() on a
 	 * DrmSession that is being (or has already been) freed, causing a
 	 * use-after-free SIGSEGV inside OCDMSessionAdapter::verifyOutputProtection(). */
-	if (!cdmidecryptor->drmSession->AcquireForUse())
+	drmSession = cdmidecryptor->drmSession;
+	if (!drmSession->AcquireForUse())
 	{
 		GST_ERROR_OBJECT(cdmidecryptor, "drmSession is being destroyed, aborting decrypt");
 		result = GST_FLOW_NOT_SUPPORTED;
 		goto free_resources;
 	}
-	errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
-	cdmidecryptor->drmSession->ReleaseAfterUse();
+	sinkCaps = gst_caps_ref(cdmidecryptor->sinkCaps);
+	g_mutex_unlock(&cdmidecryptor->mutex);
+	mutexLocked = FALSE;
+	errorCode = drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, sinkCaps);
+	drmSession->ReleaseAfterUse();
+	gst_caps_unref(sinkCaps);
+	sinkCaps = NULL;
+	g_mutex_lock(&cdmidecryptor->mutex);
+	mutexLocked = TRUE;
 
 	cdmidecryptor->streamEncrypted = true;
 	if (errorCode != 0 || cdmidecryptor->hdcpOpProtectionFailCount)
@@ -773,6 +797,9 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 
 	if (subsamplesBuffer)
 		gst_buffer_unmap(subsamplesBuffer, &subSamplesMap);
+
+	if (sinkCaps)
+		gst_caps_unref(sinkCaps);
 
 	if (protectionMeta)
 		gst_buffer_remove_meta(buffer,
@@ -932,17 +959,27 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		}
 
 		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
-		g_mutex_lock(&cdmidecryptor->mutex);
-		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
 		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
                 int err = -1;
 		int responseCode =-1;
+		DrmSession* newDrmSession = NULL;
+
+		/* Invalidate the old drmSession pointer before createDrmSession() runs, since
+		 * DrmSessionManager may delete it (slot reuse/eviction) concurrently on this
+		 * thread. Without this, transform_ip on another thread could read the stale
+		 * pointer and call AcquireForUse()/decrypt() on a freed DrmSession. */
+		g_mutex_lock(&cdmidecryptor->mutex);
+		cdmidecryptor->drmSession = NULL;
+		cdmidecryptor->streamReceived = FALSE;
+		g_cond_signal(&cdmidecryptor->condition);
+		g_mutex_unlock(&cdmidecryptor->mutex);
+
 		if (cdmidecryptor->sessionManager->m_drmConfigParam->mIsWVKIDWorkaround){
-			cdmidecryptor->drmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
+			newDrmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						outData, outDataLen, (int)cdmidecryptor->mediaType, cdmidecryptor->player, e.get(), nullptr, false);
 		}else{
-			cdmidecryptor->drmSession =
+			newDrmSession =
 				cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						reinterpret_cast<const unsigned char *>(mapInfo.data),
@@ -952,6 +989,11 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
                 {
                        cdmidecryptor->sessionManager->setfailureCb(e.get(),err);
                 }
+
+		g_mutex_lock(&cdmidecryptor->mutex);
+		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
+		cdmidecryptor->drmSession = newDrmSession;
+
 		if (NULL == cdmidecryptor->drmSession)
 		{
 /* For  Avoided setting 'streamReceived' as FALSE if createDrmSession() failed after a successful case.
