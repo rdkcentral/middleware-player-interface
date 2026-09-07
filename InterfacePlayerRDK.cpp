@@ -49,6 +49,27 @@ std::atomic_uint32_t gTearDownStreamInjectionCount{0};
 constexpr const char* kTearDownStreamInjectionFile = "/tmp/teardownstream-inject-count";
 constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 
+// Add near existing injection constants in anonymous namespace
+constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
+constexpr uint32_t kDefaultFirstFrameTimeoutMs = 3000;
+constexpr uint32_t kMinFirstFrameTimeoutMs = 50; // optional lower guard
+
+static uint32_t GetFirstFrameTimeoutMs()
+{
+    std::ifstream injectionFile(kFirstFrameTimeoutInjectionFile);
+    uint32_t timeoutMs = 0;
+
+    // Missing/unreadable/invalid/too-small => default
+    if (!(injectionFile >> timeoutMs) || timeoutMs < kMinFirstFrameTimeoutMs)
+    {
+        MW_LOG_MIL("Using default first-frame timeout: %u ms", kDefaultFirstFrameTimeoutMs);
+        return kDefaultFirstFrameTimeoutMs;
+    }
+
+    MW_LOG_WARN("Using injected first-frame timeout: %u ms", timeoutMs);
+    return timeoutMs;
+}
+
 bool ShouldInjectTuneError(uint32_t tuneCount)
 {
     std::ifstream injectionFile(kTuneErrorInjectionFile);
@@ -80,7 +101,7 @@ bool ShouldInjectTearDownStreamError(uint32_t tearDownCount)
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
-#define FIRST_FRAME_TIMEOUT_MS 250   /**< timeout to wait for first frame after tune start */
+
 #define NORMAL_PLAY_RATE 1
 #define DEFAULT_TIMEOUT_FOR_SOURCE_SETUP (1000)          /**< Default timeout value in milliseconds */
 #define DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS 12         /**< Currently MAX FRAG DURATION + 2*/
@@ -367,9 +388,10 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		/* one-shot timer; only add if not already running */
 		if (interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId == GST_TASK_ID_INVALID)
 		{
-			TimerAdd(FirstFrameTimeoutCallback, FIRST_FRAME_TIMEOUT_MS,
-					 interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId,
-					 this, "firstFrameTimeoutTimerId");
+			// In ConfigurePipeline(), replace timeout argument:
+                        const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+                        TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
+
 		}
 	}
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
@@ -5139,19 +5161,21 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 
 	if (!privatePlayer->gstPrivateContext->firstFrameReceived && !audioOnlySatisfied)
 	{
-		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", FIRST_FRAME_TIMEOUT_MS);
 
+		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
+		const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+		MW_LOG_ERR("Tune not completed: first frame not rendered within %u ms", firstFrameTimeoutMs);
 
 #ifdef PLAYER_TELEMETRY_SUPPORT
-		std::map<std::string, int> i;
-		std::map<std::string, std::string> s;
-		std::map<std::string, float> f;
-		i["timeoutMs"] = FIRST_FRAME_TIMEOUT_MS;
-		i["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
-		s["api"] = "FirstFrameTimeoutCallback";
-		s["error"] = "first_frame_not_rendered";
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> sMetrics;
+		std::map<std::string, float> fMetrics;
+		intMetrics["timeoutMs"] = static_cast<int>(firstFrameTimeoutMs);
+		intMetrics["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
+		sMetrics["api"] = "FirstFrameTimeoutCallback";
+		sMetrics["error"] = "first_frame_not_rendered";
 		PlayerTelemetry2 telemetry;
-		telemetry.send("MW_VIDEO_START_FAILURE", i, s, f);
+		telemetry.send("MW_VIDEO_START_FAILURE", intMetrics, sMetrics, fMetrics);
 #endif
 	}
 
