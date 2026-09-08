@@ -40,17 +40,13 @@ PlayerTelemetry2::PlayerTelemetry2( const std::string &appName) : appName(appNam
 }
 
 bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::string, int>& intData, const std::map<std::string, std::string>& stringData, const std::map<std::string, float>& floatData ) {
-        MW_LOG_ERR("[M] Marker Name: %s %d", markerName.c_str(), mInitializer.isInitialized());
     bool bRet = false;
 
     // Log entry and initializer status
-    MW_LOG_ERR("[M] Entered send() | marker: %s | initializer: %d",
-               markerName.c_str(), mInitializer.isInitialized());
 
     bool init = mInitializer.isInitialized();
     if(init)
     {
-        MW_LOG_ERR("[M] Inside initializer block");
 
         cJSON *root = cJSON_CreateObject();
         if(!root)
@@ -59,26 +55,21 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
             return false;
         }
 
-        MW_LOG_ERR("[M] JSON object created");
 
         cJSON_AddStringToObject(root, "app", appName.c_str());
-        MW_LOG_ERR("[M] appName added: %s", appName.c_str());
 
         for (const auto& pair : intData)
         {
-            MW_LOG_ERR("[M] int key=%s value=%d", pair.first.c_str(), pair.second);
             cJSON_AddNumberToObject(root, pair.first.c_str(), pair.second);
         }
 
         for (const auto& pair : stringData)
         {
-            MW_LOG_ERR("[M] string key=%s value=%s", pair.first.c_str(), pair.second.c_str());
             cJSON_AddStringToObject(root, pair.first.c_str(), pair.second.c_str());
         }
 
         for (const auto& pair : floatData)
         {
-            MW_LOG_ERR("[M] float key=%s value=%f", pair.first.c_str(), pair.second);
             cJSON_AddNumberToObject(root, pair.first.c_str(), pair.second);
         }
 
@@ -90,14 +81,12 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
             return false;
         }
 
-        MW_LOG_ERR("[M] Marker Name: %s | JSON: %s", markerName.c_str(), jsonString);
+        MW_LOG_INFO("[M] Marker Name: %s | JSON: %s", markerName.c_str(), jsonString);
 
         T2ERROR t2Error = t2_event_s((char *)markerName.c_str(), jsonString);
-        MW_LOG_ERR("[M] t2_event_s returned: %d", t2Error);
 
         if(T2ERROR_SUCCESS == t2Error)
         {
-            MW_LOG_ERR("[M] Telemetry event sent successfully");
             bRet = true;
         }
         else
@@ -113,7 +102,6 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
         MW_LOG_ERR("[M] Telemetry initializer not ready");
     }
 
-    MW_LOG_ERR("[M] Exiting send() | marker: %s", markerName.c_str());
     return bRet;
 }
 
