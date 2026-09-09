@@ -125,6 +125,7 @@ struct gst_media_stream
 	GstElement *sinkbin;              /**< Sink element to consume data */
 	GstElement *source;                       /**< to provide data to the pipeline */
 	GstStreamOutputFormat format; /**< Stream output format for this stream */
+	MediaCodecInfo codecInfo; /**< Codec and encryption information for this stream */
 	bool pendingSeek;                         /**< Flag denotes if a seek event has to be sent to the source */
 	bool resetPosition;                       /**< To indicate that the position of the stream is reset */
 	bool bufferUnderrun;
@@ -137,7 +138,7 @@ struct gst_media_stream
 	GstPad *demuxPad;                  /**< Demux src pad >*/
 	gulong demuxProbeId;       /**< Demux pad probe ID >*/
 
-	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID),
+	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID), codecInfo(),
 	pendingSeek(false), resetPosition(false),
 	bufferUnderrun(false), eosReached(false), sourceConfigured(false), sourceLock(PTHREAD_MUTEX_INITIALIZER), timeScale(1), trackId(-1), firstBufferProcessed(false), demuxPad(NULL), demuxProbeId(0)
 	{
