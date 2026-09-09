@@ -116,6 +116,7 @@ GstCaps* GetCaps(GstStreamOutputFormat format)
  */
 GstBuffer* CreateGstBufferWithData(gconstpointer data, gsize size)
 {
+	MW_LOG_INFO("Dummy commit 1");
 	GstBuffer *buffer = gst_buffer_new_and_alloc(size);
 	if (buffer)
 	{
