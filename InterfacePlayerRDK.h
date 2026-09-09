@@ -137,7 +137,6 @@ struct Configs
 	int monitorAvsyncThresholdPositiveMs;
 	int monitorAvsyncThresholdNegativeMs;
 	int monitorAvJumpThresholdMs;
-	bool enableEncryptedCaps;
 };
 
 
@@ -353,7 +352,8 @@ class InterfacePlayerRDK
         	 * @param enableLiveLatency Whether to enable live-latency mode in the
         	 *        RialtoSink streams-info context. Defaults to false.
         	 */
-        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url, bool enableLiveLatency = false);
+			void ConfigurePipeline(PipelineCodecInfo&& codecInfo, int format, int audioFormat, int subFormat, bool bESChangeStatus, bool setReadyAfterPipelineCreation, bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string url, bool enableLiveLatency = false);
+
         	/**
         	 * @brief Enables or disables pausing on playback start.
         	 * @param enable True to enable pausing, false to disable.
