@@ -167,6 +167,17 @@ struct MediaCodecInfo
 };
 
 /*
+ * @struct PipelineCodecInfo
+ * @brief Codec information for all tracks in a pipeline
+ */
+struct PipelineCodecInfo
+{
+	MediaCodecInfo video;
+	MediaCodecInfo audio;
+	MediaCodecInfo subtitle;
+};
+
+/*
  * @struct MediaDrmMetadata
  * @brief DRM metadata for encrypted samples
  */
