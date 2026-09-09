@@ -65,6 +65,7 @@ GST_DEBUG_CATEGORY(gst_player_taskpool_debug_category);
 static gpointer gst_player_taskpool_push (GstTaskPool * pool, GstTaskPoolFunction func, gpointer data,
     GError ** error)
 {
+  printf("dummy commit 2\n");
   PlayerGstTaskId *tid;
   gint res;
 
