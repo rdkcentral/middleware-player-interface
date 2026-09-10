@@ -34,6 +34,7 @@
 #include <string>
 #include <set>
 #include <memory>
+#include <glib.h>
 
 class FireboltInterface; //forward declaration
 

@@ -137,6 +137,8 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 {
 	// licenseUrl un-used now
 	(void) licenseUrl;
+	MW_LOG_INFO("surya: AcquireLicenseOpenOrUpdate called with clientId: %s, appId: %s", clientId.c_str(), appId.c_str());
+	g_print("surya_secman: AcquireLicenseOpenOrUpdate called with clientId: %s, appId: %s", clientId.c_str(), appId.c_str());
 
 	bool ret = false;
 	bool rpcResult = false;
@@ -198,7 +200,9 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 				!licenseRequestStr.empty())
 		{
 			MW_LOG_INFO("Access token, Content metadata and license request are copied successfully, passing details with SecManager");
-
+			g_print("surya_secman: licenseRequestStr: %s", licenseRequestStr.c_str());
+			g_print("surya_secman: accessTokenStr: %s", accessTokenStr.c_str());
+			g_print("surya_secman: contentMetaDataStr: %s", contentMetaDataStr.c_str());
 			//Set json params to be used by sec manager
 			param["accessToken"] = accessTokenStr;
 			param["contentMetadata"] = contentMetaDataStr;

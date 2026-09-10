@@ -37,6 +37,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <glib.h>
 
 #define SECMANAGER_CALL_SIGN "org.rdk.SecManager.1"
 #define WATERMARK_PLUGIN_CALLSIGN "org.rdk.Watermark.1"

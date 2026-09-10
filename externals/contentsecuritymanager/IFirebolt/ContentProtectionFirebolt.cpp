@@ -221,6 +221,8 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 {
 	// licenseUrl un-used now
 	(void) licenseUrl;
+	MW_LOG_INFO("surya: AcquireLicenseOpenOrUpdate called with clientId: %s, appId: %s", clientId.c_str(), appId.c_str());
+	g_print("surya: AcquireLicenseOpenOrUpdate called with clientId: %s, appId: %s", clientId.c_str(), appId.c_str());
 
 	bool ret = false;
 	bool result = false;
@@ -283,13 +285,17 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 
 		{
 			MW_LOG_INFO("Access token, Content metadata and license request are copied successfully, passing details with ContentProtection");
-
+			g_print("surya: licenseRequestStr: %s", licenseRequestStr.c_str());
+			g_print("surya: accessTokenStr: %s", accessTokenStr.c_str());
+			g_print("surya: contentMetaDataStr: %s", contentMetaDataStr.c_str());
+			
 			//Set json params to be used by sec manager
 			param.add("accessToken", accessTokenStr);
 			param.add("contentMetadata", contentMetaDataStr);
 
 			std::string initData = param.print_UnFormatted();
 			MW_LOG_WARN("ContentProtection %s param: %s",apiName, initData.c_str());
+			g_print("surya: initData: %s", initData.c_str());
 			bool result = false;
 			//invoke "openDrmSession" or "updateDrmSession" with retries for specific error cases
 			do
@@ -380,7 +386,6 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 
 					if (newSession.isSessionValid())
 					{
-						// session = newSession;
 						int64_t newSessionId = newSession.getSessionID();
                         if (newSessionId > 0)
                         {
