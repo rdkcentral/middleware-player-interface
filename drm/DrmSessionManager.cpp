@@ -28,6 +28,7 @@
 #include <iostream>
 #include "DrmHelper.h"
 #include <inttypes.h>
+#include <pthread.h>
 #include "PlayerUtils.h"
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
@@ -113,7 +114,11 @@ void DrmSessionManager::clearSessionData()
 			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
 			 * (called from a GStreamer pipeline thread via a cached raw pointer)
 			 * has completed, before freeing the object. */
+			long long pfdStart = GetCurrentTimeMS();
 			drmSessionContexts[i].drmSession->PrepareForDestruction();
+			long long pfdMs = GetCurrentTimeMS() - pfdStart;
+			if (pfdMs > 50)
+				MW_LOG_WARN("[TechFaultDiag] clearSessionData PrepareForDestruction slot=%d took %lldms tid=%p", i, pfdMs, (void*)pthread_self());
 			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 			drmSessionContexts[i] = DrmSessionContext();
 		}
@@ -215,7 +220,11 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 			{
 				MW_LOG_WARN("DrmSessionManager:: Clearing failed Session Data Slot : %d", i);
 				/* DELIA-70726 fix: see clearSessionData() for rationale. */
+				long long pfdStart = GetCurrentTimeMS();
 				drmSessionContexts[i].drmSession->PrepareForDestruction();
+				long long pfdMs = GetCurrentTimeMS() - pfdStart;
+				if (pfdMs > 50)
+					MW_LOG_WARN("[TechFaultDiag] clearDrmSession PrepareForDestruction slot=%d took %lldms tid=%p", i, pfdMs, (void*)pthread_self());
 				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 			}
 		}
@@ -230,7 +239,11 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
+		long long secMgrStart = GetCurrentTimeMS();
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
+		long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+		if (secMgrMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] setVideoWindowSize ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 	}
 }
 /**
@@ -244,7 +257,11 @@ void DrmSessionManager::setVideoMute(bool live, double currentLatency, bool live
 	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
+		long long secMgrStart = GetCurrentTimeMS();
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), !mIsVideoOnMute.load());
+		long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+		if (secMgrMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] setVideoMute ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 		if(!mIsVideoOnMute.load())
 		{
 			//this is required as secmanager waits for speed update to show wm once session is active
@@ -264,7 +281,11 @@ void DrmSessionManager::hideWatermarkOnDetach(void)
 	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
+		long long secMgrStart = GetCurrentTimeMS();
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
+		long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+		if (secMgrMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] hideWatermarkOnDetach ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 	}
 	mFirstFrameSeen.store(false);
 }
@@ -306,7 +327,11 @@ void DrmSessionManager::setPlaybackSpeedState(bool live, double currentLatency, 
 		}
 
 		MW_LOG_INFO("setPlaybackSpeedState pos=%fs speed=%d", adjustedPos/1000, speed );
+		long long secMgrStart = GetCurrentTimeMS();
 		ContentSecurityManager::GetInstance()->setPlaybackSpeedState(localSession.getSessionID(), speed, adjustedPos);
+		long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+		if (secMgrMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] setPlaybackSpeedState ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 	}
 	else
 	{
@@ -464,7 +489,11 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	}
 
 	// protect createDrmSession multi-thread calls; found during PR 4.0 DRM testing
+	long long lockWaitStart = GetCurrentTimeMS();
 	std::lock_guard<std::mutex> guard(mDrmSessionLock);
+	long long lockWaitMs = GetCurrentTimeMS() - lockWaitStart;
+	if (lockWaitMs > 20)
+		MW_LOG_WARN("[TechFaultDiag] createDrmSession mDrmSessionLock wait=%lldms tid=%p streamType=%d", lockWaitMs, (void*)pthread_self(), streamType);
 
 	int cdmError = -1;
 	KeyState code = KEY_ERROR;
@@ -482,7 +511,13 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	/**
 	 * Create drm session without primaryKeyId markup OR retrieve old DRM session.
 	 */
+	long long getDrmSessionStart = GetCurrentTimeMS();
 	code = getDrmSession(err, drmHelper, selectedSlot,  Instance);
+	{
+		long long getDrmSessionMs = GetCurrentTimeMS() - getDrmSessionStart;
+		if (getDrmSessionMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] createDrmSession getDrmSession() took %lldms tid=%p streamType=%d code=%d", getDrmSessionMs, (void*)pthread_self(), streamType, (int)code);
+	}
 	/**
 	 * KEY_READY code indicates that a previously created session is being reused.
 	 */
@@ -494,7 +529,13 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	std::vector<uint8_t> keyId;
 	drmHelper->getKey(keyId);
 	/* callback to initiate content protection data update */
+	long long contentUpdateStart = GetCurrentTimeMS();
 	mCustomData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
+	{
+		long long contentUpdateMs = GetCurrentTimeMS() - contentUpdateStart;
+		if (contentUpdateMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] createDrmSession ContentUpdateCb took %lldms tid=%p streamType=%d", contentUpdateMs, (void*)pthread_self(), streamType);
+	}
 	if (code == KEY_READY)
 	{
 		return drmSessionContexts[selectedSlot].drmSession;
@@ -527,7 +568,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
+	long long licenseStart = GetCurrentTimeMS();
+	MW_LOG_MIL("[TechFaultDiag] createDrmSession AcquireLicenseCb begin tid=%p streamType=%d slot=%d", (void*)pthread_self(), streamType, selectedSlot);
 	code =this->AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	MW_LOG_MIL("[TechFaultDiag] createDrmSession AcquireLicenseCb end, took %lldms tid=%p streamType=%d slot=%d code=%d", GetCurrentTimeMS() - licenseStart, (void*)pthread_self(), streamType, selectedSlot, (int)code);
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);
@@ -852,7 +896,11 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 						mContentSecurityManagerSession = slotSession;
 						bool videoMuteState = mIsVideoOnMute.load();
 						MW_LOG_WARN("Activating re-used DRM, sessionId[%" PRId64 "], with video mute = %d", slotSession.getSessionID(), videoMuteState);
+						long long secMgrStart = GetCurrentTimeMS();
 						ContentSecurityManager::GetInstance()->UpdateSessionState(slotSession.getSessionID(), true);
+						long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+						if (secMgrMs > 50)
+							MW_LOG_WARN("[TechFaultDiag] getDrmSession reuse ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 					}
 					return KEY_READY;
 				}
@@ -863,7 +911,12 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				}
 				else if (existingState <= KEY_READY)
 				{
-					if (drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout()))
+					long long waitStateStart = GetCurrentTimeMS();
+					bool gotReady = drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout());
+					long long waitStateMs = GetCurrentTimeMS() - waitStateStart;
+					if (waitStateMs > 50)
+						MW_LOG_WARN("[TechFaultDiag] getDrmSession waitForState(KEY_READY) slot=%d took %lldms (timeout=%ums) tid=%p gotReady=%d", sessionSlot, waitStateMs, drmHelper->keyProcessTimeout(), (void*)pthread_self(), gotReady);
+					if (gotReady)
 					{
 						MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 						return KEY_READY;
@@ -895,12 +948,22 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 		 * call already in flight against this session finishes, so the delete
 		 * below cannot race with OCDMSessionAdapter::verifyOutputProtection()/
 		 * decrypt() running on the old pipeline's multiqueue thread. */
+		long long pfdStart = GetCurrentTimeMS();
 		drmSessionContexts[sessionSlot].drmSession->PrepareForDestruction();
+		long long pfdMs = GetCurrentTimeMS() - pfdStart;
+		if (pfdMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] getDrmSession slot-reuse PrepareForDestruction slot=%d took %lldms tid=%p", sessionSlot, pfdMs, (void*)pthread_self());
 		MW_SAFE_DELETE(drmSessionContexts[sessionSlot].drmSession);
 	}
         this->ProfileUpdateCb();
 
+	long long getDrmSessionFactoryStart = GetCurrentTimeMS();
 	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	{
+		long long getDrmSessionFactoryMs = GetCurrentTimeMS() - getDrmSessionFactoryStart;
+		if (getDrmSessionFactoryMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] getDrmSession DrmSessionFactory::GetDrmSession slot=%d took %lldms tid=%p", sessionSlot, getDrmSessionFactoryMs, (void*)pthread_self());
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -939,7 +1002,13 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 
 	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
 	MW_LOG_INFO("DRM session Custom Data - %s ", mCustomData.empty()?"NULL":mCustomData.c_str());
+	long long generateStart = GetCurrentTimeMS();
 	drmSessionContexts[sessionSlot].drmSession->generateDRMSession(drmInitData.data(), (uint32_t)drmInitData.size(), mCustomData);
+	{
+		long long generateMs = GetCurrentTimeMS() - generateStart;
+		if (generateMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] initializeDrmSession generateDRMSession slot=%d took %lldms tid=%p", sessionSlot, generateMs, (void*)pthread_self());
+	}
 
 	code = drmSessionContexts[sessionSlot].drmSession->getState();
 	if (code != KEY_INIT)
@@ -973,7 +1042,10 @@ void DrmSessionManager::notifyCleanup()
 	{
 		// Set current session to inactive
 		MW_LOG_WARN("De-activate DRM session [%" PRId64 "] and watermark", localSession.getSessionID() );
+		long long secMgrStart = GetCurrentTimeMS();
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
+		long long secMgrMs = GetCurrentTimeMS() - secMgrStart;
+		MW_LOG_WARN("[TechFaultDiag] notifyCleanup ContentSecurityManager RPC took %lldms tid=%p", secMgrMs, (void*)pthread_self());
 		// Reset the session ID, the session ID is preserved within DrmSession instances
 		mContentSecurityManagerSession.setSessionInvalid();	//note this doesn't necessarily close the session as the session ID is also saved in the slot
 		mCurrentSpeed.store(0);

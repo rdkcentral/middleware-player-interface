@@ -25,6 +25,7 @@
 #include "DrmSession.h"
 #include "PlayerLogManager.h"
 #include <chrono>
+#include <pthread.h>
 
 /**
  * @brief Constructor for DrmSession.
@@ -53,9 +54,12 @@ bool DrmSession::AcquireForUse()
 	std::lock_guard<std::mutex> lock(mLifecycleMutex);
 	if (mMarkedForDestruction)
 	{
+		MW_LOG_WARN("[TechFaultDiag] AcquireForUse denied, already marked for destruction this=%p tid=%p", (void*)this, (void*)pthread_self());
 		return false;
 	}
 	mActiveOperations++;
+	if (mActiveOperations > 1)
+		MW_LOG_MIL("[TechFaultDiag] AcquireForUse this=%p tid=%p activeOperations=%d", (void*)this, (void*)pthread_self(), mActiveOperations);
 	return true;
 }
 
@@ -68,6 +72,10 @@ void DrmSession::ReleaseAfterUse()
 	if (mActiveOperations > 0)
 	{
 		mActiveOperations--;
+	}
+	else
+	{
+		MW_LOG_ERR("[TechFaultDiag] ReleaseAfterUse called with activeOperations already 0, possible unmatched Acquire/Release this=%p tid=%p", (void*)this, (void*)pthread_self());
 	}
 	if (mActiveOperations == 0)
 	{
@@ -85,11 +93,17 @@ void DrmSession::PrepareForDestruction(uint32_t timeoutMs)
 	mMarkedForDestruction = true;
 	if (mActiveOperations > 0)
 	{
-		MW_LOG_WARN("DrmSession::PrepareForDestruction : waiting for %d in-flight decrypt operation(s) to complete before delete", mActiveOperations);
+		auto waitStart = std::chrono::steady_clock::now();
+		MW_LOG_WARN("[TechFaultDiag] DrmSession::PrepareForDestruction : waiting for %d in-flight decrypt operation(s) to complete before delete this=%p tid=%p", mActiveOperations, (void*)this, (void*)pthread_self());
 		mLifecycleCV.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this]() { return mActiveOperations == 0; });
+		auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - waitStart).count();
 		if (mActiveOperations > 0)
 		{
-			MW_LOG_ERR("DrmSession::PrepareForDestruction : timed out waiting for in-flight decrypt operation(s); proceeding with destruction");
+			MW_LOG_ERR("[TechFaultDiag] DrmSession::PrepareForDestruction : TIMED OUT after %lldms waiting for %d in-flight decrypt operation(s); proceeding with destruction this=%p tid=%p", (long long)waitMs, mActiveOperations, (void*)this, (void*)pthread_self());
+		}
+		else
+		{
+			MW_LOG_MIL("[TechFaultDiag] DrmSession::PrepareForDestruction : in-flight operation(s) drained after %lldms this=%p tid=%p", (long long)waitMs, (void*)this, (void*)pthread_self());
 		}
 	}
 }

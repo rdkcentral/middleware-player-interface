@@ -502,8 +502,6 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	GstBuffer* subsamplesBuffer = NULL;
 	GstMapInfo subSamplesMap;
 	GstProtectionMeta* protectionMeta = NULL;
-	DrmSession* drmSession = NULL;
-	GstCaps* sinkCaps = NULL;
 	gboolean mutexLocked = FALSE;
 	int errorCode;
 
@@ -519,7 +517,13 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	protectionMeta =
 			reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
 
-	g_mutex_lock(&cdmidecryptor->mutex);
+	{
+		gint64 lockWaitStart = g_get_monotonic_time();
+		g_mutex_lock(&cdmidecryptor->mutex);
+		gint64 lockWaitMs = (g_get_monotonic_time() - lockWaitStart) / 1000;
+		if (lockWaitMs > 20)
+			MW_LOG_WARN("[TechFaultDiag] transform_ip mutex wait=%" G_GINT64_FORMAT "ms tid=%p mediaType=%d", lockWaitMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+	}
 	mutexLocked = TRUE;
 
 	if (cdmidecryptor->sinkCaps == NULL && cdmidecryptor->streamReceived) {
@@ -542,18 +546,18 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 		{
 			// call decrypt even for clear samples in order to copy it to a secure buffer. If secure buffers are not supported
 			// decrypt() call will return without doing anything
-			drmSession = cdmidecryptor->drmSession;
-			if (drmSession != NULL && cdmidecryptor->sinkCaps != NULL && drmSession->AcquireForUse())
+			/* DELIA-70726 fix: guard against the DrmSession being concurrently torn down
+			 * (e.g. DrmSessionManager reusing/evicting the slot during a back-to-back
+			 * channel change) while this pipeline still has buffers in flight. */
+			if (cdmidecryptor->drmSession != NULL && cdmidecryptor->sinkCaps != NULL
+					&& cdmidecryptor->drmSession->AcquireForUse())
 			{
-				sinkCaps = gst_caps_ref(cdmidecryptor->sinkCaps);
-				g_mutex_unlock(&cdmidecryptor->mutex);
-				mutexLocked = FALSE;
-				errorCode = drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, sinkCaps);
-				drmSession->ReleaseAfterUse();
-				gst_caps_unref(sinkCaps);
-				sinkCaps = NULL;
-				g_mutex_lock(&cdmidecryptor->mutex);
-				mutexLocked = TRUE;
+				gint64 decryptStart = g_get_monotonic_time();
+				errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
+				cdmidecryptor->drmSession->ReleaseAfterUse();
+				gint64 decryptMs = (g_get_monotonic_time() - decryptStart) / 1000;
+				if (decryptMs > 50)
+					MW_LOG_WARN("[TechFaultDiag] transform_ip clear-buffer decrypt() held mutex for %" G_GINT64_FORMAT "ms tid=%p mediaType=%d", decryptMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
 			}
 			else
 			{ /* If drmSession creation failed, or is being destroyed, the call will be aborted here */
@@ -579,19 +583,14 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	{
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n\nWaiting for key\n");
 	}
-	/* Wait until key/protection is available, but also re-check canWait on wakeups so
-	 * state transitions (PAUSED->READY) can break the wait without blocking teardown. */
+	// The key might not have been received yet. Wait for it.
 	if (!cdmidecryptor->streamReceived)
 	{
-		gint64 waitUntil = g_get_monotonic_time() + (10 * G_TIME_SPAN_SECOND);
-		while (!cdmidecryptor->streamReceived && cdmidecryptor->canWait)
-		{
-			if (!g_cond_wait_until(&cdmidecryptor->condition, &cdmidecryptor->mutex, waitUntil))
-			{
-				GST_ERROR_OBJECT(cdmidecryptor, "Timed out waiting for protection event");
-				break;
-			}
-		}
+		gint64 keyWaitStart = g_get_monotonic_time();
+		MW_LOG_MIL("[TechFaultDiag] transform_ip waiting for key tid=%p mediaType=%d", (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+		g_cond_wait(&cdmidecryptor->condition,
+				&cdmidecryptor->mutex);
+		MW_LOG_MIL("[TechFaultDiag] transform_ip key wait ended after %" G_GINT64_FORMAT "ms tid=%p mediaType=%d streamReceived=%d", (g_get_monotonic_time() - keyWaitStart) / 1000, (void*)g_thread_self(), (int)cdmidecryptor->mediaType, cdmidecryptor->streamReceived);
 	}
 
 	if (!cdmidecryptor->streamReceived)
@@ -692,22 +691,20 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	 * this guard, the multiqueue/decryptor thread can call decrypt() on a
 	 * DrmSession that is being (or has already been) freed, causing a
 	 * use-after-free SIGSEGV inside OCDMSessionAdapter::verifyOutputProtection(). */
-	drmSession = cdmidecryptor->drmSession;
-	if (!drmSession->AcquireForUse())
+	if (!cdmidecryptor->drmSession->AcquireForUse())
 	{
 		GST_ERROR_OBJECT(cdmidecryptor, "drmSession is being destroyed, aborting decrypt");
 		result = GST_FLOW_NOT_SUPPORTED;
 		goto free_resources;
 	}
-	sinkCaps = gst_caps_ref(cdmidecryptor->sinkCaps);
-	g_mutex_unlock(&cdmidecryptor->mutex);
-	mutexLocked = FALSE;
-	errorCode = drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, sinkCaps);
-	drmSession->ReleaseAfterUse();
-	gst_caps_unref(sinkCaps);
-	sinkCaps = NULL;
-	g_mutex_lock(&cdmidecryptor->mutex);
-	mutexLocked = TRUE;
+	{
+		gint64 decryptStart = g_get_monotonic_time();
+		errorCode = cdmidecryptor->drmSession->decrypt(keyIDBuffer, ivBuffer, buffer, subSampleCount, subsamplesBuffer, cdmidecryptor->sinkCaps);
+		cdmidecryptor->drmSession->ReleaseAfterUse();
+		gint64 decryptMs = (g_get_monotonic_time() - decryptStart) / 1000;
+		if (decryptMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] transform_ip decrypt() held mutex for %" G_GINT64_FORMAT "ms tid=%p mediaType=%d", decryptMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+	}
 
 	cdmidecryptor->streamEncrypted = true;
 	if (errorCode != 0 || cdmidecryptor->hdcpOpProtectionFailCount)
@@ -797,9 +794,6 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 
 	if (subsamplesBuffer)
 		gst_buffer_unmap(subsamplesBuffer, &subSamplesMap);
-
-	if (sinkCaps)
-		gst_caps_unref(sinkCaps);
 
 	if (protectionMeta)
 		gst_buffer_remove_meta(buffer,
@@ -959,41 +953,35 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		}
 
 		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
+		{
+			gint64 lockWaitStart = g_get_monotonic_time();
+			g_mutex_lock(&cdmidecryptor->mutex);
+			gint64 lockWaitMs = (g_get_monotonic_time() - lockWaitStart) / 1000;
+			if (lockWaitMs > 20)
+				MW_LOG_WARN("[TechFaultDiag] sink_event mutex wait=%" G_GINT64_FORMAT "ms tid=%p mediaType=%d", lockWaitMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+		}
+		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
 		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
                 int err = -1;
 		int responseCode =-1;
-		DrmSession* newDrmSession = NULL;
-
-		/* Invalidate the old drmSession pointer before createDrmSession() runs, since
-		 * DrmSessionManager may delete it (slot reuse/eviction) concurrently on this
-		 * thread. Without this, transform_ip on another thread could read the stale
-		 * pointer and call AcquireForUse()/decrypt() on a freed DrmSession. */
-		g_mutex_lock(&cdmidecryptor->mutex);
-		cdmidecryptor->drmSession = NULL;
-		cdmidecryptor->streamReceived = FALSE;
-		g_cond_signal(&cdmidecryptor->condition);
-		g_mutex_unlock(&cdmidecryptor->mutex);
-
+		gint64 createSessionStart = g_get_monotonic_time();
+		MW_LOG_MIL("[TechFaultDiag] sink_event createDrmSession begin tid=%p mediaType=%d", (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
 		if (cdmidecryptor->sessionManager->m_drmConfigParam->mIsWVKIDWorkaround){
-			newDrmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
+			cdmidecryptor->drmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						outData, outDataLen, (int)cdmidecryptor->mediaType, cdmidecryptor->player, e.get(), nullptr, false);
 		}else{
-			newDrmSession =
+			cdmidecryptor->drmSession =
 				cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						reinterpret_cast<const unsigned char *>(mapInfo.data),
 						mapInfo.size, (int)cdmidecryptor->mediaType, cdmidecryptor->player, e.get(), nullptr, false);
 		}
+		MW_LOG_MIL("[TechFaultDiag] sink_event createDrmSession end, took %" G_GINT64_FORMAT "ms tid=%p mediaType=%d drmSession=%p", (g_get_monotonic_time() - createSessionStart) / 1000, (void*)g_thread_self(), (int)cdmidecryptor->mediaType, (void*)cdmidecryptor->drmSession);
 		if(err != -1)
                 {
                        cdmidecryptor->sessionManager->setfailureCb(e.get(),err);
                 }
-
-		g_mutex_lock(&cdmidecryptor->mutex);
-		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
-		cdmidecryptor->drmSession = newDrmSession;
-
 		if (NULL == cdmidecryptor->drmSession)
 		{
 /* For  Avoided setting 'streamReceived' as FALSE if createDrmSession() failed after a successful case.
@@ -1068,17 +1056,32 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 	GstCDMIDecryptor* cdmidecryptor =
 			GST_CDMI_DECRYPTOR(element);
 
+	gint64 changestateEntryTime = g_get_monotonic_time();
+	MW_LOG_MIL("[TechFaultDiag] changestate ENTER transition=%d tid=%p mediaType=%d", (int)transition, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+
 	switch (transition)
 	{
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		GST_DEBUG_OBJECT(cdmidecryptor, "READY->PAUSED");
-		g_mutex_lock(&cdmidecryptor->mutex);
+		{
+			gint64 lockWaitStart = g_get_monotonic_time();
+			g_mutex_lock(&cdmidecryptor->mutex);
+			gint64 lockWaitMs = (g_get_monotonic_time() - lockWaitStart) / 1000;
+			if (lockWaitMs > 20)
+				MW_LOG_WARN("[TechFaultDiag] changestate READY_TO_PAUSED mutex wait=%" G_GINT64_FORMAT "ms tid=%p mediaType=%d", lockWaitMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+		}
 		cdmidecryptor->canWait = true;
 		g_mutex_unlock(&cdmidecryptor->mutex);
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG_OBJECT(cdmidecryptor, "PAUSED->READY");
-		g_mutex_lock(&cdmidecryptor->mutex);
+		{
+			gint64 lockWaitStart = g_get_monotonic_time();
+			MW_LOG_MIL("[TechFaultDiag] changestate PAUSED_TO_READY attempting mutex tid=%p mediaType=%d", (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+			g_mutex_lock(&cdmidecryptor->mutex);
+			gint64 lockWaitMs = (g_get_monotonic_time() - lockWaitStart) / 1000;
+			MW_LOG_MIL("[TechFaultDiag] changestate PAUSED_TO_READY acquired mutex after %" G_GINT64_FORMAT "ms tid=%p mediaType=%d", lockWaitMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType);
+		}
 		cdmidecryptor->canWait = false;
 		g_cond_signal(&cdmidecryptor->condition);
 		g_mutex_unlock(&cdmidecryptor->mutex);
@@ -1099,9 +1102,16 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 		break;
 	}
 
-	ret =
-			GST_ELEMENT_CLASS(gst_cdmidecryptor_parent_class)->change_state(
-					element, transition);
+	{
+		gint64 parentChangeStart = g_get_monotonic_time();
+		ret =
+				GST_ELEMENT_CLASS(gst_cdmidecryptor_parent_class)->change_state(
+						element, transition);
+		gint64 parentChangeMs = (g_get_monotonic_time() - parentChangeStart) / 1000;
+		gint64 totalMs = (g_get_monotonic_time() - changestateEntryTime) / 1000;
+		if (parentChangeMs > 50 || totalMs > 50)
+			MW_LOG_WARN("[TechFaultDiag] changestate transition=%d parentChangeState=%" G_GINT64_FORMAT "ms total=%" G_GINT64_FORMAT "ms tid=%p mediaType=%d ret=%d", (int)transition, parentChangeMs, totalMs, (void*)g_thread_self(), (int)cdmidecryptor->mediaType, (int)ret);
+	}
 	return ret;
 }
 
