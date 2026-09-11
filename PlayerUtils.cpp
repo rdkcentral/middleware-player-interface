@@ -26,7 +26,7 @@
 #include <utility>
 #include <cstdio>
 
-#include "version.h"
+#include "version.h.in"
 
 /**
  * @brief Check if string start with a prefix
@@ -302,10 +302,10 @@ std::vector<uint8_t> RawKeyToKeyId(const uint8_t* key, std::size_t keySize)
  */
 void PrintPlayerInterfaceVersion()
 {
-    MW_LOG_MIL("###################################################\n");
- //   MW_LOG_MIL("[PlayerInterface] Version   : %s\n", PLAYERINTERFACE_VERSION);
-    MW_LOG_MIL("[PlayerInterface] Git Rev   : %s\n", PLAYERINTERFACE_GIT_REVISION);
-    MW_LOG_MIL("[PlayerInterface] Git Tag   : %s\n", PLAYERINTERFACE_GIT_TAG);
-   // MW_LOG_MIL("[PlayerInterface] Git Branch: %s\n", PLAYERINTERFACE_GIT_BRANCH);
-    MW_LOG_MIL("###################################################\n");
+    std::printf("###################################################\n");
+    std::printf("[PlayerInterface] Version   : %s\n", PLAYERINTERFACE_VERSION);
+    std::printf("[PlayerInterface] Git Rev   : %s\n", PLAYERINTERFACE_GIT_REVISION);
+    std::printf("[PlayerInterface] Git Tag   : %s\n", PLAYERINTERFACE_GIT_TAG);
+    std::printf("[PlayerInterface] Git Branch: %s\n", PLAYERINTERFACE_GIT_BRANCH);
+    std::printf("###################################################\n");
 }
