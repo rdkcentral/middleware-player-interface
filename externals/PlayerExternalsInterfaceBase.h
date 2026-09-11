@@ -84,7 +84,7 @@ class PlayerExternalsInterfaceBase
                          NULL);
 
             if(sourceWidth != m_sourceWidth || sourceHeight != m_sourceHeight) {
-                MW_LOG_WARN("viddec (%p) --> says width %d, height %d", element, sourceWidth, sourceHeight);
+                MW_LOG_WARN("viddec --> says width %d, height %d", sourceWidth, sourceHeight);
                 m_sourceWidth   = sourceWidth;
                 m_sourceHeight  = sourceHeight;
             }
