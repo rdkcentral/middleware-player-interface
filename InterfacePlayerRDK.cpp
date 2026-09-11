@@ -307,9 +307,9 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
  * @param[in] drmMetadata The DRM metadata
  */
 static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMetadata &drmMetadata);
+
 /**
  * @brief Configures the GStreamer pipeline.
- * @param codecInfo Pipeline codec information.
  * @param format Video format.
  * @param audioFormat Audio format.
  * @param subFormat Whether subtitle format is enabled.
@@ -325,14 +325,38 @@ static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMe
  * @param enableLiveLatency Whether to enable live-latency mode in the
  *        RialtoSink streams-info context (passed as enable-live-latency).
  */
-void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int format, int audioFormat, int subFormat,
+void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subFormat,
+										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
+										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
+{
+	StreamCodecInfo streamInfo;
+	streamInfo.video.mCodecFormat = static_cast<GstStreamOutputFormat>(format);
+	streamInfo.audio.mCodecFormat = static_cast<GstStreamOutputFormat>(audioFormat);
+	streamInfo.subtitle.mCodecFormat = static_cast<GstStreamOutputFormat>(subFormat);
+	ConfigurePipeline(std::move(streamInfo), bESChangeStatus, setReadyAfterPipelineCreation,
+					  isSubEnable, trackId, rate, pipelineName, PipelinePriority, FirstFrameFlag, manifestUrl, enableLiveLatency);
+}
+
+/**
+ * @brief Configures the GStreamer pipeline.
+ * @param codecInfo Codec information for the stream.
+ * @param bESChangeStatus Whether ES change status is enabled.
+ * @param setReadyAfterPipelineCreation Whether to set the player as ready after pipeline creation.
+ * @param isSubEnable Whether subtitles are enabled.
+ * @param trackId Track ID.
+ * @param rate Bitrate.
+ * @param pipelineName Pipeline name.
+ * @param PipelinePriority Pipeline priority.
+ * @param FirstFrameFlag Whether the first-frame callback is required.
+ * @param manifestUrl URL of the manifest used to configure stream setup.
+ * @param enableLiveLatency Whether to enable live-latency mode in the
+ *        RialtoSink streams-info context (passed as enable-live-latency).
+ */
+void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
 	mFirstFrameRequired = FirstFrameFlag;
-	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
-	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
-	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
 	MediaCodecInfo* codecInfoByTrack[GST_TRACK_COUNT] = {
 		&codecInfo.video,
 		&codecInfo.audio,
@@ -340,20 +364,20 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 	};
 
 	GstStreamOutputFormat newFormat[GST_TRACK_COUNT];
-	newFormat[eGST_MEDIATYPE_VIDEO] = gstFormat;
-	newFormat[eGST_MEDIATYPE_AUDIO] = gstAudioFormat;
+	newFormat[eGST_MEDIATYPE_VIDEO] = static_cast<GstStreamOutputFormat>(codecInfo.video.mCodecFormat);;
+	newFormat[eGST_MEDIATYPE_AUDIO] = static_cast<GstStreamOutputFormat>(codecInfo.audio.mCodecFormat);
 
 	bool newClosedCaptionsControl = false;
 
 	if(isSubEnable)
 	{
 		MW_LOG_MIL("Gstreamer subs enabled");
-		newFormat[eGST_MEDIATYPE_SUBTITLE] = gstSubFormat;
+		newFormat[eGST_MEDIATYPE_SUBTITLE] = static_cast<GstStreamOutputFormat>(codecInfo.subtitle.mCodecFormat);
 	}
 	else
 	{
 		MW_LOG_MIL("Gstreamer subs disabled");
-		newFormat[eGST_MEDIATYPE_SUBTITLE]=GST_FORMAT_INVALID;
+		newFormat[eGST_MEDIATYPE_SUBTITLE] = GST_FORMAT_INVALID;
 	}
 
 	if(!(m_gstConfigParam->useWesterosSink))
@@ -361,7 +385,6 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
 		interfacePlayerPriv->gstPrivateContext->firstTuneWithWesterosSinkOff = interfacePlayerPriv->socInterface->IsFirstTuneWithWesteros();
 	}
-
 	else
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = true;
@@ -378,7 +401,7 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 		interfacePlayerPriv->gstPrivateContext->usingRialtoSink = true;
 
 		// If no subtitles defined, then create a closed caption control stream
-		newClosedCaptionsControl = (gstSubFormat == GST_FORMAT_INVALID);
+		newClosedCaptionsControl = (static_cast<GstStreamOutputFormat>(codecInfo.subtitle.mCodecFormat) == GST_FORMAT_INVALID);
 
 		// To avoid out of band subtitles being removed during trickplay,
 		// check if they were previously configured, and don't enable Closed Caption Control.
@@ -425,20 +448,21 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[i];
+		bool isInitialSetup = (stream->format == GST_FORMAT_INVALID || stream->format == GST_FORMAT_UNKNOWN);
 		bool isValidNewFormat = (newFormat[i] != GST_FORMAT_INVALID && newFormat[i] != GST_FORMAT_UNKNOWN);
-		if(stream->format != newFormat[i] || (isValidNewFormat && stream->codecInfo.mIsEncrypted != codecInfoByTrack[i]->mIsEncrypted))
+		bool isEncryptionChanged = (stream->codecInfo.mIsEncrypted != codecInfoByTrack[i]->mIsEncrypted);
+		bool isFormatChanged = (stream->format != newFormat[i] || isEncryptionChanged);
+		// Reconfigure pipeline if this is the first setup, or the encryption status or format has changed
+		bool shouldReconfigure = isValidNewFormat && (isInitialSetup || isFormatChanged);
+		if(shouldReconfigure)
 		{
-			bool isInitialSetup = (stream->format == GST_FORMAT_INVALID || stream->format == GST_FORMAT_UNKNOWN);
-			if (isValidNewFormat || isInitialSetup)
-			{
-				MW_LOG_MIL("Closing stream %d old format = %d, new format = %d",i, stream->format, newFormat[i]);
-				configureStream[i] = true;
-				interfacePlayerPriv->gstPrivateContext->NumberOfTracks++;
-			}
-			else
-			{
-				MW_LOG_MIL("Skipping reconfiguration for stream %d - both format invalid/unknown",i);
-			}
+			MW_LOG_MIL("Closing stream %d old format = %d, new format = %d",i, stream->format, newFormat[i]);
+			configureStream[i] = true;
+			interfacePlayerPriv->gstPrivateContext->NumberOfTracks++;
+		}
+		else
+		{
+			MW_LOG_MIL("Skipping reconfiguration for stream %d for [%d]->[%d], isEncryptionChanged = %d",i, stream->format, newFormat[i], isEncryptionChanged);
 		}
 		if(interfacePlayerPriv->socInterface->ShouldTearDownForTrickplay())
 		{
@@ -510,7 +534,7 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 		g_object_get(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin, "video-sink", &vidsink, NULL);
 		if(vidsink)
 		{
-			gboolean videoOnly = (audioFormat == GST_FORMAT_INVALID);
+			gboolean videoOnly = (newFormat[eGST_MEDIATYPE_AUDIO] == GST_FORMAT_INVALID);
 			MW_LOG_INFO("Setting single-path-stream to %d", videoOnly);
 			g_object_set(vidsink, "single-path-stream", videoOnly, NULL);
 			// RDKEMW-18286: Reinforce show-video-window before pipeline state change
@@ -557,7 +581,7 @@ void InterfacePlayerRDK::ConfigurePipeline(PipelineCodecInfo&& codecInfo,int for
 		}
 	}
 	/* If buffering is enabled, set the pipeline in Paused state, once sufficient content has been buffered the pipeline will be set to GST_STATE_PLAYING */
-	else if (interfacePlayerPriv->gstPrivateContext->buffering_enabled && format != GST_FORMAT_INVALID && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
+	else if (interfacePlayerPriv->gstPrivateContext->buffering_enabled && newFormat[eGST_MEDIATYPE_VIDEO] != GST_FORMAT_INVALID && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED, target state to GST_STATE_PLAYING");
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = GST_STATE_PLAYING;
