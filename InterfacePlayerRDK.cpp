@@ -93,7 +93,7 @@ mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSys
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
-	MW_LOG_MIL("InterfacePlayerRDK constructed using external library");
+	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 1.0.0");
 	PrintPlayerInterfaceVersion();
 	m_gstConfigParam = new Configs();
 	m_gstConfigParam->framesToQueue = SocUtils::RequiredQueuedFrames();
