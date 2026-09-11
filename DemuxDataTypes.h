@@ -167,10 +167,10 @@ struct MediaCodecInfo
 };
 
 /*
- * @struct PipelineCodecInfo
- * @brief Codec information for all tracks in a pipeline
+ * @struct StreamCodecInfo
+ * @brief Codec information for all tracks in a stream
  */
-struct PipelineCodecInfo
+struct StreamCodecInfo
 {
 	MediaCodecInfo video;
 	MediaCodecInfo audio;
