@@ -335,7 +335,7 @@ class InterfacePlayerRDK
         	 *@param[in] drmID preferred drm
         	 */
         	void SetPreferredDRM(const char *drmID);
-        	/**
+			/**
         	 * @brief Configures the GStreamer pipeline.
         	 * @param format Video format.
         	 * @param audioFormat Audio format.
@@ -352,7 +352,24 @@ class InterfacePlayerRDK
         	 * @param enableLiveLatency Whether to enable live-latency mode in the
         	 *        RialtoSink streams-info context. Defaults to false.
         	 */
-			void ConfigurePipeline(PipelineCodecInfo&& codecInfo, int format, int audioFormat, int subFormat, bool bESChangeStatus, bool setReadyAfterPipelineCreation, bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string url, bool enableLiveLatency = false);
+        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url, bool enableLiveLatency = false);
+
+        	/**
+        	 * @brief Configures the GStreamer pipeline.
+        	 * @param codecInfo Codec information for the stream.
+        	 * @param bESChangeStatus Whether ES change status is enabled.
+        	 * @param setReadyAfterPipelineCreation Whether to set the player as ready after pipeline creation.
+        	 * @param isSubEnable Whether subtitles are enabled.
+        	 * @param trackId Track ID.
+        	 * @param rate Bitrate.
+        	 * @param pipelineName Pipeline name.
+        	 * @param PipelinePriority Pipeline priority.
+        	 * @param FirstFrameFlag Whether the first-frame callback is required.
+        	 * @param url URL of the manifest used to configure stream setup.
+        	 * @param enableLiveLatency Whether to enable live-latency mode in the
+        	 *        RialtoSink streams-info context. Defaults to false.
+        	 */
+			void ConfigurePipeline(StreamCodecInfo&& codecInfo, bool bESChangeStatus, bool setReadyAfterPipelineCreation, bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string url, bool enableLiveLatency = false);
 
         	/**
         	 * @brief Enables or disables pausing on playback start.

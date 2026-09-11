@@ -129,7 +129,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 	mPlayerConfigParams->useRialtoSink = true;
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, false);
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 	EXPECT_EQ(mPlayerContext->using_westerossink, true);
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, true);
 
@@ -138,18 +138,19 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 {
 	g_mockGStreamer = nullptr;
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].format, GST_FORMAT_INVALID);
 }
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithEncryptedCodecInfo)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	MediaCodecInfo videoCodecInfo(GST_FORMAT_VIDEO_ES_H264);
 	videoCodecInfo.mIsEncrypted = true;
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
 }
@@ -157,12 +158,13 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithEncryptedCodecInfo)
 // Validate that an encryption-only change does not configure or count a track when its format is invalid.
 TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalidFormat)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerContext->NumberOfTracks = 0;
 	MediaCodecInfo videoCodecInfo(GST_FORMAT_INVALID);
 	videoCodecInfo.mIsEncrypted = true;
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
@@ -174,7 +176,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 	mPlayerContext->buffering_enabled = true;
 	mPlayerContext->rate = GST_NORMAL_PLAY_RATE;
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->buffering_in_progress, true);
 	EXPECT_EQ(mPlayerContext->buffering_target_state, GST_STATE_PLAYING);
@@ -189,7 +191,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
 	EXPECT_EQ(cbResponse, 5); //callback was called
@@ -204,7 +206,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_ESChange)
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
 	EXPECT_EQ(cbResponse, 5);
@@ -341,6 +343,9 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 
 	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_VIDEO];
 	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mCodecFormat = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mCodecData = {0x01, 0x02};
+	stream->codecInfo.mIsEncrypted = true;
 	stream->eosReached = true;
 	stream->bufferUnderrun = true;
 
@@ -357,6 +362,9 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
 	EXPECT_EQ(stream->format, GST_FORMAT_INVALID);
+	EXPECT_EQ(stream->codecInfo.mCodecFormat, GST_FORMAT_INVALID);
+	EXPECT_TRUE(stream->codecInfo.mCodecData.empty());
+	EXPECT_FALSE(stream->codecInfo.mIsEncrypted);
 	EXPECT_EQ(stream->bufferUnderrun, false);
 	EXPECT_EQ(stream->eosReached, false);
 	EXPECT_EQ(mPlayerContext->buffering_in_progress, false);
@@ -394,7 +402,11 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_misc)
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_AUDIO);
 	stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
 	stream->format = GST_FORMAT_VIDEO_ES_H264; //dummy value
+	stream->codecInfo.mCodecFormat = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mIsEncrypted = true;
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_SUBTITLE);
+	EXPECT_EQ(stream->codecInfo.mCodecFormat, GST_FORMAT_INVALID);
+	EXPECT_FALSE(stream->codecInfo.mIsEncrypted);
 }
 
 TEST_F(InterfacePlayerTests, GstStopTestTrue)
@@ -850,6 +862,30 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStream
 	g_mockGstUtils = nullptr;
 }
 
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedContainerCapsRemainUnchanged)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_MPEGTS;
+	stream->codecInfo = MediaCodecInfo(stream->format);
+	stream->codecInfo.mIsEncrypted = true;
+	mPlayerConfigParams->videoBufBytes = 500;
+	mInterfaceGstPlayer->SetPreferredDRM("urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed");
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_MPEGTS)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
+}
+
 // Validate that encrypted elementary stream caps retain the original media type without adding a missing DRM system.
 TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStreamCapsWithoutDrmSystem)
 {
@@ -897,6 +933,7 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_ClearElementaryStreamCaps
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
 	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
 }
 
 TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
@@ -3201,6 +3238,22 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_ValidVideoCodecFormat)
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(&caps, 0)).WillOnce(Return(&s));
 	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&s, StrEq("codec_data"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_set_simple(&caps, StrEq("stream-format"))).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
+
+	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo));
+
+	delete g_mockGstUtils;
+}
+
+TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedContainerCapsRemainUnchanged)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+	MediaCodecInfo codecInfo;
+	codecInfo.mCodecFormat = GST_FORMAT_ISO_BMFF;
+	codecInfo.mIsEncrypted = true;
+	GstCaps caps;
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_ISO_BMFF)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
 
 	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo));
