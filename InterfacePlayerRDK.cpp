@@ -3426,11 +3426,14 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	float timeout = 100.0;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gint gstGetStateCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+	bool pendingStateRetried = false;
 
 	do
 	{
-		if ((GST_STATE_CHANGE_SUCCESS
-			 == gst_element_get_state(privatePlayer->gstPrivateContext->pipeline, &gst_current, &gst_pending, timeout * GST_MSECOND))
+		GstStateChangeReturn stateChangeRet = gst_element_get_state(
+			privatePlayer->gstPrivateContext->pipeline, &gst_current, &gst_pending, timeout * GST_MSECOND);
+
+		if ((GST_STATE_CHANGE_SUCCESS == stateChangeRet)
 			&& (gst_current == stateToValidate))
 		{
 			GST_WARNING(
@@ -3438,6 +3441,16 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 						gst_current, gst_pending);
 			return gst_current;
 		}
+
+		if (!pendingStateRetried && (GST_STATE_CHANGE_ASYNC == stateChangeRet) && (gst_pending == stateToValidate))
+		{
+			MW_LOG_WARN("validateStateWithMsTimeout - PIPELINE state is pending for target state %d, delaying retrigger by 100 ms",
+						stateToValidate);
+			g_usleep(100 * 1000);
+			SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, stateToValidate);
+			pendingStateRetried = true;
+		}
+
 		g_usleep (msTimeOut * 1000); // Let pipeline safely transition to required state
 	}
 	while ((gst_current != stateToValidate) && (gstGetStateCnt-- != 0));
