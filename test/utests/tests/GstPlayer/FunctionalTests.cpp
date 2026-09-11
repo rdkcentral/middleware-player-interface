@@ -253,12 +253,9 @@ public:
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 			.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
 
-		mInterfaceGstPlayer->ConfigurePipeline(PipelineCodecInfo{GST_FORMAT_VIDEO_ES_H264,
+		mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264,
 										GST_FORMAT_AUDIO_ES_AAC,
 										GST_FORMAT_SUBTITLE_TTML},
-										GST_FORMAT_VIDEO_ES_H264,
-										GST_FORMAT_AUDIO_ES_AAC,
-										GST_FORMAT_SUBTITLE_TTML,
 										setup->bESChangeStatus,
 										  setup->setReadyAfterPipelineCreation,
 										  true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);

@@ -206,7 +206,7 @@ void configurePipelineCommand(InterfacePlayerRDK& player, const std::vector<std:
         std::string url = params[11];
 
         player.ConfigurePipeline(
-            PipelineCodecInfo{
+            StreamCodecInfo{
                 MediaCodecInfo(static_cast<GstStreamOutputFormat>(format)),
                 MediaCodecInfo(static_cast<GstStreamOutputFormat>(audioFormat)),
                 MediaCodecInfo(static_cast<GstStreamOutputFormat>(subFormat))},
