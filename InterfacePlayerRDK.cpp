@@ -3718,16 +3718,24 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 			{
 				MW_LOG_WARN("PTS-RESTAMP ENABLED, but we have codec change, so Signal EOS (%s).",gstGetMediaTypeName(type));
 			}
-			GstPlayer_SignalEOS(stream);
+			const bool skipAudioEosForRialto = interfacePlayerPriv->gstPrivateContext->usingRialtoSink && (type == eGST_MEDIATYPE_AUDIO) && !codecChange;
+			if (!skipAudioEosForRialto)
+			{
+				GstPlayer_SignalEOS(stream);
+				//If we have an audio discontinuity, signal subtec as well
+				if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
+				{
+					 GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				}
+			}
+			else
+			{
+				MW_LOG_INFO("Skipping appsrc EOS for %s discontinuity with Rialto sink", gstGetMediaTypeName(type));
+			}
+			
 			// We are in buffering, but we received discontinuity, un-pause pipeline
 			shouldHaltBuffering = true;
 			ret = true;
-
-			//If we have an audio discontinuity, signal subtec as well
-			if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
-			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
-			}
 		}
 	}
 	return ret;
