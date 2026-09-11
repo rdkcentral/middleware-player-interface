@@ -34,7 +34,6 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
-#include <PlayerLogManager.h>
 
 //Delete non-array object
 #define MW_SAFE_DELETE(ptr) { delete(ptr); ptr = NULL; }
