@@ -1,0 +1,155 @@
+name: L2 tests
+permissions:
+  contents: read
+
+# Uncomment below block to execute this workflow on Github Environment
+# on:
+#   pull_request:
+#     branches: [ develop ]
+#     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
+
+on: [act] # This workflow triggers when using the 'act' tool locally
+
+jobs:
+  execute-L2-tests:
+    name: Runs all L2 tests
+    runs-on: comcast-ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Install Middleware
+        run: |
+          export OPTION_COVERAGE=ON
+          yes | ./install-middleware.sh -s subtecii
+
+      - name: Set PKG_CONFIG_PATH
+        run: |
+          echo "PKG_CONFIG_PATH=${{ github.workspace }}/.libs/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: Create build directory
+        run: mkdir -p ${{ github.workspace }}/build
+
+      - name: Compile player interface with coverage
+        working-directory: ${{ github.workspace }}/build
+        run: |
+          cmake \
+            -S "${{ github.workspace }}" \
+            -B . \
+            -DEXCEPTIONS_ENABLE=ON \
+            -DENABLE_CODE_COVERAGE=ON \
+            -DBUILD_PICLI=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_COMPILER=/usr/bin/gcc \
+            -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+            -DCMAKE_CXX_FLAGS="--coverage -O0 -g" \
+            -DCMAKE_C_FLAGS="--coverage -O0 -g"
+          cmake --build . --target playergstinterface -j8
+
+      - name: Build pi-cli
+        working-directory: ${{ github.workspace }}/build
+        run: >
+            cmake
+            -S "${{ github.workspace }}"
+            -B .
+            -DEXCEPTIONS_ENABLE=ON
+            -DENABLE_CODE_COVERAGE=ON
+            -DBUILD_PICLI=ON 
+            &&
+            cmake --build . -j8
+
+      - name: Clone rdk-e/rdk-middleware-tools repo using PAT
+        working-directory: ${{ github.workspace }}/../
+        run: |
+          rm -rf rdk-middleware-tools
+          git clone https://$PAT@github.com/rdk-e/rdk-middleware-tools.git
+        env:
+          PAT: ${{ secrets.PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Create virtual environment
+        working-directory: ${{ github.workspace }}/../rdk-middleware-tools
+        run: python -m venv .mtvenv
+
+      - name: Install dependencies
+        working-directory: ${{ github.workspace }}/../rdk-middleware-tools
+        run: |
+          source .mtvenv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          mkdir -p ${{ github.workspace }}/../test_streams
+          chmod 777 ${{ github.workspace }}/../test_streams
+          apt install -y gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+
+      - name: Enable SSH connection
+        run: |
+          apt-get install -y openssh-client openssh-server sshpass tar wget
+          # Enable password authentication in sshd_config
+          sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          echo 'Port 8822' >> /etc/ssh/sshd_config
+          echo 'ListenAddress 127.0.0.1' >> /etc/ssh/sshd_config
+          mkdir -p /var/run/sshd
+          service ssh restart
+          useradd -m testuser
+          echo "testuser:1234" | chpasswd
+          mkdir -p /home/testuser/.ssh
+          ssh-keygen -t rsa -N "" -f /home/testuser/.ssh/id_rsa
+          cat /home/testuser/.ssh/id_rsa.pub >> /home/testuser/.ssh/authorized_keys
+          chmod 600 /home/testuser/.ssh/authorized_keys
+          chown -R testuser:testuser /home/testuser/.ssh
+          # Wait for SSH to be ready
+          sleep 2
+          echo '--- SSHD CONFIG ---'
+          cat /etc/ssh/sshd_config
+          service ssh start || (cat /var/log/auth.log || true)
+          service ssh status
+          chown -R testuser:testuser ${{ github.workspace }}/build
+          sshpass -p "1234" ssh -o StrictHostKeyChecking=no -p 8822 testuser@localhost "echo 'SSH connection to self successful'"
+
+      - name: Execute L2 Tests using MTF
+        working-directory: ${{ github.workspace }}/../rdk-middleware-tools
+        run: |
+          source .mtvenv/bin/activate
+          echo Y | python3 run_tests.py -c player_interface -l L2 -d ${{ github.workspace }}/test/L2_Tests/player_interface/ 
+          
+      - name: Generate coverage report
+        working-directory: ${{ github.workspace }}/build
+        run: >
+          lcov -c
+          -o coverage.info
+          -d ./CMakeFiles/playergstinterface.dir/
+          &&
+          lcov
+          -r coverage.info
+          '/usr/include/*'
+          '*/build/*'
+          '*/install/usr/include/*'
+          '*/Tests/headers/*'
+          '*/Tests/mocks/*'
+          '*/Tests/L2Tests/*'
+          '*/googlemock/*'
+          '*/googletest/*'
+          -o filtered_coverage.info
+          &&
+          genhtml
+          -o coverage
+          -t "middleware-player-interface coverage"
+          filtered_coverage.info
+          
+      - name: Upload artifacts
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-L2-player-interface
+          path: |
+            build/coverage/
+          if-no-files-found: warn
+
+
