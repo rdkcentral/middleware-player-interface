@@ -72,6 +72,17 @@ public:
 	virtual void Release(int iID) = 0;
 
 	/**
+	 * @brief Clear the stored control handle if it currently equals handle.
+	 *        Called by the handle owner's destructor so a handle can never be
+	 *        used after the object it points to is freed, independent of
+	 *        whether the GetId()/Release() usage count has reached zero (it
+	 *        may not have, if another session is still registered - see
+	 *        multi-pipeline mode).
+	 * @param[in] handle - the handle being invalidated
+	 */
+	virtual void InvalidateHandle(void *) {}
+
+	/**
 	 * @fn SetStatus
 	 *
 	 * @param[in] enable - true to enable CC rendering
@@ -275,11 +286,25 @@ public:
 	static PlayerCCManagerBase * GetInstance();
 
 	/**
-	 * @fn SetRialto
+	 * @fn HasInstance
+	 * @brief Check whether GetInstance() has already created the singleton,
+	 *        without creating it as a side effect.
 	 *
+	 * @return bool - true if an instance exists
+	 */
+	static bool HasInstance();
+
+	/**
+	 * @fn SetRialto
+	 * @brief Configure which CC manager subclass GetInstance() will create.
+	 *
+	 * @param[in] bIsRialto       true when using the Rialto GStreamer sink
+	 *                            (PlayerRialtoCCManager).
+	 * @param[in] bIsDirectRialto true when using the direct-Rialto path
+	 *                            (PlayerDirectRialtoCCManager).
 	 * @return void
 	 */
-	static void SetRialto(bool bIsRialto);
+	static void SetRialto(bool bIsRialto, bool bIsDirectRialto = false);
 
 	/**
 	 * @fn DestroyInstance
@@ -289,8 +314,19 @@ public:
 	static void DestroyInstance();
 
 private:
-	static PlayerCCManagerBase *mInstance; /**< Singleton instance */
-	static bool mIsRialto;	/**< Determines which class to instantiate */
+	/**
+	 * @enum CCManagerType
+	 * @brief Identifies which PlayerCCManagerBase subclass to instantiate.
+	 */
+	enum class CCManagerType
+	{
+		SubtecCCManager,      ///< Use PlayerSubtecCCManager (default)
+		RialtoCCManager,      ///< Use PlayerRialtoCCManager
+		DirectRialtoCCManager ///< Use PlayerDirectRialtoCCManager
+	};
+
+	static PlayerCCManagerBase *mInstance;          /**< Singleton instance */
+	static CCManagerType        mCCManagerType;     /**< Determines which class to instantiate */
 };
 
 class PlayerFakeCCManager : public PlayerCCManagerBase
