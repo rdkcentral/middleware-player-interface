@@ -797,6 +797,53 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 	delete g_mockGstUtils;
 }
 
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStreamCapsEnabled)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	GstStructure structure = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->protectionEvent[mediaType] = reinterpret_cast<GstEvent*>(0x1234);
+	mPlayerConfigParams->videoBufBytes = 500;
+	mPlayerConfigParams->enableEncryptedCaps = true;
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_VIDEO_ES_H264)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(&caps, 0)).WillOnce(Return(&structure));
+	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&structure, StrEq("original-media-type"))).Times(1);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
+}
+
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStreamCapsDisabled)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->protectionEvent[mediaType] = reinterpret_cast<GstEvent*>(0x1234);
+	mPlayerConfigParams->videoBufBytes = 500;
+	mPlayerConfigParams->enableEncryptedCaps = false;
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_VIDEO_ES_H264)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+}
+
 TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
 {
 
