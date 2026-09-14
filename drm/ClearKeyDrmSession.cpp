@@ -21,7 +21,6 @@
 * @file ClearKeyDrmSession.cpp
 * @brief Source file for ClearKey DRM Session.
 */
-
 #include "ClearKeyDrmSession.h"
 #include "PlayerUtils.h"
 #include <gst/gst.h>
