@@ -90,3 +90,4 @@ bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string na
 		return true;
 	}
 }
+
