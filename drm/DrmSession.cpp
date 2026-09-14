@@ -130,3 +130,9 @@ const std::vector<std::vector<uint8_t>>& DrmSession::getUsableKeys() const
 	static const std::vector<std::vector<uint8_t>> emptyVector;
 	return emptyVector;
 }
+
+int DrmSession::decrypt(const std::vector<GstBuffer*> &vBuf, GstCaps* caps)
+{
+    MW_LOG_ERR("Standard multi decrypt method not implemented");
+    return -1;
+}
