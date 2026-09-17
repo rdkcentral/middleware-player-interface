@@ -239,6 +239,7 @@ static void gst_cdmidecryptor_init(
 	cdmidecryptor->notifyDecryptError = true;
 	cdmidecryptor->streamEncrypted = false;
 	cdmidecryptor->ignoreSVP = false;
+	cdmidecryptor->stateEpoch = 0;
 	cdmidecryptor->sinkCaps = NULL;
 	cdmidecryptor->svpCtx = NULL;
 
@@ -932,17 +933,22 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		}
 
 		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
+		guint64 createStateEpoch = 0;
 		g_mutex_lock(&cdmidecryptor->mutex);
-		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
+		createStateEpoch = cdmidecryptor->stateEpoch;
+		g_mutex_unlock(&cdmidecryptor->mutex);
 		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
-                int err = -1;
+		int err = -1;
 		int responseCode =-1;
+		DrmSession* createdSession = NULL;
+		/* createDrmSession() may block in OCDM internals; do not hold the decryptor
+		 * mutex while calling it, otherwise PAUSED->READY/READY->NULL can deadlock. */
 		if (cdmidecryptor->sessionManager->m_drmConfigParam->mIsWVKIDWorkaround){
-			cdmidecryptor->drmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
+			createdSession = cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						outData, outDataLen, (int)cdmidecryptor->mediaType, cdmidecryptor->player, e.get(), nullptr, false);
 		}else{
-			cdmidecryptor->drmSession =
+			createdSession =
 				cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
 						reinterpret_cast<const char *>(systemId), eMEDIAFORMAT_DASH,
 						reinterpret_cast<const unsigned char *>(mapInfo.data),
@@ -952,6 +958,29 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
                 {
                        cdmidecryptor->sessionManager->setfailureCb(e.get(),err);
                 }
+		g_mutex_lock(&cdmidecryptor->mutex);
+		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
+		/* Only discard on a teardown (PAUSED->READY) that occurred while createDrmSession()
+		 * was in flight; canWait is not used here since it can also be false due to an
+		 * unrelated prior key failure, which must not cause this result to be dropped. */
+		if (createStateEpoch != cdmidecryptor->stateEpoch)
+		{
+			GST_WARNING_OBJECT(cdmidecryptor,
+				"Discarding late createDrmSession result: epoch %" G_GUINT64_FORMAT "->%" G_GUINT64_FORMAT,
+				createStateEpoch, cdmidecryptor->stateEpoch);
+			result = TRUE;
+			g_cond_signal(&cdmidecryptor->condition);
+			g_mutex_unlock(&cdmidecryptor->mutex);
+			GST_DEBUG_OBJECT(cdmidecryptor, "\n releasing ...................... mutex\n");
+			gst_buffer_unmap(initdatabuffer, &mapInfo);
+			gst_event_unref(event);
+			if(outData){
+				free(outData);
+				outData = NULL;
+			}
+			break;
+		}
+		cdmidecryptor->drmSession = createdSession;
 		if (NULL == cdmidecryptor->drmSession)
 		{
 /* For  Avoided setting 'streamReceived' as FALSE if createDrmSession() failed after a successful case.
@@ -1037,6 +1066,7 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG_OBJECT(cdmidecryptor, "PAUSED->READY");
 		g_mutex_lock(&cdmidecryptor->mutex);
+		cdmidecryptor->stateEpoch++;
 		cdmidecryptor->canWait = false;
 		g_cond_signal(&cdmidecryptor->condition);
 		g_mutex_unlock(&cdmidecryptor->mutex);
