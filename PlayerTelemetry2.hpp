@@ -67,6 +67,7 @@ public:
      * @brief send  - Send the telemetry data to the telemetry bus
      * @param[in] markerName - Name of the marker
      * @param[in] data - Data to be sent
+     * @return bool - true if success, false otherwise
      */
     bool send(const std::string &markerName, const char *  data);
 
