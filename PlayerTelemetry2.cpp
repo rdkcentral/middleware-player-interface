@@ -49,6 +49,11 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
     {
 
         cJSON *root = cJSON_CreateObject();
+        if (root == NULL)
+        {
+            MW_LOG_ERR("Failed to create cJSON root object for telemetry event: %s", markerName.c_str());
+            return false;
+        }
         if(!root)
         {
             MW_LOG_ERR("[M] cJSON_CreateObject failed");
