@@ -62,3 +62,7 @@ std::size_t GetThreadID( const pthread_t &t )
 	static std::hash<pthread_t> pthread_hasher;
 	return pthread_hasher( t );
 }
+
+void PrintPlayerInterfaceVersion()
+{
+}
