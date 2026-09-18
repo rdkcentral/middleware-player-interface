@@ -168,9 +168,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 #ifdef PLAYER_TELEMETRY_SUPPORT
 	PlayerTelemetry2 telemetry;
 	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
-#endif
-	
-#ifdef PLAYER_TELEMETRY_SUPPORT
+
 	std::map<std::string, int> intMetrics;
 	std::map<std::string, std::string> stringMetrics;
 	std::map<std::string, float> floatMetrics;
@@ -179,7 +177,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	stringMetrics["component"] = "InterfacePlayerRDK";
 	stringMetrics["action"] = "constructor";
 
-	
 	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
 #endif
 }
