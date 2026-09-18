@@ -33,6 +33,8 @@
 #include "TextStyleAttributes.h"
 #include <memory>
 #include <gst/gst.h>
+#include "TelemetryMarkers.h"
+#include "PlayerTelemetry.h"
 #ifdef PLAYER_TELEMETRY_SUPPORT
 #include "PlayerTelemetry2.hpp"
 #endif //PLAYER_TELEMETRY_SUPPORT
