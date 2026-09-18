@@ -173,6 +173,7 @@ struct GstPlayerPriv
 	std::mutex TaskControlMutex; /**< For scheduling/de-scheduling or resetting async tasks/variables and timers */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
+	guint firstFrameTimeoutTimerId;
 	guint bufferingTimeoutTimerId;                    /**< ID of timer handler created for buffering timeout. */
 	GstElement *video_dec;                                    /**< Video decoder used by pipeline. */
 	GstElement *audio_dec;                                    /**< Audio decoder used by pipeline. */
