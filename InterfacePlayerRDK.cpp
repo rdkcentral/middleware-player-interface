@@ -52,22 +52,22 @@ constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 
 // Add near existing injection constants in anonymous namespace
 constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
-constexpr uint32_t kDefaultFirstFrameTimeoutMs = 3000;
-constexpr uint32_t kMinFirstFrameTimeoutMs = 50; // optional lower guard
+constexpr int kDefaultFirstFrameTimeoutMs = 3000;
+constexpr int kMinFirstFrameTimeoutMs = 50; // optional lower guard
 
-static uint32_t GetFirstFrameTimeoutMs()
+static int GetFirstFrameTimeoutMs()
 {
     std::ifstream injectionFile(kFirstFrameTimeoutInjectionFile);
-    uint32_t timeoutMs = 0;
+	int timeoutMs = 0;
 
     // Missing/unreadable/invalid/too-small => default
     if (!(injectionFile >> timeoutMs) || timeoutMs < kMinFirstFrameTimeoutMs)
     {
-        MW_LOG_MIL("Using default first-frame timeout: %u ms", kDefaultFirstFrameTimeoutMs);
+		MW_LOG_MIL("Using default first-frame timeout: %d ms", kDefaultFirstFrameTimeoutMs);
         return kDefaultFirstFrameTimeoutMs;
     }
 
-    MW_LOG_WARN("Using injected first-frame timeout: %u ms", timeoutMs);
+	MW_LOG_WARN("Using injected first-frame timeout: %d ms", timeoutMs);
     return timeoutMs;
 }
 
@@ -5164,14 +5164,14 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 	{
 
 		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
-		const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
-		MW_LOG_ERR("Tune not completed: first frame not rendered within %u ms", firstFrameTimeoutMs);
+		const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", firstFrameTimeoutMs);
 
 #ifdef PLAYER_TELEMETRY_SUPPORT
 		std::map<std::string, int> intMetrics;
 		std::map<std::string, std::string> sMetrics;
 		std::map<std::string, float> fMetrics;
-		intMetrics["timeoutMs"] = static_cast<int>(firstFrameTimeoutMs);
+		intMetrics["timeoutMs"] = firstFrameTimeoutMs;
 		intMetrics["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
 		sMetrics["api"] = "FirstFrameTimeoutCallback";
 		sMetrics["error"] = "first_frame_not_rendered";
@@ -5257,15 +5257,6 @@ static gboolean buffering_timeout (gpointer data)
 			pInterfacePlayerRDK->OnBuffering_timeoutCb(isBufferingTimeoutConditionMet, isRateCorrectionDefaultOnPlaying, isPlayerReady);
 		}
 		return privatePlayer->gstPrivateContext->buffering_in_progress;
-#if 0
-    	         PlayerTelemetry2::send("MW_BUFFERING_TIMEOUT",
-                 privatePlayer->gstPrivateContext->numberOfVideoBuffersSent,
-                 privatePlayer->gstPrivateContext->buffering_timeout_cnt,
-                 privatePlayer->gstPrivateContext->rate,
-                 isBufferingTimeoutConditionMet,
-                 isRateCorrectionDefaultOnPlaying,
-                 isPlayerReady);
-#endif
 	}
 	else
 	{
