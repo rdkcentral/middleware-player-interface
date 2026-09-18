@@ -379,21 +379,19 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 	mFirstFrameRequired = FirstFrameFlag;
 
 	/* First-frame watchdog: tune not completed if callback never arrives */
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	if (mFirstFrameRequired && interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
 	{
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false;
 
-		/* one-shot timer; only add if not already running */
-		if (interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId == GST_TASK_ID_INVALID)
-		{
-			// In ConfigurePipeline(), replace timeout argument:
-                        const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
-                        TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
-
-		}
+		/* restart one-shot timer for this tune attempt */
+		TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+		const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+		TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs,
+				 interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this,
+				 "firstFrameTimeoutTimerId");
 	}
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
 	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
