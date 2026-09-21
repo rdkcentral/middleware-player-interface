@@ -4139,10 +4139,8 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 	bool audioOnly = false;
 
 	/* first frame arrived; cancel watchdog */
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
-	{
-		TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
-	}
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+	
 
 	bool requireFirstVideoFrameDisplay = false;
 	if (!interfacePlayerPriv->gstPrivateContext->firstFrameReceived && (interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived
