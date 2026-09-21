@@ -377,7 +377,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 	mFirstFrameRequired = FirstFrameFlag;
 
 	/* First-frame watchdog: tune not completed if callback never arrives */
-	if (mFirstFrameRequired && interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	if (mFirstFrameRequired)
 	{
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
