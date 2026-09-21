@@ -65,8 +65,12 @@ int PlayerDirectRialtoCCManager::Initialize(void *handle)
 	MW_LOG_INFO("ENTRY handle=%p", handle);
 
 	auto *newControl = static_cast<IDirectRialtoCC *>(handle);
-	const bool changedHandle = (newControl != m_control.load());
-	m_control = newControl;
+	bool changedHandle;
+	{
+		std::lock_guard<std::mutex> lock(m_controlMutex);
+		changedHandle = (newControl != m_control);
+		m_control = newControl;
+	}
 
 	if (newControl == nullptr)
 	{
@@ -120,11 +124,14 @@ void PlayerDirectRialtoCCManager::Release(int id)
 
 void PlayerDirectRialtoCCManager::InvalidateHandle(void *handle)
 {
-	// m_control is atomic, so this can safely race with Initialize() /
-	// SetTrack() / StartRendering() / StopRendering() without m_idLock.
-	auto *expected = static_cast<IDirectRialtoCC *>(handle);
-	if (expected != nullptr && m_control.compare_exchange_strong(expected, nullptr))
+	// Holding m_controlMutex blocks until any SetTrack() / StartRendering() /
+	// StopRendering() call already in progress on the old handle has
+	// returned, so the caller can safely destroy the handle owner once this
+	// call returns.
+	std::lock_guard<std::mutex> lock(m_controlMutex);
+	if (handle != nullptr && m_control == handle)
 	{
+		m_control = nullptr;
 		MW_LOG_WARN("handle=%p invalidated ahead of Release()", handle);
 	}
 }
@@ -139,8 +146,8 @@ int PlayerDirectRialtoCCManager::SetTrack(
 
 	MW_LOG_INFO("track=\"%s\" format=%d", track.c_str(), static_cast<int>(format));
 
-	IDirectRialtoCC *control = m_control.load();
-	if (control == nullptr)
+	std::lock_guard<std::mutex> lock(m_controlMutex);
+	if (m_control == nullptr)
 	{
 		MW_LOG_INFO("No control handle — track cached");
 		return 0;
@@ -148,33 +155,33 @@ int PlayerDirectRialtoCCManager::SetTrack(
 
 	const std::string identifier = mapTrackIdentifier(track, format);
 	MW_LOG_INFO("setTextTrackIdentifier=\"%s\"", identifier.c_str());
-	control->setTextTrackIdentifier(identifier);
-	return 0;
+	const bool ok = m_control->setTextTrackIdentifier(identifier);
+	return ok ? 0 : -1;
 }
 
 void PlayerDirectRialtoCCManager::StartRendering()
 {
 	MW_LOG_INFO("ENTRY — unmuting CC");
-	IDirectRialtoCC *control = m_control.load();
-	if (control == nullptr)
+	std::lock_guard<std::mutex> lock(m_controlMutex);
+	if (m_control == nullptr)
 	{
 		MW_LOG_WARN("No control handle — cannot unmute");
 		return;
 	}
-	control->setCCMute(false);
+	m_control->setCCMute(false);
 	MW_LOG_INFO("EXIT");
 }
 
 void PlayerDirectRialtoCCManager::StopRendering()
 {
 	MW_LOG_INFO("ENTRY — muting CC");
-	IDirectRialtoCC *control = m_control.load();
-	if (control == nullptr)
+	std::lock_guard<std::mutex> lock(m_controlMutex);
+	if (m_control == nullptr)
 	{
 		MW_LOG_WARN("No control handle — cannot mute");
 		return;
 	}
-	control->setCCMute(true);
+	m_control->setCCMute(true);
 	MW_LOG_INFO("EXIT");
 }
 
@@ -182,6 +189,7 @@ void PlayerDirectRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("ENTRY");
 	PlayerCCManagerBase::ResetState();
+	std::lock_guard<std::mutex> lock(m_controlMutex);
 	m_control = nullptr;
 	MW_LOG_INFO("EXIT");
 }

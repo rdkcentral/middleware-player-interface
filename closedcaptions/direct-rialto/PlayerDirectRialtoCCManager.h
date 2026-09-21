@@ -44,7 +44,6 @@
 #include "PlayerCCManager.h"
 #include "IDirectRialtoCC.h"
 
-#include <atomic>
 #include <mutex>
 #include <set>
 
@@ -101,11 +100,17 @@ private:
 	static std::string mapTrackIdentifier(const std::string &track,
 	                                      CCFormat format);
 
+	/// Guards m_control. InvalidateHandle() also takes this lock, so any
+	/// SetTrack() / StartRendering() / StopRendering() call already in
+	/// progress on the old handle completes before InvalidateHandle() clears
+	/// the pointer and returns - preventing use-after-free when the handle
+	/// owner is destroyed concurrently.
+	mutable std::mutex m_controlMutex;
+
 	/// Non-owning pointer to the AampRialtoPlayer CC control interface.
-	/// Null until Initialize() is called (first PLAYING state). Atomic since
-	/// InvalidateHandle() may run concurrently with the other accessors from
-	/// the handle owner's destructor.
-	std::atomic<IDirectRialtoCC *> m_control{nullptr};
+	/// Null until Initialize() is called (first PLAYING state). Guarded by
+	/// m_controlMutex.
+	IDirectRialtoCC *m_control{nullptr};
 
 	/// Guards mId / mIdSet.
 	std::mutex m_idLock;

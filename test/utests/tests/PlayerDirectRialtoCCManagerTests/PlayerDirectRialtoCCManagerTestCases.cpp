@@ -29,6 +29,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <memory>
 #include <string>
 
 #include "PlayerDirectRialtoCCManager.h"
@@ -119,6 +120,23 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 		.WillOnce(Return(true));
 
 	m_mgr.Initialize(m_mock.get());
+}
+
+/**
+ * @test SetTrack_ControlRejectsIdentifier_ReturnsFailure
+ * @brief When setTextTrackIdentifier() reports failure, SetTrack() must
+ *        return -1, per the PlayerCCManagerBase::SetTrack() 0/-1 contract.
+ */
+TEST_F(PlayerDirectRialtoCCManagerTest,
+	SetTrack_ControlRejectsIdentifier_ReturnsFailure)
+{
+	InitWithDefaultTrack();
+
+	EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC2"))
+		.Times(1)
+		.WillOnce(Return(false));
+
+	EXPECT_EQ(m_mgr.SetTrack("2", eCLOSEDCAPTION_FORMAT_608), -1);
 }
 
 /**

@@ -35,9 +35,12 @@ int PlayerRialtoCCManager::Initialize(void * handle)
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Initialize(%p) called", handle);
 
-	bool changedHandle = (handle != mSubtitleControlHandle.load());
-
-	mSubtitleControlHandle = handle;
+	bool changedHandle;
+	{
+		std::lock_guard<std::mutex> lock(mControlMutex);
+		changedHandle = (handle != mSubtitleControlHandle);
+		mSubtitleControlHandle = handle;
+	}
 
 	if (GetTrack().empty())
 	{
@@ -74,6 +77,7 @@ void PlayerRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Resetting");
 	PlayerCCManagerBase::ResetState();
+	std::lock_guard<std::mutex> lock(mControlMutex);
 	mSubtitleControlHandle = nullptr;
 }
 
@@ -110,11 +114,14 @@ void PlayerRialtoCCManager::Release(int id)
  */
 void PlayerRialtoCCManager::InvalidateHandle(void *handle)
 {
-	// mSubtitleControlHandle is atomic, so this can safely race with
-	// Initialize() / SetTrack() / StartRendering() / StopRendering().
-	void *expected = handle;
-	if (expected != nullptr && mSubtitleControlHandle.compare_exchange_strong(expected, nullptr))
+	// Holding mControlMutex blocks until any SetTrack() / StartRendering() /
+	// StopRendering() call already in progress on the old handle has
+	// returned, so the caller can safely destroy the handle owner once this
+	// call returns.
+	std::lock_guard<std::mutex> lock(mControlMutex);
+	if (handle != nullptr && mSubtitleControlHandle == handle)
 	{
+		mSubtitleControlHandle = nullptr;
 		MW_LOG_WARN("PlayerRialtoCCManager::handle:%p invalidated ahead of Release()", handle);
 	}
 }
@@ -131,8 +138,8 @@ int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat for
 
 	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
 
-	void *handle = mSubtitleControlHandle.load();
-	if (nullptr != handle)
+	std::lock_guard<std::mutex> lock(mControlMutex);
+	if (nullptr != mSubtitleControlHandle)
 	{
 		// We expect 'track' to have an alphabetic prefix. If it does not,
 		// add one based on 'format'.
@@ -152,7 +159,7 @@ int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat for
 
 		MW_LOG_INFO("PlayerRialtoCCManager::set track (modified) \"%s\"", textTrackIdentifier.c_str());
 
-		g_object_set(handle, "text-track-identifier", textTrackIdentifier.c_str(), NULL);
+		g_object_set(mSubtitleControlHandle, "text-track-identifier", textTrackIdentifier.c_str(), NULL);
 	}
 	else
 	{
@@ -169,10 +176,10 @@ void PlayerRialtoCCManager::StartRendering()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::unmuting");
 
-	void *handle = mSubtitleControlHandle.load();
-	if (nullptr != handle)
+	std::lock_guard<std::mutex> lock(mControlMutex);
+	if (nullptr != mSubtitleControlHandle)
 	{
-		g_object_set(handle, "mute", FALSE, NULL);
+		g_object_set(mSubtitleControlHandle, "mute", FALSE, NULL);
 	}
 	else
 	{
@@ -188,10 +195,10 @@ void PlayerRialtoCCManager::StopRendering()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::muting");
 
-	void *handle = mSubtitleControlHandle.load();
-	if (nullptr != handle)
+	std::lock_guard<std::mutex> lock(mControlMutex);
+	if (nullptr != mSubtitleControlHandle)
 	{
-		g_object_set(handle, "mute", TRUE, NULL);
+		g_object_set(mSubtitleControlHandle, "mute", TRUE, NULL);
 	}
 	else
 	{
