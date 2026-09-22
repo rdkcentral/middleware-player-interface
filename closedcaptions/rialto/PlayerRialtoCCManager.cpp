@@ -35,28 +35,24 @@ int PlayerRialtoCCManager::Initialize(void * handle)
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Initialize(%p) called", handle);
 
-	bool changedHandle;
-	std::string cachedTrack;
-	CCFormat cachedFormat;
-	{
-		std::lock_guard<std::mutex> lock(mControlMutex);
-		changedHandle = (handle != mSubtitleControlHandle);
-		mSubtitleControlHandle = handle;
-		cachedTrack  = mTrack;
-		cachedFormat = mTrackFormat;
-	}
+	// Held for the whole handle-assignment + configuration sequence so a
+	// concurrent Initialize()/SetTrack() call can't interleave and configure
+	// the wrong handle (or leave this handle unconfigured).
+	std::lock_guard<std::mutex> lock(mControlMutex);
+	const bool changedHandle = (handle != mSubtitleControlHandle);
+	mSubtitleControlHandle = handle;
 
-	if (cachedTrack.empty())
+	if (mTrack.empty())
 	{
 		// Apps expect to render default CC as CC1, so set that here in case
 		// they do not explicitly call SetTrack().
 		MW_LOG_INFO("PlayerRialtoCCManager::Setting default to \"CC1\"");
-		(void) SetTrack("CC1");
+		(void) SetTrackLocked("CC1", eCLOSEDCAPTION_FORMAT_DEFAULT);
 	}
 	else if (changedHandle)
 	{
 		// Configure the new handle.
-		(void) SetTrack(cachedTrack, cachedFormat);
+		(void) SetTrackLocked(mTrack, mTrackFormat);
 	}
 
 	return 0;
@@ -141,11 +137,16 @@ void PlayerRialtoCCManager::InvalidateHandle(void *handle)
  */
 int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat format)
 {
-	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
-
 	// mTrack/mTrackFormat are shared with Initialize() and ResetState(), so
 	// they must be updated under the same lock as mSubtitleControlHandle.
 	std::lock_guard<std::mutex> lock(mControlMutex);
+	return SetTrackLocked(track, format);
+}
+
+int PlayerRialtoCCManager::SetTrackLocked(const std::string &track, const CCFormat format)
+{
+	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
+
 	mTrack       = track;	// For PlayerCCManager::GetTrack()
 	mTrackFormat = format;
 

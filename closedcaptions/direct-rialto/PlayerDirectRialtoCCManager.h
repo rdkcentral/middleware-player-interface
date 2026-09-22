@@ -100,10 +100,10 @@ private:
 	static std::string mapTrackIdentifier(const std::string &track,
 	                                      CCFormat format);
 
-	/// Clear m_control if it still equals handle, forcing a later
-	/// Initialize() call with the same handle to retry SetTrack() instead
-	/// of treating it as an unchanged, already-configured handle.
-	void clearControlOnFailure(IDirectRialtoCC *handle);
+	/// SetTrack() body, assuming m_controlMutex is already held. Used by
+	/// SetTrack() itself and by Initialize(), so handle assignment and
+	/// configuration happen as one atomic critical section.
+	int SetTrackLocked(const std::string &track, CCFormat format);
 
 	/// Guards m_control and SetTrack()'s writes / Initialize()'s reads of
 	/// the inherited mTrack / mTrackFormat cache. InvalidateHandle() also

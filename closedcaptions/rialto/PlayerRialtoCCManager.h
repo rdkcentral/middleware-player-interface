@@ -121,6 +121,11 @@ private:
 	 */
 	void ResetState() override;
 
+	/// SetTrack() body, assuming mControlMutex is already held. Used by
+	/// SetTrack() itself and by Initialize(), so handle assignment and
+	/// configuration happen as one atomic critical section.
+	int SetTrackLocked(const std::string &track, const CCFormat format);
+
 private:
 	/// Guards mSubtitleControlHandle and SetTrack()'s writes / Initialize()'s
 	/// reads of the inherited mTrack / mTrackFormat cache. InvalidateHandle()

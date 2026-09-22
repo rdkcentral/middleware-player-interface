@@ -65,16 +65,12 @@ int PlayerDirectRialtoCCManager::Initialize(void *handle)
 	MW_LOG_INFO("ENTRY handle=%p", handle);
 
 	auto *newControl = static_cast<IDirectRialtoCC *>(handle);
-	bool changedHandle;
-	std::string cachedTrack;
-	CCFormat cachedFormat;
-	{
-		std::lock_guard<std::mutex> lock(m_controlMutex);
-		changedHandle = (newControl != m_control);
-		m_control     = newControl;
-		cachedTrack   = mTrack;
-		cachedFormat  = mTrackFormat;
-	}
+	// Held for the whole handle-assignment + configuration sequence so a
+	// concurrent Initialize()/SetTrack() call can't interleave and configure
+	// the wrong handle (or leave this handle unconfigured).
+	std::lock_guard<std::mutex> lock(m_controlMutex);
+	const bool changedHandle = (newControl != m_control);
+	m_control = newControl;
 
 	if (newControl == nullptr)
 	{
@@ -83,25 +79,25 @@ int PlayerDirectRialtoCCManager::Initialize(void *handle)
 		return 0;
 	}
 
-	if (cachedTrack.empty())
+	if (mTrack.empty())
 	{
 		// Apps expect CC1 as the default; apply it so the first frame
 		// renders without an explicit SetTextTrack() call.
 		MW_LOG_INFO("Setting default track CC1");
-		if (SetTrack("CC1") != 0)
+		if (SetTrackLocked("CC1", eCLOSEDCAPTION_FORMAT_DEFAULT) != 0)
 		{
 			MW_LOG_WARN("Failed to set default track CC1");
-			clearControlOnFailure(newControl);
+			m_control = nullptr;
 			return -1;
 		}
 	}
 	else if (changedHandle)
 	{
 		// Re-apply the cached track on the new handle (e.g. re-tune).
-		if (SetTrack(cachedTrack, cachedFormat) != 0)
+		if (SetTrackLocked(mTrack, mTrackFormat) != 0)
 		{
 			MW_LOG_WARN("Failed to reapply cached track on new handle");
-			clearControlOnFailure(newControl);
+			m_control = nullptr;
 			return -1;
 		}
 	}
@@ -154,11 +150,16 @@ void PlayerDirectRialtoCCManager::InvalidateHandle(void *handle)
 int PlayerDirectRialtoCCManager::SetTrack(
 	const std::string &track, CCFormat format)
 {
-	MW_LOG_INFO("track=\"%s\" format=%d", track.c_str(), static_cast<int>(format));
-
 	// mTrack/mTrackFormat are shared with Initialize() and ResetState(), so
 	// they must be updated under the same lock as m_control.
 	std::lock_guard<std::mutex> lock(m_controlMutex);
+	return SetTrackLocked(track, format);
+}
+
+int PlayerDirectRialtoCCManager::SetTrackLocked(
+	const std::string &track, CCFormat format)
+{
+	MW_LOG_INFO("track=\"%s\" format=%d", track.c_str(), static_cast<int>(format));
 
 	if (m_control == nullptr)
 	{
@@ -226,14 +227,3 @@ void PlayerDirectRialtoCCManager::ResetState()
 	MW_LOG_INFO("EXIT");
 }
 
-void PlayerDirectRialtoCCManager::clearControlOnFailure(IDirectRialtoCC *handle)
-{
-	// A failed track application leaves the control unconfigured; clear it
-	// so a later Initialize() call with the same handle is treated as a
-	// handle change and retries SetTrack() instead of reporting success.
-	std::lock_guard<std::mutex> lock(m_controlMutex);
-	if (m_control == handle)
-	{
-		m_control = nullptr;
-	}
-}

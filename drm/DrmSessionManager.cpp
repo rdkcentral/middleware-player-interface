@@ -532,6 +532,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	if (!AcquireLicenseCb)
 	{
 		MW_LOG_WARN("AcquireLicenseCb not registered - cannot acquire license");
+		err = MW_DRM_INIT_FAILED;
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
 		if (cachedKeyIDs)
 		{
