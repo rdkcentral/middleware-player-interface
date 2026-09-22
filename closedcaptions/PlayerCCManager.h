@@ -72,17 +72,6 @@ public:
 	virtual void Release(int iID) = 0;
 
 	/**
-	 * @brief Clear the stored control handle if it currently equals handle.
-	 *        Called by the handle owner's destructor so a handle can never be
-	 *        used after the object it points to is freed, independent of
-	 *        whether the GetId()/Release() usage count has reached zero (it
-	 *        may not have, if another session is still registered - see
-	 *        multi-pipeline mode).
-	 * @param[in] handle - the handle being invalidated
-	 */
-	virtual void InvalidateHandle(void *) {}
-
-	/**
 	 * @fn SetStatus
 	 *
 	 * @param[in] enable - true to enable CC rendering
@@ -258,6 +247,17 @@ protected:
 	 */
 	virtual void ResetState();
 
+	/**
+	 * @brief Reset mOptions/mTrack/mTrackFormat/mLastTextTracks/mEnabled/
+	 *        mTrickplayStarted/mParentalCtrlLocked to their initial values.
+	 *        Does NOT call Stop(). Subclasses whose SetTrack()/Initialize()
+	 *        access these fields under a control mutex must call this while
+	 *        holding that same mutex (after calling Stop() separately,
+	 *        outside the lock) instead of calling ResetState() directly, to
+	 *        avoid racing with a concurrent SetTrack()/Initialize() call.
+	 */
+	void ResetTrackState();
+
 	/* NOTE WELL: The ResetState() method resets these member variables back to
 	** their initial state. It should be updated if any of the following change
 	** or are added to. */
@@ -268,6 +268,23 @@ protected:
 	bool mEnabled{false};                  /**< true if CC rendering enabled, false otherwise */
 	bool mTrickplayStarted{false};         /**< If a trickplay is going on or not */
 	bool mParentalCtrlLocked{false};       /**< If Parental Control lock enabled on not */
+
+public:
+	/**
+	 * @brief Clear the stored control handle if it currently equals handle.
+	 *        Called by the handle owner's destructor so a handle can never be
+	 *        used after the object it points to is freed, independent of
+	 *        whether the GetId()/Release() usage count has reached zero (it
+	 *        may not have, if another session is still registered - see
+	 *        multi-pipeline mode).
+	 *        Declared last (appended after the pre-existing virtual
+	 *        interface, not inserted between Release() and SetStatus()) so it
+	 *        only extends the vtable instead of shifting every later slot,
+	 *        which would silently mis-dispatch calls made through a binary
+	 *        built against an older header.
+	 * @param[in] handle - the handle being invalidated
+	 */
+	virtual void InvalidateHandle(void *) {}
 };
 
 /**

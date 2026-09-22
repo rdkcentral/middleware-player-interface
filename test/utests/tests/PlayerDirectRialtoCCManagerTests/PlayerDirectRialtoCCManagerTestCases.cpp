@@ -197,6 +197,26 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 }
 
 /**
+ * @test SetTrack_ControlRejectsIdentifier_CacheKeepsPreviousTrack
+ * @brief A rejected SetTrack() must not update mTrack/mTrackFormat, so a
+ *        later Initialize() with the same handle still sees a changed
+ *        handle correctly re-apply the last-accepted track rather than
+ *        skipping it because the cache already matched the rejected one.
+ */
+TEST_F(PlayerDirectRialtoCCManagerTest,
+	SetTrack_ControlRejectsIdentifier_CacheKeepsPreviousTrack)
+{
+	InitWithDefaultTrack();
+
+	EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC2"))
+		.Times(1)
+		.WillOnce(Return(false));
+
+	EXPECT_EQ(m_mgr.SetTrack("2", eCLOSEDCAPTION_FORMAT_608), -1);
+	EXPECT_EQ(m_mgr.GetTrack(), "CC1");
+}
+
+/**
  * @test SetTrack_NumericWith608Format_PrependsCCPrefix
  * @brief A numeric track string with 608 format should become "CC<n>".
  */

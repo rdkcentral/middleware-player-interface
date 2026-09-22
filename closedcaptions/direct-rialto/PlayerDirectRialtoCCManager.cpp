@@ -159,11 +159,13 @@ int PlayerDirectRialtoCCManager::SetTrack(
 	// mTrack/mTrackFormat are shared with Initialize() and ResetState(), so
 	// they must be updated under the same lock as m_control.
 	std::lock_guard<std::mutex> lock(m_controlMutex);
-	mTrack       = track;
-	mTrackFormat = format;
 
 	if (m_control == nullptr)
 	{
+		// No backend to apply against yet; cache unconditionally so
+		// Initialize() can apply it once a control becomes available.
+		mTrack       = track;
+		mTrackFormat = format;
 		MW_LOG_INFO("No control handle — track cached");
 		return 0;
 	}
@@ -171,6 +173,15 @@ int PlayerDirectRialtoCCManager::SetTrack(
 	const std::string identifier = mapTrackIdentifier(track, format);
 	MW_LOG_INFO("setTextTrackIdentifier=\"%s\"", identifier.c_str());
 	const bool ok = m_control->setTextTrackIdentifier(identifier);
+	if (ok)
+	{
+		// Only cache once the backend confirms the change, so a rejected
+		// track doesn't leave mTrack out of sync with what the control is
+		// still actually rendering (which would make a later Initialize()
+		// with the same handle wrongly skip reapplying it).
+		mTrack       = track;
+		mTrackFormat = format;
+	}
 	return ok ? 0 : -1;
 }
 
@@ -203,11 +214,14 @@ void PlayerDirectRialtoCCManager::StopRendering()
 void PlayerDirectRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("ENTRY");
-	// PlayerCCManagerBase::ResetState() calls Stop() -> StopRendering(),
-	// which re-enters m_controlMutex; run it before taking the lock here to
-	// avoid deadlocking on this non-recursive mutex.
-	PlayerCCManagerBase::ResetState();
+	// Stop() -> StopRendering() re-enters m_controlMutex; call it before
+	// taking the lock to avoid deadlocking on this non-recursive mutex.
+	Stop();
 	std::lock_guard<std::mutex> lock(m_controlMutex);
+	// Reset the cached track/rendering fields under the same lock that
+	// SetTrack()/Initialize() use to access them, avoiding a race with a
+	// concurrent call to either.
+	ResetTrackState();
 	m_control = nullptr;
 	MW_LOG_INFO("EXIT");
 }

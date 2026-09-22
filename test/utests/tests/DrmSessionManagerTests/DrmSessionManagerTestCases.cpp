@@ -28,6 +28,7 @@
 #include "MockOpenCdmSessionAdapter.h"
 #include "DrmCallbacks.h"
 #include "MockDrmSessionFactory.h"
+#include "MockDrmSession.h"
 #include "DrmHelper.h"
 #include "WidevineDrmHelper.h"
 #include "DrmInfo.h"
@@ -52,6 +53,11 @@ class TestableDrmSessionManager : public DrmSessionManager
 public:
 	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback), mMaxSessions(maxDrmSessions)
+	{
+	}
+
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback, DrmSessionCreator creator)
+		: DrmSessionManager(maxDrmSessions, player, watermarkCallback, std::move(creator)), mMaxSessions(maxDrmSessions)
 	{
 	}
 
@@ -1293,5 +1299,79 @@ TEST_F(DrmSessionManagerComplexTests, OpencdmConstructionFailureTest)
 	
 	// Verify the error code is mapped to MW_DRM_SESSION_CREATE_FAILED
 	EXPECT_EQ(err, MW_DRM_SESSION_CREATE_FAILED);
+}
+
+/**
+ * @brief getDrmSession() must invoke an injected DrmSessionCreator (instead
+ * of DrmSessionFactory::GetDrmSession()) and transfer ownership of the
+ * returned unique_ptr into the selected session slot.
+ */
+TEST_F(DrmSessionManagerComplexTests, DrmSessionCreator_InvokedAndOwnershipTransferred)
+{
+	bool creatorInvoked = false;
+	DrmHelperPtr capturedHelper;
+	auto *mockSession = new NiceMock<MockDrmSession>("com.widevine.alpha");
+	ON_CALL(*mockSession, getState()).WillByDefault(Return(KEY_INIT));
+
+	DrmSessionCreator creator =
+		[&](DrmHelperPtr drmHelper, DrmCallbacks *instance) -> std::unique_ptr<DrmSession>
+	{
+		creatorInvoked = true;
+		capturedHelper = drmHelper;
+		return std::unique_ptr<DrmSession>(mockSession);
+	};
+
+	TestableDrmSessionManager manager(maxDrmSessions, nullptr, nullptr, creator);
+	// getDrmSession() unconditionally invokes ProfileUpdateCb; it must be
+	// registered first or the call throws std::bad_function_call.
+	manager.RegisterProfilingUpdateCb([]() {});
+
+	auto mockHelper = CreateMockDrmHelper("com.widevine.alpha");
+	ON_CALL(*mockHelper, getKey(_))
+		.WillByDefault(Invoke([](std::vector<uint8_t>& keyID) { keyID = {0x01, 0x02, 0x03, 0x04}; }));
+
+	int err = 0;
+	int selectedSlot = -1;
+	KeyState result = manager.getDrmSession(err, mockHelper, selectedSlot, nullptr);
+
+	EXPECT_TRUE(creatorInvoked);
+	EXPECT_EQ(capturedHelper, mockHelper);
+	ASSERT_GE(selectedSlot, 0);
+	EXPECT_EQ(manager.drmSessionContexts[selectedSlot].drmSession, mockSession);
+	EXPECT_EQ(result, KEY_INIT);
+	EXPECT_EQ(err, 0);
+}
+
+/**
+ * @brief getDrmSession() must report MW_DRM_INIT_FAILED and leave the slot's
+ * drmSession null when an injected DrmSessionCreator fails (returns nullptr).
+ */
+TEST_F(DrmSessionManagerComplexTests, DrmSessionCreator_ReturnsNull_ReportsInitFailure)
+{
+	bool creatorInvoked = false;
+	DrmSessionCreator creator =
+		[&](DrmHelperPtr, DrmCallbacks *) -> std::unique_ptr<DrmSession>
+	{
+		creatorInvoked = true;
+		return nullptr;
+	};
+
+	TestableDrmSessionManager manager(maxDrmSessions, nullptr, nullptr, creator);
+	// getDrmSession() unconditionally invokes ProfileUpdateCb; it must be
+	// registered first or the call throws std::bad_function_call.
+	manager.RegisterProfilingUpdateCb([]() {});
+
+	auto mockHelper = CreateMockDrmHelper("com.widevine.alpha");
+	ON_CALL(*mockHelper, getKey(_))
+		.WillByDefault(Invoke([](std::vector<uint8_t>& keyID) { keyID = {0x01, 0x02, 0x03, 0x04}; }));
+
+	int err = 0;
+	int selectedSlot = -1;
+	manager.getDrmSession(err, mockHelper, selectedSlot, nullptr);
+
+	EXPECT_TRUE(creatorInvoked);
+	ASSERT_GE(selectedSlot, 0);
+	EXPECT_EQ(manager.drmSessionContexts[selectedSlot].drmSession, nullptr);
+	EXPECT_EQ(err, MW_DRM_INIT_FAILED);
 }
 

@@ -875,7 +875,14 @@ void PlayerCCManagerBase::ResetState()
 {
 	MW_LOG_INFO("PlayerCCManagerBase::Resetting");
 	Stop();
+	ResetTrackState();
+}
 
+/**
+ *  @brief Reset the cached track/rendering fields without stopping.
+ */
+void PlayerCCManagerBase::ResetTrackState()
+{
 	mOptions = "";
 	mTrack = "";
 	mTrackFormat = eCLOSEDCAPTION_FORMAT_DEFAULT;

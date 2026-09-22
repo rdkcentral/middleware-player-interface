@@ -122,10 +122,11 @@ private:
 	void ResetState() override;
 
 private:
-	/// Guards mSubtitleControlHandle. InvalidateHandle() also takes this
-	/// lock, so any SetTrack() / StartRendering() / StopRendering() call
-	/// already in progress on the old handle completes before
-	/// InvalidateHandle() clears the pointer and returns - preventing
+	/// Guards mSubtitleControlHandle and SetTrack()'s writes / Initialize()'s
+	/// reads of the inherited mTrack / mTrackFormat cache. InvalidateHandle()
+	/// also takes this lock, so any SetTrack() / StartRendering() /
+	/// StopRendering() call already in progress on the old handle completes
+	/// before InvalidateHandle() clears the pointer and returns - preventing
 	/// use-after-free when the handle owner is destroyed concurrently.
 	mutable std::mutex mControlMutex;
 

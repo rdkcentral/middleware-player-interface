@@ -36,13 +36,17 @@ int PlayerRialtoCCManager::Initialize(void * handle)
 	MW_LOG_INFO("PlayerRialtoCCManager::Initialize(%p) called", handle);
 
 	bool changedHandle;
+	std::string cachedTrack;
+	CCFormat cachedFormat;
 	{
 		std::lock_guard<std::mutex> lock(mControlMutex);
 		changedHandle = (handle != mSubtitleControlHandle);
 		mSubtitleControlHandle = handle;
+		cachedTrack  = mTrack;
+		cachedFormat = mTrackFormat;
 	}
 
-	if (GetTrack().empty())
+	if (cachedTrack.empty())
 	{
 		// Apps expect to render default CC as CC1, so set that here in case
 		// they do not explicitly call SetTrack().
@@ -52,7 +56,7 @@ int PlayerRialtoCCManager::Initialize(void * handle)
 	else if (changedHandle)
 	{
 		// Configure the new handle.
-		(void) SetTrack(GetTrack(), mTrackFormat);
+		(void) SetTrack(cachedTrack, cachedFormat);
 	}
 
 	return 0;
@@ -76,8 +80,14 @@ int PlayerRialtoCCManager::GetId()
 void PlayerRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Resetting");
-	PlayerCCManagerBase::ResetState();
+	// Stop() -> StopRendering() re-enters mControlMutex; call it before
+	// taking the lock to avoid deadlocking on this non-recursive mutex.
+	Stop();
 	std::lock_guard<std::mutex> lock(mControlMutex);
+	// Reset the cached track/rendering fields under the same lock that
+	// SetTrack()/Initialize() use to access them, avoiding a race with a
+	// concurrent call to either.
+	ResetTrackState();
 	mSubtitleControlHandle = nullptr;
 }
 
@@ -131,14 +141,14 @@ void PlayerRialtoCCManager::InvalidateHandle(void *handle)
  */
 int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat format)
 {
-	// Cache the original track string and the format so the prefix (if any)
-	// can be re-applied correctly from the cached values.
-	mTrack = track;	// For PlayerCCManager::GetTrack()
-	mTrackFormat = format;
-
 	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
 
+	// mTrack/mTrackFormat are shared with Initialize() and ResetState(), so
+	// they must be updated under the same lock as mSubtitleControlHandle.
 	std::lock_guard<std::mutex> lock(mControlMutex);
+	mTrack       = track;	// For PlayerCCManager::GetTrack()
+	mTrackFormat = format;
+
 	if (nullptr != mSubtitleControlHandle)
 	{
 		// We expect 'track' to have an alphabetic prefix. If it does not,

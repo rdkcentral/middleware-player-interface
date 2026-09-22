@@ -80,6 +80,11 @@ void PlayerCCManagerBase::ResetState()
 	// mutex re-entrancy that PlayerDirectRialtoCCManager::ResetState() must
 	// avoid deadlocking on.
 	Stop();
+	ResetTrackState();
+}
+
+void PlayerCCManagerBase::ResetTrackState()
+{
 	mOptions.clear();
 	mTrack.clear();
 	mTrackFormat = eCLOSEDCAPTION_FORMAT_DEFAULT;
