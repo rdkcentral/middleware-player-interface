@@ -203,10 +203,11 @@ void PlayerDirectRialtoCCManager::StopRendering()
 void PlayerDirectRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("ENTRY");
-	// Base ResetState() clears mTrack/mTrackFormat, so it must run under the
-	// same lock that guards them elsewhere in this class.
-	std::lock_guard<std::mutex> lock(m_controlMutex);
+	// PlayerCCManagerBase::ResetState() calls Stop() -> StopRendering(),
+	// which re-enters m_controlMutex; run it before taking the lock here to
+	// avoid deadlocking on this non-recursive mutex.
 	PlayerCCManagerBase::ResetState();
+	std::lock_guard<std::mutex> lock(m_controlMutex);
 	m_control = nullptr;
 	MW_LOG_INFO("EXIT");
 }

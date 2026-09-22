@@ -105,12 +105,14 @@ private:
 	/// of treating it as an unchanged, already-configured handle.
 	void clearControlOnFailure(IDirectRialtoCC *handle);
 
-	/// Guards m_control and the inherited mTrack / mTrackFormat cache.
-	/// InvalidateHandle() also takes this lock, so any SetTrack() /
-	/// StartRendering() / StopRendering() call already in progress on the
-	/// old handle completes before InvalidateHandle() clears the pointer
-	/// and returns - preventing use-after-free when the handle owner is
-	/// destroyed concurrently.
+	/// Guards m_control and SetTrack()'s writes / Initialize()'s reads of
+	/// the inherited mTrack / mTrackFormat cache. InvalidateHandle() also
+	/// takes this lock, so any SetTrack() / StartRendering() /
+	/// StopRendering() call already in progress on the old handle completes
+	/// before InvalidateHandle() clears the pointer and returns -
+	/// preventing use-after-free when the handle owner is destroyed
+	/// concurrently. ResetState() clears mTrack / mTrackFormat via the base
+	/// class before taking this lock (see ResetState() for why).
 	mutable std::mutex m_controlMutex;
 
 	/// Non-owning pointer to the AampRialtoPlayer CC control interface.

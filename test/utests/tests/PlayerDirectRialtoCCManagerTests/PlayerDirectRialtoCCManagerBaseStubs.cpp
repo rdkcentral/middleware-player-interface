@@ -68,8 +68,18 @@ void PlayerCCManagerBase::SetParentalControlStatus(bool locked)
 	mParentalCtrlLocked = locked;
 }
 
+void PlayerCCManagerBase::Stop()
+{
+	StopRendering();
+}
+
 void PlayerCCManagerBase::ResetState()
 {
+	// Mirrors the real PlayerCCManagerBase::ResetState(), which calls Stop()
+	// (-> StopRendering()) before clearing state; this exercises the same
+	// mutex re-entrancy that PlayerDirectRialtoCCManager::ResetState() must
+	// avoid deadlocking on.
+	Stop();
 	mOptions.clear();
 	mTrack.clear();
 	mTrackFormat = eCLOSEDCAPTION_FORMAT_DEFAULT;

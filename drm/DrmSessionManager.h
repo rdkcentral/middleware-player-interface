@@ -232,16 +232,13 @@ public:
 	
 	/**
 	 *  @fn DrmSessionManager
+	 *  @brief creator defaults to null (no injection) rather than being a
+	 *         separate overload: a distinct 3-arg symbol would let a
+	 *         prebuilt binary compiled before m_sessionCreator existed link
+	 *         successfully against this header's larger layout and silently
+	 *         heap-corrupt on construction, instead of failing to compile.
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator);
-
-	/**
-	 *  @fn DrmSessionManager
-	 *  @brief Preserves the pre-existing three-argument mangled symbol for
-	 *         binaries linked against older releases of this installed
-	 *         header; delegates to the creator-injecting constructor.
-	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
+	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator = nullptr);
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.

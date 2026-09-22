@@ -279,12 +279,18 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 
 /**
  * @test ResetState_ClearsControlHandle
- * @brief After ResetState(), StartRendering() must not call the old mock.
+ * @brief ResetState() must call Stop() (-> StopRendering()) on the still-
+ *        valid control without deadlocking on m_controlMutex, then clear
+ *        the control so a subsequent StartRendering() is a no-op.
  */
 TEST_F(PlayerDirectRialtoCCManagerTest,
 	ResetState_ClearsControlHandle)
 {
 	InitWithDefaultTrack();
+
+	EXPECT_CALL(*m_mock, setCCMute(true))
+		.Times(1)
+		.WillOnce(Return(true));
 
 	m_mgr.ResetState();
 
