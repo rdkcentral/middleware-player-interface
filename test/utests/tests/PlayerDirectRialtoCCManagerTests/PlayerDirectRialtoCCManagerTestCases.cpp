@@ -106,6 +106,23 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 }
 
 /**
+ * @test Initialize_ControlRejectsDefaultTrack_ReturnsFailure
+ * @brief When the control rejects the default "CC1" identifier,
+ *        Initialize() must propagate the failure so
+ *        PlayerCCManagerBase::Init() reports it, instead of silently
+ *        discarding the SetTrack() result and returning 0.
+ */
+TEST_F(PlayerDirectRialtoCCManagerTest,
+	Initialize_ControlRejectsDefaultTrack_ReturnsFailure)
+{
+	EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC1"))
+		.Times(1)
+		.WillOnce(Return(false));
+
+	EXPECT_EQ(m_mgr.Initialize(m_mock.get()), -1);
+}
+
+/**
  * @test Initialize_WithCachedTrack_ReappliesCachedTrack
  * @brief When a track has already been cached via SetTrack(), Initialize()
  *        with a new handle must re-apply the cached identifier, not "CC1".
@@ -120,6 +137,23 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 		.WillOnce(Return(true));
 
 	m_mgr.Initialize(m_mock.get());
+}
+
+/**
+ * @test Initialize_ControlRejectsCachedTrack_ReturnsFailure
+ * @brief When the control rejects the cached identifier on re-apply,
+ *        Initialize() must propagate the failure instead of returning 0.
+ */
+TEST_F(PlayerDirectRialtoCCManagerTest,
+	Initialize_ControlRejectsCachedTrack_ReturnsFailure)
+{
+	m_mgr.SetTrack("CC3");
+
+	EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC3"))
+		.Times(1)
+		.WillOnce(Return(false));
+
+	EXPECT_EQ(m_mgr.Initialize(m_mock.get()), -1);
 }
 
 /**

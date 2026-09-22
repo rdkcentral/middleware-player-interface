@@ -84,12 +84,20 @@ int PlayerDirectRialtoCCManager::Initialize(void *handle)
 		// Apps expect CC1 as the default; apply it so the first frame
 		// renders without an explicit SetTextTrack() call.
 		MW_LOG_INFO("Setting default track CC1");
-		(void) SetTrack("CC1");
+		if (SetTrack("CC1") != 0)
+		{
+			MW_LOG_WARN("Failed to set default track CC1");
+			return -1;
+		}
 	}
 	else if (changedHandle)
 	{
 		// Re-apply the cached track on the new handle (e.g. re-tune).
-		(void) SetTrack(GetTrack(), mTrackFormat);
+		if (SetTrack(GetTrack(), mTrackFormat) != 0)
+		{
+			MW_LOG_WARN("Failed to reapply cached track on new handle");
+			return -1;
+		}
 	}
 
 	MW_LOG_INFO("EXIT");
