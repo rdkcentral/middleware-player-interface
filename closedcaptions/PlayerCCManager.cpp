@@ -914,6 +914,14 @@ void PlayerCCManager::SetRialto(bool bIsRialto, bool bIsDirectRialto)
 }
 
 /**
+ *  @brief Set the CC manager variant (no direct-Rialto option).
+ */
+void PlayerCCManager::SetRialto(bool bIsRialto)
+{
+	SetRialto(bIsRialto, false);
+}
+
+/**
  *  @brief Destroy instance
  */
 void PlayerCCManager::DestroyInstance()

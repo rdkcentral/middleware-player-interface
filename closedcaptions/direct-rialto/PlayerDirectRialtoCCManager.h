@@ -100,11 +100,17 @@ private:
 	static std::string mapTrackIdentifier(const std::string &track,
 	                                      CCFormat format);
 
-	/// Guards m_control. InvalidateHandle() also takes this lock, so any
-	/// SetTrack() / StartRendering() / StopRendering() call already in
-	/// progress on the old handle completes before InvalidateHandle() clears
-	/// the pointer and returns - preventing use-after-free when the handle
-	/// owner is destroyed concurrently.
+	/// Clear m_control if it still equals handle, forcing a later
+	/// Initialize() call with the same handle to retry SetTrack() instead
+	/// of treating it as an unchanged, already-configured handle.
+	void clearControlOnFailure(IDirectRialtoCC *handle);
+
+	/// Guards m_control and the inherited mTrack / mTrackFormat cache.
+	/// InvalidateHandle() also takes this lock, so any SetTrack() /
+	/// StartRendering() / StopRendering() call already in progress on the
+	/// old handle completes before InvalidateHandle() clears the pointer
+	/// and returns - preventing use-after-free when the handle owner is
+	/// destroyed concurrently.
 	mutable std::mutex m_controlMutex;
 
 	/// Non-owning pointer to the AampRialtoPlayer CC control interface.

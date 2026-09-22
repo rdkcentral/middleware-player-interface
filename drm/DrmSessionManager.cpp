@@ -74,6 +74,14 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 }
 
 /**
+ *  @brief DrmSessionManager constructor (no injected creator).
+ */
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback)
+	: DrmSessionManager(maxDrmSessions, player, std::move(watermarkSessionUpdateCallback), nullptr)
+{
+}
+
+/**
  *  @brief DrmSessionManager Destructor.
  */
 DrmSessionManager::~DrmSessionManager()

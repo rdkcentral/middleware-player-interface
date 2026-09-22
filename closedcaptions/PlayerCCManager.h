@@ -304,7 +304,16 @@ public:
 	 *                            (PlayerDirectRialtoCCManager).
 	 * @return void
 	 */
-	static void SetRialto(bool bIsRialto, bool bIsDirectRialto = false);
+	static void SetRialto(bool bIsRialto, bool bIsDirectRialto);
+
+	/**
+	 * @fn SetRialto
+	 * @brief Preserves the pre-existing one-argument mangled symbol for
+	 *        binaries linked against older releases of this installed
+	 *        header; delegates to the two-argument overload.
+	 * @return void
+	 */
+	static void SetRialto(bool bIsRialto);
 
 	/**
 	 * @fn DestroyInstance

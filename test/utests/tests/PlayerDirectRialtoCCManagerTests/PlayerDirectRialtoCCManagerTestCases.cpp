@@ -157,6 +157,29 @@ TEST_F(PlayerDirectRialtoCCManagerTest,
 }
 
 /**
+ * @test Initialize_RetryAfterRejectedDefaultTrack_ReappliesTrack
+ * @brief After a failed default-track application, Initialize() must clear
+ *        the unconfigured control so a retry with the same handle is
+ *        treated as a handle change and re-attempts SetTrack(), instead of
+ *        seeing an unchanged handle and returning success without
+ *        configuring the control.
+ */
+TEST_F(PlayerDirectRialtoCCManagerTest,
+	Initialize_RetryAfterRejectedDefaultTrack_ReappliesTrack)
+{
+	{
+		::testing::InSequence seq;
+		EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC1"))
+			.WillOnce(Return(false));
+		EXPECT_CALL(*m_mock, setTextTrackIdentifier("CC1"))
+			.WillOnce(Return(true));
+	}
+
+	EXPECT_EQ(m_mgr.Initialize(m_mock.get()), -1);
+	EXPECT_EQ(m_mgr.Initialize(m_mock.get()), 0);
+}
+
+/**
  * @test SetTrack_ControlRejectsIdentifier_ReturnsFailure
  * @brief When setTextTrackIdentifier() reports failure, SetTrack() must
  *        return -1, per the PlayerCCManagerBase::SetTrack() 0/-1 contract.
