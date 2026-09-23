@@ -31,9 +31,8 @@ Player_TelemetryInitializer::~Player_TelemetryInitializer()
 
 Player_TelemetryInitializer PlayerTelemetry2::mInitializer;
 
-PlayerTelemetry2::PlayerTelemetry2()
-: PlayerTelemetry2("")
-{
+PlayerTelemetry2::PlayerTelemetry2() {
+    PlayerTelemetry2("");
 }
 
 PlayerTelemetry2::PlayerTelemetry2( const std::string &appName) : appName(appName) {
