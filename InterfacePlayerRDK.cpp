@@ -3090,6 +3090,13 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 	bool segmentEventSent = false;
 	bool isFirstBuffer = stream->resetPosition;
+	// Period-end clip carried on this sample: >0 sets a segment stop, ==0 clears it.
+	GstClockTime clipStop = GST_CLOCK_TIME_NONE;
+	bool haveClip = sample.mPeriodBoundaryPts.has_value();
+	if (haveClip && *sample.mPeriodBoundaryPts > 0.0)
+	{
+		clipStop = (GstClockTime)(*sample.mPeriodBoundaryPts * GST_SECOND);
+	}
 	// Make sure source element is present before data is injected
 	// If format is FORMAT_INVALID, we don't know what we are doing here
 	pthread_mutex_lock(&stream->sourceLock);
@@ -3117,10 +3124,20 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 		if( interfacePlayerPriv->gstPrivateContext->video_sink &&
 			sendNewSegmentEvent == true)
 		{
-			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, 0);
+			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, clipStop);
 			segmentEventSent = true;
 		}
 		MW_LOG_DEBUG("mediaType[%d] SendGstEvents - first buffer received !!! initFragment: %d, pts: %" G_GUINT64_FORMAT, mediaType, initFragment, pts);
+	}
+	else if (haveClip && interfacePlayerPriv->gstPrivateContext->video_sink)
+	{
+		// Mid-period boundary: refresh the segment with the clip stop (or clear it).
+		// Reuse this sample's own pts as the new start - injection is monotonic, so it
+		// is always <= every subsequent buffer's pts and nothing is dropped for being
+		// "too early". AAMP only sets mPeriodBoundaryPts on the one sample that
+		// represents a transition, so no dedup state is needed here.
+		MW_LOG_MIL("mediaType[%d] Period clip: refreshing segment start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, pts, clipStop);
+		interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, clipStop);
 	}
 
 	sendNewSegmentEvent = segmentEventSent;

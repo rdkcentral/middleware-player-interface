@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 #include "DemuxDataTypes.h" // for MediaDrmMetadata and the exchange helper
@@ -58,6 +59,9 @@ struct MediaSample
 	double mDts{0.0};
 	double mDuration{0.0};
 	double mPtsOffset{0.0};
+	/// Presentation time (seconds) to clip output to a DASH Period end.
+	/// nullopt: no clip; >0: set segment stop at this PTS; ==0: clear a previous clip.
+	std::optional<double> mPeriodBoundaryPts{};
 	MediaDrmMetadata mDrmMetadata{}; // DRM metadata for encrypted samples
 
 	/**
