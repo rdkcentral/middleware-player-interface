@@ -1359,6 +1359,12 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		{
 			MW_LOG_DEBUG(" InterfacePlayerRDK: %s state set to %s, rc:%d",  SafeName(element).c_str(), gst_element_state_get_name(targetState), rc);
 		}
+		if (rc == GST_STATE_CHANGE_FAILURE && GST_IS_BIN(element))
+		{
+			std::string dotFileName = "myplayer_state_change_failure_";
+			dotFileName += gst_element_state_get_name(targetState);
+			GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(element), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.c_str());
+		}
 	}
 	else
 	{
@@ -4568,7 +4574,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				}
 				if (pInterfacePlayerRDK->m_gstConfigParam->gstLogging)
 				{
-					GST_DEBUG_BIN_TO_DOT_FILE((GstBin *)privatePlayer->gstPrivateContext->pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "myplayer");
+					//GST_DEBUG_BIN_TO_DOT_FILE((GstBin *)privatePlayer->gstPrivateContext->pipeline, GST_DEBUG_GRAPH_SHOW_ALL, "myplayer");
 					// output graph to .dot format which can be visualized with Graphviz tool if:
 					// gstreamer is configured with --gst-enable-gst-debug
 					// and "gst" is enabled in player cfg
