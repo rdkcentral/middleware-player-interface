@@ -3090,13 +3090,23 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 	bool segmentEventSent = false;
 	bool isFirstBuffer = stream->resetPosition;
-	// Period-end clip carried on this sample: >0 sets a segment stop, ==0 clears it.
-	GstClockTime clipStop = GST_CLOCK_TIME_NONE;
-	bool haveClip = sample.mPeriodBoundaryPts.has_value();
-	if (haveClip && *sample.mPeriodBoundaryPts > 0.0)
-	{
-		clipStop = (GstClockTime)(*sample.mPeriodBoundaryPts * GST_SECOND);
-	}
+	// AAMP announces a Period-end clip target on every unit that still overhangs
+	// a DASH Period end (not just once) - the monotonic property of the overhang
+	// check means every unit in an overhanging tail qualifies. That makes the
+	// *absence* of an announcement the reliable signal that we've moved past the
+	// tail and the stop should be lifted - unlike inferring it from "the next call
+	// after we last clipped", which breaks for LLD's multiple trailing chunks in
+	// the same overhanging tail.
+	//
+	// Applied uniformly to audio and video: GstBaseSink drops any buffer outside
+	// [start, stop) regardless of media type, so both rely on the same segment
+	// stop/clear mechanism rather than audio taking a separate discard-without-push
+	// path. Video specifically must never be withheld from the decoder (samples
+	// may decode out of presentation order - B-frames referencing forward "anchor"
+	// frames whose own pts can already be past the target while a not-yet-arrived,
+	// earlier-presented frame still depends on it), so relying on the sink to drop
+	// rather than pre-filtering here is required for video and simply reused for
+	// audio too.
 	// Make sure source element is present before data is injected
 	// If format is FORMAT_INVALID, we don't know what we are doing here
 	pthread_mutex_lock(&stream->sourceLock);
@@ -3115,6 +3125,16 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	}
 	if (isFirstBuffer)
 	{
+		// A fresh reset (tune/seek/period-change) means any pending clip
+		// obligation from before is no longer relevant.
+		stream->pendingClipPts.reset();
+		// Anchor the segment start here and reuse it for every later clip/clear
+		// event in this segment's lifetime - re-deriving it from each call's own
+		// sample pts would let it drift forward and could then clip a still
+		// in-flight buffer (e.g. video decode-order vs. presentation-order)
+		// whose pts is earlier than that later call's sample.
+		stream->segmentStartPts = pts;
+
 		//Send Gst Event when first buffer received after new tune, seek or period change
 		int enableGstQuery = m_gstConfigParam->enableGstPosQuery;
 		interfacePlayerPriv->SendGstEvents((int)mediaType, pts, enableGstQuery, m_gstConfigParam->enablePTSReStamp, m_gstConfigParam->vodTrickModeFPS);
@@ -3124,20 +3144,36 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 		if( interfacePlayerPriv->gstPrivateContext->video_sink &&
 			sendNewSegmentEvent == true)
 		{
-			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, clipStop);
+			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, GST_CLOCK_TIME_NONE);
 			segmentEventSent = true;
 		}
 		MW_LOG_DEBUG("mediaType[%d] SendGstEvents - first buffer received !!! initFragment: %d, pts: %" G_GUINT64_FORMAT, mediaType, initFragment, pts);
 	}
-	else if (haveClip && interfacePlayerPriv->gstPrivateContext->video_sink)
+	else
 	{
-		// Mid-period boundary: refresh the segment with the clip stop (or clear it).
-		// Reuse this sample's own pts as the new start - injection is monotonic, so it
-		// is always <= every subsequent buffer's pts and nothing is dropped for being
-		// "too early". AAMP only sets mPeriodBoundaryPts on the one sample that
-		// represents a transition, so no dedup state is needed here.
-		MW_LOG_MIL("mediaType[%d] Period clip: refreshing segment start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, pts, clipStop);
-		interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, clipStop);
+		if (sample.mPeriodBoundaryPts.has_value())
+		{
+			const GstClockTime target = (GstClockTime)(*sample.mPeriodBoundaryPts * GST_SECOND);
+			if (!stream->pendingClipPts.has_value() || *stream->pendingClipPts != target)
+			{
+				// First unit of this overhang (or a genuinely new target) - set the
+				// stop once. Reuse the segment's original anchor start (captured at
+				// isFirstBuffer), not this sample's own pts, so the lower bound never
+				// advances past a still in-flight buffer.
+				MW_LOG_MIL("mediaType[%d] Period clip: setting segment stop %" G_GUINT64_FORMAT " at pts %" G_GUINT64_FORMAT, mediaType, target, *stream->segmentStartPts);
+				interfacePlayerPriv->SendNewSegmentEvent(mediaType, *stream->segmentStartPts, target);
+			}
+			stream->pendingClipPts = target;
+		}
+		else if (stream->pendingClipPts.has_value())
+		{
+			// This unit no longer carries an announcement - the overhanging tail is
+			// over, lift the stop back to unbounded before any following content
+			// (e.g. the next Period) is incorrectly suppressed by it.
+			MW_LOG_MIL("mediaType[%d] Period clip: clearing segment stop", mediaType);
+			interfacePlayerPriv->SendNewSegmentEvent(mediaType, *stream->segmentStartPts, GST_CLOCK_TIME_NONE);
+			stream->pendingClipPts.reset();
+		}
 	}
 
 	sendNewSegmentEvent = segmentEventSent;

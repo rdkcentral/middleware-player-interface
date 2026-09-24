@@ -37,6 +37,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <any>
+#include <optional>
 #include "SocInterface.h"
 #include "InterfacePlayerRDK.h"
 #include "GstUtils.h"
@@ -136,6 +137,8 @@ struct gst_media_stream
 	bool firstBufferProcessed; /**< Indicates if the first buffer is processed in this stream */
 	GstPad *demuxPad;                  /**< Demux src pad >*/
 	gulong demuxProbeId;       /**< Demux pad probe ID >*/
+	std::optional<GstClockTime> pendingClipPts; /**< Period-end clip target while an overhanging tail is in force; absence of a fresh announcement signals it is time to clear */
+	std::optional<GstClockTime> segmentStartPts; /**< Segment start anchored at the first buffer since the last reset; reused (not re-derived) for later clip/clear events so it never advances past a buffer still in flight */
 
 	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID),
 	pendingSeek(false), resetPosition(false),

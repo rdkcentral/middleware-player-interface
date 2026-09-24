@@ -60,7 +60,7 @@ struct MediaSample
 	double mDuration{0.0};
 	double mPtsOffset{0.0};
 	/// Presentation time (seconds) to clip output to a DASH Period end.
-	/// nullopt: no clip; >0: set segment stop at this PTS; ==0: clear a previous clip.
+	/// nullopt: no clip (or the prior clip has ended); set: segment stop target in force.
 	std::optional<double> mPeriodBoundaryPts{};
 	MediaDrmMetadata mDrmMetadata{}; // DRM metadata for encrypted samples
 
