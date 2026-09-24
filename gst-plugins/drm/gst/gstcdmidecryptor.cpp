@@ -702,13 +702,17 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	if(errorCode == HDCP_OUTPUT_PROTECTION_FAILURE)
 	{
 		cdmidecryptor->hdcpOpProtectionFailCount++;
-	}
-	else if(cdmidecryptor->hdcpOpProtectionFailCount)
-	{
+		// Check on every sustained failure, not just when the error transitions away from this type
 		if(cdmidecryptor->hdcpOpProtectionFailCount >= DECRYPT_FAILURE_THRESHOLD) {
 			GstStructure *newmsg = gst_structure_new("HDCPProtectionFailure", "message", G_TYPE_STRING,"HDCP Output Protection Error", NULL);
 			gst_element_post_message(reinterpret_cast<GstElement*>(cdmidecryptor),gst_message_new_application (GST_OBJECT (cdmidecryptor), newmsg));
+			cdmidecryptor->hdcpOpProtectionFailCount = 0;
 		}
+		// Don't forward a protection-failed sample downstream to the decoder
+		goto free_resources;
+	}
+	else if(cdmidecryptor->hdcpOpProtectionFailCount)
+	{
 		cdmidecryptor->hdcpOpProtectionFailCount = 0;
 	}
 	else
