@@ -416,6 +416,11 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		newFormat[eGST_MEDIATYPE_SUBTITLE]=GST_FORMAT_INVALID;
 	}
 
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !interfacePlayerPriv->socInterface)
+	{
+		MW_LOG_ERR("interfacePlayerPriv or its members are null, cannot configure pipeline");
+		return;
+	}
 	if(!(m_gstConfigParam->useWesterosSink))
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
