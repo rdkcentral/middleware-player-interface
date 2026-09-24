@@ -3152,15 +3152,17 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	else
 	{
 		// TEST HACK - remove before merging. Forces a synthetic Period-end clip on
-		// every 4th audio segment, targeting half-way through it, so segment
-		// clipping/recovery can be verified by ear on a live audio-heavy channel.
+		// every 4th audio segment, targeting just before its own start pts, so the
+		// whole segment should fall outside [start, stop) and get dropped entirely -
+		// confirms whether clipping happens at injected-buffer granularity.
 		if (mediaType == eGST_MEDIATYPE_AUDIO && !initFragment && !sample.mPeriodBoundaryPts.has_value())
 		{
 			static int audioSegmentCounter = 0;
 			++audioSegmentCounter;
 			if (audioSegmentCounter % 4 == 0)
 			{
-				sample.mPeriodBoundaryPts = sample.mPts + sample.mDuration * 0.5;
+				//sample.mPeriodBoundaryPts = sample.mPts + sample.mDuration * 0.5;
+				sample.mPeriodBoundaryPts = sample.mPts - 0.001;
 			}
 		}
 
