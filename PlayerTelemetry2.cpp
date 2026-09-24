@@ -61,7 +61,7 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
         }
 
 
-        cJSON_AddStringToObject(root, "app", appName.c_str());
+      //  cJSON_AddStringToObject(root, "app", appName.c_str());
 
         for (const auto& pair : intData)
         {
