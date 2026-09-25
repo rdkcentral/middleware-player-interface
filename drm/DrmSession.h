@@ -152,6 +152,7 @@ public:
 	 * @retval Returns status of decrypt request.
 	 */
         virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
+        virtual int decrypt(std::vector<GstBuffer*> &vBuf, GstCaps* caps = NULL);
 
 	/**
 	 * @fn decrypt
