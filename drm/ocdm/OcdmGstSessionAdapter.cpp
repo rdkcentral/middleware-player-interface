@@ -386,7 +386,7 @@ int OCDMGSTSessionAdapter::decrypt(GstBuffer *keyIDBuffer, GstBuffer *ivBuffer, 
 	return retValue;
 }
 
-int OCDMGSTSessionAdapter::decrypt(const std::vector<GstBuffer*> &vBuf, GstCaps* caps)
+int OCDMGSTSessionAdapter::decrypt(std::vector<GstBuffer*> &vBuf, GstCaps* caps)
 {
     int retValue = -1;
 
@@ -398,7 +398,7 @@ int OCDMGSTSessionAdapter::decrypt(const std::vector<GstBuffer*> &vBuf, GstCaps*
           }
           if (OCDMGSTSessionDecryptMulti && !gst_caps_is_empty(caps) && GST_IS_CAPS(caps)) {
 
-              retValue = OCDMGSTSessionDecryptMulti(m_pOpenCDMSession, vBuf, caps);
+              retValue = OCDMGSTSessionDecryptMulti(m_pOpenCDMSession, vBuf.data(), vBuf.size(), caps);
           } else {
               MW_LOG_WARN("decrypt not called - multi decrypt: %p, caps empty: %d", OCDMGSTSessionDecryptMulti, gst_caps_is_empty(caps));
           }

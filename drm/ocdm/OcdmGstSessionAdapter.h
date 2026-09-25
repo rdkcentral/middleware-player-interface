@@ -51,7 +51,7 @@ public:
                     MW_LOG_WARN("No opencdm_gstreamer_session_decrypt_buffer found");
                 {
                 const char* ocdmgstsessiondecryptmulti = "opencdm_gstreamer_session_decrypt_buffer_multi";
-                OCDMGSTSessionDecryptMulti = (OpenCDMError(*)(struct OpenCDMSession*, const std::vector<GstBuffer*> &, GstCaps*))dlsym(RTLD_DEFAULT, ocdmgstsessiondecryptmulti);
+                OCDMGSTSessionDecryptMulti = (OpenCDMError(*)(struct OpenCDMSession*, GstBuffer* buffers[], const uint16_t, GstCaps*))dlsym(RTLD_DEFAULT, ocdmgstsessiondecryptmulti);
                 if (OCDMGSTSessionDecryptMulti)
                     MW_LOG_WARN("Has opencdm_gstreamer_session_decrypt_buffer_multi");
                 else
@@ -62,9 +62,9 @@ public:
 
 	int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps);
 	int decrypt(const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData);
-    int decrypt(const std::vector<GstBuffer*> &vBuf, GstCaps* caps);
+    int decrypt(std::vector<GstBuffer*> &vBuf, GstCaps* caps);
 
 private:
         OpenCDMError(*OCDMGSTSessionDecrypt)(struct OpenCDMSession*, GstBuffer*, GstCaps*);
-        OpenCDMError(*OCDMGSTSessionDecryptMulti)(struct OpenCDMSession*, const std::vector<GstBuffer*> &, GstCaps*);
+        OpenCDMError(*OCDMGSTSessionDecryptMulti)(struct OpenCDMSession*, GstBuffer* buffers[], const uint16_t, GstCaps*);
 };
