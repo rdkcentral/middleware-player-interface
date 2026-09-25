@@ -3182,16 +3182,12 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 			}
 			stream->pendingClipPts = target;
 		}
-		else
+		else if (stream->pendingClipPts.has_value())
 		{
-			// Resend the clear on every unit without an announcement, not just once
-			// at the transition edge - a single isolated clear appeared not to
-			// reliably stick (RialtoServer batching/loss suspected), so keep
-			// reasserting unbounded until a new clip target shows up again.
-			if (stream->pendingClipPts.has_value())
-			{
-				MW_LOG_MIL("mediaType[%d] Period clip: clearing segment stop", mediaType);
-			}
+			// This unit no longer carries an announcement - the overhanging tail is
+			// over, lift the stop back to unbounded before any following content
+			// (e.g. the next Period) is incorrectly suppressed by it.
+			MW_LOG_MIL("mediaType[%d] Period clip: clearing segment stop", mediaType);
 			interfacePlayerPriv->SendNewSegmentEvent(mediaType, *stream->segmentStartPts, GST_CLOCK_TIME_NONE);
 			stream->pendingClipPts.reset();
 		}
