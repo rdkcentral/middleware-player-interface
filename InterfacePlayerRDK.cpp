@@ -1878,13 +1878,6 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		int MaxGstVideoBufBytes = m_gstConfigParam->videoBufBytes;
 		MW_LOG_INFO("Setting gst Video buffer max bytes to %d", MaxGstVideoBufBytes);
 		g_object_set(source, "max-bytes", (guint64)MaxGstVideoBufBytes, NULL);			/* Sets the maximum video buffer bytes as per configuration*/
-		if( privatePlayer->gstPrivateContext->usingRialtoSink &&
-		   !privatePlayer->socInterface->IsVideoMaster(privatePlayer->gstPrivateContext->video_sink) )
-		{
-			// This property is required so that the segment event sent via gst_app_src_push_sample
-			MW_LOG_INFO("Setting handle-segment-change to 1");
-			g_object_set(source, "handle-segment-change", TRUE, NULL);
-		}
 	}
 	else if (eGST_MEDIATYPE_AUDIO == mediaType)
 	{
@@ -1892,6 +1885,17 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		int MaxGstAudioBufBytes = m_gstConfigParam->audioBufBytes;
 		MW_LOG_INFO("Setting gst Audio buffer max bytes to %d", MaxGstAudioBufBytes);
 		g_object_set(source, "max-bytes", (guint64)MaxGstAudioBufBytes, NULL);			/* Sets the maximum audio buffer bytes as per configuration*/
+	}
+	if (privatePlayer->gstPrivateContext->usingRialtoSink &&
+	   (eGST_MEDIATYPE_VIDEO == mediaType || eGST_MEDIATYPE_AUDIO == mediaType))
+	{
+		// Required so GstAppSrc queues the segment carried by gst_app_src_push_sample
+		// against the next real buffer push, instead of silently discarding it when
+		// no buffer accompanies the sample (previously gated to !IsVideoMaster video
+		// only, which left audio - and video on IsVideoMaster devices - unable to
+		// receive mid-stream segment/stop updates at all).
+		MW_LOG_MIL("Setting handle-segment-change to 1 for mediaType[%d]", mediaType);
+		g_object_set(source, "handle-segment-change", TRUE, NULL);
 	}
 	g_object_set(source, "min-percent", 50, NULL);								/* Trigger the need data event when the queued bytes fall below 50% */
 	/* "format" can be used to perform seek or query/conversion operation*/
@@ -3152,16 +3156,13 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	else
 	{
 		// TEST HACK - remove before merging. Forces a synthetic Period-end clip on
-		// every 4th video segment, targeting just before its own start pts, so the
+		// every 4th audio segment, targeting just before its own start pts, so the
 		// whole segment should fall outside [start, stop) and get dropped entirely.
-		// Targets video, not audio: handle-segment-change (required for a Rialto
-		// appsrc to honor the segment carried by gst_app_src_push_sample) is only
-		// ever enabled for video's appsrc (InitializeSourceForPlayer), never audio's.
-		if (mediaType == eGST_MEDIATYPE_VIDEO && !initFragment && !sample.mPeriodBoundaryPts.has_value())
+		if (mediaType == eGST_MEDIATYPE_AUDIO && !initFragment && !sample.mPeriodBoundaryPts.has_value())
 		{
-			static int videoSegmentCounter = 0;
-			++videoSegmentCounter;
-			if (videoSegmentCounter % 4 == 0)
+			static int audioSegmentCounter = 0;
+			++audioSegmentCounter;
+			if (audioSegmentCounter % 4 == 0)
 			{
 				sample.mPeriodBoundaryPts = sample.mPts - 0.001;
 			}
