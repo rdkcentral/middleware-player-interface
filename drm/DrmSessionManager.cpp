@@ -556,6 +556,38 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 			return nullptr;
 		}
 	}
+	else if (code == KEY_READY)
+	{
+		// F2 (RDKEMW-24407) Part B: single-key post-update usability check. A reused
+		// session that was updated for a different channel can report KEY_READY while
+		// the REQUIRED keyId is actually unusable (Key State 3) - SecManager returns a
+		// valid license yet the key never becomes usable. Verify the required keyId is
+		// present in the CDM's usable-key set before trusting KEY_READY.
+		// NOTE: only fail when the CDM actually reports usable keys; some DRM systems
+		// return an empty usable-key list, in which case we cannot determine usability
+		// and must not false-fail.
+		std::vector<std::vector<uint8_t>> usableKeyIds;
+		{
+			std::lock_guard<std::mutex> sessionGuard(drmSessionContexts[selectedSlot].sessionMutex);
+			if (drmSessionContexts[selectedSlot].drmSession)
+			{
+				usableKeyIds = drmSessionContexts[selectedSlot].drmSession->getUsableKeys();
+			}
+		}
+		if (!usableKeyIds.empty())
+		{
+			bool requiredKeyUsable = (std::find(usableKeyIds.begin(), usableKeyIds.end(), keyId) != usableKeyIds.end());
+			if (!requiredKeyUsable)
+			{
+				MW_LOG_WARN("Required keyId %s not usable after license install (Key State 3) for slot %d - marking failed to trigger fresh-session fallback",
+						PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot);
+				std::lock_guard<std::mutex> guard(cachedKeyMutex);
+				cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+				return nullptr;
+			}
+			MW_LOG_INFO("Required keyId %s is usable for slot %d", PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot);
+		}
+	}
 
 	// License acquisition was done, so mContentSecurityManagerSession will be populated now
 	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
