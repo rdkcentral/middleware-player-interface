@@ -442,7 +442,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 			 * the server-side session. If the pipeline was previously configured video-only
 			 * (e.g. during iframe trickplay, audioFormat=FORMAT_INVALID => single-path-stream=true),
 			 * and audio is now being added, a late allSourcesAttached() call would leave audio
-			 * permanently starved (lastAudioSampleTimestamps stays 0). See VPAAMP-1282.
+			 * permanently starved (lastAudioSampleTimestamps stays 0).
 			 */
 			if ((eGST_MEDIATYPE_AUDIO == (GstMediaType)i) &&
 				interfacePlayerPriv->gstPrivateContext->usingRialtoSink &&
@@ -454,7 +454,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 				if (vidsink)
 				{
 					MW_LOG_MIL("InterfacePlayerRDK - ConfigurePipeline: pre-setting single-path-stream=false"
-							   " before audio SetupStream (VPAAMP-1282)");
+							   " before audio SetupStream");
 					g_object_set(vidsink, "single-path-stream", FALSE, NULL);
 					gst_object_unref(vidsink);
 				}
