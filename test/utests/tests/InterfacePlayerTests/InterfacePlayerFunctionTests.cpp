@@ -3175,10 +3175,11 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_RialtoSinglePathStreamFalseBefore
 	int singlePathSetOrder   = -1;
 	int binAddOrder          = -1;
 
-	// Use typed matchers to select the (gpointer, const gchar*, int) overload.
+	// Use typed matchers to select the (gpointer, const gchar*, int) overload and
+	// assert the value written is FALSE (0), not just any integer.
 	EXPECT_CALL(*g_mockGLib, g_object_set(Matcher<gpointer>(_),
 	                                       StrEq("single-path-stream"),
-	                                       Matcher<int>(_)))
+	                                       Matcher<int>(Eq((int)FALSE))))
 		.Times(AtLeast(1))
 		.WillRepeatedly(InvokeWithoutArgs([&]{
 			if (singlePathSetOrder < 0) singlePathSetOrder = callCounter++;

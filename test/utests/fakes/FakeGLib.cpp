@@ -108,6 +108,13 @@ void g_object_get(gpointer object, const gchar *first_property_name, ...)
 			{
 				g_mockGLib->g_object_get(object, property_name, va_arg(args_list, gpointer*));
 			}
+			else
+			{
+				/* Consume and discard the output-pointer argument for any unrecognised
+				 * property so the next va_arg call reads the correct property name
+				 * rather than the output pointer. */
+				va_arg(args_list, gpointer);
+			}
 			property_name = va_arg(args_list, gchar *);
 		}
 		va_end(args_list);
