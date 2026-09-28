@@ -146,7 +146,15 @@ bool ContentSecurityManager::AcquireLicense(std::string clientId, std::string ap
 	}
 	else
 	{
-		MW_LOG_MIL("%s but the input data has changed, update session.", session.ToString().c_str());
+		// F2 (RDKEMW-24407): the pooled session is valid but bound to a DIFFERENT
+		// channel's input data (changed keyIds/initData on channel change). Updating
+		// such a session can leave the required key unusable (Key State 3) even though
+		// SecManager returns a valid license. Constrain reuse: release the stale session
+		// and invalidate the handle so AcquireLicenseOpenOrUpdate() below takes the fresh
+		// OpenDrmSession path instead of UpdateDrmSession on stale-bound content.
+		MW_LOG_MIL("%s but the input data has changed; releasing stale session [%" PRId64 "] and opening a fresh session.", session.ToString().c_str(), session.getSessionID());
+		ReleaseSession(session.getSessionID());
+		session.setSessionInvalid();
 	}
 
 	if(!success)
