@@ -108,6 +108,13 @@ void g_object_get(gpointer object, const gchar *first_property_name, ...)
 			{
 				g_mockGLib->g_object_get(object, property_name, va_arg(args_list, gpointer*));
 			}
+			else if((strcmp(property_name, "flags") == 0))
+			{
+				/* Initialize flags to zero so callers that immediately read the value
+				 * after g_object_get() do not observe undefined behaviour. */
+				gint *out = va_arg(args_list, gint*);
+				if (out) *out = 0;
+			}
 			else
 			{
 				/* Consume and discard the output-pointer argument for any unrecognised
