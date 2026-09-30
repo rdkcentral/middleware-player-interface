@@ -375,10 +375,13 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
 	mFirstFrameRequired = FirstFrameFlag;
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !m_gstConfigParam)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
+		return;
+	}
 
 	/* First-frame watchdog: tune not completed if callback never arrives */
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
-	{
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
@@ -390,7 +393,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs,
 				 interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this,
 				 "firstFrameTimeoutTimerId");
-	}
+	
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
 	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
 	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
