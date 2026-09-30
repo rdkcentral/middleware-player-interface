@@ -458,7 +458,7 @@ class InterfacePlayerRDK
         	 * @param[out] firstBufferPushed Indicates whether the first buffer was pushed.
         	 * @return True if the event was sent successfully, false otherwise.
         	 */
-			bool SendHelper(int type, MediaSample&& sample, bool initFragment, bool &discontinuity, bool &notifyFirstBufferProcessed, bool &sendNewSegmentEvent, bool &resetTrickUTC, bool &firstBufferPushed);
+		bool SendHelper(int type, MediaSample&& sample, bool initFragment, bool &discontinuity, bool &notifyFirstBufferProcessed, bool &sendNewSegmentEvent, bool &resetTrickUTC, bool &firstBufferPushed);
         	
         	/**
         	 * @brief Pauses the injector.
