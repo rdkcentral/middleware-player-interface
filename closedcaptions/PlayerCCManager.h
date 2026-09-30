@@ -247,6 +247,17 @@ protected:
 	 */
 	virtual void ResetState();
 
+	/**
+	 * @brief Reset mOptions/mTrack/mTrackFormat/mLastTextTracks/mEnabled/
+	 *        mTrickplayStarted/mParentalCtrlLocked to their initial values.
+	 *        Does NOT call Stop(). Subclasses whose SetTrack()/Initialize()
+	 *        access these fields under a control mutex must call this while
+	 *        holding that same mutex (after calling Stop() separately,
+	 *        outside the lock) instead of calling ResetState() directly, to
+	 *        avoid racing with a concurrent SetTrack()/Initialize() call.
+	 */
+	void ResetTrackState();
+
 	/* NOTE WELL: The ResetState() method resets these member variables back to
 	** their initial state. It should be updated if any of the following change
 	** or are added to. */
@@ -257,6 +268,23 @@ protected:
 	bool mEnabled{false};                  /**< true if CC rendering enabled, false otherwise */
 	bool mTrickplayStarted{false};         /**< If a trickplay is going on or not */
 	bool mParentalCtrlLocked{false};       /**< If Parental Control lock enabled on not */
+
+public:
+	/**
+	 * @brief Clear the stored control handle if it currently equals handle.
+	 *        Called by the handle owner's destructor so a handle can never be
+	 *        used after the object it points to is freed, independent of
+	 *        whether the GetId()/Release() usage count has reached zero (it
+	 *        may not have, if another session is still registered - see
+	 *        multi-pipeline mode).
+	 *        Declared last (appended after the pre-existing virtual
+	 *        interface, not inserted between Release() and SetStatus()) so it
+	 *        only extends the vtable instead of shifting every later slot,
+	 *        which would silently mis-dispatch calls made through a binary
+	 *        built against an older header.
+	 * @param[in] handle - the handle being invalidated
+	 */
+	virtual void InvalidateHandle(void *) {}
 };
 
 /**
@@ -275,11 +303,25 @@ public:
 	static PlayerCCManagerBase * GetInstance();
 
 	/**
-	 * @fn SetRialto
+	 * @fn HasInstance
+	 * @brief Check whether GetInstance() has already created the singleton,
+	 *        without creating it as a side effect.
 	 *
+	 * @return bool - true if an instance exists
+	 */
+	static bool HasInstance();
+
+	/**
+	 * @fn SetRialto
+	 * @brief Configure which CC manager subclass GetInstance() will create.
+	 *
+	 * @param[in] bIsRialto       true when using the Rialto GStreamer sink
+	 *                            (PlayerRialtoCCManager).
+	 * @param[in] bIsDirectRialto true when using the direct-Rialto path
+	 *                            (PlayerDirectRialtoCCManager).
 	 * @return void
 	 */
-	static void SetRialto(bool bIsRialto);
+	static void SetRialto(bool bIsRialto, bool bIsDirectRialto = false);
 
 	/**
 	 * @fn DestroyInstance
@@ -289,8 +331,19 @@ public:
 	static void DestroyInstance();
 
 private:
-	static PlayerCCManagerBase *mInstance; /**< Singleton instance */
-	static bool mIsRialto;	/**< Determines which class to instantiate */
+	/**
+	 * @enum CCManagerType
+	 * @brief Identifies which PlayerCCManagerBase subclass to instantiate.
+	 */
+	enum class CCManagerType
+	{
+		SubtecCCManager,      ///< Use PlayerSubtecCCManager (default)
+		RialtoCCManager,      ///< Use PlayerRialtoCCManager
+		DirectRialtoCCManager ///< Use PlayerDirectRialtoCCManager
+	};
+
+	static PlayerCCManagerBase *mInstance;          /**< Singleton instance */
+	static CCManagerType        mCCManagerType;     /**< Determines which class to instantiate */
 };
 
 class PlayerFakeCCManager : public PlayerCCManagerBase

@@ -59,7 +59,6 @@ std::shared_ptr<MockDrmHelper> drmHelper;
 DrmInfo drminfo;
 MockDrmMemorySystem *g_mockMemorySystem;
 static std::string g_defaultSystemId = "com.widevine.alpha";
-static std::vector<std::vector<uint8_t>> g_emptyKeys;
 
 class OcdmBasicSessionAdapterTests : public ::testing::Test
 {
@@ -82,7 +81,7 @@ protected:
 		g_mockOpenCdmSessionAdapter = new NiceMock<MockOpenCdmSessionAdapter>();
 
 		// Set default return value for getUsableKeys() to return an empty vector
-		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys()).WillByDefault(testing::ReturnRef(g_emptyKeys));
+		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys()).WillByDefault(testing::Return(std::vector<std::vector<uint8_t>>{}));
 
 		g_mockMemorySystem = new NiceMock<MockDrmMemorySystem>();
 	}
