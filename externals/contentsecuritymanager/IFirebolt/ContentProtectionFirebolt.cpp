@@ -608,7 +608,7 @@ bool ContentProtectionFirebolt::UpdateDrmSession(int64_t sessionId, int32_t &err
 	if(drmSession)
 	{
 		MW_LOG_INFO("DRM session updated successfully for sessionId: %" PRId64 " with Response %s", sessionId, drmSession.value().c_str());
-		response = drmSession.value();
+		response = drmSession.updateSessionResponse;
 		ret = true;
 	}
 	else
