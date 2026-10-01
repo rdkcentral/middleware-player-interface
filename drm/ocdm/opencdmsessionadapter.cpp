@@ -145,6 +145,22 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		};
 
 		m_OCDMSessionCallbacks.error_message_callback = [](OpenCDMSession* session, void* userData, const char message[]) {
+			(void)session;
+			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+			if (!userSession)
+			{
+				return;
+			}
+
+			userSession->m_keyStatus = InternalError;
+			userSession->m_eKeyState = KEY_ERROR;
+			userSession->m_keyStatusReady.signal();
+			userSession->m_keyStatusWait.signal();
+			MW_LOG_ERR("OpenCDM error: %s", message ? message : "unknown error");
+			if (userSession->m_drmCallbacks)
+			{
+				userSession->m_drmCallbacks->ErrorMessage(message ? message : "unknown error");
+			}
 		};
 
 		m_OCDMSessionCallbacks.keys_updated_callback = [](const OpenCDMSession* session, void* userData) {
