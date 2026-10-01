@@ -36,6 +36,7 @@ class DrmCallbacks
 public:
 	virtual void Individualization(const std::string& payload) = 0;
 	virtual void LicenseRenewal(DrmHelperPtr drmHelper, void* userData) = 0;
+	virtual void ErrorMessage(const std::string& message) { (void)message; }
 	virtual ~DrmCallbacks() {};
 };
 
