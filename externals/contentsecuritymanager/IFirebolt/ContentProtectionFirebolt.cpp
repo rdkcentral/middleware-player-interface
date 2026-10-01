@@ -39,6 +39,22 @@ std::mutex mConnectionMutex;
 using namespace Firebolt;
 uint64_t ContentProtectionFirebolt::mSubscriptionId = 0;
 
+// RDKEMW-24407 repro/diagnostics. Flags are plain files checked with access() at the call
+// site (no thread / timer), so toggling takes effect on the very next license request.
+//  csm_repro_self_update     : after a successful OpenDrmSession, issue a real UpdateDrmSession on the
+//                              same (guaranteed alive) session and run its response through the normal
+//                              parsing path. Discriminates "update response is mishandled" from "transient".
+//  csm_repro_drop_update_resp: blank the UpdateDrmSession response ("{}") -> license-less reply fingerprint.
+//                              Also suppresses the F1 Update->Open fallback, which would otherwise recover
+//                              the fabricated failure before it reaches AAMP.
+//  csm_repro_stale_session   : pin a live session instance for the opened ID carrying a deliberately
+//                              different input hash, so the real ContentSecurityManagerSession constructor
+//                              takes getInstance()'s "input data changed" path and emits [83] / [118].
+#define CSM_REPRO_SELF_UPDATE "/tmp/csm_repro_self_update"
+#define CSM_REPRO_DROP_UPDATE "/tmp/csm_repro_drop_update_resp"
+#define CSM_REPRO_STALE_SESSION "/tmp/csm_repro_stale_session"
+static inline bool ReproFlag(const char* path) { return access(path, F_OK) == 0; }
+
 //Lookup table to convert CPS error to secmanager error
 static const std::map<const int32_t, std::pair<const int32_t, const int32_t>> ContentProtectionSecManagerErrorLookUp =
 {
@@ -291,6 +307,47 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 						UpdateDrmSession(sessionId, errorCode,
 								licenseRequestStr, initData, drmSession);
 				}
+				// RDKEMW-24407 repro: keep a live instance for this ID with a mismatched hash so the
+				// constructor below reuses it instead of creating a new one.
+				if (!update && result && ReproFlag(CSM_REPRO_STALE_SESSION))
+				{
+					static std::vector<ContentSecurityManagerSession> sReproPinnedSessions;
+					static std::atomic<std::size_t> sReproStaleHash{0x5A5A5A5A};
+					sReproPinnedSessions.emplace_back(sessionId, ++sReproStaleHash);
+					MW_LOG_WARN("REPRO-24407: pinned stale instance for session [%" PRId64 "], %zu pinned",
+							sessionId, sReproPinnedSessions.size());
+				}
+				// RDKEMW-24407 repro: real UpdateDrmSession round trip right after a successful open.
+				if (!update && result && ReproFlag(CSM_REPRO_SELF_UPDATE))
+				{
+					std::string updResp;
+					int32_t updErr = CONTENT_SECURITY_MANAGER_DRM_GEN_ERR_NONE;
+					bool updRet = UpdateDrmSession(sessionId, updErr, licenseRequestStr, initData, updResp);
+					MW_LOG_WARN("REPRO-24407: self-update on session [%" PRId64 "] ret=%d err=%d respLen=%zu",
+							sessionId, (int)updRet, updErr, updResp.size());
+					apiName = "UpdateDrmSession";
+					update = true;
+					result = updRet;
+					errorCode = updErr;
+					drmSession = updResp;
+				}
+				// RDKEMW-24407 repro: emulate a license-less UpdateDrmSession reply.
+				if (update && result && ReproFlag(CSM_REPRO_DROP_UPDATE))
+				{
+					MW_LOG_WARN("REPRO-24407: dropping UpdateDrmSession response (len=%zu)", drmSession.size());
+					drmSession = "{}";
+				}
+				// RDKEMW-24407 diagnostic (worth keeping): what did the update reply actually contain?
+				if (update && result && !drmSession.empty())
+				{
+					std::string probeLicense;
+					PlayerJsonObject probeResp(drmSession);
+					PlayerJsonObject probeCtx;
+					const bool hasLicense = probeResp.get("license", probeLicense);
+					const bool hasCtx = probeResp.get("secManagerResultContext", probeCtx);
+					MW_LOG_WARN("UpdateDrmSession response diag: len=%zu hasLicense=%d hasResultContext=%d head=%.160s",
+							drmSession.size(), (int)hasLicense, (int)hasCtx, drmSession.c_str());
+				}
 				if (drmSession.empty())
 				{
 					MW_LOG_WARN("DrmSession Response is empty.");
@@ -452,7 +509,9 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 			// F1 (RDKEMW-24407): Update->Open fallback. If the update path failed and
 			// we have not yet tried a fresh open, release the stale bound session and
 			// retry once as a new OpenDrmSession.
-			if (!ret && update && !triedOpenFallback && IsActive())
+			// Suppressed while the response-drop flag is set, otherwise the fabricated
+			// failure is recovered here and never reaches AAMP.
+			if (!ret && update && !triedOpenFallback && !ReproFlag(CSM_REPRO_DROP_UPDATE) && IsActive())
 			{
 				MW_LOG_WARN("ContentProtection %s failed (statusCode:%d reasonCode:%d); performing Update->Open fallback with a fresh session (stale sessionId:%" PRId64 ")", apiName, *statusCode, *reasonCode, sessionId);
 				// We already hold mContentProtectionMutex here, so close inline instead
