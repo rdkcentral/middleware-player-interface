@@ -239,7 +239,8 @@ static void gst_cdmidecryptor_init(
 	cdmidecryptor->notifyDecryptError = true;
 	cdmidecryptor->streamEncrypted = false;
 	cdmidecryptor->ignoreSVP = false;
-	cdmidecryptor->stateEpoch = 0;
+	cdmidecryptor->sessionCreationInProgress = false;
+	cdmidecryptor->discardSessionCreationResult = false;
 	cdmidecryptor->sinkCaps = NULL;
 	cdmidecryptor->svpCtx = NULL;
 
@@ -933,9 +934,9 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		}
 
 		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
-		guint64 createStateEpoch = 0;
 		g_mutex_lock(&cdmidecryptor->mutex);
-		createStateEpoch = cdmidecryptor->stateEpoch;
+		cdmidecryptor->sessionCreationInProgress = true;
+		cdmidecryptor->discardSessionCreationResult = false;
 		g_mutex_unlock(&cdmidecryptor->mutex);
 		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
 		int err = -1;
@@ -960,14 +961,12 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
                 }
 		g_mutex_lock(&cdmidecryptor->mutex);
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
-		/* Only discard on a teardown (PAUSED->READY) that occurred while createDrmSession()
-		 * was in flight; canWait is not used here since it can also be false due to an
-		 * unrelated prior key failure, which must not cause this result to be dropped. */
-		if (createStateEpoch != cdmidecryptor->stateEpoch)
+		cdmidecryptor->sessionCreationInProgress = false;
+		/* PAUSED->READY marks an in-flight result for discard. READY->PAUSED does not
+		 * clear the mark, so a late result cannot be published after a new transition. */
+		if (cdmidecryptor->discardSessionCreationResult)
 		{
-			GST_WARNING_OBJECT(cdmidecryptor,
-				"Discarding late createDrmSession result: epoch %" G_GUINT64_FORMAT "->%" G_GUINT64_FORMAT,
-				createStateEpoch, cdmidecryptor->stateEpoch);
+			GST_WARNING_OBJECT(cdmidecryptor, "Discarding late createDrmSession result after teardown");
 			result = TRUE;
 			g_cond_signal(&cdmidecryptor->condition);
 			g_mutex_unlock(&cdmidecryptor->mutex);
@@ -1066,7 +1065,10 @@ static GstStateChangeReturn gst_cdmidecryptor_changestate(
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG_OBJECT(cdmidecryptor, "PAUSED->READY");
 		g_mutex_lock(&cdmidecryptor->mutex);
-		cdmidecryptor->stateEpoch++;
+		if (cdmidecryptor->sessionCreationInProgress)
+		{
+			cdmidecryptor->discardSessionCreationResult = true;
+		}
 		cdmidecryptor->canWait = false;
 		g_cond_signal(&cdmidecryptor->condition);
 		g_mutex_unlock(&cdmidecryptor->mutex);

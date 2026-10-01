@@ -64,7 +64,8 @@ struct _GstCDMIDecryptor
     gboolean                        notifyDecryptError;
     gboolean                        streamEncrypted;
     gboolean                        ignoreSVP; //No need for svp for clearKey streams
-    guint64                         stateEpoch; // incremented on teardown-related state transitions
+    gboolean                        sessionCreationInProgress;
+    gboolean                        discardSessionCreationResult;
     GstCaps*                        sinkCaps;
     //GstBuffer*                    initDataBuffer;
     void*                           svpCtx;
