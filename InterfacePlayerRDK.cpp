@@ -509,6 +509,30 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 			stream->codecInfo = std::move(*codecInfoByTrack[i]);
 			stream->trackId = trackId;
 
+			/* For Rialto pipelines, single-path-stream must be cleared to false BEFORE the audio
+			 * appsrc is added to the pipeline. This ensures the Rialto server waits for all
+			 * expected sources (video + audio) before calling allSourcesAttached(), which commits
+			 * the server-side session. If the pipeline was previously configured video-only
+			 * (e.g. during iframe trickplay, audioFormat=FORMAT_INVALID => single-path-stream=true),
+			 * and audio is now being added, a late allSourcesAttached() call would leave audio
+			 * permanently starved (lastAudioSampleTimestamps stays 0).
+			 */
+			if ((eGST_MEDIATYPE_AUDIO == (GstMediaType)i) &&
+				interfacePlayerPriv->gstPrivateContext->usingRialtoSink &&
+				(m_gstConfigParam->media != eGST_MEDIAFORMAT_PROGRESSIVE))
+			{
+				GstElement* vidsink = NULL;
+				g_object_get(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin,
+							 "video-sink", &vidsink, NULL);
+				if (vidsink)
+				{
+					MW_LOG_MIL("InterfacePlayerRDK - ConfigurePipeline: pre-setting single-path-stream=false"
+							   " before audio SetupStream");
+					g_object_set(vidsink, "single-path-stream", FALSE, NULL);
+					gst_object_unref(vidsink);
+				}
+			}
+
 			/* Sets up the stream for the given MediaType */
 			if(0 != InterfacePlayer_SetupStream((GstMediaType)i, manifestUrl))
 			{

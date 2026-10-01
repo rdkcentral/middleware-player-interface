@@ -47,6 +47,8 @@ using ::testing::SaveArg;
 using ::testing::Pointer;
 using ::testing::Matcher;
 using ::testing::AnyNumber;
+using ::testing::AtLeast;
+using ::testing::InvokeWithoutArgs;
 
 #define GST_NORMAL_PLAY_RATE		1
 
@@ -3285,5 +3287,75 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedAudioCodecFormat)
 	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_AUDIO, std::move(codecInfo));
 
 	delete g_mockGstUtils;
+}
+
+/**
+ * Regression test: when transitioning a Rialto pipeline from video-only (trickplay,
+ * single-path-stream=true) back to audio+video playback, ConfigurePipeline must write
+ * single-path-stream=false on the video sink BEFORE InterfacePlayer_SetupStream adds the
+ * audio appsrc (gst_bin_add). If the write comes after, the Rialto server has already
+ * committed to a video-only session via allSourcesAttached() and will never deliver audio.
+ */
+TEST_F(InterfacePlayerTests, ConfigurePipeline_RialtoSinglePathStreamFalseBeforeAudioSetup)
+{
+	// Pre-condition: Rialto, non-progressive, video stream already configured (no audio yet,
+	// simulating the state after an iframe trickplay pipeline was established video-only).
+	mPlayerConfigParams->useRialtoSink = true;
+	mPlayerConfigParams->media = eGST_MEDIAFORMAT_DASH;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].format = GST_FORMAT_INVALID;
+
+	// Provide a pre-existing pipeline and bus so ConfigurePipeline skips CreatePipeline.
+	GstElement fake_pipeline  = {.object = {.name = (gchar *)"testpipeline"}};
+	GstBus      fake_bus      = {};
+	mPlayerContext->pipeline  = &fake_pipeline;
+	mPlayerContext->bus       = &fake_bus;
+
+	// Video sinkbin is already in place (left over from the trickplay pipeline).
+	GstElement fake_video_sinkbin = {.object = {.name = (gchar *)"videosinkbin0"}};
+	GstElement fake_vidsink       = {.object = {.name = (gchar *)"rialtomsevideosink0"}};
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin = &fake_video_sinkbin;
+
+	// g_object_get("video-sink") on the video sinkbin returns fake_vidsink.
+	// Use typed matchers to select the gpointer* overload unambiguously.
+	EXPECT_CALL(*g_mockGLib, g_object_get(Matcher<gpointer>(&fake_video_sinkbin),
+	                                       StrEq("video-sink"),
+	                                       Matcher<gpointer*>(_)))
+		.WillRepeatedly(SetArgPointee<2>((gpointer)&fake_vidsink));
+
+	// Track call ordering between single-path-stream write and the first gst_bin_add
+	// (which is issued inside InterfacePlayer_SetupStream for the audio sinkbin).
+	int callCounter          = 0;
+	int singlePathSetOrder   = -1;
+	int binAddOrder          = -1;
+
+	// Use typed matchers to select the (gpointer, const gchar*, int) overload and
+	// assert the value written is FALSE (0), not just any integer.
+	EXPECT_CALL(*g_mockGLib, g_object_set(Matcher<gpointer>(_),
+	                                       StrEq("single-path-stream"),
+	                                       Matcher<int>(Eq((int)FALSE))))
+		.Times(AtLeast(1))
+		.WillRepeatedly(InvokeWithoutArgs([&]{
+			if (singlePathSetOrder < 0) singlePathSetOrder = callCounter++;
+		}));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(_, _))
+		.Times(AtLeast(1))
+		.WillRepeatedly(DoAll(
+			InvokeWithoutArgs([&]{
+				if (binAddOrder < 0) binAddOrder = callCounter++;
+			}),
+			Return(TRUE)));
+
+	// Call ConfigurePipeline with audio enabled: transitioning from video-only to AV.
+	mInterfaceGstPlayer->ConfigurePipeline(
+		GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_INVALID,
+		false, false, false, 0, GST_NORMAL_PLAY_RATE,
+		"testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_GE(singlePathSetOrder, 0) << "single-path-stream=false was never written to the video sink";
+	EXPECT_GE(binAddOrder, 0)        << "gst_bin_add was never called; audio SetupStream did not run";
+	EXPECT_LT(singlePathSetOrder, binAddOrder)
+		<< "single-path-stream=false must be set before audio SetupStream adds the sinkbin to the pipeline";
 }
 
