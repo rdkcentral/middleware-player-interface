@@ -67,6 +67,7 @@ OCDMSessionAdapter::OCDMSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *cal
 		m_destUrl(),
 		m_drmHelper(drmHelper),
 		m_drmCallbacks(callbacks),
+		m_sessionReinitializationRequired(false),
 		m_keyStatusWait(),
 		m_keyId(),
 		m_keyStored(),
@@ -101,6 +102,28 @@ void OCDMSessionAdapter::initDRMSystem()
 	MW_LOG_WARN("initDRMSystem :: exit ");
 }
 
+void OCDMSessionAdapter::reinitializeDRMSessionIfRequired()
+{
+	if (!m_sessionReinitializationRequired.exchange(false))
+	{
+		return;
+	}
+
+	MW_LOG_WARN("Reinitializing OpenCDM session after Rialto error");
+	if (m_pOpenCDMSession)
+	{
+		opencdm_session_close(m_pOpenCDMSession);
+		opencdm_destruct_session(m_pOpenCDMSession);
+		m_pOpenCDMSession = nullptr;
+	}
+	m_challenge.clear();
+	m_destUrl.clear();
+	m_keyStored.clear();
+	m_keyStateIndeterminate = false;
+	m_keyStatus = InternalError;
+	m_eKeyState = KEY_INIT;
+}
+
 
 OCDMSessionAdapter::~OCDMSessionAdapter()
 {
@@ -123,6 +146,7 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
 
 	std::lock_guard<std::mutex> guard(decryptMutex);
+	reinitializeDRMSessionIfRequired();
 	if (m_pOpenCDMSystem == nullptr)
 	{
 		MW_LOG_WARN("OpenCDM system not present, unable to generate DRM session");
@@ -154,6 +178,7 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 
 			userSession->m_keyStatus = InternalError;
 			userSession->m_eKeyState = KEY_ERROR;
+			userSession->m_sessionReinitializationRequired.store(true);
 			userSession->m_keyStatusReady.signal();
 			userSession->m_keyStatusWait.signal();
 			MW_LOG_ERR("OpenCDM error: %s", message ? message : "unknown error");

@@ -117,8 +117,10 @@ protected:
 
 	DrmHelperPtr m_drmHelper;
 	DrmCallbacks *m_drmCallbacks;
+	std::atomic<bool> m_sessionReinitializationRequired;
 
 	bool verifyOutputProtection();
+	void reinitializeDRMSessionIfRequired();
 public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
