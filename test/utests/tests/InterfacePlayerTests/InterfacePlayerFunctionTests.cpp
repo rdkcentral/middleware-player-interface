@@ -155,6 +155,155 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithEncryptedCodecInfo)
 	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
 }
 
+/*
+ * shouldReconfigure truth table (all 10 reachable rows are covered below)
+ *
+ * Formula:
+ *   shouldReconfigure = (F && (V || I)) || (E && V)
+ *
+ * Symbols:
+ *   F = format changed (stream->format != newFormat)
+ *   I = initial UNKNOWN setup only (stream INVALID and newFormat UNKNOWN)
+ *   V = valid new format (newFormat is neither INVALID nor UNKNOWN)
+ *   E = encryption changed
+ *
+ * Reachable rows and expected result:
+ * +------+---+---+---+---+-------------------+
+ * | Row  | F | I | V | E | shouldReconfigure |
+ * +------+---+---+---+---+-------------------+
+ * | R1   | 1 | 1 | 0 | 0 |         1         |
+ * | R2   | 1 | 1 | 0 | 1 |         1         |
+ * | R3   | 1 | 0 | 1 | 0 |         1         |
+ * | R4   | 1 | 0 | 1 | 1 |         1         |
+ * | R5   | 1 | 0 | 0 | 0 |         0         |
+ * | R6   | 1 | 0 | 0 | 1 |         0         |
+ * | R7   | 0 | 0 | 1 | 0 |         0         |
+ * | R8   | 0 | 0 | 1 | 1 |         1         |
+ * | R9   | 0 | 0 | 0 | 0 |         0         |
+ * | R10  | 0 | 0 | 0 | 1 |         0         |
+ * +------+---+---+---+---+-------------------+
+ *
+ * Unreachable by definition:
+ * - I=1 with F=0 (INVALID cannot equal UNKNOWN)
+ * - I=1 with V=1 (UNKNOWN is not a valid format)
+ */
+TEST_F(InterfacePlayerTests, ConfigurePipeline_ShouldReconfigureDecisionMatrix)
+{
+	g_mockGStreamer = nullptr;
+
+	// R1: F=1, I=1, V=0, E=0 -> shouldReconfigure=true.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+
+	// R2: F=1, I=1, V=0, E=1 -> shouldReconfigure=true.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	MediaCodecInfo unknownEncryptedVideoCodecInfo(GST_FORMAT_UNKNOWN);
+	unknownEncryptedVideoCodecInfo.mIsEncrypted = true;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(unknownEncryptedVideoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
+	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R3: F=1, I=0, V=1, E=0 -> shouldReconfigure=true.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_HEVC, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_VIDEO_ES_HEVC);
+
+	// R4: F=1, I=0, V=1, E=1 -> shouldReconfigure=true.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	MediaCodecInfo validChangedEncryptedVideoCodecInfo(GST_FORMAT_VIDEO_ES_HEVC);
+	validChangedEncryptedVideoCodecInfo.mIsEncrypted = true;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(validChangedEncryptedVideoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_VIDEO_ES_HEVC);
+	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R5: F=1, I=0, V=0, E=0 -> shouldReconfigure=false.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_VIDEO_ES_H264);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// Additional R5 transition check: UNKNOWN -> INVALID should also stay not reconfigured.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_UNKNOWN;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+
+	// R6: F=1, I=0, V=0, E=1 -> shouldReconfigure=false.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_UNKNOWN;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	MediaCodecInfo invalidEncryptedVideoCodecInfo(GST_FORMAT_INVALID);
+	invalidEncryptedVideoCodecInfo.mIsEncrypted = true;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(invalidEncryptedVideoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R7: F=0, I=0, V=1, E=0 -> shouldReconfigure=false.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R8: F=0, I=0, V=1, E=1 -> shouldReconfigure=true.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	MediaCodecInfo encryptedVideoCodecInfo(GST_FORMAT_VIDEO_ES_H264);
+	encryptedVideoCodecInfo.mIsEncrypted = true;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(encryptedVideoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
+	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R9: F=0, I=0, V=0, E=0 -> shouldReconfigure=false.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_UNKNOWN;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+
+	// R10: F=0, I=0, V=0, E=1 -> shouldReconfigure=false.
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_UNKNOWN;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = false;
+	MediaCodecInfo unknownEncryptedNoFormatChangeCodecInfo(GST_FORMAT_UNKNOWN);
+	unknownEncryptedNoFormatChangeCodecInfo.mIsEncrypted = true;
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(unknownEncryptedNoFormatChangeCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+}
+
 // Validate that an encryption-only change does not configure or count a track when its format is invalid.
 TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalidFormat)
 {
@@ -168,6 +317,21 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalid
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+}
+
+// A manifest may not reveal the video format (muxed HLS/TS, or audio remapped to the video slot).
+// The track must still be set up on first configuration so the source exists and injection can start;
+// the real caps arrive later from the demuxer via SetStreamCaps().
+TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
+{
+	g_mockGStreamer = nullptr;
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->rate = 1.0;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
 }
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
