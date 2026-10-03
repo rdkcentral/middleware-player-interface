@@ -458,9 +458,12 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		bool isInitialSetup = (stream->format == GST_FORMAT_INVALID || stream->format == GST_FORMAT_UNKNOWN);
 		bool isValidNewFormat = (newFormat[i] != GST_FORMAT_INVALID && newFormat[i] != GST_FORMAT_UNKNOWN);
 		bool isEncryptionChanged = (stream->codecInfo.mIsEncrypted != codecInfoByTrack[i]->mIsEncrypted);
-		bool isFormatChanged = (stream->format != newFormat[i] || isEncryptionChanged);
-		// Reconfigure pipeline if this is the first setup, or the encryption status or format has changed
-		bool shouldReconfigure = isValidNewFormat && (isInitialSetup || isFormatChanged);
+		// The initial-setup case must be honoured even for an unknown format (e.g. muxed HLS/TS, or audio
+		// remapped to the video slot) because the real format is only discovered from the demuxer later -
+		// without a source element the injector never unblocks. An encryption-only change is only
+		// actionable once the format is usable.
+		bool shouldReconfigure = (stream->format != newFormat[i] && (isValidNewFormat || isInitialSetup))
+		                         || (isEncryptionChanged && isValidNewFormat);
 		if(shouldReconfigure)
 		{
 			MW_LOG_MIL("Closing stream %d old format = %d, new format = %d",i, stream->format, newFormat[i]);

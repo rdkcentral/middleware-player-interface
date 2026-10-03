@@ -170,6 +170,21 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalid
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
 }
 
+// A manifest may not reveal the video format (muxed HLS/TS, or audio remapped to the video slot).
+// The track must still be set up on first configuration so the source exists and injection can start;
+// the real caps arrive later from the demuxer via SetStreamCaps().
+TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
+{
+	g_mockGStreamer = nullptr;
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->rate = 1.0;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+}
+
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 {
 	g_mockGStreamer = nullptr;
