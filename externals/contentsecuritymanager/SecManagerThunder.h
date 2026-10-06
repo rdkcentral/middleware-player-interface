@@ -196,6 +196,12 @@ protected:
 	 *   @fn UnRegisterAllEvents
 	 */
 	void UnRegisterAllEvents ();
+    /**
+	 * @brief Check if a session ID is owned by this SecManagerThunder instance
+	 * @param sessionId Session ID to check
+	 * @return true if this instance owns the session, false otherwise
+	 */
+	bool isOwnedSession(int64_t sessionId);
 
 	ThunderAccessPlayer mSecManagerObj;       /**< ThunderAccessPlayer object for communicating with SecManager*/
 	ThunderAccessPlayer mWatermarkPluginObj;  /**< ThunderAccessPlayer object for communicating with Watermark Plugin Obj*/
@@ -204,6 +210,8 @@ protected:
 	std::mutex mSpeedStateMutex;		/**< mutex for setPlaybackSpeedState()*/
         std::mutex mLoadClutMutex;		/**< mutex for mLoadClutInFlight set*/
         std::set<int> mLoadClutInFlight;	/**< graphicIds currently in loadClutWatermark*/
+        std::mutex mOwnedSessionsMutex;     /**< mutex for mOwnedSessions*/
+        std::set<int64_t> mOwnedSessions;   /**< Set of session IDs owned by this instance*/
 	std::list<std::string> mRegisteredEvents;
 	bool mSchedulerStarted;
 };
