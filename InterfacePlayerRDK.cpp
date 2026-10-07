@@ -3735,7 +3735,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 			if (!codecChange && siblingType != eGST_MEDIATYPE_DEFAULT)
 			{
 				gst_media_stream *siblingStream = &interfacePlayerPriv->gstPrivateContext->stream[siblingType];
-				if (siblingStream->format != GST_FORMAT_INVALID && !siblingStream->firstBufferProcessed)Expand commentComment on lines R3730 to R3733Resolved
+				if (siblingStream->format != GST_FORMAT_INVALID && !siblingStream->firstBufferProcessed)
 				{
 					proceedWithEos = false;
 				}
