@@ -2428,7 +2428,15 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				gst_object_unref(targetPad);
 
 				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(subtitlebin));
-				stream->source = GST_ELEMENT(gst_object_ref_sink(InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE)));
+GstElement* appsrc = InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE);
+				if (!appsrc)
+				{
+					MW_LOG_ERR("Failed to create subtitle appsrc");
+					g_clear_object(&stream->sinkbin);
+					stream->sourceConfigured = false;
+					return -1;
+				}
+				stream->source = GST_ELEMENT(gst_object_ref_sink(appsrc));
 
 				gst_bin_add(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
 				gst_bin_add(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
