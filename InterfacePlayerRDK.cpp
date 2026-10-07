@@ -1394,8 +1394,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		if (interfacePlayerPriv->gstPrivateContext->pipeline)
 		{
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;   /* stopping pipeline, don't want to change state if GST_MESSAGE_ASYNC_DONE message comes in */
-			/* Subtitle appsrc is parented directly in the pipeline (not inside sinkbin), remove it first */
-			if (mediaType == eGST_MEDIATYPE_SUBTITLE && stream->source)
+			/* Subtitle appsrc is parented directly in the pipeline (not inside sinkbin), remove it first.
+			 * Closed caption control appsrc is parented inside sinkbin instead, so exclude that case. */
+			if (mediaType == eGST_MEDIATYPE_SUBTITLE && stream->source &&
+				!interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl)
 			{
 				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL))
 				{
