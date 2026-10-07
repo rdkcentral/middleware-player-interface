@@ -2418,9 +2418,10 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 					MW_LOG_ERR("Failed to link rialto subtitle elements");
 					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
 					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
-					g_clear_object(&stream->sinkbin);
-					g_clear_object(&stream->source);
-					return -1;
+g_clear_object(&stream->sinkbin);
+g_clear_object(&stream->source);
+stream->sourceConfigured = false;
+return -1;
 				}
 
 				gst_element_sync_state_with_parent(stream->source);
