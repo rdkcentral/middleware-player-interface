@@ -133,7 +133,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
 mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
+trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 1.0.4");
