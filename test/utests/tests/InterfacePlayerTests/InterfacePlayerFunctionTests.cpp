@@ -30,6 +30,7 @@
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
 
+
 using ::testing::NiceMock;
 using ::testing::StrictMock;
 using ::testing::Return;
@@ -404,6 +405,7 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mInterfaceGstPlayer->Stop(true);
 	EXPECT_EQ(mPlayerContext->syncControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->aSyncControl.isEnabled(),false);
+	EXPECT_EQ(mPlayerContext->bufferingTimeoutControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskID,0);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskIsPending,false);
 	EXPECT_EQ(mPlayerContext->bufferingTimeoutTimerId,PLAYER_TASK_ID_INVALID);
@@ -2914,14 +2916,30 @@ TEST_F(InterfacePlayerTests, EndOfStreamReached_FirstBufferProcessedTrue_TrickMo
 	EXPECT_TRUE(shouldHaltBuffering);
 }
 
-TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success) //failure case todo
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success)
 {
 	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
 	std::string manifestUrl = "http://example.com/manifest.mpd";
+	GstElement playbin = {.object = {.name = (gchar *)"playbin"}};
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(&playbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&gst_element_pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&playbin))
+		.WillOnce(Return(TRUE));
 	int retvalue = mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl);
 
 	EXPECT_EQ(retvalue, 0);
 }
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinCreationFails)
+{
+	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
+	std::string manifestUrl = "http://example.com/manifest.mpd";
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(nullptr));
 
 TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSubtitleSinkCreationFailed)
 {
@@ -3111,6 +3129,8 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoPipelineLinkFailu
 	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
 }
 
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl), -1);
+	EXPECT_EQ(mPlayerContext->stream[streamId].sinkbin, nullptr);
 TEST_F(InterfacePlayerTests, DisableDecoderHandleNotified)
 {
 	mPlayerContext->decoderHandleNotified = true;
