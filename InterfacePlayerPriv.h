@@ -254,8 +254,6 @@ struct GstPlayerPriv
 	double seekPosition;              /**< the position to seek the pipeline to in seconds */
 	GstPlayerPriv();
 	~GstPlayerPriv();
-	GstHandlerControl bufferingTimeoutControl;
-	std::mutex bufferingTimeoutMutex;
 };
 
 class InterfacePlayerPriv
