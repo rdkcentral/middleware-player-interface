@@ -1440,7 +1440,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 					if (current != GST_STATE_NULL)
 					{
 						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: sinkbin stopped abruptly, did not reach NULL (current=%s) - forcing synchronous reset before next decoder configuration", gst_element_state_get_name(current));
-						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);Expand commentComment on lines R1354 to R1357Resolved
+						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
 					}
 				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
