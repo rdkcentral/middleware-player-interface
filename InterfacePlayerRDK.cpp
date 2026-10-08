@@ -5228,7 +5228,7 @@ void InterfacePlayerRDK::NotifyEOS()
 			// eosSignalled is reset once the async task is completed either in Configure/Flush/ResetEOSSignalled, so set the flag before scheduling the task
 			interfacePlayerPriv->gstPrivateContext->eosSignalled = true;
 			// High priority so this isn't delayed behind the progress/buffering timers
-			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_HIGH, (GSourceFunc)IdleCallbackOnEOS, (gpointer)this, NULL);
+			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)IdleCallbackOnEOS, (gpointer)this, NULL);
 			if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId == PLAYER_TASK_ID_INVALID && true == interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 			{
 				interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
