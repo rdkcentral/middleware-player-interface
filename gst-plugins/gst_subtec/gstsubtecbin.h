@@ -50,6 +50,7 @@ struct _GstSubtecBin
   bool        mute = false;
   bool        async = true;
   bool        sync = true;
+  bool        usingRialtoSink = false;
   std::string subtec_socket{};
   guint64     pts_offset{0};
 };

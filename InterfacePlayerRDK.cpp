@@ -2322,62 +2322,37 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 {
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)playerInstance;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	gst_media_stream* stream = &pInterfacePlayerRDK->interfacePlayerPriv->gstPrivateContext->stream[streamId];
+	gst_media_stream* stream = &privatePlayer->gstPrivateContext->stream[streamId];
 	if (eGST_MEDIATYPE_SUBTITLE == streamId)
 	{
 		if(m_gstConfigParam->gstreamerSubsEnabled)
 		{
-			if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
+			MW_LOG_INFO("subs using subtecbin (usingRialtoSink=%d)", privatePlayer->gstPrivateContext->usingRialtoSink);
+			stream->sinkbin = gst_element_factory_make("subtecbin", NULL);			/* Creates a new element of "subtecbin" type and returns a new GstElement */
+			if (!stream->sinkbin)													/* When a new element can not be created a NULL is returned */
 			{
-				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(gst_element_factory_make("playbin", NULL)));
-				MW_LOG_INFO("subs using rialto subtitle sink");
-				GstElement* textsink = gst_element_factory_make("rialtomsesubtitlesink", NULL);
-				if (textsink)
-				{
-					MW_LOG_INFO("Created rialtomsesubtitlesink: %s", GST_ELEMENT_NAME(textsink));
-				}
-				else
-				{
-					MW_LOG_WARN("Failed to create rialtomsesubtitlesink");
-				}
-				auto subtitlebin = gst_bin_new("subtitlebin");
-				auto vipertransform = gst_element_factory_make("vipertransform", NULL);
-				gst_bin_add_many(GST_BIN(subtitlebin),vipertransform,textsink,NULL);
-				gst_element_link(vipertransform, textsink);
-				gst_element_add_pad(subtitlebin, gst_ghost_pad_new("sink", gst_element_get_static_pad(vipertransform, "sink")));
-
-				g_object_set(stream->sinkbin, "text-sink", subtitlebin, NULL);
-				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(textsink));
-				MW_LOG_MIL("using rialtomsesubtitlesink muted=%d sink=%p", interfacePlayerPriv->gstPrivateContext->subtitleMuted, interfacePlayerPriv->gstPrivateContext->subtitle_sink);
-				g_object_set(textsink, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
+				MW_LOG_WARN("Cannot set up subtitle subtecbin");
+				return -1;
 			}
-			else
+			stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(stream->sinkbin));	/* Retain a counted reference to sinkbin. */
+			g_object_set(G_OBJECT(stream->sinkbin), "sync", FALSE, NULL);
+			/* Drives subtecbin's internal choice between subtecsink and rialtomsesubtitlesink */
+			g_object_set(G_OBJECT(stream->sinkbin), "using-rialto-sink", privatePlayer->gstPrivateContext->usingRialtoSink, NULL);
+
+			stream->source = GST_ELEMENT(gst_object_ref_sink(InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE)));
+			gst_bin_add_many(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source, stream->sinkbin, NULL);		/* Add source and sink to the current pipeline */
+
+			if (!gst_element_link_many(stream->source, stream->sinkbin, NULL))			/* forms a GstElement link chain; linking stream->source to stream->sinkbin */
 			{
-				MW_LOG_INFO("subs using subtecbin");
-				stream->sinkbin = gst_element_factory_make("subtecbin", NULL);			/* Creates a new element of "subtecbin" type and returns a new GstElement */
-				if (!stream->sinkbin)													/* When a new element can not be created a NULL is returned */
-				{
-					MW_LOG_WARN("Cannot set up subtitle subtecbin");
-					return -1;
-				}
-				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(stream->sinkbin));	/* Retain a counted reference to sinkbin. */
-				g_object_set(G_OBJECT(stream->sinkbin), "sync", FALSE, NULL);
-
-				stream->source = GST_ELEMENT(gst_object_ref_sink(InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE)));
-				gst_bin_add_many(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source, stream->sinkbin, NULL);		/* Add source and sink to the current pipeline */
-
-				if (!gst_element_link_many(stream->source, stream->sinkbin, NULL))			/* forms a GstElement link chain; linking stream->source to stream->sinkbin */
-				{
-					MW_LOG_ERR("Failed to link subtitle elements");
-					return -1;
-				}
-
-				gst_element_sync_state_with_parent(stream->source);
-				gst_element_sync_state_with_parent(stream->sinkbin);
-				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(stream->sinkbin));
-				g_object_set(stream->sinkbin, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
-				return 0;
+				MW_LOG_ERR("Failed to link subtitle elements");
+				return -1;
 			}
+
+			gst_element_sync_state_with_parent(stream->source);
+			gst_element_sync_state_with_parent(stream->sinkbin);
+			interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(stream->sinkbin));
+			g_object_set(stream->sinkbin, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
+			return 0;
 		}
 	}
 	else

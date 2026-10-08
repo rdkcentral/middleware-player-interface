@@ -59,7 +59,8 @@ enum
   PROP_SYNC,
   PROP_SUBTEC_SOCKET,
   PROP_PTS_OFFSET,
-  PROP_ATTRIBUTE_VALUES
+  PROP_ATTRIBUTE_VALUES,
+  PROP_USING_RIALTO_SINK
 };
 
 static void
@@ -122,6 +123,12 @@ gst_subtecbin_class_init (GstSubtecBinClass * klass)
                                   GST_TYPE_STRUCTURE,
                                   (GParamFlags)(G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property(gobject_class,
+                                  PROP_USING_RIALTO_SINK,
+                                  g_param_spec_boolean("using-rialto-sink", "Using Rialto sink", "Creates rialtomsesubtitlesink instead of subtecsink (must be set before data flows)",
+                                  FALSE,
+                                  (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   gobject_class->dispose = gst_subtecbin_dispose;
   gobject_class->finalize = gst_subtecbin_finalize;
 }
@@ -133,6 +140,9 @@ static void gst_subtecbin_set_property (GObject * object, guint prop_id,
 
   GST_DEBUG_OBJECT (subtecbin, "set_property %d", prop_id);
 
+  // rialtomsesubtitlesink only supports "mute" (see SetupStream) - the remaining properties are subtecsink/SubtecChannel specific
+  bool forward_subtecsink_only_props = subtecbin->sink && !subtecbin->usingRialtoSink;
+
   switch (prop_id) {
     case PROP_MUTE:
       if (subtecbin->sink)
@@ -140,35 +150,38 @@ static void gst_subtecbin_set_property (GObject * object, guint prop_id,
       subtecbin->mute = g_value_get_boolean(value);
       break;
     case PROP_NO_EOS:
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "no-eos", value);
       subtecbin->no_eos = g_value_get_boolean(value);
       break;
     case PROP_ASYNC:
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "async", value);
       subtecbin->async = g_value_get_boolean(value);
       break;
     case PROP_SYNC:
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "sync", value);
       subtecbin->sync = g_value_get_boolean(value);
       break;
     case PROP_SUBTEC_SOCKET:
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "subtec-socket", value);
       subtecbin->subtec_socket = g_value_get_string(value);
       break;
     case PROP_PTS_OFFSET:
     {
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "pts-offset", value);
       subtecbin->pts_offset = g_value_get_uint64(value);
     }
       break;
     case PROP_ATTRIBUTE_VALUES:
-      if (subtecbin->sink)
+      if (forward_subtecsink_only_props)
         g_object_set_property(G_OBJECT(subtecbin->sink), "attribute-values", value);
+      break;
+    case PROP_USING_RIALTO_SINK:
+      subtecbin->usingRialtoSink = g_value_get_boolean(value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -203,6 +216,9 @@ gst_subtecbin_get_property (GObject * object, guint property_id,
     case PROP_PTS_OFFSET:
       g_value_set_uint64(value, subtecbin->pts_offset);
       break;
+    case PROP_USING_RIALTO_SINK:
+      g_value_set_boolean(value, subtecbin->usingRialtoSink);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -227,46 +243,83 @@ type_found (GstElement * typefind, guint probability,
     GstCaps * caps, GstSubtecBin * subtecbin)
 {
   GST_DEBUG_OBJECT (subtecbin, "subs_typefind found caps %" GST_PTR_FORMAT, caps);
-  subtecbin->sink = gst_element_factory_make("subtecsink", NULL);
 
-  g_return_if_fail (subtecbin->sink != NULL);
+  if (subtecbin->usingRialtoSink)
+  {
+    // Mirrors InterfacePlayerRDK::SetupStream's rialtomsesubtitlesink chain construction
+    const GstStructure *s = gst_caps_get_structure (caps, 0);
+    gboolean is_mp4 = g_str_equal (gst_structure_get_name (s), "application/mp4");
 
-  g_object_set(G_OBJECT(subtecbin->sink), "mute", subtecbin->mute, NULL);
-  g_object_set(G_OBJECT(subtecbin->sink), "no-eos", subtecbin->no_eos, NULL);
-  g_object_set(G_OBJECT(subtecbin->sink), "async", subtecbin->async, NULL);
-  g_object_set(G_OBJECT(subtecbin->sink), "sync", subtecbin->sync, NULL);
-  g_object_set(G_OBJECT(subtecbin->sink), "pts-offset", subtecbin->pts_offset, NULL);
-
-  GstElementFactory *ttml_transform_factory = NULL;
-  GList *sub_parser_factories =  gst_element_factory_list_filter (gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_MEDIA_SUBTITLE, 
-                                  GST_RANK_PRIMARY), 
-                                  caps,
-                                  GST_PAD_SINK, 
-                                  TRUE);
-  GList *tmp = sub_parser_factories;
-
-  for (; tmp; tmp = tmp->next) {
-    GstElementFactory *factory = (GstElementFactory *) tmp->data;
-    GST_DEBUG_OBJECT(subtecbin, "factory name %s can sink caps %d", gst_plugin_feature_get_name ((GstPluginFeature *) factory), gst_element_factory_can_sink_all_caps(factory, caps));
-    if (gst_element_factory_can_sink_all_caps(factory, caps))
+    subtecbin->sink = gst_element_factory_make("rialtomsesubtitlesink", NULL);
+    if (!subtecbin->sink)
     {
-      if (gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_DEMUXER))
+      GST_ERROR_OBJECT (subtecbin, "Failed to create rialtomsesubtitlesink");
+      return;
+    }
+    g_object_set(G_OBJECT(subtecbin->sink), "mute", subtecbin->mute, NULL);
+
+    subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+    if (!subtecbin->formatter)
+    {
+      GST_ERROR_OBJECT (subtecbin, "Failed to create vipertransform");
+      gst_clear_object(&subtecbin->sink);
+      return;
+    }
+
+    if (is_mp4)
+    {
+      subtecbin->demux = gst_element_factory_make("subtecmp4transform", NULL);
+      if (!subtecbin->demux)
       {
-        subtecbin->demux = gst_element_factory_create(factory, NULL);        
-
-        GstPad *demux_pad = gst_element_get_static_pad(subtecbin->demux, "src");
-        GstCaps *demux_caps = gst_pad_get_pad_template_caps(demux_pad);
-
-        GST_DEBUG_OBJECT(subtecbin, "seek allowed caps %" GST_PTR_FORMAT, demux_caps);
-        auto ttml_formatter_factory = gst_element_factory_find("vipertransform");
-        if (gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
-        {
-          subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
-        }
+        GST_ERROR_OBJECT (subtecbin, "Failed to create subtecmp4transform");
+        gst_clear_object(&subtecbin->sink);
+        gst_clear_object(&subtecbin->formatter);
+        return;
       }
     }
   }
-  gst_plugin_feature_list_free(sub_parser_factories);
+  else
+  {
+    subtecbin->sink = gst_element_factory_make("subtecsink", NULL);
+
+    g_return_if_fail (subtecbin->sink != NULL);
+
+    g_object_set(G_OBJECT(subtecbin->sink), "mute", subtecbin->mute, NULL);
+    g_object_set(G_OBJECT(subtecbin->sink), "no-eos", subtecbin->no_eos, NULL);
+    g_object_set(G_OBJECT(subtecbin->sink), "async", subtecbin->async, NULL);
+    g_object_set(G_OBJECT(subtecbin->sink), "sync", subtecbin->sync, NULL);
+    g_object_set(G_OBJECT(subtecbin->sink), "pts-offset", subtecbin->pts_offset, NULL);
+
+    GList *sub_parser_factories =  gst_element_factory_list_filter (gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_MEDIA_SUBTITLE, 
+                                    GST_RANK_PRIMARY), 
+                                    caps,
+                                    GST_PAD_SINK, 
+                                    TRUE);
+    GList *tmp = sub_parser_factories;
+
+    for (; tmp; tmp = tmp->next) {
+      GstElementFactory *factory = (GstElementFactory *) tmp->data;
+      GST_DEBUG_OBJECT(subtecbin, "factory name %s can sink caps %d", gst_plugin_feature_get_name ((GstPluginFeature *) factory), gst_element_factory_can_sink_all_caps(factory, caps));
+      if (gst_element_factory_can_sink_all_caps(factory, caps))
+      {
+        if (gst_element_factory_list_is_type(factory, GST_ELEMENT_FACTORY_TYPE_DEMUXER))
+        {
+          subtecbin->demux = gst_element_factory_create(factory, NULL);        
+
+          GstPad *demux_pad = gst_element_get_static_pad(subtecbin->demux, "src");
+          GstCaps *demux_caps = gst_pad_get_pad_template_caps(demux_pad);
+
+          GST_DEBUG_OBJECT(subtecbin, "seek allowed caps %" GST_PTR_FORMAT, demux_caps);
+          auto ttml_formatter_factory = gst_element_factory_find("vipertransform");
+          if (gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
+          {
+            subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+          }
+        }
+      }
+    }
+    gst_plugin_feature_list_free(sub_parser_factories);
+  }
 
   GList *chain = NULL;
 
