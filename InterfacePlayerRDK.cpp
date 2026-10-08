@@ -94,7 +94,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
-	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 0.2.0-r6_VIPA");
+	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 0.2.0-r7_VIPA");
 	m_gstConfigParam = new Configs();
 	m_gstConfigParam->framesToQueue = SocUtils::RequiredQueuedFrames();
 	pthread_mutex_init(&mProtectionLock, NULL);
@@ -1440,7 +1440,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 					if (current != GST_STATE_NULL)
 					{
 						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: sinkbin stopped abruptly, did not reach NULL (current=%s) - forcing synchronous reset before next decoder configuration", gst_element_state_get_name(current));
-						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);Expand commentComment on lines R1354 to R1357Resolved
+						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
 					}
 				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
