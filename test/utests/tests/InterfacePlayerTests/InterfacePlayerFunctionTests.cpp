@@ -170,6 +170,21 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalid
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
 }
 
+// A manifest may not reveal the video format (muxed HLS/TS, or audio remapped to the video slot).
+// The track must still be set up on first configuration so the source exists and injection can start;
+// the real caps arrive later from the demuxer via SetStreamCaps().
+TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
+{
+	g_mockGStreamer = nullptr;
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->rate = 1.0;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+}
+
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 {
 	g_mockGStreamer = nullptr;
@@ -3287,3 +3302,208 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedAudioCodecFormat)
 	delete g_mockGstUtils;
 }
 
+/*
+ * shouldReconfigure truth table (all 10 reachable rows are covered below)
+ *
+ * Formula:
+ *   shouldReconfigure = (F && (V || I)) || (E && V)
+ *
+ * Symbols:
+ *   F = format changed (stream->format != newFormat)
+ *   I = initial UNKNOWN setup only (stream INVALID and newFormat UNKNOWN)
+ *   V = valid new format (newFormat is neither INVALID nor UNKNOWN)
+ *   E = encryption changed
+ *
+ * Reachable rows and expected result:
+ * +------+---+---+---+---+-------------------+
+ * | Row  | F | I | V | E | shouldReconfigure |
+ * +------+---+---+---+---+-------------------+
+ * | R1   | 1 | 1 | 0 | 0 |         1         |
+ * | R2   | 1 | 1 | 0 | 1 |         1         |
+ * | R3   | 1 | 0 | 1 | 0 |         1         |
+ * | R4   | 1 | 0 | 1 | 1 |         1         |
+ * | R5   | 1 | 0 | 0 | 0 |         0         |
+ * | R6   | 1 | 0 | 0 | 1 |         0         |
+ * | R7   | 0 | 0 | 1 | 0 |         0         |
+ * | R8   | 0 | 0 | 1 | 1 |         1         |
+ * | R9   | 0 | 0 | 0 | 0 |         0         |
+ * | R10  | 0 | 0 | 0 | 1 |         0         |
+ * +------+---+---+---+---+-------------------+
+ *
+ * Unreachable by definition:
+ * - I=1 with F=0 (INVALID cannot equal UNKNOWN)
+ * - I=1 with V=1 (UNKNOWN is not a valid format)
+ */
+// Define test parameters for the decision matrix
+struct ShouldReconfigureTestParams {
+	std::string testName;  // e.g., "R1", "R2", etc.
+	GstStreamOutputFormat initialFormat;
+	GstStreamOutputFormat newFormat;
+	bool initiallyEncrypted;
+	bool newEncrypted;
+	int expectedTrackCount;
+	GstStreamOutputFormat expectedFinalFormat;
+	bool expectedEncrypted;
+};
+
+class ConfigurePipelineShouldReconfigureTest : public InterfacePlayerTests,
+	public ::testing::WithParamInterface<ShouldReconfigureTestParams> {
+};
+
+INSTANTIATE_TEST_SUITE_P(
+	DecisionMatrix,
+	ConfigurePipelineShouldReconfigureTest,
+	::testing::Values(
+		// R1: F=1, I=1, V=0, E=0 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R1_FormatChangeInvalidToUnknown_NoEncryption",
+			GST_FORMAT_INVALID,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			1,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R2: F=1, I=1, V=0, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R2_FormatChangeInvalidToUnknown_WithEncryption",
+			GST_FORMAT_INVALID,
+			GST_FORMAT_UNKNOWN,
+			false,
+			true,
+			1,
+			GST_FORMAT_UNKNOWN,
+			true
+		},
+		// R3: F=1, I=0, V=1, E=0 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R3_ValidFormatChange_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false,
+			false,
+			1,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false
+		},
+		// R4: F=1, I=0, V=1, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R4_ValidFormatChange_WithEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false,
+			true,
+			1,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			true
+		},
+		// R5: F=1, I=0, V=0, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R5_NoValidFormatChange_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			0,
+			GST_FORMAT_VIDEO_ES_H264,
+			false
+		},
+		// R5 additional: UNKNOWN -> INVALID transition
+		ShouldReconfigureTestParams{
+			"R5_UnknownToInvalid_NoEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_INVALID,
+			false,
+			false,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R6: F=1, I=0, V=0, E=1 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R6_NoValidFormatChange_WithEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_INVALID,
+			false,
+			true,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R7: F=0, I=0, V=1, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R7_NoFormatChange_SameFormat_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_H264,
+			false,
+			false,
+			0,
+			GST_FORMAT_VIDEO_ES_H264,
+			false
+		},
+		// R8: F=0, I=0, V=1, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R8_NoFormatChange_EncryptionChange",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_H264,
+			false,
+			true,
+			1,
+			GST_FORMAT_VIDEO_ES_H264,
+			true
+		},
+		// R9: F=0, I=0, V=0, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R9_NoFormatChange_UnknownFormat_NoEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R10: F=0, I=0, V=0, E=1 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R10_NoFormatChange_UnknownFormat_EncryptionChange",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_UNKNOWN,
+			false,
+			true,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		}
+	),
+	[](const ::testing::TestParamInfo<ShouldReconfigureTestParams>& info) {
+		return info.param.testName;
+	}
+);
+
+TEST_P(ConfigurePipelineShouldReconfigureTest, ConfigurePipeline_ShouldReconfigureDecisionMatrix)
+{
+	auto param = GetParam();
+	g_mockGStreamer = nullptr;
+
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = param.initialFormat;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = param.initiallyEncrypted;
+
+	// Build the codec info based on parameters
+	MediaCodecInfo codecInfo;
+	codecInfo.mCodecFormat = param.newFormat;
+	codecInfo.mIsEncrypted = param.newEncrypted;
+
+	mInterfaceGstPlayer->ConfigurePipeline(
+		StreamCodecInfo{std::move(codecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, param.expectedTrackCount);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, param.expectedFinalFormat);
+	if (param.expectedTrackCount > 0) {
+		EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted, param.expectedEncrypted);
+	} else {
+		EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted, param.initiallyEncrypted);
+	}
+}
