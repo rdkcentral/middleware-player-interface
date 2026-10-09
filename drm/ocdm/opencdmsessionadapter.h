@@ -141,6 +141,7 @@ public:
 	DrmData * generateKeyRequest(string& destinationURL, uint32_t timeout) override;
 	int processDRMKey(DrmData* key, uint32_t timeout) override;
 	KeyState getState() override;
+	bool IsInvalidated() const override { return m_sessionReinitializationRequired.load(); }
 	void clearDecryptContext() override;
 #if defined(USE_OPENCDM_ADAPTER)
 	void setKeyId(const std::vector<uint8_t>& keyId) override;

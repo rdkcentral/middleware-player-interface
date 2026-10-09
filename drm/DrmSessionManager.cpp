@@ -839,7 +839,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				isKeyIdFound = (it != keyIDSlot.end());
 			}
 
-			if (isKeyIdFound)
+			if (isKeyIdFound && !drmSessionContexts[sessionSlot].drmSession->IsInvalidated())
 			{
 				KeyState existingState = drmSessionContexts[sessionSlot].drmSession->getState();
 				if (existingState == KEY_READY)
@@ -876,12 +876,16 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				}
 				else
 				{
-					MW_LOG_WARN("existing DRM session for %s has error state %d", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), existingState);
-					// CID-164094 : Added the mutex lock due to overriding the isFailedKeyEntries variable
-					std::lock_guard<std::mutex> guard(cachedKeyMutex);
-					cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
-					return KEY_ERROR;
+					// Transient error (e.g. Rialto server crash) - fall through below to evict
+					// this stale session and rebuild immediately instead of latching isFailedKeyEntries,
+					// which would otherwise strand this slot in error state until an unrelated
+					// forced clearDrmSession() call happens to clean it up.
+					MW_LOG_WARN("existing DRM session for %s has error state %d, rebuilding session", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str(), existingState);
 				}
+			}
+			else if (isKeyIdFound)
+			{
+				MW_LOG_WARN("existing DRM session for %s was invalidated", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
 			}
 			else
 			{
