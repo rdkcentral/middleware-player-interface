@@ -5650,7 +5650,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 			TransformToEncryptedCaps(caps, mDrmSystem);
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
-		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
+		MW_LOG_MIL("Setting caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
 		g_free(capsStr);
 		gst_app_src_set_caps(GST_APP_SRC(stream->source), caps);
 		gst_caps_unref(caps);
