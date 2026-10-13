@@ -209,6 +209,8 @@ aSyncControl(), syncControl(), callbackControl(), seekPosition(0)
 	 * using the westerossink connected using westeros compositor.
 	 */
 	strcpy(videoRectangle, "");
+	videoRectangleWidth = 0;
+	videoRectangleHeight = 0;
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		protectionEvent[i] = NULL;
@@ -2933,14 +2935,13 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
  */
 void InterfacePlayerRDK::GetVideoSize(int &width, int &height)
 {
-	int x;
-	int y;
-	int w = 0;
-	int h = 0;
-	if ((4 == sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle, "%d,%d,%d,%d", &x, &y, &w, &h)) && (w > 0) && (h > 0))
+	// Use the dimensions cached by SetVideoRectangle() instead of re-parsing
+	// the "x,y,w,h" string on every call.
+	if (interfacePlayerPriv->gstPrivateContext->videoRectangleWidth > 0 &&
+	    interfacePlayerPriv->gstPrivateContext->videoRectangleHeight > 0)
 	{
-		width = w;
-		height = h;
+		width  = interfacePlayerPriv->gstPrivateContext->videoRectangleWidth;
+		height = interfacePlayerPriv->gstPrivateContext->videoRectangleHeight;
 	}
 }
 
@@ -2979,6 +2980,8 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 		return;
 	}
 	snprintf(interfacePlayerPriv->gstPrivateContext->videoRectangle, sizeof(interfacePlayerPriv->gstPrivateContext->videoRectangle), "%d,%d,%d,%d", x,y,w,h);
+	interfacePlayerPriv->gstPrivateContext->videoRectangleWidth  = w;
+	interfacePlayerPriv->gstPrivateContext->videoRectangleHeight = h;
 	MW_LOG_MIL("Rect %s, video_sink =%p",
 			   interfacePlayerPriv->gstPrivateContext->videoRectangle, interfacePlayerPriv->gstPrivateContext->video_sink);
 	if (m_gstConfigParam->enableRectPropertyCfg)

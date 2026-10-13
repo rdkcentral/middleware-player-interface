@@ -202,6 +202,8 @@ struct GstPlayerPriv
 	bool usingRialtoSink;                                                            /**< true if rialto sink is used for video and audio sinks */
 	bool usingClosedCaptionsControl;                                                 /**< true if subtitle sink being used for CC control */
 	char videoRectangle[VIDEO_COORDINATES_SIZE];
+	int videoRectangleWidth;                                                             /**< Cached width parsed from videoRectangle; 0 when unset/invalid */
+	int videoRectangleHeight;                                                            /**< Cached height parsed from videoRectangle; 0 when unset/invalid */
 	bool pauseOnStartPlayback;                                                               /**< true if should start playback paused */
 	std::atomic<bool> eosSignalled;                                                  /**< Indicates if EOS has signaled */
 	gboolean buffering_enabled;                                                              /**< enable buffering based on multiqueue */
