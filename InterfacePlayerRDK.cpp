@@ -51,7 +51,6 @@
 #else
 #define PLAYER_G_MEMDUP(src, size) g_memdup((src), (guint)(size))
 #endif
-#define GST_DELAY_BETWEEN_PTS_CHECK_FOR_EOS_ON_UNDERFLOW 500    /**< A timeout interval in milliseconds to check pts in case of underflow */
 #define GST_MIN_DECODE_ERROR_INTERVAL 10000                     /**< Minimum time interval in milliseconds between two decoder error CB to send anomaly error */
 #define BUFFERING_TIMEOUT_PRIORITY -70                           /**< 0 is DEFAULT priority whereas -100 is the HIGH_PRIORITY */
 
@@ -192,7 +191,7 @@ firstFrameCallbackIdleTaskId(GST_TASK_ID_INVALID), firstFrameCallbackIdleTaskPen
 using_westerossink(false), usingRialtoSink(false), usingClosedCaptionsControl(false), pauseOnStartPlayback(false), eosSignalled(false),
 buffering_enabled(FALSE), buffering_in_progress(FALSE), buffering_timeout_cnt(0),
 buffering_target_state(GST_STATE_NULL),
-lastKnownPTS(0), ptsUpdatedTimeMS(0), ptsCheckForEosOnUnderflowIdleTaskId(GST_TASK_ID_INVALID),
+lastKnownPTS(0), ptsUpdatedTimeMS(0),
 numberOfVideoBuffersSent(0), segmentStart(0), positionQuery(NULL),
 paused(false), pipelineState(GST_STATE_NULL),
 firstVideoFrameDisplayedCallbackTask("FirstVideoFrameDisplayedCallback"),
@@ -1422,7 +1421,6 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
-	stream->bufferUnderrun = false;
 	stream->eosReached = false;
 
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
@@ -1530,12 +1528,6 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
 		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
 		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
 	}
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
@@ -1683,21 +1675,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO];
 	interfacePlayerPriv->gstPrivateContext->rate = rate;
-	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = false;
-	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = false;
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d", interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
-
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d", interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
 
 	}
 
@@ -3317,10 +3300,6 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 					}
 				}
 			}
-			else if (stream->bufferUnderrun)
-			{
-				stream->bufferUnderrun = false;
-			}
 
 			// PROFILE_BUCKET_FIRST_BUFFER after successful push of first gst buffer
 			if (isFirstBuffer == true && ret == GST_FLOW_OK)
@@ -3643,25 +3622,16 @@ bool InterfacePlayerRDK::IsCacheEmpty(int Type)
 			// Changed to MW_LOG_TRACE, to avoid log flooding
 			// We're seeing this logged frequently during live linear playback, despite no user-facing problem.
 			MW_LOG_TRACE("InterfacePlayerRDK::Cache level empty");
-			if (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun == true ||
-				interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun == true)				/* Interpret bufferUnderun as cachelevel being empty */
+			bool ptsChanged = CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL);
+			if(!ptsChanged)
 			{
-				MW_LOG_WARN("InterfacePlayerRDK::Received buffer underrun signal for video(%d) or audio(%d) previously",interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun,
-							interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun);
+				//PTS hasn't changed for the timeout value
+				MW_LOG_WARN("InterfacePlayerRDK: Appsrc cache is empty and PTS hasn't been updated for more than %dms and ret(%d)",
+							GST_MIN_PTS_UPDATE_INTERVAL, ret);
 			}
 			else
 			{
-				bool ptsChanged = CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL);
-				if(!ptsChanged)
-				{
-					//PTS hasn't changed for the timeout value
-					MW_LOG_WARN("InterfacePlayerRDK: Appsrc cache is empty and PTS hasn't been updated for more than %dms and ret(%d)",
-								GST_MIN_PTS_UPDATE_INTERVAL, ret);
-				}
-				else
-				{
-					ret = false;		/* Pts changing, conclude that cache is not empty */
-				}
+				ret = false;		/* Pts changing, conclude that cache is not empty */
 			}
 		}
 	}
@@ -4230,30 +4200,6 @@ long long InterfacePlayerRDK::GetVideoPosition(void)
 }
 
 /**
- * @brief Notifies EOS if video decoder pts is stalled
- * @param[in] user_data pointer to InterfacePlayerRDK instance
- * @retval G_SOURCE_REMOVE, if the source should be removed
- */
-static gboolean VideoDecoderPtsCheckerForEOS(gpointer user_data)
-{
-	InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK *) user_data;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	gint64 currentPTS = pInterfacePlayerRDK->GetVideoPTS();                       /* Gets the currentPTS from the 'video-pts' property of the element */
-
-	if (currentPTS == privatePlayer->gstPrivateContext->lastKnownPTS)
-	{
-		MW_LOG_MIL("PTS not changed");
-		pInterfacePlayerRDK->NotifyEOS();                                                             /* Notify EOS if the PTS has not changed */
-	}
-	else
-	{
-		MW_LOG_MIL("Video PTS still moving lastKnownPTS %" G_GUINT64_FORMAT " currentPTS %" G_GUINT64_FORMAT " ##", privatePlayer->gstPrivateContext->lastKnownPTS, currentPTS);
-	}
-	privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = GST_TASK_ID_INVALID;
-	return G_SOURCE_REMOVE;
-}
-
-/**
  * @brief Check if gstreamer element is audio sink or audio decoder
  * @param[in] name Name of the element
  * @param[in] pInterfacePlayerRDK pointer to InterfacePlayerRDK instance
@@ -4312,26 +4258,6 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		}
 
 		MW_LOG_WARN("## Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
-		privatePlayer->gstPrivateContext->stream[type].bufferUnderrun = true;
-
-		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate == GST_NORMAL_PLAY_RATE))
-		{
-			if (!privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-			{
-				privatePlayer->gstPrivateContext->lastKnownPTS = pInterfacePlayerRDK->GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
-				privatePlayer->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;
-				privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = g_timeout_add(GST_DELAY_BETWEEN_PTS_CHECK_FOR_EOS_ON_UNDERFLOW, VideoDecoderPtsCheckerForEOS, pInterfacePlayerRDK);
-				/*g_timeout_add - Sets the function VideoDecoderPtsCheckerForEOS to be called at regular intervals*/
-			}
-			else
-			{
-				MW_LOG_WARN("ptsCheckForEosOnUnderflowIdleTask ID %d already running, ignore underflow", (int)privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-			}
-		}
-		else
-		{
-			MW_LOG_WARN("Mediatype %d underrun, when eosReached is %d", type, privatePlayer->gstPrivateContext->stream[type].eosReached);
-		}
 		if(pInterfacePlayerRDK->OnGstBufferUnderflowCb)
 		{
 			pInterfacePlayerRDK->OnGstBufferUnderflowCb(static_cast<int>(type));
