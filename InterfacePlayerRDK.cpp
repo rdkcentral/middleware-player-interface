@@ -2393,7 +2393,10 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				auto subtitlebin = gst_bin_new("subtitlebin");
 				auto vipertransform = gst_element_factory_make("vipertransform", NULL);
 				gst_bin_add_many(GST_BIN(subtitlebin),vipertransform,textsink,NULL);
-				gst_element_link(vipertransform, textsink);
+				if (!gst_element_link(vipertransform, textsink))
+				{
+					MW_LOG_ERR("Failed to link vipertransform to rialtomsesubtitlesink; subtitles will not render");
+				}
 				gst_element_add_pad(subtitlebin, gst_ghost_pad_new("sink", gst_element_get_static_pad(vipertransform, "sink")));
 
 				g_object_set(stream->sinkbin, "text-sink", subtitlebin, NULL);
