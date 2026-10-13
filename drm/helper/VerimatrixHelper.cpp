@@ -50,12 +50,8 @@ bool VerimatrixHelper::parsePssh(const uint8_t* initData, uint32_t initDataLen)
 
 	initData += VERIMATRIX_PSSH_DATA_POSITION;
 	initDataLen -= VERIMATRIX_PSSH_DATA_POSITION;
-	char *init = new char[initDataLen + 1];
-	memcpy(init, initData, initDataLen);
-	init[initDataLen] = 0;
 
-	std::string pssh(init);
-	delete []init;
+	std::string pssh(reinterpret_cast<const char*>(initData), initDataLen);
 
 	MW_LOG_WARN("pssh %s", pssh.c_str());
 

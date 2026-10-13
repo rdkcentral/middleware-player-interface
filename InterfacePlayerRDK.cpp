@@ -132,7 +132,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(), mEncrypt(NULL), mDRMSessionManager(NULL),
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
@@ -151,10 +151,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
 	DestroyPipeline();
-	if (mDrmSystem)
-	{
-		delete[] mDrmSystem;
-	}
 	/* safe delete configuration parameter */
 	MW_SAFE_DELETE(m_gstConfigParam);
 	mScheduler.StopScheduler();
@@ -937,19 +933,7 @@ void InterfacePlayerRDK::SetPreferredDRM(const char *drmID)
 {
 	if (drmID != NULL)
 	{
-		if (mDrmSystem != NULL)
-		{
-			delete[] mDrmSystem;
-		}
-		mDrmSystem = new char[strlen(drmID) + 1];
-		if (mDrmSystem != NULL)
-		{
-			strcpy(mDrmSystem, drmID);
-		}
-		else
-		{
-			MW_LOG_ERR("Memory allocation failed for mDrmSystem\n");
-		}
+		mDrmSystem = drmID;
 	}
 }
 
@@ -1994,7 +1978,7 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
 		{
 			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
 		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
@@ -5160,10 +5144,10 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 			gst_message_parse_context_type(msg, &contextType);
 			if (!g_strcmp0(contextType, "drm-preferred-decryption-system-id"))
 			{
-				MW_LOG_MIL("Setting %s as preferred drm",pInterfacePlayerRDK->mDrmSystem);
+				MW_LOG_MIL("Setting %s as preferred drm", pInterfacePlayerRDK->mDrmSystem.c_str());
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
-				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem,  NULL);
+				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem.empty() ? NULL : pInterfacePlayerRDK->mDrmSystem.c_str(),  NULL);
 				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
 			}
 
@@ -5650,7 +5634,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
