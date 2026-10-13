@@ -22,7 +22,30 @@
 #include <stdio.h>
 #include "opencdmsessionadapter.h"
 
+<<<<<<< Updated upstream
 
+=======
+/**
+ * @brief Test DrmCallbacks implementation
+ */
+class TestDrmCallbacks : public DrmCallbacks {
+public:
+	int rialtoServerCrashCount = 0;
+
+    void Individualization(const std::string& payload) override {
+        (void)payload;
+    }
+
+    void LicenseRenewal(DrmHelperPtr drmHelper, void* userData) override {
+        (void)drmHelper;
+        (void)userData;
+    }
+
+	void RialtoServerCrashed() override {
+		++rialtoServerCrashCount;
+	}
+};
+>>>>>>> Stashed changes
 
 class WidevineDrmHelper : public DrmHelper {
 public:
@@ -73,6 +96,7 @@ public:
     bool callVerifyOutputProtection() {
         return OCDMSessionAdapter::verifyOutputProtection();
     }
+<<<<<<< Updated upstream
 };
 
 class OCDMSessionAdapterTest : public ::testing::Test {
@@ -87,6 +111,56 @@ protected:
     }
     TestableOCDMSessionAdapter* testAdapter;
 };
+=======
+
+    void triggerProcessOCDMChallenge(const char* url, const uint8_t* challenge, uint16_t size) {
+        processOCDMChallenge(url, challenge, size);
+    }
+
+    void triggerKeysUpdatedOCDM() {
+        keysUpdatedOCDM();
+    }
+
+    void triggerKeyUpdateOCDM(const uint8_t* key, uint8_t keySize) {
+        keyUpdateOCDM(key, keySize);
+    }
+
+    void triggerErrorMessage(const char* message) {
+        handleErrorMessage(message);
+    }
+};
+
+TEST(OCDMSessionAdapter, RialtoCrashInvalidatesSessionAndNotifiesOnce)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    TestDrmCallbacks drmCallbacks;
+    TestableOCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+
+    adapter.triggerErrorMessage("Rialto Session Server crashed.");
+    adapter.triggerErrorMessage("Rialto Session Server crashed.");
+
+    EXPECT_EQ(KEY_ERROR, adapter.getState());
+    EXPECT_EQ(1, drmCallbacks.rialtoServerCrashCount);
+}
+
+TEST(OCDMSessionAdapter, OtherErrorDoesNotInvalidateSession)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    TestDrmCallbacks drmCallbacks;
+    TestableOCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+
+    adapter.triggerErrorMessage("A different OpenCDM error.");
+
+    EXPECT_EQ(KEY_INIT, adapter.getState());
+    EXPECT_EQ(0, drmCallbacks.rialtoServerCrashCount);
+}
+
+// ========================================
+// EVENT CLASS TESTS
+// ========================================
+>>>>>>> Stashed changes
 
 
 // Utility function to convert KeyState enum to string.

@@ -197,7 +197,8 @@ bool DrmSessionManager::getFailedKeyIdStatus(int sessionIndex)
  */
 void DrmSessionManager::clearDrmSession(bool forceClearSession)
 {
-	for(int i = 0 ; i < mMaxDRMSessions; i++)
+	std::lock_guard<std::mutex> managerLock(mDrmSessionLock);
+	for (int i = 0; i < mMaxDRMSessions; i++)
 	{
 		// Clear the session data if license key acquisition failed or if forceClearSession is true in the case of LicenseCaching is false.
 		bool isFailedKeyEntry = false;
@@ -218,7 +219,20 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 				drmSessionContexts[i].drmSession->PrepareForDestruction();
 				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 			}
+			if (forceClearSession)
+			{
+				drmSessionContexts[i].data.clear();
+				std::lock_guard<std::mutex> keyLock(cachedKeyMutex);
+				if (cachedKeyIDs != nullptr)
+				{
+					cachedKeyIDs[i] = KeyIdEntries();
+				}
+			}
 		}
+	}
+	if (forceClearSession)
+	{
+		mContentSecurityManagerSession.setSessionInvalid();
 	}
 }
 

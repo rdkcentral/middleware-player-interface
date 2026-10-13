@@ -62,6 +62,7 @@ OCDMSessionAdapter::OCDMSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *cal
 		m_challengeSize(0),
 		m_keyStatus(InternalError),
 		m_keyStateIndeterminate(false),
+		m_sessionInvalidated(false),
 		m_keyStatusReady(),
 		m_OCDMSessionCallbacks(),
 		m_destUrl(),
@@ -145,6 +146,11 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		};
 
 		m_OCDMSessionCallbacks.error_message_callback = [](OpenCDMSession* session, void* userData, const char message[]) {
+			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+			if (userSession)
+			{
+				userSession->handleErrorMessage(message);
+			}
 		};
 
 		m_OCDMSessionCallbacks.keys_updated_callback = [](const OpenCDMSession* session, void* userData) {
@@ -402,7 +408,27 @@ bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 
 KeyState OCDMSessionAdapter::getState()
 {
+	if (m_sessionInvalidated.load())
+	{
+		return KEY_ERROR;
+	}
 	return m_eKeyState;
+}
+
+void OCDMSessionAdapter::handleErrorMessage(const char* message)
+{
+	if (!message || strcmp(message, "Rialto Session Server crashed.") != 0 ||
+		m_sessionInvalidated.exchange(true))
+	{
+		return;
+	}
+
+	m_keyStatusReady.signal();
+	m_keyStatusWait.signal();
+	if (m_drmCallbacks)
+	{
+		m_drmCallbacks->RialtoServerCrashed();
+	}
 }
 
 

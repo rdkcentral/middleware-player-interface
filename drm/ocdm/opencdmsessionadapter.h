@@ -31,6 +31,7 @@
 
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
+#include <atomic>
 #include <condition_variable>
 #include "DrmCallbacks.h"
 
@@ -104,6 +105,7 @@ protected:
 	std::string m_destUrl;
 	KeyStatus m_keyStatus;
 	bool m_keyStateIndeterminate;
+	std::atomic<bool> m_sessionInvalidated;
 	std::vector<uint8_t> m_keyStored;
 	std::vector<std::vector<uint8_t>> m_usableKeys; // Store usable key IDs from ocdm_update_callback
 	mutable std::mutex m_usableKeysMutex; // Protects m_usableKeys from concurrent access
@@ -119,6 +121,7 @@ protected:
 	DrmCallbacks *m_drmCallbacks;
 
 	bool verifyOutputProtection();
+	void handleErrorMessage(const char* message);
 public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
