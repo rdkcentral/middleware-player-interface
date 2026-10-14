@@ -2563,7 +2563,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskNotPending)
 	GstTaskControlData taskDetails("TestTask");
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_HIGH, _, _, _))
 				.WillOnce(Return(1));
 
 
@@ -2594,7 +2594,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskFailedToAdd)
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
 	// Simulate failure to add task
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_HIGH, _, _, _))
 				.WillOnce(Return(0));
 
 	bool result = mInterfaceGstPlayer->IdleTaskAdd(taskDetails, funcPtr);
@@ -2687,7 +2687,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_VideoType_FirstFrameNotReceived)
 		audio = false;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).Times(3)
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_HIGH, _, _, _)).Times(3)
 		.WillOnce(Return(1)).WillOnce(Return(0)).WillOnce(Return(0));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2720,7 +2720,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_AudioType_FirstFrameNotReceived)
 		audio = true;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_HIGH, _, _, _))
 		.WillRepeatedly(Return(1));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2916,8 +2916,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_TaskSchedulingFailed)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return an invalid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// EOS uses the same priority as the buffering timer (-70), not G_PRIORITY_HIGH
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(-70, _, _, _))
 		.WillOnce(Return(PLAYER_TASK_ID_INVALID));
 
 	// Call the method
@@ -2935,8 +2935,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_FirstCall)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return a valid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// EOS uses the same priority as the buffering timer (-70), not G_PRIORITY_HIGH
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(-70, _, _, _))
 		.WillOnce(Return(1234));
 
 	mInterfaceGstPlayer->NotifyEOS();

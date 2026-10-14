@@ -133,7 +133,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
 mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false)
+trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), idleCallbackControl()
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 1.0.4");
@@ -148,6 +148,9 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
+	// Cancel any queued idle/timer callbacks before freeing player state, otherwise a
+	// callback scheduled just before destruction can fire against freed memory.
+	CancelPendingCallbacks();
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
@@ -642,6 +645,7 @@ gboolean InterfacePlayerRDK::IdleCallbackOnFirstFrame(gpointer user_data)
 	if (pInterfacePlayerRDK)
 	{
                 privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::firstVideoFrameReceived);
 		privatePlayer->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 		privatePlayer->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
@@ -706,6 +710,7 @@ gboolean InterfacePlayerRDK::IdleCallbackOnEOS(gpointer user_data)
 	if (pInterfacePlayerRDK)
 	{
 	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		MW_LOG_MIL("eosCallbackIdleTaskId %d", privatePlayer->gstPrivateContext->eosCallbackIdleTaskId);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::notifyEOS);
 		privatePlayer->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
@@ -876,6 +881,7 @@ gboolean InterfacePlayerRDK::IdleCallback(gpointer user_data)
 	if (pInterfacePlayerRDK)
 	{
 	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::idleCb);
 		pInterfacePlayerRDK->IdleTaskClearFlags(privatePlayer->gstPrivateContext->firstProgressCallbackIdleTask);
 
@@ -907,6 +913,7 @@ gboolean InterfacePlayerRDK::IdleCallbackFirstVideoFrameDisplayed(gpointer user_
 	if (pInterfacePlayerRDK)
 	{
 	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::firstVideoFrameDisplayed);
 		pInterfacePlayerRDK->IdleTaskRemove(privatePlayer->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
 	}
@@ -1516,36 +1523,7 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false ;
 	}
-	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
-
-	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
-	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
-		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
-		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove firstFrameCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
+	CancelPendingCallbacks();
 	/* Prevent potential side effects of injecting EOS and
 	 * make the stop process more deterministic by:
 	 1) Confirming that bus handlers (disabled above) have completed
@@ -1601,6 +1579,46 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 
 	// Reset mp4demux playback semantic shim on pipeline event reset
 	interfacePlayerPriv->gstPrivateContext->isMp4DemuxPlayback = false;
+}
+
+/**
+ *  @brief CancelPendingCallbacks - cancel idle/timer callbacks scheduled against this instance
+ */
+void InterfacePlayerRDK::CancelPendingCallbacks()
+{
+	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
+
+	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
+	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
+		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
+		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove firstFrameCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
+		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
+	// Wait for any idle callback already running on the main loop thread to finish
+	// before the caller frees player state (g_source_remove alone won't wait for it).
+	idleCallbackControl.waitForDone(100, "idle callback handler");
 }
 
 void InterfacePlayerRDK::ResetGstEvents()
@@ -3860,7 +3878,6 @@ bool InterfacePlayerRDK::IdleTaskAdd(GstTaskControlData& taskDetails, Background
 	if (0 == taskDetails.taskID)
 	{
 		taskDetails.taskIsPending = false;
-		// High priority so playback-state tasks aren't delayed behind the progress/buffering timers
 		taskDetails.taskID = g_idle_add_full(G_PRIORITY_HIGH, (GSourceFunc)funcPtr, (gpointer)this, NULL);
 		// Wait for g_idle_add response , if failed to create task for wrong state , not to make pending flag as true
 		if(0 != taskDetails.taskID)
@@ -3924,7 +3941,6 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 		{
 			interfacePlayerPriv->gstPrivateContext->decoderHandleNotified = true;
 			interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-			// High priority so this isn't delayed behind the progress/buffering timers
 			interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_HIGH, (GSourceFunc)IdleCallbackOnFirstFrame, (gpointer)this, NULL);
 			// Wait for g_idle_add response , if failed to create task for wrong state , not to make pending flag as true
 			if(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId != PLAYER_TASK_ID_INVALID)
@@ -3953,7 +3969,6 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 			{
 				interfacePlayerPriv->gstPrivateContext->decoderHandleNotified = true;
 				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-				// High priority so this isn't delayed behind the progress/buffering timers
 				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_HIGH, (GSourceFunc)IdleCallbackOnFirstFrame, (gpointer)this, NULL);
 				// Wait for g_idle_add response , if failed to create task for wrong state , not to make pending flag as true
 				if(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId != PLAYER_TASK_ID_INVALID)
@@ -4127,6 +4142,8 @@ bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePr
 			(void)busWatchId;
 			interfacePlayerPriv->gstPrivateContext->syncControl.enable();
 			gst_bus_set_sync_handler(interfacePlayerPriv->gstPrivateContext->bus, (GstBusSyncHandler) bus_sync_handler, this, NULL);
+			// Re-arm idle callback guard for this pipeline's lifecycle (disabled by CancelPendingCallbacks() on Stop/destruction)
+			idleCallbackControl.enable();
 			interfacePlayerPriv->gstPrivateContext->buffering_enabled = m_gstConfigParam->gstreamerBufferingBeforePlay;
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
 			interfacePlayerPriv->gstPrivateContext->buffering_timeout_cnt = DEFAULT_BUFFERING_MAX_CNT;
@@ -5227,8 +5244,7 @@ void InterfacePlayerRDK::NotifyEOS()
 			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = true;
 			// eosSignalled is reset once the async task is completed either in Configure/Flush/ResetEOSSignalled, so set the flag before scheduling the task
 			interfacePlayerPriv->gstPrivateContext->eosSignalled = true;
-			// High priority so this isn't delayed behind the progress/buffering timers
-			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)IdleCallbackOnEOS, (gpointer)this, NULL);
+			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = g_idle_add_full(BUFFERING_TIMEOUT_PRIORITY, (GSourceFunc)IdleCallbackOnEOS, (gpointer)this, NULL);
 			if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId == PLAYER_TASK_ID_INVALID && true == interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 			{
 				interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
