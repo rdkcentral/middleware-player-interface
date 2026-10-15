@@ -191,7 +191,7 @@ firstFrameCallbackIdleTaskId(GST_TASK_ID_INVALID), firstFrameCallbackIdleTaskPen
 using_westerossink(false), usingRialtoSink(false), usingClosedCaptionsControl(false), pauseOnStartPlayback(false), eosSignalled(false),
 buffering_enabled(FALSE), buffering_in_progress(FALSE), buffering_timeout_cnt(0),
 buffering_target_state(GST_STATE_NULL),
-lastKnownPTS(0), ptsUpdatedTimeMS(0),
+lastKnownPTS(0), ptsUpdatedTimeMS(0), lastKnownAudioPTS(0), audioPtsUpdatedTimeMS(0),
 numberOfVideoBuffersSent(0), segmentStart(0), positionQuery(NULL),
 paused(false), pipelineState(GST_STATE_NULL),
 firstVideoFrameDisplayedCallbackTask("FirstVideoFrameDisplayedCallback"),
@@ -3574,30 +3574,58 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
 {
 	bool ret = true;
-	gint64 currentPTS = GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
+	gint64 currentPTS = 0;
+	bool isAudioOnly = (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].format == GST_FORMAT_INVALID);
+
+	if (isAudioOnly)
+	{
+		/* Audio-only playback: use audio position instead of video PTS */
+		long long audioPositionMs = GetAudioPosition();
+		currentPTS = audioPositionMs * MPEG_PTS_TICKS_PER_MS; /* Convert ms to 90kHz ticks */
+		MW_LOG_TRACE("InterfacePlayerRDK: audio-only playback, audio position(ms)=%lld, converted PTS=%" G_GINT64_FORMAT,
+					 audioPositionMs, currentPTS);
+	}
+	else
+	{
+		/* Video playback: use video PTS */
+		currentPTS = GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
+	}
+
 	if (currentPTS != 0)
 	{
-		if (currentPTS != interfacePlayerPriv->gstPrivateContext->lastKnownPTS)
+		gint64 lastPTS = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS : interfacePlayerPriv->gstPrivateContext->lastKnownPTS;
+		long long lastUpdateTime = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS : interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
+
+		if (currentPTS != lastPTS)
 		{
-			MW_LOG_MIL("InterfacePlayerRDK: There is an update in PTS prevPTS:%" G_GINT64_FORMAT " newPTS: %" G_GINT64_FORMAT ,
-					   interfacePlayerPriv->gstPrivateContext->lastKnownPTS, currentPTS);
-			interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;			/* save a copy of the current steady clock in milliseconds */
-			interfacePlayerPriv->gstPrivateContext->lastKnownPTS = currentPTS;
+			MW_LOG_MIL("InterfacePlayerRDK: There is an update in %s PTS prevPTS:%" G_GINT64_FORMAT " newPTS: %" G_GINT64_FORMAT,
+					   isAudioOnly ? "audio" : "video", lastPTS, currentPTS);
+			if (isAudioOnly)
+			{
+				interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS = NOW_STEADY_TS_MS;
+				interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS = currentPTS;
+			}
+			else
+			{
+				interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;
+				interfacePlayerPriv->gstPrivateContext->lastKnownPTS = currentPTS;
+			}
 		}
 		else
 		{
-			long diff = NOW_STEADY_TS_MS - interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
+			long diff = NOW_STEADY_TS_MS - lastUpdateTime;
 			if (diff > timeout)
 			{
-				MW_LOG_WARN("InterfacePlayerRDK: Video PTS hasn't been updated for %ld ms and timeout - %ld ms", diff, timeout);
+				MW_LOG_WARN("InterfacePlayerRDK: %s PTS hasn't been updated for %ld ms and timeout - %ld ms",
+							isAudioOnly ? "Audio" : "Video", diff, timeout);
 				ret = false;
 			}
 		}
 	}
 	else
 	{
-		MW_LOG_MIL("InterfacePlayerRDK: video-pts parsed is: %" G_GINT64_FORMAT ,
-				   currentPTS);
+		MW_LOG_MIL("InterfacePlayerRDK: %s PTS parsed is: %" G_GINT64_FORMAT,
+				   isAudioOnly ? "audio" : "video", currentPTS);
 	}
 	return ret;
 }
@@ -4196,6 +4224,58 @@ long long InterfacePlayerRDK::GetVideoPosition(void)
 	}
 
 	MW_LOG_TRACE("InterfacePlayerRDK: position(ms) = %" G_GINT64_FORMAT , GST_TIME_AS_MSECONDS(position));
+	return static_cast<long long>( (GST_TIME_AS_MSECONDS(position)) );
+}
+
+/**
+ *  @brief Gets the current audio playback position using
+ *         gst_element_query_position on the audio sinkbin.
+ *
+ *  @retval Current playback position in milliseconds, or 0 if the
+ *          pipeline is not in PLAYING/PAUSED state or the query fails.
+ */
+long long InterfacePlayerRDK::GetAudioPosition(void)
+{
+	gint64 position = 0;
+	GstElement *pipeline = interfacePlayerPriv->gstPrivateContext->pipeline;
+	GstElement *audioSinkbin = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin;
+
+	if (pipeline && audioSinkbin)
+	{
+		GstState state = GST_STATE_NULL;
+		GstState pending = GST_STATE_NULL;
+		GstClockTime timeout = 0;/* non-blocking state query */
+		GstStateChangeReturn rc = gst_element_get_state(pipeline, &state, &pending, timeout);
+
+		/* Position can only be queried reliably when the pipeline is in
+		 * PLAYING or PAUSED state, so we first verify the pipeline state
+		 * via gst_element_get_state before issuing the position query. */
+		if (rc == GST_STATE_CHANGE_SUCCESS &&
+		   (state == GST_STATE_PLAYING || state == GST_STATE_PAUSED))
+		{
+			if (!gst_element_query_position(audioSinkbin, GST_FORMAT_TIME, &position))
+			{
+				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position failed for audio");
+				position = 0;
+			}
+			else if (position == static_cast<gint64>(GST_CLOCK_TIME_NONE))
+			{
+				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position returned GST_CLOCK_TIME_NONE for audio");
+				position = 0;
+			}
+		}
+		else
+		{
+			MW_LOG_INFO("InterfacePlayerRDK: pipeline not in PLAYING/PAUSED (state=%d, rc=%d), cannot query audio position", state, rc);
+		}
+	}
+	else
+	{
+		MW_LOG_WARN("InterfacePlayerRDK: cannot query audio position; pipeline=%p audioSinkbin=%p",
+					pipeline, audioSinkbin);
+	}
+
+	MW_LOG_TRACE("InterfacePlayerRDK: audio position(ms) = %" G_GINT64_FORMAT , GST_TIME_AS_MSECONDS(position));
 	return static_cast<long long>( (GST_TIME_AS_MSECONDS(position)) );
 }
 

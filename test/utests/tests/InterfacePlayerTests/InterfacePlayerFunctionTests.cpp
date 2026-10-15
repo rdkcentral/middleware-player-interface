@@ -28,6 +28,7 @@
 #include "MockPlayerScheduler.h"
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
+#include <thread>
 #include <gst/gstpluginfeature.h>
 
 
@@ -2252,6 +2253,96 @@ TEST_F(InterfacePlayerTests, IsCacheEmpty_CacheLevelEmpty_PTSChanged)
 	bool result = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
 
 	EXPECT_FALSE(result);
+}
+
+TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioOnly_CacheLevelEmpty_AudioPositionChanged)
+{
+	int mediaType = eGST_MEDIATYPE_AUDIO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->source = &gst_element_pipeline;
+
+	/* Simulate audio-only playback: video format is invalid */
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	/* Mock audio position query to return a non-zero position (audio is progressing) */
+	GstElement gst_element_audio_sink = {.object = {.name = (gchar *)"testaudiosink"}};
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin = &gst_element_audio_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* 1 second in nanoseconds */
+			Return(TRUE)));
+
+	bool result = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+
+	/* Audio position is changing, so cache should be reported as non-empty */
+	EXPECT_FALSE(result);
+}
+
+TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioOnly_CacheLevelEmpty_AudioPositionStalled)
+{
+	int mediaType = eGST_MEDIATYPE_AUDIO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->source = &gst_element_pipeline;
+
+	/* Simulate audio-only playback: video format is invalid */
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	/* Mock audio position query to return the same position (audio is stalled) */
+	GstElement gst_element_audio_sink = {.object = {.name = (gchar *)"testaudiosink"}};
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin = &gst_element_audio_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* 1 second in nanoseconds */
+			Return(TRUE)));
+
+	/* First call sets the initial position */
+	bool result1 = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+	EXPECT_FALSE(result1);
+
+	/* Simulate time passing beyond timeout */
+	std::this_thread::sleep_for(std::chrono::milliseconds(4100));
+
+	/* Second call with same position should detect stall */
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* Same position - stalled */
+			Return(TRUE)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	bool result2 = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+
+	/* Audio position hasn't changed for timeout, so cache should be reported as empty */
+	EXPECT_TRUE(result2);
 }
 
 TEST_F(InterfacePlayerTests, ResetEOSSignalledFlag)

@@ -209,6 +209,8 @@ struct GstPlayerPriv
 	GstState buffering_target_state;                                                 /**< the target state after buffering */
 	gint64 lastKnownPTS;                                                                     /**< To store the PTS of last displayed video */
 	long long ptsUpdatedTimeMS;                                                              /**< Timestamp when PTS was last updated */
+	gint64 lastKnownAudioPTS;                                                                /**< To store the last audio position for audio-only playback */
+	long long audioPtsUpdatedTimeMS;                                                         /**< Timestamp when audio position was last updated */
 	int numberOfVideoBuffersSent;                                                    /**< Number of video buffers sent to pipeline */
 	gint64 segmentStart;                                                                     /**< segment start value; required when qtdemux is enabled or restamping is disabled; -1 to send a segment.start query to gstreamer */
 	GstQuery *positionQuery;                                                                 /**< pointer that holds a position query object */
