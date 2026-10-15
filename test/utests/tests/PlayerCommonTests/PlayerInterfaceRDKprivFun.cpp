@@ -2256,7 +2256,7 @@ TEST(InterfacePlayerPriv, DestructorCalledOnStackObject_start) {
 /**
  * @brief Test the default construction of gst_media_stream to ensure it initializes to default values.
  *
- * This test validates that when a gst_media_stream object is default-constructed, all its members are initialized with the expected default values. It verifies that pointer members (sinkbin, source, demuxPad) are set to nullptr, the format is set to GST_FORMAT_INVALID, boolean flags (pendingSeek, resetPosition, bufferUnderrun, eosReached, sourceConfigured, firstBufferProcessed) are false, mutex operations on sourceLock succeed, timeScale is set to 1u, trackId is -1, and demuxProbeId is 0ul. This ensures that the object is in a valid initial state.
+ * This test validates that when a gst_media_stream object is default-constructed, all its members are initialized with the expected default values. It verifies that pointer members (sinkbin, source, demuxPad) are set to nullptr, the format is set to GST_FORMAT_INVALID, boolean flags (pendingSeek, resetPosition, eosReached, sourceConfigured, firstBufferProcessed) are false, mutex operations on sourceLock succeed, timeScale is set to 1u, trackId is -1, and demuxProbeId is 0ul. This ensures that the object is in a valid initial state.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 053@n
@@ -2275,15 +2275,14 @@ TEST(InterfacePlayerPriv, DestructorCalledOnStackObject_start) {
  * | 04 | Verify format is initialized to GST_FORMAT_INVALID. | stream.format = uninitialized | stream.format equals GST_FORMAT_INVALID. | Should Pass |
  * | 05 | Verify pendingSeek is initialized to false. | stream.pendingSeek = uninitialized | stream.pendingSeek equals false. | Should Pass |
  * | 06 | Verify resetPosition is initialized to false. | stream.resetPosition = uninitialized | stream.resetPosition equals false. | Should Pass |
- * | 07 | Verify bufferUnderrun is initialized to false. | stream.bufferUnderrun = uninitialized | stream.bufferUnderrun equals false. | Should Pass |
- * | 08 | Verify eosReached is initialized to false. | stream.eosReached = uninitialized | stream.eosReached equals false. | Should Pass |
- * | 09 | Verify sourceConfigured is initialized to false. | stream.sourceConfigured = uninitialized | stream.sourceConfigured equals false. | Should Pass |
- * | 10 | Verify locking and unlocking sourceLock succeed. | pthread_mutex_lock(&stream.sourceLock), pthread_mutex_unlock(&stream.sourceLock) | Both lock and unlock return 0. | Should Pass |
- * | 11 | Verify timeScale is initialized to 1u. | stream.timeScale = uninitialized | stream.timeScale equals 1u. | Should Pass |
- * | 12 | Verify trackId is initialized to -1. | stream.trackId = uninitialized | stream.trackId equals -1. | Should Pass |
- * | 13 | Verify firstBufferProcessed is initialized to false. | stream.firstBufferProcessed = uninitialized | stream.firstBufferProcessed equals false. | Should Pass |
- * | 14 | Verify demuxPad is initialized to nullptr. | stream.demuxPad = uninitialized | stream.demuxPad equals nullptr. | Should Pass |
- * | 15 | Verify demuxProbeId is initialized to 0ul. | stream.demuxProbeId = uninitialized | stream.demuxProbeId equals 0ul. | Should Pass |
+ * | 07 | Verify eosReached is initialized to false. | stream.eosReached = uninitialized | stream.eosReached equals false. | Should Pass |
+ * | 08 | Verify sourceConfigured is initialized to false. | stream.sourceConfigured = uninitialized | stream.sourceConfigured equals false. | Should Pass |
+ * | 09 | Verify locking and unlocking sourceLock succeed. | pthread_mutex_lock(&stream.sourceLock), pthread_mutex_unlock(&stream.sourceLock) | Both lock and unlock return 0. | Should Pass |
+ * | 10 | Verify timeScale is initialized to 1u. | stream.timeScale = uninitialized | stream.timeScale equals 1u. | Should Pass |
+ * | 11 | Verify trackId is initialized to -1. | stream.trackId = uninitialized | stream.trackId equals -1. | Should Pass |
+ * | 12 | Verify firstBufferProcessed is initialized to false. | stream.firstBufferProcessed = uninitialized | stream.firstBufferProcessed equals false. | Should Pass |
+ * | 13 | Verify demuxPad is initialized to nullptr. | stream.demuxPad = uninitialized | stream.demuxPad equals nullptr. | Should Pass |
+ * | 14 | Verify demuxProbeId is initialized to 0ul. | stream.demuxProbeId = uninitialized | stream.demuxProbeId equals 0ul. | Should Pass |
  */
 TEST(gst_media_stream, DefaultConstructionPositiveTest) {
     std::cout << "Entering DefaultConstructionPositiveTest test" << std::endl;
@@ -2311,10 +2310,6 @@ TEST(gst_media_stream, DefaultConstructionPositiveTest) {
         // Check resetPosition
         std::cout << "resetPosition value: " << std::boolalpha << stream.resetPosition << std::endl;
         EXPECT_FALSE(stream.resetPosition);
-
-        // Check bufferUnderrun
-        std::cout << "bufferUnderrun value: " << std::boolalpha << stream.bufferUnderrun << std::endl;
-        EXPECT_FALSE(stream.bufferUnderrun);
 
         // Check eosReached
         std::cout << "eosReached value: " << std::boolalpha << stream.eosReached << std::endl;

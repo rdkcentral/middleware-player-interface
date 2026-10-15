@@ -51,7 +51,6 @@
 #else
 #define PLAYER_G_MEMDUP(src, size) g_memdup((src), (guint)(size))
 #endif
-#define GST_DELAY_BETWEEN_PTS_CHECK_FOR_EOS_ON_UNDERFLOW 500    /**< A timeout interval in milliseconds to check pts in case of underflow */
 #define GST_MIN_DECODE_ERROR_INTERVAL 10000                     /**< Minimum time interval in milliseconds between two decoder error CB to send anomaly error */
 #define BUFFERING_TIMEOUT_PRIORITY -70                           /**< 0 is DEFAULT priority whereas -100 is the HIGH_PRIORITY */
 
@@ -192,7 +191,7 @@ firstFrameCallbackIdleTaskId(GST_TASK_ID_INVALID), firstFrameCallbackIdleTaskPen
 using_westerossink(false), usingRialtoSink(false), usingClosedCaptionsControl(false), pauseOnStartPlayback(false), eosSignalled(false),
 buffering_enabled(FALSE), buffering_in_progress(FALSE), buffering_timeout_cnt(0),
 buffering_target_state(GST_STATE_NULL),
-lastKnownPTS(0), ptsUpdatedTimeMS(0), ptsCheckForEosOnUnderflowIdleTaskId(GST_TASK_ID_INVALID),
+lastKnownPTS(0), ptsUpdatedTimeMS(0), lastKnownAudioPTS(0), audioPtsUpdatedTimeMS(0),
 numberOfVideoBuffersSent(0), segmentStart(0), positionQuery(NULL),
 paused(false), pipelineState(GST_STATE_NULL),
 firstVideoFrameDisplayedCallbackTask("FirstVideoFrameDisplayedCallback"),
@@ -1422,7 +1421,6 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
-	stream->bufferUnderrun = false;
 	stream->eosReached = false;
 
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
@@ -1530,12 +1528,6 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
 		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
 		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
 	}
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
@@ -1683,21 +1675,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO];
 	interfacePlayerPriv->gstPrivateContext->rate = rate;
-	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = false;
-	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = false;
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d", interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
-
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d", interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
 
 	}
 
@@ -3317,10 +3300,6 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 					}
 				}
 			}
-			else if (stream->bufferUnderrun)
-			{
-				stream->bufferUnderrun = false;
-			}
 
 			// PROFILE_BUCKET_FIRST_BUFFER after successful push of first gst buffer
 			if (isFirstBuffer == true && ret == GST_FLOW_OK)
@@ -3595,30 +3574,58 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
 {
 	bool ret = true;
-	gint64 currentPTS = GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
+	gint64 currentPTS = 0;
+	bool isAudioOnly = (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].format == GST_FORMAT_INVALID);
+
+	if (isAudioOnly)
+	{
+		/* Audio-only playback: use audio position instead of video PTS */
+		long long audioPositionMs = GetAudioPosition();
+		currentPTS = audioPositionMs * MPEG_PTS_TICKS_PER_MS; /* Convert ms to 90kHz ticks */
+		MW_LOG_TRACE("InterfacePlayerRDK: audio-only playback, audio position(ms)=%lld, converted PTS=%" G_GINT64_FORMAT,
+					 audioPositionMs, currentPTS);
+	}
+	else
+	{
+		/* Video playback: use video PTS */
+		currentPTS = GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
+	}
+
 	if (currentPTS != 0)
 	{
-		if (currentPTS != interfacePlayerPriv->gstPrivateContext->lastKnownPTS)
+		gint64 lastPTS = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS : interfacePlayerPriv->gstPrivateContext->lastKnownPTS;
+		long long lastUpdateTime = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS : interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
+
+		if (currentPTS != lastPTS)
 		{
-			MW_LOG_MIL("InterfacePlayerRDK: There is an update in PTS prevPTS:%" G_GINT64_FORMAT " newPTS: %" G_GINT64_FORMAT ,
-					   interfacePlayerPriv->gstPrivateContext->lastKnownPTS, currentPTS);
-			interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;			/* save a copy of the current steady clock in milliseconds */
-			interfacePlayerPriv->gstPrivateContext->lastKnownPTS = currentPTS;
+			MW_LOG_MIL("InterfacePlayerRDK: There is an update in %s PTS prevPTS:%" G_GINT64_FORMAT " newPTS: %" G_GINT64_FORMAT,
+					   isAudioOnly ? "audio" : "video", lastPTS, currentPTS);
+			if (isAudioOnly)
+			{
+				interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS = NOW_STEADY_TS_MS;
+				interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS = currentPTS;
+			}
+			else
+			{
+				interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;
+				interfacePlayerPriv->gstPrivateContext->lastKnownPTS = currentPTS;
+			}
 		}
 		else
 		{
-			long diff = NOW_STEADY_TS_MS - interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
+			long diff = NOW_STEADY_TS_MS - lastUpdateTime;
 			if (diff > timeout)
 			{
-				MW_LOG_WARN("InterfacePlayerRDK: Video PTS hasn't been updated for %ld ms and timeout - %ld ms", diff, timeout);
+				MW_LOG_WARN("InterfacePlayerRDK: %s PTS hasn't been updated for %ld ms and timeout - %ld ms",
+							isAudioOnly ? "Audio" : "Video", diff, timeout);
 				ret = false;
 			}
 		}
 	}
 	else
 	{
-		MW_LOG_MIL("InterfacePlayerRDK: video-pts parsed is: %" G_GINT64_FORMAT ,
-				   currentPTS);
+		MW_LOG_MIL("InterfacePlayerRDK: %s PTS parsed is: %" G_GINT64_FORMAT,
+				   isAudioOnly ? "audio" : "video", currentPTS);
 	}
 	return ret;
 }
@@ -3643,25 +3650,16 @@ bool InterfacePlayerRDK::IsCacheEmpty(int Type)
 			// Changed to MW_LOG_TRACE, to avoid log flooding
 			// We're seeing this logged frequently during live linear playback, despite no user-facing problem.
 			MW_LOG_TRACE("InterfacePlayerRDK::Cache level empty");
-			if (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun == true ||
-				interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun == true)				/* Interpret bufferUnderun as cachelevel being empty */
+			bool ptsChanged = CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL);
+			if(!ptsChanged)
 			{
-				MW_LOG_WARN("InterfacePlayerRDK::Received buffer underrun signal for video(%d) or audio(%d) previously",interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun,
-							interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun);
+				//PTS hasn't changed for the timeout value
+				MW_LOG_WARN("InterfacePlayerRDK: Appsrc cache is empty and PTS hasn't been updated for more than %dms and ret(%d)",
+							GST_MIN_PTS_UPDATE_INTERVAL, ret);
 			}
 			else
 			{
-				bool ptsChanged = CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL);
-				if(!ptsChanged)
-				{
-					//PTS hasn't changed for the timeout value
-					MW_LOG_WARN("InterfacePlayerRDK: Appsrc cache is empty and PTS hasn't been updated for more than %dms and ret(%d)",
-								GST_MIN_PTS_UPDATE_INTERVAL, ret);
-				}
-				else
-				{
-					ret = false;		/* Pts changing, conclude that cache is not empty */
-				}
+				ret = false;		/* Pts changing, conclude that cache is not empty */
 			}
 		}
 	}
@@ -4230,27 +4228,55 @@ long long InterfacePlayerRDK::GetVideoPosition(void)
 }
 
 /**
- * @brief Notifies EOS if video decoder pts is stalled
- * @param[in] user_data pointer to InterfacePlayerRDK instance
- * @retval G_SOURCE_REMOVE, if the source should be removed
+ *  @brief Gets the current audio playback position using
+ *         gst_element_query_position on the audio sinkbin.
+ *
+ *  @retval Current playback position in milliseconds, or 0 if the
+ *          pipeline is not in PLAYING/PAUSED state or the query fails.
  */
-static gboolean VideoDecoderPtsCheckerForEOS(gpointer user_data)
+long long InterfacePlayerRDK::GetAudioPosition(void)
 {
-	InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK *) user_data;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
-	gint64 currentPTS = pInterfacePlayerRDK->GetVideoPTS();                       /* Gets the currentPTS from the 'video-pts' property of the element */
+	gint64 position = 0;
+	GstElement *pipeline = interfacePlayerPriv->gstPrivateContext->pipeline;
+	GstElement *audioSinkbin = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin;
 
-	if (currentPTS == privatePlayer->gstPrivateContext->lastKnownPTS)
+	if (pipeline && audioSinkbin)
 	{
-		MW_LOG_MIL("PTS not changed");
-		pInterfacePlayerRDK->NotifyEOS();                                                             /* Notify EOS if the PTS has not changed */
+		GstState state = GST_STATE_NULL;
+		GstState pending = GST_STATE_NULL;
+		GstClockTime timeout = 0;/* non-blocking state query */
+		GstStateChangeReturn rc = gst_element_get_state(pipeline, &state, &pending, timeout);
+
+		/* Position can only be queried reliably when the pipeline is in
+		 * PLAYING or PAUSED state, so we first verify the pipeline state
+		 * via gst_element_get_state before issuing the position query. */
+		if (rc == GST_STATE_CHANGE_SUCCESS &&
+		   (state == GST_STATE_PLAYING || state == GST_STATE_PAUSED))
+		{
+			if (!gst_element_query_position(audioSinkbin, GST_FORMAT_TIME, &position))
+			{
+				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position failed for audio");
+				position = 0;
+			}
+			else if (position == static_cast<gint64>(GST_CLOCK_TIME_NONE))
+			{
+				MW_LOG_WARN("InterfacePlayerRDK: gst_element_query_position returned GST_CLOCK_TIME_NONE for audio");
+				position = 0;
+			}
+		}
+		else
+		{
+			MW_LOG_INFO("InterfacePlayerRDK: pipeline not in PLAYING/PAUSED (state=%d, rc=%d), cannot query audio position", state, rc);
+		}
 	}
 	else
 	{
-		MW_LOG_MIL("Video PTS still moving lastKnownPTS %" G_GUINT64_FORMAT " currentPTS %" G_GUINT64_FORMAT " ##", privatePlayer->gstPrivateContext->lastKnownPTS, currentPTS);
+		MW_LOG_WARN("InterfacePlayerRDK: cannot query audio position; pipeline=%p audioSinkbin=%p",
+					pipeline, audioSinkbin);
 	}
-	privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = GST_TASK_ID_INVALID;
-	return G_SOURCE_REMOVE;
+
+	MW_LOG_TRACE("InterfacePlayerRDK: audio position(ms) = %" G_GINT64_FORMAT , GST_TIME_AS_MSECONDS(position));
+	return static_cast<long long>( (GST_TIME_AS_MSECONDS(position)) );
 }
 
 /**
@@ -4312,26 +4338,6 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		}
 
 		MW_LOG_WARN("## Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
-		privatePlayer->gstPrivateContext->stream[type].bufferUnderrun = true;
-
-		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate == GST_NORMAL_PLAY_RATE))
-		{
-			if (!privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-			{
-				privatePlayer->gstPrivateContext->lastKnownPTS = pInterfacePlayerRDK->GetVideoPTS();			/* Gets the currentPTS from the 'video-pts' property of the element */
-				privatePlayer->gstPrivateContext->ptsUpdatedTimeMS = NOW_STEADY_TS_MS;
-				privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = g_timeout_add(GST_DELAY_BETWEEN_PTS_CHECK_FOR_EOS_ON_UNDERFLOW, VideoDecoderPtsCheckerForEOS, pInterfacePlayerRDK);
-				/*g_timeout_add - Sets the function VideoDecoderPtsCheckerForEOS to be called at regular intervals*/
-			}
-			else
-			{
-				MW_LOG_WARN("ptsCheckForEosOnUnderflowIdleTask ID %d already running, ignore underflow", (int)privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-			}
-		}
-		else
-		{
-			MW_LOG_WARN("Mediatype %d underrun, when eosReached is %d", type, privatePlayer->gstPrivateContext->stream[type].eosReached);
-		}
 		if(pInterfacePlayerRDK->OnGstBufferUnderflowCb)
 		{
 			pInterfacePlayerRDK->OnGstBufferUnderflowCb(static_cast<int>(type));
