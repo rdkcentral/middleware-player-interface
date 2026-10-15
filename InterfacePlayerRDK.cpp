@@ -5505,7 +5505,7 @@ void AddBufferFieldToStructure(GstStructure *structure, const char *fieldName, c
  * @param[in] type The media type.
  * @param[in] codecInfo The codec information.
  */
-void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo)
+void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo, bool isEncrypted)
 {
 	GstCaps *caps = GetCaps(codecInfo.mCodecFormat);
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
@@ -5559,7 +5559,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 									NULL);
 			}
 		}
-		if (codecInfo.mIsEncrypted)
+		if (isEncrypted)
 		{
 			GstStructure *s = gst_caps_get_structure (caps, 0);
 			if (s)

@@ -779,8 +779,9 @@ class InterfacePlayerRDK
 		 * @brief Sets the stream capabilities.
 		 * @param[in] type The media type.
 		 * @param[in] codecInfo The codec information.
+		 * @param[in] isEncrypted Whether the stream is encrypted.
 		 */
-		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
+		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo, bool isEncrypted);
 
 	private:
 		InterfacePlayerPriv *interfacePlayerPriv;

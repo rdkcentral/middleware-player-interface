@@ -3076,7 +3076,7 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_NullCaps)
 	EXPECT_CALL(*g_mockGstUtils, GetCaps(_)).WillOnce(Return(nullptr));
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, _)).Times(0);
 
-	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo));
+	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo), false);
 
 	delete g_mockGstUtils;
 }
@@ -3101,7 +3101,7 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_ValidVideoCodecFormat)
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_set_simple(&caps, StrEq("stream-format"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
 
-	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo));
+	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo), false);
 
 	delete g_mockGstUtils;
 }
@@ -3128,7 +3128,7 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedAudioCodecFormat)
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_set_simple(&caps, StrEq("channels"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
 
-	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_AUDIO, std::move(codecInfo));
+	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_AUDIO, std::move(codecInfo), true);
 
 	delete g_mockGstUtils;
 }
