@@ -26,7 +26,6 @@
 #define THUNDERACCESSPLAYER_H_
 
 #include <string>
-#include <functional>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>

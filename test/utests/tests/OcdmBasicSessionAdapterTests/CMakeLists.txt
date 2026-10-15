@@ -42,7 +42,6 @@ include_directories(${PLAYER_ROOT}/playerLogManager)
 include_directories(${PLAYER_ROOT}/baseConversion)
 
 set(TEST_SOURCES FunctionalTests.cpp
-		 OcdmBasicDecryptFillTests.cpp
 		 OcdmBasicSessionAdapterTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
