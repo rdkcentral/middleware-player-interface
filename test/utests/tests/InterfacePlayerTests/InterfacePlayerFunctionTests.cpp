@@ -2255,6 +2255,107 @@ TEST_F(InterfacePlayerTests, IsCacheEmpty_CacheLevelEmpty_PTSChanged)
 	EXPECT_FALSE(result);
 }
 
+TEST_F(InterfacePlayerTests, IsCacheEmpty_Video_CacheLevelEmpty_VideoPTSChanged)
+{
+	int mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->source = &gst_element_pipeline;
+
+	/* Set valid video format to ensure video PTS path is taken */
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	/* Mock video decoder to return a non-zero PTS (video is progressing) */
+	GstElement gst_element_video_dec = {.object = {.name = (gchar *)"testvideodec"}};
+	mPlayerContext->video_dec = &gst_element_video_dec;
+
+	/* Since we can't easily mock SocInterface in this test framework,
+	 * we'll rely on the fact that GetVideoPTS falls back to GetVideoPosition
+	 * when video-pts property is not supported. Mock the position query instead. */
+	GstElement gst_element_video_sink = {.object = {.name = (gchar *)"testvideosink"}};
+	mPlayerContext->video_sink = &gst_element_video_sink;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin = &gst_element_video_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_video_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* 1 second in nanoseconds */
+			Return(TRUE)));
+
+	bool result = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+
+	/* Video position is changing, so cache should be reported as non-empty */
+	EXPECT_FALSE(result);
+}
+
+TEST_F(InterfacePlayerTests, IsCacheEmpty_Video_CacheLevelEmpty_VideoPTSStalled)
+{
+	int mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->source = &gst_element_pipeline;
+
+	/* Set valid video format to ensure video PTS path is taken */
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	/* Mock video decoder and sink for position query fallback */
+	GstElement gst_element_video_dec = {.object = {.name = (gchar *)"testvideodec"}};
+	mPlayerContext->video_dec = &gst_element_video_dec;
+
+	GstElement gst_element_video_sink = {.object = {.name = (gchar *)"testvideosink"}};
+	mPlayerContext->video_sink = &gst_element_video_sink;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin = &gst_element_video_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_video_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* 1 second in nanoseconds */
+			Return(TRUE)));
+
+	/* First call sets the initial position */
+	bool result1 = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+	EXPECT_FALSE(result1);
+
+	/* Simulate time passing beyond timeout */
+	std::this_thread::sleep_for(std::chrono::milliseconds(4100));
+
+	/* Second call with same position should detect stall */
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_video_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL), /* Same position - stalled */
+			Return(TRUE)));
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(stream->source)))
+		.WillOnce(Return(0));
+
+	bool result2 = mInterfaceGstPlayer->IsCacheEmpty(mediaType);
+
+	/* Video position hasn't changed for timeout, so cache should be reported as empty */
+	EXPECT_TRUE(result2);
+}
+
 TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioOnly_CacheLevelEmpty_AudioPositionChanged)
 {
 	int mediaType = eGST_MEDIATYPE_AUDIO;
