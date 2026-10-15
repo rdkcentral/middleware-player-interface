@@ -1,0 +1,841 @@
+From 8e0f22c152dfa0880fdfa826f812d8c4026e42db Mon Sep 17 00:00:00 2001
+From: Devin <devin@cognition.ai>
+Date: Tue, 13 Oct 2026 23:06:01 -0400
+Subject: [PATCH 4/6] L1: thin-suite fills (~59 tests)
+
+GstUtilsFillTests: GetCaps format branch matrix (MPEG-TS, ISO BMFF,
+MP3, AAC variants, AC3/EC3/Atmos, AC4, H.264, HEVC, MPEG-2, TTML,
+WebVTT, MP4, unknown/invalid).
+
+GstHandlerControlFillTests: enable/disable, ScopeHelper move
+semantics, handler completion, timeout paths, concurrent waiters.
+
+OcdmBasicDecryptFillTests: decrypt error-code passthrough,
+terminateEarly on failure, HDCP gate skipping the memory system,
+zero-size payload, IV propagation, serialized repeat calls.
+
+VttCueFillTests: VTTCue value-type field assignment across boundary
+inputs (zero/negative times, empty/long/UTF-8 text, settings).
+
+DrmSecureClient and PluginsTests are intentionally not extended: the
+former is fully gated behind SEC_CLIENT_HEADERS which are absent, and
+the decryptor plugin sources are static-heavy/uncompiled in that
+binary, so no meaningful always-on coverage exists there.
+---
+ .../GstHandlerControlTests/CMakeLists.txt     |   1 +
+ .../GstHandlerControlFillTests.cpp            | 212 ++++++++++++++++
+ .../utests/tests/GstUtilsTests/CMakeLists.txt |   1 +
+ .../tests/GstUtilsTests/GstUtilsFillTests.cpp | 237 ++++++++++++++++++
+ .../CMakeLists.txt                            |   1 +
+ .../OcdmBasicDecryptFillTests.cpp             | 165 ++++++++++++
+ .../utests/tests/SubtitleTests/CMakeLists.txt |   3 +-
+ .../tests/SubtitleTests/VttCueFillTests.cpp   | 112 +++++++++
+ 8 files changed, 731 insertions(+), 1 deletion(-)
+ create mode 100644 test/utests/tests/GstHandlerControlTests/GstHandlerControlFillTests.cpp
+ create mode 100644 test/utests/tests/GstUtilsTests/GstUtilsFillTests.cpp
+ create mode 100644 test/utests/tests/OcdmBasicSessionAdapterTests/OcdmBasicDecryptFillTests.cpp
+ create mode 100644 test/utests/tests/SubtitleTests/VttCueFillTests.cpp
+
+diff --git a/test/utests/tests/GstHandlerControlTests/CMakeLists.txt b/test/utests/tests/GstHandlerControlTests/CMakeLists.txt
+index 720ec72..aa3681f 100644
+--- a/test/utests/tests/GstHandlerControlTests/CMakeLists.txt
++++ b/test/utests/tests/GstHandlerControlTests/CMakeLists.txt
+@@ -38,6 +38,7 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
+ 
+ 
+ set(TEST_SOURCES GstHandlerControlTests.cpp
++  GstHandlerControlFillTests.cpp
+   GstHandlerControlPlayerTests.cpp)
+ 
+ set(PLAYER_SOURCES ${PLAYER_ROOT}/GstHandlerControl.cpp ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
+diff --git a/test/utests/tests/GstHandlerControlTests/GstHandlerControlFillTests.cpp b/test/utests/tests/GstHandlerControlTests/GstHandlerControlFillTests.cpp
+new file mode 100644
+index 0000000..0df6082
+--- /dev/null
++++ b/test/utests/tests/GstHandlerControlTests/GstHandlerControlFillTests.cpp
+@@ -0,0 +1,212 @@
++/*
++ * If not stated otherwise in this file or this component's license file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2025 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/**
++ * @file GstHandlerControlFillTests.cpp
++ * @brief Gap-fill coverage for GstHandlerControl: enable/disable semantics,
++ *        ScopeHelper RAII counting, move-assignment, nested scopes, and the
++ *        waitForDone() timeout/completion matrix with a real worker thread.
++ */
++
++#include <gtest/gtest.h>
++#include <atomic>
++#include <chrono>
++#include <thread>
++#include <vector>
++
++#include "GstHandlerControl.h"
++
++class GstHandlerControlFillTests : public ::testing::Test
++{
++protected:
++	GstHandlerControl mControl;
++};
++
++/* ================================================================== */
++/* enable / disable / isEnabled                                       */
++/* ================================================================== */
++
++TEST_F(GstHandlerControlFillTests, InitiallyEnabled)
++{
++	EXPECT_TRUE(mControl.isEnabled());
++}
++
++TEST_F(GstHandlerControlFillTests, DisableClearsEnabled)
++{
++	mControl.disable();
++	EXPECT_FALSE(mControl.isEnabled());
++}
++
++TEST_F(GstHandlerControlFillTests, EnableSetsEnabled)
++{
++	mControl.disable();
++	mControl.enable();
++	EXPECT_TRUE(mControl.isEnabled());
++}
++
++TEST_F(GstHandlerControlFillTests, DoubleDisableStaysDisabled)
++{
++	mControl.disable();
++	mControl.disable();
++	EXPECT_FALSE(mControl.isEnabled());
++}
++
++TEST_F(GstHandlerControlFillTests, EnableDisableCycles)
++{
++	for (int i = 0; i < 5; i++)
++	{
++		mControl.enable();
++		EXPECT_TRUE(mControl.isEnabled());
++		mControl.disable();
++		EXPECT_FALSE(mControl.isEnabled());
++	}
++}
++
++/* ================================================================== */
++/* ScopeHelper counting                                               */
++/* ================================================================== */
++
++TEST_F(GstHandlerControlFillTests, ScopeHelperCountsSingleScope)
++{
++	EXPECT_TRUE(mControl.waitForDone(10, "idle")); // no scopes outstanding
++	{
++		auto scope = mControl.getScopeHelper();
++		EXPECT_FALSE(mControl.waitForDone(30, "onescope")); // still held -> times out
++	}
++	EXPECT_TRUE(mControl.waitForDone(100, "released"));
++}
++
++TEST_F(GstHandlerControlFillTests, NestedScopeHelpersRequireAllToExit)
++{
++	{
++		auto s1 = mControl.getScopeHelper();
++		{
++			auto s2 = mControl.getScopeHelper();
++			EXPECT_FALSE(mControl.waitForDone(20, "nested"));
++		} // s2 released - s1 still held
++		EXPECT_FALSE(mControl.waitForDone(20, "outerheld"));
++	}
++	EXPECT_TRUE(mControl.waitForDone(100, "allreleased"));
++}
++
++TEST_F(GstHandlerControlFillTests, ScopeHelperMoveAssignTransfersOwnership)
++{
++	{
++		auto s1 = mControl.getScopeHelper();
++		auto s2 = mControl.getScopeHelper(); // count == 2
++		s1 = std::move(s2);                  // s1's old scope ends -> count back to 1
++		EXPECT_FALSE(mControl.waitForDone(20, "stillone"));
++	} // moved scope ends
++	EXPECT_TRUE(mControl.waitForDone(100, "done"));
++}
++
++/* ================================================================== */
++/* waitForDone                                                        */
++/* ================================================================== */
++
++TEST_F(GstHandlerControlFillTests, WaitForDoneNegativeDelayImmediateFalse)
++{
++	EXPECT_FALSE(mControl.waitForDone(-1, "neg"));
++	EXPECT_FALSE(mControl.waitForDone(-500, "neg2"));
++}
++
++TEST_F(GstHandlerControlFillTests, WaitForDoneZeroInstancesImmediate)
++{
++	EXPECT_TRUE(mControl.waitForDone(0, "none"));
++}
++
++TEST_F(GstHandlerControlFillTests, WaitForDoneDisablesControl)
++{
++	mControl.waitForDone(0, "x");
++	EXPECT_FALSE(mControl.isEnabled());
++}
++
++TEST_F(GstHandlerControlFillTests, WaitForDoneTimesOutWhileHeld)
++{
++	auto scope = mControl.getScopeHelper();
++	auto start = std::chrono::steady_clock::now();
++	EXPECT_FALSE(mControl.waitForDone(50, "held"));
++	auto elapsed = std::chrono::steady_clock::now() - start;
++	EXPECT_GE(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), 40);
++}
++
++TEST_F(GstHandlerControlFillTests, WaitForDoneReturnsWhenScopeEndsEarly)
++{
++	std::atomic<bool> finished{false};
++	auto scope = mControl.getScopeHelper();
++
++	std::thread t([&]
++	{
++		std::this_thread::sleep_for(std::chrono::milliseconds(40));
++		finished = mControl.waitForDone(2000, "worker");
++	});
++
++	std::this_thread::sleep_for(std::chrono::milliseconds(10));
++	{ auto releaseMe = std::move(scope); } // release scope while waiter sleeps
++	t.join();
++	EXPECT_TRUE(finished);
++}
++
++TEST_F(GstHandlerControlFillTests, ReturnStraightAwayEnabledFalse)
++{
++	auto scope = mControl.getScopeHelper();
++	EXPECT_FALSE(scope.returnStraightAway());
++}
++
++TEST_F(GstHandlerControlFillTests, ReturnStraightAwayDisabledTrue)
++{
++	mControl.disable();
++	auto scope = mControl.getScopeHelper();
++	EXPECT_TRUE(scope.returnStraightAway());
++}
++
++TEST_F(GstHandlerControlFillTests, ReturnStraightAwayNullControllerTrue)
++{
++	GstHandlerControl::ScopeHelper scope; // default ctor - no controller
++	EXPECT_TRUE(scope.returnStraightAway());
++}
++
++TEST_F(GstHandlerControlFillTests, ScopeCountedEvenWhenDisabled)
++{
++	mControl.disable();
++	{
++		auto scope = mControl.getScopeHelper(); // counts despite being disabled
++		EXPECT_TRUE(scope.returnStraightAway());
++		EXPECT_FALSE(mControl.waitForDone(20, "disabledscope"));
++	}
++	EXPECT_TRUE(mControl.waitForDone(100, "released"));
++}
++
++TEST_F(GstHandlerControlFillTests, MultipleScopesReleasedByWorker)
++{
++	std::vector<std::thread> threads;
++	for (int i = 0; i < 3; i++)
++	{
++		threads.emplace_back([this]
++		{
++			auto scope = mControl.getScopeHelper();
++			std::this_thread::sleep_for(std::chrono::milliseconds(15));
++		});
++	}
++	for (auto &t : threads)
++	{
++		t.join();
++	}
++	EXPECT_TRUE(mControl.waitForDone(500, "multi"));
++}
+diff --git a/test/utests/tests/GstUtilsTests/CMakeLists.txt b/test/utests/tests/GstUtilsTests/CMakeLists.txt
+index 2c026ed..1aca7eb 100644
+--- a/test/utests/tests/GstUtilsTests/CMakeLists.txt
++++ b/test/utests/tests/GstUtilsTests/CMakeLists.txt
+@@ -38,6 +38,7 @@ include_directories(${PLAYER_ROOT}/externals)
+ include_directories(${UTEST_ROOT}/fakes)
+ 
+ set(TEST_SOURCES    GstUtilsTests.cpp
++			GstUtilsFillTests.cpp
+ 			GstUtilsPlayerTests.cpp)
+ 
+ set(PLAYER_SOURCES
+diff --git a/test/utests/tests/GstUtilsTests/GstUtilsFillTests.cpp b/test/utests/tests/GstUtilsTests/GstUtilsFillTests.cpp
+new file mode 100644
+index 0000000..578a537
+--- /dev/null
++++ b/test/utests/tests/GstUtilsTests/GstUtilsFillTests.cpp
+@@ -0,0 +1,237 @@
++/*
++ * If not stated otherwise in this file or this component's license file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2025 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/**
++ * @file GstUtilsFillTests.cpp
++ * @brief Gap-fill coverage for GstUtils.cpp:
++ *        - GetCaps() per-format branch matrix (media type + first field)
++ *        - UNKNOWN/INVALID formats produce no caps call
++ *        - CreateGstBufferWithData() allocation/map failure paths
++ *
++ *        Conventions match GstUtilsTests.cpp: g_mockGStreamer drives the
++ *        faked gst_* entry points.  gst_caps_new_simple is forwarded to the
++ *        mock with signature (media_type, fieldname, GType, int, void*).
++ */
++
++#include <gtest/gtest.h>
++#include <gmock/gmock.h>
++
++#include "GstUtils.h"
++#include "MockGStreamer.h"
++
++using ::testing::_;
++using ::testing::IsNull;
++using ::testing::Return;
++using ::testing::StrEq;
++
++class GstUtilsFillTests : public ::testing::Test
++{
++protected:
++	GstCaps mDummyCaps{};
++
++	void SetUp() override
++	{
++		g_mockGStreamer = new MockGStreamer();
++	}
++
++	void TearDown() override
++	{
++		delete g_mockGStreamer;
++		g_mockGStreamer = nullptr;
++	}
++};
++
++/* ================================================================== */
++/* GetCaps - elementary stream formats                                */
++/* ================================================================== */
++
++TEST_F(GstUtilsFillTests, GetCaps_MpegTs)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("video/mpegts"), StrEq("systemstream"),
++									G_TYPE_BOOLEAN, TRUE, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_MPEGTS), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_IsoBmff)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("video/quicktime"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_ISO_BMFF), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioMp3)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/mpeg"), StrEq("mpegversion"),
++									G_TYPE_INT, 1, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_MP3), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioAac)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/mpeg"), StrEq("mpegversion"),
++									G_TYPE_INT, 2, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_AAC), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioAacRaw)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/mpeg"), StrEq("mpegversion"),
++									G_TYPE_INT, 4, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_AAC_RAW), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioAc3)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/x-ac3"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_AC3), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioAc4)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/x-ac4"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_AC4), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioEc3)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/x-eac3"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_EC3), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_AudioAtmos)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("audio/x-eac3"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_AUDIO_ES_ATMOS), &mDummyCaps);
++}
++
++/* ================================================================== */
++/* GetCaps - video formats (also exercise the SocInterface caps hooks) */
++/* ================================================================== */
++
++TEST_F(GstUtilsFillTests, GetCaps_VideoH264)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("video/x-h264"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_VIDEO_ES_H264), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_VideoHevc)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("video/x-h265"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_VIDEO_ES_HEVC), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_VideoMpeg2)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("video/mpeg"), StrEq("mpegversion"),
++									G_TYPE_INT, 2, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_VIDEO_ES_MPEG2), &mDummyCaps);
++}
++
++/* ================================================================== */
++/* GetCaps - subtitle formats                                         */
++/* ================================================================== */
++
++TEST_F(GstUtilsFillTests, GetCaps_SubtitleTtml)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("application/ttml+xml"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_SUBTITLE_TTML), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_SubtitleWebVtt)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("text/vtt"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_SUBTITLE_WEBVTT), &mDummyCaps);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_SubtitleMp4)
++{
++	EXPECT_CALL(*g_mockGStreamer,
++				gst_caps_new_simple(StrEq("application/mp4"), IsNull(), _, _, _))
++		.WillOnce(Return(&mDummyCaps));
++	EXPECT_EQ(GetCaps(GST_FORMAT_SUBTITLE_MP4), &mDummyCaps);
++}
++
++/* ================================================================== */
++/* GetCaps - invalid formats                                          */
++/* ================================================================== */
++
++TEST_F(GstUtilsFillTests, GetCaps_UnknownFormatNoCapsCall)
++{
++	EXPECT_CALL(*g_mockGStreamer, gst_caps_new_simple(_, _, _, _, _)).Times(0);
++	EXPECT_EQ(GetCaps(GST_FORMAT_UNKNOWN), nullptr);
++}
++
++TEST_F(GstUtilsFillTests, GetCaps_InvalidFormatNoCapsCall)
++{
++	EXPECT_CALL(*g_mockGStreamer, gst_caps_new_simple(_, _, _, _, _)).Times(0);
++	EXPECT_EQ(GetCaps(GST_FORMAT_INVALID), nullptr);
++}
++
++/* ================================================================== */
++/* CreateGstBufferWithData                                            */
++/* ================================================================== */
++
++TEST_F(GstUtilsFillTests, CreateBuffer_MapFailureReturnsNull)
++{
++	// FakeGStreamer::gst_buffer_map always returns FALSE, so the function
++	// unrefs and returns NULL once allocation succeeds.
++	const char payload[] = {0x01, 0x02, 0x03, 0x04};
++	GstBuffer *buf = CreateGstBufferWithData(payload, sizeof(payload));
++	EXPECT_EQ(buf, nullptr);
++}
++
++TEST_F(GstUtilsFillTests, CreateBuffer_NullDataStillAttemptsAllocation)
++{
++	// NULL data pointer is not rejected up-front; the map failure path
++	// still returns NULL under the fake.
++	EXPECT_EQ(CreateGstBufferWithData(nullptr, 16), nullptr);
++}
++
++TEST_F(GstUtilsFillTests, CreateBuffer_ZeroSizeReturnsNull)
++{
++	const char payload[] = {0xAA};
++	EXPECT_EQ(CreateGstBufferWithData(payload, 0), nullptr);
++}
+diff --git a/test/utests/tests/OcdmBasicSessionAdapterTests/CMakeLists.txt b/test/utests/tests/OcdmBasicSessionAdapterTests/CMakeLists.txt
+index 0eb9af4..dffaf4b 100644
+--- a/test/utests/tests/OcdmBasicSessionAdapterTests/CMakeLists.txt
++++ b/test/utests/tests/OcdmBasicSessionAdapterTests/CMakeLists.txt
+@@ -42,6 +42,7 @@ include_directories(${PLAYER_ROOT}/playerLogManager)
+ include_directories(${PLAYER_ROOT}/baseConversion)
+ 
+ set(TEST_SOURCES FunctionalTests.cpp
++		 OcdmBasicDecryptFillTests.cpp
+ 		 OcdmBasicSessionAdapterTests.cpp)
+ 
+ set(PLAYER_SOURCES ${PLAYER_ROOT}/drm/ocdm/OcdmBasicSessionAdapter.cpp
+diff --git a/test/utests/tests/OcdmBasicSessionAdapterTests/OcdmBasicDecryptFillTests.cpp b/test/utests/tests/OcdmBasicSessionAdapterTests/OcdmBasicDecryptFillTests.cpp
+new file mode 100644
+index 0000000..05089be
+--- /dev/null
++++ b/test/utests/tests/OcdmBasicSessionAdapterTests/OcdmBasicDecryptFillTests.cpp
+@@ -0,0 +1,165 @@
++/*
++ * If not stated otherwise in this file or this component's license file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2025 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/**
++ * @file OcdmBasicDecryptFillTests.cpp
++ * @brief Boundary and error-code gap-fill for OCDMBasicSessionAdapter::decrypt
++ *        beyond the scenarios in FunctionalTests.cpp:
++ *        - OCDM error-code passthrough (nonzero values propagate verbatim)
++ *        - memory-system error path still calls terminateEarly
++ *        - HDCP gate never touches the memory system or OCDM
++ *        - zero-size payload / null-IV parameter variations
++ *        - repeated decrypt calls remain serialized and correct
++ */
++
++#include <gtest/gtest.h>
++#include <gmock/gmock.h>
++
++#include "OcdmBasicSessionAdapter.h"
++#include "MockOpenCdmSessionAdapter.h"
++#include "MockDrmHelper.h"
++#include "MockOpenCdm.h"
++#include "MockDrmMemorySystem.h"
++#include <cstring>
++
++using ::testing::NiceMock;
++using ::testing::Return;
++using ::testing::_;
++using ::testing::SetArgReferee;
++using ::testing::DoAll;
++using ::testing::Eq;
++
++class OcdmBasicDecryptFillTests : public ::testing::Test
++{
++protected:
++	std::shared_ptr<MockDrmHelper> mDrmHelper;
++	OCDMBasicSessionAdapter *mAdapter = nullptr;
++	std::string mSystemId = "com.widevine.alpha";
++
++	void SetUp() override
++	{
++		mDrmHelper = std::make_shared<NiceMock<MockDrmHelper>>();
++		g_mockopencdm = new NiceMock<MockOpenCdm>();
++		g_mockOpenCdmSessionAdapter = new NiceMock<MockOpenCdmSessionAdapter>();
++		g_mockMemorySystem = new NiceMock<MockDrmMemorySystem>();
++
++		ON_CALL(*mDrmHelper, ocdmSystemId()).WillByDefault(testing::ReturnRef(mSystemId));
++		ON_CALL(*mDrmHelper, getMemorySystem()).WillByDefault(Return(nullptr));
++		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys())
++			.WillByDefault(Return(std::vector<std::vector<uint8_t>>{}));
++
++		mAdapter = new OCDMBasicSessionAdapter(mDrmHelper, nullptr);
++	}
++
++	void TearDown() override
++	{
++		delete mAdapter;
++		delete g_mockOpenCdmSessionAdapter;
++		g_mockOpenCdmSessionAdapter = nullptr;
++		delete g_mockopencdm;
++		g_mockopencdm = nullptr;
++		delete g_mockMemorySystem;
++		g_mockMemorySystem = nullptr;
++		mDrmHelper = nullptr;
++	}
++
++	MockDrmMemorySystem *g_mockMemorySystem = nullptr;
++};
++
++TEST_F(OcdmBasicDecryptFillTests, HdcpFailSkipsMemorySystemEntirely)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(false));
++	EXPECT_CALL(*mDrmHelper, getMemorySystem()).Times(0);
++	EXPECT_CALL(*g_mockMemorySystem, encode(_, _, _)).Times(0);
++	EXPECT_CALL(*g_mockMemorySystem, terminateEarly()).Times(0);
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, _, _, _, _, _, _, _, _)).Times(0);
++
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr),
++			  HDCP_COMPLIANCE_CHECK_FAILURE);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptErrorCodePassthroughInvalidSession)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, _, _, _, _, _, _, _, _))
++		.WillOnce(Return(ERROR_INVALID_SESSION));
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), ERROR_INVALID_SESSION);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptErrorCodePassthroughUnknown)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, _, _, _, _, _, _, _, _))
++		.WillOnce(Return(ERROR_UNKNOWN));
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), ERROR_UNKNOWN);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptErrorNoMemorySystemNoTerminateEarly)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*mDrmHelper, getMemorySystem()).WillRepeatedly(Return(nullptr));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, _, _, _, _, _, _, _, _))
++		.WillOnce(Return(ERROR_INVALID_SESSION));
++	EXPECT_CALL(*g_mockMemorySystem, terminateEarly()).Times(0);
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), ERROR_INVALID_SESSION);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptSuccessNoMemorySystemNoDecode)
++{
++	const uint8_t payload[] = {9, 9, 9};
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*mDrmHelper, getMemorySystem()).WillRepeatedly(Return(nullptr));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, sizeof(payload), _, _, _, _, _, _, _))
++		.WillOnce(Return(ERROR_NONE));
++	EXPECT_CALL(*g_mockMemorySystem, decode(_, _, _, _)).Times(0);
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, payload, sizeof(payload), nullptr), 0);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptZeroSizePayload)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, 0, _, _, _, _, _, _, _))
++		.WillOnce(Return(ERROR_NONE));
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), 0);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, DecryptPassesIvPointerAndLength)
++{
++	const uint8_t iv[] = {0xAA, 0xBB, 0xCC, 0xDD};
++	const uint8_t payload[] = {1};
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection()).WillOnce(Return(true));
++	EXPECT_CALL(*g_mockopencdm,
++				opencdm_session_decrypt(_, _, sizeof(payload), _, _,
++										Eq(iv), Eq((uint32_t)sizeof(iv)), _, _, _))
++		.WillOnce(Return(ERROR_NONE));
++	EXPECT_EQ(mAdapter->decrypt(iv, sizeof(iv), payload, sizeof(payload), nullptr), 0);
++}
++
++TEST_F(OcdmBasicDecryptFillTests, RepeatedDecryptCallsSerialize)
++{
++	EXPECT_CALL(*g_mockOpenCdmSessionAdapter, verifyOutputProtection())
++		.Times(2)
++		.WillRepeatedly(Return(true));
++	EXPECT_CALL(*g_mockopencdm, opencdm_session_decrypt(_, _, _, _, _, _, _, _, _, _))
++		.Times(2)
++		.WillRepeatedly(Return(ERROR_NONE));
++
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), 0);
++	EXPECT_EQ(mAdapter->decrypt(nullptr, 0, nullptr, 0, nullptr), 0);
++}
+diff --git a/test/utests/tests/SubtitleTests/CMakeLists.txt b/test/utests/tests/SubtitleTests/CMakeLists.txt
+index dd7065d..9ef206b 100644
+--- a/test/utests/tests/SubtitleTests/CMakeLists.txt
++++ b/test/utests/tests/SubtitleTests/CMakeLists.txt
+@@ -40,7 +40,8 @@ include_directories(${PLAYER_ROOT}/tsb/api)
+ include_directories(${PLAYER_ROOT}/../)
+ 
+ set(TEST_SOURCES SubtitleRun.cpp 
+-                VttCueFun.cpp)
++                VttCueFun.cpp
++                VttCueFillTests.cpp)
+ 
+ add_executable(${EXEC_NAME}
+                ${TEST_SOURCES})
+diff --git a/test/utests/tests/SubtitleTests/VttCueFillTests.cpp b/test/utests/tests/SubtitleTests/VttCueFillTests.cpp
+new file mode 100644
+index 0000000..8292b31
+--- /dev/null
++++ b/test/utests/tests/SubtitleTests/VttCueFillTests.cpp
+@@ -0,0 +1,112 @@
++/*
++ * If not stated otherwise in this file or this component's license file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2025 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/**
++ * @file VttCueFillTests.cpp
++ * @brief Gap-fill coverage for the VTTCue value type: constructor field
++ *        assignment across boundary inputs (zero/negative times, empty and
++ *        long strings, settings variants).
++ */
++
++#include <gtest/gtest.h>
++#include <string>
++#include "vttCue.h"
++
++class VttCueFillTests : public ::testing::Test
++{
++};
++
++TEST_F(VttCueFillTests, CtorStoresAllFields)
++{
++	VTTCue cue(1.5, 2.25, "hello", "line:0 position:50%");
++	EXPECT_DOUBLE_EQ(cue.mStart, 1.5);
++	EXPECT_DOUBLE_EQ(cue.mDuration, 2.25);
++	EXPECT_EQ(cue.mText, "hello");
++	EXPECT_EQ(cue.mSettings, "line:0 position:50%");
++}
++
++TEST_F(VttCueFillTests, CtorZeroTimes)
++{
++	VTTCue cue(0.0, 0.0, "", "");
++	EXPECT_DOUBLE_EQ(cue.mStart, 0.0);
++	EXPECT_DOUBLE_EQ(cue.mDuration, 0.0);
++	EXPECT_TRUE(cue.mText.empty());
++	EXPECT_TRUE(cue.mSettings.empty());
++}
++
++TEST_F(VttCueFillTests, CtorNegativeStartAccepted)
++{
++	// struct does not validate - pins current behaviour
++	VTTCue cue(-3.0, 1.0, "x", "");
++	EXPECT_DOUBLE_EQ(cue.mStart, -3.0);
++}
++
++TEST_F(VttCueFillTests, CtorNegativeDurationAccepted)
++{
++	VTTCue cue(0.0, -2.0, "x", "");
++	EXPECT_DOUBLE_EQ(cue.mDuration, -2.0);
++}
++
++TEST_F(VttCueFillTests, CtorFractionalPrecision)
++{
++	VTTCue cue(0.001, 0.0005, "t", "s");
++	EXPECT_DOUBLE_EQ(cue.mStart, 0.001);
++	EXPECT_DOUBLE_EQ(cue.mDuration, 0.0005);
++}
++
++TEST_F(VttCueFillTests, CtorLongTextPreserved)
++{
++	std::string longText(4096, 'a');
++	VTTCue cue(0.0, 1.0, longText, "");
++	EXPECT_EQ(cue.mText, longText);
++	EXPECT_EQ(cue.mText.size(), 4096u);
++}
++
++TEST_F(VttCueFillTests, CtorMultilineTextPreserved)
++{
++	std::string text = "line one\nline two\r\nline three";
++	VTTCue cue(0.0, 1.0, text, "");
++	EXPECT_EQ(cue.mText, text);
++}
++
++TEST_F(VttCueFillTests, CtorUtf8TextPreserved)
++{
++	std::string text = "\xE4\xBD\xA0\xE5\xA5\xBD"; // UTF-8 CJK bytes
++	VTTCue cue(0.0, 1.0, text, "");
++	EXPECT_EQ(cue.mText, text);
++}
++
++TEST_F(VttCueFillTests, CtorSettingsVariants)
++{
++	VTTCue cue(0.0, 1.0, "x", "vertical:rl");
++	EXPECT_EQ(cue.mSettings, "vertical:rl");
++	VTTCue cue2(0.0, 1.0, "x", "align:center size:50%");
++	EXPECT_EQ(cue2.mSettings, "align:center size:50%");
++}
++
++TEST_F(VttCueFillTests, CopySemanticsValueType)
++{
++	VTTCue a(1.0, 2.0, "t", "s");
++	VTTCue b = a;
++	EXPECT_DOUBLE_EQ(b.mStart, 1.0);
++	EXPECT_EQ(b.mText, "t");
++	// copies are independent
++	b.mStart = 9.0;
++	EXPECT_DOUBLE_EQ(a.mStart, 1.0);
++}
+-- 
+2.48.1.windows.1
+

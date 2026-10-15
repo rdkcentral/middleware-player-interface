@@ -183,10 +183,10 @@ gst_vipertransform_finalize (GObject * object)
 gint64 convertTime(const std::string &timeString)
 {
 	gint64 retMs = 0;
-	int hours, mins;
-	float secs;
+	int hours = 0, mins = 0;
+	float secs = 0;
 
-	if (std::sscanf(timeString.c_str(), "%d:%d:%f", &hours, &mins, &secs))
+	if (std::sscanf(timeString.c_str(), "%d:%d:%f", &hours, &mins, &secs) == 3)
 	{
 		retMs += static_cast<gint64>(hours) * 3600;
 		retMs += mins * 60;
