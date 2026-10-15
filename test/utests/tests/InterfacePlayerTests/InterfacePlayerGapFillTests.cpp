@@ -1424,8 +1424,8 @@ TEST_F(InterfacePlayerGapFillTests, SetPreferredDRM_Replacement)
 {
 	mInterfaceGstPlayer->SetPreferredDRM("com.widevine.alpha");
 	mInterfaceGstPlayer->SetPreferredDRM("com.microsoft.playready");
-	ASSERT_NE(mInterfaceGstPlayer->mDrmSystem, nullptr);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, "com.microsoft.playready");
+	ASSERT_FALSE(mInterfaceGstPlayer->mDrmSystem.empty());
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, "com.microsoft.playready");
 }
 
 /* ------------------------------------------------------------------------- */
