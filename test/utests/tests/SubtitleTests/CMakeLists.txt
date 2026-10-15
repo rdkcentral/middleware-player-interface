@@ -40,7 +40,8 @@ include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES SubtitleRun.cpp 
-                VttCueFun.cpp)
+                VttCueFun.cpp
+                VttCueFillTests.cpp)
 
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES})
