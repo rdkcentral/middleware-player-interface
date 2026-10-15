@@ -174,6 +174,17 @@ struct MediaCodecInfo
 };
 
 /*
+ * @struct StreamCodecInfo
+ * @brief Codec information for all tracks in a stream
+ */
+struct StreamCodecInfo
+{
+	MediaCodecInfo video;
+	MediaCodecInfo audio;
+	MediaCodecInfo subtitle;
+};
+
+/*
  * @struct MediaDrmMetadata
  * @brief DRM metadata for encrypted samples
  */
