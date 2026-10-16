@@ -22,6 +22,7 @@
 
 #include <map>
 #include <cstdint>
+#include <string>
 #include <string.h>
 #include <vector>
 #include <mutex>
@@ -166,7 +167,7 @@ class InterfacePlayerRDK
 
 	public:
 		Configs *m_gstConfigParam;
-		char *mDrmSystem;
+		std::string mDrmSystem;
 		void *mEncrypt;
 		void *mDRMSessionManager;
 		std::map<InterfaceCB, std::function<void()>> callbackMap;
