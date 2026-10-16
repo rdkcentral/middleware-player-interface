@@ -65,14 +65,25 @@ struct ThunderCall
 
 struct FakeThunderControl
 {
-	bool activateResult;
+	bool activateResult = true;
 	std::deque<std::pair<bool, JsonObject>> responses;
-	std::pair<bool, JsonObject> defaultResponse;
+	std::pair<bool, JsonObject> defaultResponse{true, JsonObject{}};
 	std::vector<ThunderCall> calls;
 	std::map<std::string, std::function<void(const WPEFramework::Core::JSON::VariantContainer &)>> handlers;
 	std::vector<std::string> unsubscribed;
-	bool subscribeResult;
-	void reset();
+	bool subscribeResult = true;
+	// Defined inline (matching FakeThunderAccessPlayer.cpp) so this translation
+	// unit does not emit an unresolved external reference to reset().
+	void reset()
+	{
+		activateResult = true;
+		responses.clear();
+		defaultResponse = {true, JsonObject{}};
+		calls.clear();
+		handlers.clear();
+		unsubscribed.clear();
+		subscribeResult = true;
+	}
 };
 extern FakeThunderControl &g_FakeThunder;
 
