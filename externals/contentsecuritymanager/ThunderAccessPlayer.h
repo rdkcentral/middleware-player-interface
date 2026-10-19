@@ -66,7 +66,7 @@ public:
      *   @fn ThunderAccessPlayer
      *   @note   Security token acquisition, controller object creation
      */
-    ThunderAccessPlayer(std::string callsign);
+    ThunderAccessPlayer(const std::string& callsign);
 	
     /**
      *   @fn ~ThunderAccessPlayer
@@ -99,7 +99,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool InvokeJSONRPC(std::string method, const JsonObject &param, JsonObject &result, const uint32_t waitTime = THUNDER_RPC_TIMEOUT);
+    bool InvokeJSONRPC(const std::string& method, const JsonObject &param, JsonObject &result, const uint32_t waitTime = THUNDER_RPC_TIMEOUT);
 
     /**
      *   @fn SubscribeEvent
@@ -108,7 +108,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool SubscribeEvent (std::string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    bool SubscribeEvent (const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
     /**
      *   @fn UnSubscribeEvent
      *   @note   unSubscribe event data for the specific plugin
@@ -116,7 +116,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool UnSubscribeEvent (std::string eventName);
+    bool UnSubscribeEvent (const std::string& eventName);
 
 private:
     /**< The Remote object connected to specific Plugin*/
