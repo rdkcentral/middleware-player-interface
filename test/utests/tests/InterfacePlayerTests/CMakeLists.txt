@@ -40,6 +40,8 @@ message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
 set(TEST_SOURCES InterfacePlayerFunctionTests.cpp
 		InterfacePlayerGapFillTests.cpp
+		InterfacePlayerCallbackCoverageTests.cpp
+		InterfacePlayerBusCoverageTests.cpp
 		InterfacePlayerTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
