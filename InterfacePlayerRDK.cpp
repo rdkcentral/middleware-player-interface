@@ -1387,7 +1387,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				}
 				break;
 			default:
-				MW_LOG_ERR("InterfacePlayerRDK: %s is in an unknown state", SafeName(element).c_str());
+				MW_LOG_ERR("InterfacePlayerRDK: %s get_state returned unexpected rc=%d : current %s  pending %s", SafeName(element).c_str(), (int)stateChangeReturn, gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				break;
 		}
 
@@ -1400,6 +1400,11 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
 		rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		if (GST_STATE_CHANGE_FAILURE == rc)
+		{
+			MW_LOG_ERR("InterfacePlayerRDK: set_state FAILED on %s : target %s, was current %s pending %s", SafeName(element).c_str(), gst_element_state_get_name(targetState), gst_element_state_get_name(current), gst_element_state_get_name(pending));
+			LogStatus(element);
+		}
 		if(syncOnlyTransition)
 		{
 			MW_LOG_MIL("InterfacePlayerRDK: %s state set to %s",  SafeName(element).c_str(), gst_element_state_get_name(targetState));
@@ -1462,7 +1467,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 		{
 			interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl = false;
-			MW_LOG_ERR("Set false for usingClosedCaptionsControl flag");
+			MW_LOG_INFO("Set false for usingClosedCaptionsControl flag");
 		}
 		g_clear_object(&stream->sinkbin);
 		g_clear_object(&stream->source);
@@ -1802,7 +1807,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	if (!gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
 						  position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 	{
-		MW_LOG_ERR("Seek failed");
+		MW_LOG_ERR("gst_element_seek failed: pos=%f rate=%f pipelineState=%s, will retry as pending seek", position, playRate, gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState));
 		SetPendingSeek(true);
 		//Save the updated seek position
 		SetSeekPosition(position);
@@ -1873,7 +1878,7 @@ static GstMediaType gstGetMediaTypeForSource(const void  *source, const void *_t
 	}
 	else
 	{
-		MW_LOG_ERR("Null check failed.");
+		MW_LOG_ERR("gstGetMediaTypeForSource: invalid args source=%p instance=%p", source, _this);
 	}
 
 	return eGST_MEDIATYPE_DEFAULT;
@@ -1900,7 +1905,7 @@ static void gst_need_data(void *source, guint size, void *_this)
 		}
 		else
 		{
-			MW_LOG_ERR( "Null check failed." );
+			MW_LOG_ERR( "need-data: stream pointer is null for %s", gstGetMediaTypeName(mediaType));
 		}
 	}
 }
@@ -1929,14 +1934,14 @@ static void gst_enough_data(GstElement *source, void *_this)
 				}
 				else
 				{
-					MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					MW_LOG_ERR( "enough-data: stream pointer is null for %s", gstGetMediaTypeName(mediaType));
 				}
 			}
 		}
 	}
 	else
 	{
-		MW_LOG_ERR( "Null check failed." );
+		MW_LOG_ERR( "enough-data: null InterfacePlayerRDK instance, source=%p", (void*)source);
 	}
 }
 void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * source, int type)
@@ -2604,7 +2609,7 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
 				mediaType, GST_TIME_ARGS(pts), GST_TIME_ARGS(gstPrivateContext->seekPosition * GST_SECOND));
 			if(!gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, (gstPrivateContext->seekPosition * GST_SECOND)))
 			{
-				MW_LOG_ERR("Seek failed");
+				MW_LOG_ERR("gst_element_seek_simple failed: mediaType:%d seekPosition:%f source:%s", mediaType, (double)gstPrivateContext->seekPosition, SafeName(GST_ELEMENT(stream->source)).c_str());
 			}
 
 		}
@@ -2832,12 +2837,12 @@ long long InterfacePlayerRDK::GetPositionMilliseconds(void)
 	long long rc = 0;
 	if (interfacePlayerPriv->gstPrivateContext->pipeline == NULL)
 	{
-		MW_LOG_ERR("Pipeline is NULL");
+		MW_LOG_WARN("GetPositionMilliseconds: pipeline is NULL, returning 0");
 		return rc;
 	}
 	if (interfacePlayerPriv->gstPrivateContext->positionQuery == NULL)
 	{
-		MW_LOG_ERR("Position query is NULL");
+		MW_LOG_WARN("GetPositionMilliseconds: position query is NULL, returning 0");
 		return rc;
 	}
 	// Perform gstreamer query and related operation only when pipeline is playing or if deliberately put in paused
@@ -2866,7 +2871,7 @@ long long InterfacePlayerRDK::GetPositionMilliseconds(void)
 		}
 		else
 		{
-			MW_LOG_ERR("InterfacePlayerRDK: segment query failed");
+			MW_LOG_WARN("InterfacePlayerRDK: segment query failed on video source %p, segmentStart stays unset", video->source);
 		}
 		gst_query_unref(segmentQuery);
 	}
@@ -2920,7 +2925,7 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
 				}
 				else
 				{
-					MW_LOG_ERR("Duration query failed");
+					MW_LOG_WARN("Duration query failed, pipelineState=%s", gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState));
 				}
 				gst_query_unref(durationQuery);		/* Decreases the refcount of the durationQuery. In this case the count will be zero, so it will be freed*/
 				durationQuery = NULL;
@@ -3415,7 +3420,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 					MW_LOG_INFO("Pushing sample with segment for mediaType[%d]. start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT" rate %f applied_rate %f", mediaType, segment.start, segment.stop, segment.rate, segment.applied_rate);
 					if (GST_FLOW_OK != gst_app_src_push_sample(GST_APP_SRC(stream->source), sample))
 					{
-						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d]", mediaType);
+						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d], start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, segment.start, segment.stop);
 					}
 					if(sample)
 					{
@@ -3444,7 +3449,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 			GstEvent* event = gst_event_new_segment (&segment);
 			if (!gst_pad_push_event(sourceEleSrcPad, event))
 			{
-				MW_LOG_ERR("Failed to push segment event for mediaType[%d]", mediaType);
+				MW_LOG_ERR("Failed to push segment event for mediaType[%d], srcPad=%p start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, sourceEleSrcPad, segment.start, segment.stop);
 			}
 			gst_object_unref(sourceEleSrcPad);
 
@@ -3533,8 +3538,8 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	}
 	while ((gst_current != stateToValidate) && (gstGetStateCnt-- != 0));
 
-	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
-			   gst_current, gst_pending);
+	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : wanted = %s, State = %s, Pending = %s",
+			   gst_element_state_get_name(stateToValidate), gst_element_state_get_name(gst_current), gst_element_state_get_name(gst_pending));
 	return gst_current;
 }
 
@@ -3568,12 +3573,12 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			/* wait a bit longer for the state change to conclude */
 			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
 			{
-				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
+				MW_LOG_ERR("InterfacePlayerRDK_Pause - state change to %s did not complete within timeout", gst_element_state_get_name(nextState));
 			}
 		}
 		else if (GST_STATE_CHANGE_SUCCESS != rc)
 		{
-			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
+			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state to %s FAILED rc %d", gst_element_state_get_name(nextState), (int)rc);
 		}
 
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
@@ -3979,7 +3984,7 @@ void InterfacePlayerRDK::TriggerEvent(InterfaceCB event)
 	}
 	else
 	{
-		MW_LOG_ERR("Unknown event - No callback registered!");
+		MW_LOG_ERR("TriggerEvent: no callback registered for event %d", (int)event);
 	}
 }
 void InterfacePlayerRDK::TriggerEvent(InterfaceCB event, int data)
@@ -3991,7 +3996,7 @@ void InterfacePlayerRDK::TriggerEvent(InterfaceCB event, int data)
 	}
 	else
 	{
-		MW_LOG_ERR("Unknown event - No callback registered!");
+		MW_LOG_ERR("TriggerEvent: no callback registered for event %d (data=%d)", (int)event, data);
 	}
 }
 /* @brief Check if string start with a prefix
@@ -4338,7 +4343,7 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		}
 		else
 		{
-			MW_LOG_ERR("underflow callback not registered");
+			MW_LOG_ERR("underflow callback not registered, mediaType %d underflow not reported to player", (int)type);
 		}
 #ifdef USE_EXTERNAL_STATS
 		INC_RETUNE_COUNT(type); // Increment the retune count for low level AV metric
@@ -4426,7 +4431,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 	{
 		case GST_MESSAGE_ERROR:
 			gst_message_parse_error(msg, &error, &dbg_info);
-			MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
+			MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s | domain=%s code=%d | Debug Info: %s", GST_OBJECT_NAME(msg->src), error->message, g_quark_to_string(error->domain), error->code, (dbg_info) ? dbg_info : "none");
 			busEvent.msgType = MESSAGE_ERROR;
 			busEvent.msg = error->message;
 			if(dbg_info)
@@ -4438,14 +4443,13 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				busEvent.dbg_info[0] = '\0';
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
-			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
 			g_clear_error(&error);
 			g_free(dbg_info);
 			break;
 
 		case GST_MESSAGE_WARNING:
 			gst_message_parse_warning(msg, &error, &dbg_info);
-			MW_LOG_ERR("GST_MESSAGE_WARNING %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
+			MW_LOG_WARN("GST_MESSAGE_WARNING %s: %s | domain=%s code=%d | Debug Info: %s", GST_OBJECT_NAME(msg->src), error->message, g_quark_to_string(error->domain), error->code, (dbg_info) ? dbg_info : "none");
 			busEvent.msgType = MESSAGE_WARNING;
 			busEvent.msg = error->message;
 			if(dbg_info)
@@ -4457,7 +4461,6 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				busEvent.dbg_info[0] = '\0';
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
-			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
 			g_clear_error(&error);
 			g_free(dbg_info);
 			break;
