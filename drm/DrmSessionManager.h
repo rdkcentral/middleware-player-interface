@@ -31,6 +31,8 @@
 #include "GstUtils.h"
 #include <string>
 #include <atomic>
+#include <map>
+#include <vector>
 #include <utility>
 #include <memory>
 #include "DrmHelper.h"
@@ -178,6 +180,12 @@ public:
 protected:
 	KeyIdEntries *cachedKeyIDs;
 	std::mutex cachedKeyMutex;
+
+	/**
+	 * @fn		trackActiveKeyId
+	 * @brief	Remember the key ID of a session returned to a caller, so a later decrypt failure can flag it
+	 */
+	void trackActiveKeyId(int streamType, const std::vector<uint8_t> &keyId);
 private:
 	char* accessToken;
 	int accessTokenLen;
@@ -186,6 +194,9 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
+	std::mutex mActiveKeyMutex;
+	/** Key IDs of the sessions handed out per stream type (current and pre-fetched), bounded by mMaxDRMSessions */
+	std::map<int, std::vector<std::vector<uint8_t>>> mActiveKeyIds;
 	DrmSessionCreator m_sessionCreator;
 	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
@@ -357,6 +368,39 @@ public:
 	 * @return	void.
 	 */
 	void clearFailedKeyIds();
+
+	/**
+	 * @fn		clearFailedSlots
+	 * @brief	Reset only the key entries flagged as failed so that the key can be
+	 *		negotiated again. Unlike clearFailedKeyIds(), the primary key marker
+	 *		of slots that are not failed is left untouched.
+	 *
+	 * @return	void.
+	 */
+	void clearFailedSlots();
+
+	/**
+	 * @fn		markSessionFailed
+	 * @brief	Flag the cached slot holding the given key ID as failed (for example after a
+	 *		decrypt failure on an already created session). The session object is not
+	 *		deleted here, because it may still be in use by a running pipeline; it is evicted
+	 *		by the next clearDrmSession(false), which runs at tune start.
+	 *
+	 * @param	keyId - key ID as returned by DrmHelper::getKey()
+	 * @return	bool - true if a cached slot holding the key was found and flagged
+	 */
+	bool markSessionFailed(const std::vector<uint8_t> &keyId);
+
+	/**
+	 * @fn		markActiveSessionsFailed
+	 * @brief	Flag the cached slots of every session handed out by createDrmSession() since the last
+	 *		clearFailedKeyIds(), whichever caller (player or gst decryptor plugin) created them.
+	 *		The sessions are not deleted, see markSessionFailed().
+	 *
+	 * @param[out]	total - number of tracked key IDs
+	 * @return	int - number of cached slots that were flagged
+	 */
+	int markActiveSessionsFailed(size_t &total);
 
 
 	/**
