@@ -74,7 +74,7 @@ void ClearKeySession::initDRMSession()
 #else
 	EVP_CIPHER_CTX_init(OPEN_SSL_CONTEXT);
 #endif
-	MW_LOG_ERR("ClearKeySession: enter ");
+	MW_LOG_INFO("ClearKeySession: enter ");
 }
 
 /**
@@ -154,7 +154,7 @@ void ClearKeySession::generateDRMSession(const uint8_t *f_pbInitData,
 			else
 			{
 				setKeyId(reinterpret_cast<const char*>(keyId), keyIDLen);
-				MW_LOG_ERR("ClearKeySession: Session generated for clearkey");
+				MW_LOG_MIL("ClearKeySession: Session generated for clearkey");
 			}
 			free(keyId);
 		}
