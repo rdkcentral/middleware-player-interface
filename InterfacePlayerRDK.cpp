@@ -1585,6 +1585,8 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	DestroyPipeline();
 	interfacePlayerPriv->gstPrivateContext->rate = GST_NORMAL_PLAY_RATE;
 	interfacePlayerPriv->gstPrivateContext->lastKnownPTS = 0;
+	interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS = 0;
+	interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS = 0;
 	interfacePlayerPriv->gstPrivateContext->segmentStart = 0;
 	interfacePlayerPriv->gstPrivateContext->paused = false;
 	interfacePlayerPriv->gstPrivateContext->pipelineState = GST_STATE_NULL;
@@ -3571,18 +3573,21 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
  *  @brief Check if PTS is changing
  *  @retval true if PTS changed from lastKnown PTS or timeout hasn't expired, will optimistically return true if video-pts attribute is not available from decoder
  */
-bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
+bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(GstMediaType mediaType, long timeout)
 {
 	bool ret = true;
 	gint64 currentPTS = 0;
-	bool isAudioOnly = (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].format == GST_FORMAT_INVALID);
+	GstStreamOutputFormat videoFormat = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].format;
+	bool audioInVideoSlot = (videoFormat >= GST_FORMAT_AUDIO_ES_MP3 && videoFormat <= GST_FORMAT_AUDIO_ES_AC4);
+	bool useAudioPosition = (mediaType == eGST_MEDIATYPE_AUDIO || audioInVideoSlot ||
+							 videoFormat == GST_FORMAT_INVALID);
 
-	if (isAudioOnly)
+	if (useAudioPosition)
 	{
-		/* Audio-only playback: use audio position instead of video PTS */
+		/* Use audio position for audio cache checks and audio-only/remapped layouts. */
 		long long audioPositionMs = GetAudioPosition();
 		currentPTS = audioPositionMs * MPEG_PTS_TICKS_PER_MS; /* Convert ms to 90kHz ticks */
-		MW_LOG_TRACE("InterfacePlayerRDK: audio-only playback, audio position(ms)=%lld, converted PTS=%" G_GINT64_FORMAT,
+		MW_LOG_TRACE("InterfacePlayerRDK: audio playback, audio position(ms)=%lld, converted PTS=%" G_GINT64_FORMAT,
 					 audioPositionMs, currentPTS);
 	}
 	else
@@ -3593,14 +3598,14 @@ bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
 
 	if (currentPTS != 0)
 	{
-		gint64 lastPTS = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS : interfacePlayerPriv->gstPrivateContext->lastKnownPTS;
-		long long lastUpdateTime = isAudioOnly ? interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS : interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
+		gint64 lastPTS = useAudioPosition ? interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS : interfacePlayerPriv->gstPrivateContext->lastKnownPTS;
+		long long lastUpdateTime = useAudioPosition ? interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS : interfacePlayerPriv->gstPrivateContext->ptsUpdatedTimeMS;
 
 		if (currentPTS != lastPTS)
 		{
 			MW_LOG_MIL("InterfacePlayerRDK: There is an update in %s PTS prevPTS:%" G_GINT64_FORMAT " newPTS: %" G_GINT64_FORMAT,
-					   isAudioOnly ? "audio" : "video", lastPTS, currentPTS);
-			if (isAudioOnly)
+					   useAudioPosition ? "audio" : "video", lastPTS, currentPTS);
+			if (useAudioPosition)
 			{
 				interfacePlayerPriv->gstPrivateContext->audioPtsUpdatedTimeMS = NOW_STEADY_TS_MS;
 				interfacePlayerPriv->gstPrivateContext->lastKnownAudioPTS = currentPTS;
@@ -3617,7 +3622,7 @@ bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
 			if (diff > timeout)
 			{
 				MW_LOG_WARN("InterfacePlayerRDK: %s PTS hasn't been updated for %ld ms and timeout - %ld ms",
-							isAudioOnly ? "Audio" : "Video", diff, timeout);
+							useAudioPosition ? "Audio" : "Video", diff, timeout);
 				ret = false;
 			}
 		}
@@ -3625,7 +3630,7 @@ bool InterfacePlayerRDK::CheckForPTSChangeWithTimeout(long timeout)
 	else
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: %s PTS parsed is: %" G_GINT64_FORMAT,
-				   isAudioOnly ? "audio" : "video", currentPTS);
+				   useAudioPosition ? "audio" : "video", currentPTS);
 	}
 	return ret;
 }
@@ -3650,7 +3655,7 @@ bool InterfacePlayerRDK::IsCacheEmpty(int Type)
 			// Changed to MW_LOG_TRACE, to avoid log flooding
 			// We're seeing this logged frequently during live linear playback, despite no user-facing problem.
 			MW_LOG_TRACE("InterfacePlayerRDK::Cache level empty");
-			bool ptsChanged = CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL);
+			bool ptsChanged = CheckForPTSChangeWithTimeout(mediaType, GST_MIN_PTS_UPDATE_INTERVAL);
 			if(!ptsChanged)
 			{
 				//PTS hasn't changed for the timeout value
@@ -4239,6 +4244,11 @@ long long InterfacePlayerRDK::GetAudioPosition(void)
 	gint64 position = 0;
 	GstElement *pipeline = interfacePlayerPriv->gstPrivateContext->pipeline;
 	GstElement *audioSinkbin = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin;
+	GstStreamOutputFormat videoFormat = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].format;
+	if (!audioSinkbin && videoFormat >= GST_FORMAT_AUDIO_ES_MP3 && videoFormat <= GST_FORMAT_AUDIO_ES_AC4)
+	{
+		audioSinkbin = interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin;
+	}
 
 	if (pipeline && audioSinkbin)
 	{

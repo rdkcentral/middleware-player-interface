@@ -587,10 +587,11 @@ class InterfacePlayerRDK
         	bool Pause(bool pause, bool forceStopGstreamerPreBuffering);
         	/**
         	 * @brief Checks for PTS change with a timeout.
+                * @param[in] mediaType The type of media stream being checked.
         	 * @param[in] timeout The timeout value in milliseconds.
         	 * @return True if a PTS change was detected within the timeout, false otherwise.
         	 */
-        	bool CheckForPTSChangeWithTimeout(long timeout);
+		bool CheckForPTSChangeWithTimeout(GstMediaType mediaType, long timeout);
         	/**
         	 * @brief Checks if the cache is empty for a given media type.
         	 * @param[in] mediaType The type of media stream.

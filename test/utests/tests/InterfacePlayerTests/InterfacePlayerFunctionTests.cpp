@@ -422,8 +422,10 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_misc)
 	EXPECT_FALSE(stream->codecInfo.mIsEncrypted);
 }
 
-TEST_F(InterfacePlayerTests, GstStopTestTrue)
+TEST_F(InterfacePlayerTests, GstStopTestTrue_PlayerReuseResetsAudioPTSHistory)
 {
+	mPlayerContext->lastKnownAudioPTS = 90000;
+	mPlayerContext->audioPtsUpdatedTimeMS = 1;
 	mPlayerContext->syncControl.enable();
 	mPlayerContext->aSyncControl.enable();
 	GstBus gst_element_bus = {.object = {.name = (gchar *)"testbus"}};
@@ -461,6 +463,28 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	EXPECT_EQ(mPlayerContext->eosCallbackIdleTaskPending,false);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskId,PLAYER_TASK_ID_INVALID);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskPending,false);
+	EXPECT_EQ(mPlayerContext->lastKnownAudioPTS, 0);
+	EXPECT_EQ(mPlayerContext->audioPtsUpdatedTimeMS, 0);
+
+	GstElement gst_element_audio_sink = {.object = {.name = (gchar *)"testaudiosink"}};
+	mPlayerContext->pipeline = &gst_element_pipeline;
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].source = &gst_element_pipeline;
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin = &gst_element_audio_sink;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(&gst_element_pipeline)))
+		.WillOnce(Return(0));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL),
+			Return(TRUE)));
+
+	EXPECT_FALSE(mInterfaceGstPlayer->IsCacheEmpty(eGST_MEDIATYPE_AUDIO));
+	EXPECT_EQ(mPlayerContext->lastKnownAudioPTS, 90000);
 }
 
 
@@ -2461,6 +2485,64 @@ TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioOnly_CacheLevelEmpty_AudioPositio
 
 	/* Audio position hasn't changed for timeout, so cache should be reported as empty */
 	EXPECT_TRUE(result2);
+}
+
+TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioStalledWhileVideoAdvances)
+{
+	gst_media_stream* audioStream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	audioStream->source = &gst_element_pipeline;
+	audioStream->format = GST_FORMAT_AUDIO_ES_AAC;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->lastKnownAudioPTS = 90000;
+	mPlayerContext->audioPtsUpdatedTimeMS = 1;
+	mPlayerContext->lastKnownPTS = 90000;
+
+	GstElement gst_element_audio_sink = {.object = {.name = (gchar *)"testaudiosink"}};
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].sinkbin = &gst_element_audio_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+	g_mockSocInterface = new NiceMock<MockSocInterface>();
+	ON_CALL(*g_mockSocInterface, GetVideoPts(_, _, _)).WillByDefault(Return(180000));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(audioStream->source)))
+		.WillOnce(Return(0));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL),
+			Return(TRUE)));
+
+	EXPECT_TRUE(mInterfaceGstPlayer->IsCacheEmpty(eGST_MEDIATYPE_AUDIO));
+
+	delete g_mockSocInterface;
+	g_mockSocInterface = nullptr;
+}
+
+TEST_F(InterfacePlayerTests, IsCacheEmpty_AudioRemappedToVideoSlot)
+{
+	gst_media_stream* videoStream = &mPlayerContext->stream[eGST_MEDIATYPE_VIDEO];
+	videoStream->source = &gst_element_pipeline;
+	videoStream->format = GST_FORMAT_AUDIO_ES_AAC;
+	GstElement gst_element_audio_sink = {.object = {.name = (gchar *)"testaudiosink"}};
+	videoStream->sinkbin = &gst_element_audio_sink;
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_current_level_bytes(GST_APP_SRC(videoStream->source)))
+		.WillOnce(Return(0));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _, _, _))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_query_position(&gst_element_audio_sink, GST_FORMAT_TIME, _))
+		.WillOnce(DoAll(
+			SetArgPointee<2>(1000000000ULL),
+			Return(TRUE)));
+
+	EXPECT_FALSE(mInterfaceGstPlayer->IsCacheEmpty(eGST_MEDIATYPE_VIDEO));
+	EXPECT_EQ(mPlayerContext->lastKnownAudioPTS, 90000);
 }
 
 TEST_F(InterfacePlayerTests, ResetEOSSignalledFlag)
