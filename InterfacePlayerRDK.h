@@ -551,6 +551,13 @@ class InterfacePlayerRDK
 		 *         pipeline is not in PLAYING/PAUSED state or the query fails.
 		 */
 		long long GetVideoPosition(void);
+		/**
+		 * @brief Gets the current audio playback position via
+		 *        gst_element_query_position on the audio sinkbin.
+		 * @return The playback position in milliseconds, or 0 if the
+		 *         pipeline is not in PLAYING/PAUSED state or the query fails.
+		 */
+		long long GetAudioPosition(void);
         	/**
         	 * @brief Sets the callback for the first frame.
         	 * @param[in] callback The callback function to be called on the first frame.
@@ -580,10 +587,11 @@ class InterfacePlayerRDK
         	bool Pause(bool pause, bool forceStopGstreamerPreBuffering);
         	/**
         	 * @brief Checks for PTS change with a timeout.
+                * @param[in] mediaType The type of media stream being checked.
         	 * @param[in] timeout The timeout value in milliseconds.
         	 * @return True if a PTS change was detected within the timeout, false otherwise.
         	 */
-        	bool CheckForPTSChangeWithTimeout(long timeout);
+		bool CheckForPTSChangeWithTimeout(GstMediaType mediaType, long timeout);
         	/**
         	 * @brief Checks if the cache is empty for a given media type.
         	 * @param[in] mediaType The type of media stream.

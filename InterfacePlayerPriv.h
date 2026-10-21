@@ -128,7 +128,6 @@ struct gst_media_stream
 	MediaCodecInfo codecInfo; /**< Codec and encryption information for this stream */
 	bool pendingSeek;                         /**< Flag denotes if a seek event has to be sent to the source */
 	bool resetPosition;                       /**< To indicate that the position of the stream is reset */
-	bool bufferUnderrun;
 	bool eosReached;           /**< To indicate the status of End of Stream reached */
 	bool sourceConfigured; /**< To indicate that the current source is initialized and configured */
 	pthread_mutex_t sourceLock;
@@ -140,7 +139,7 @@ struct gst_media_stream
 
 	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID), codecInfo(),
 	pendingSeek(false), resetPosition(false),
-	bufferUnderrun(false), eosReached(false), sourceConfigured(false), sourceLock(PTHREAD_MUTEX_INITIALIZER), timeScale(1), trackId(-1), firstBufferProcessed(false), demuxPad(NULL), demuxProbeId(0)
+	eosReached(false), sourceConfigured(false), sourceLock(PTHREAD_MUTEX_INITIALIZER), timeScale(1), trackId(-1), firstBufferProcessed(false), demuxPad(NULL), demuxProbeId(0)
 	{
 	}
 
@@ -210,7 +209,8 @@ struct GstPlayerPriv
 	GstState buffering_target_state;                                                 /**< the target state after buffering */
 	gint64 lastKnownPTS;                                                                     /**< To store the PTS of last displayed video */
 	long long ptsUpdatedTimeMS;                                                              /**< Timestamp when PTS was last updated */
-	guint ptsCheckForEosOnUnderflowIdleTaskId;                               /**< ID of task to ensure video PTS is not moving before notifying EOS on underflow. */
+	gint64 lastKnownAudioPTS;                                                                /**< To store the last audio position for audio-only playback */
+	long long audioPtsUpdatedTimeMS;                                                         /**< Timestamp when audio position was last updated */
 	int numberOfVideoBuffersSent;                                                    /**< Number of video buffers sent to pipeline */
 	gint64 segmentStart;                                                                     /**< segment start value; required when qtdemux is enabled or restamping is disabled; -1 to send a segment.start query to gstreamer */
 	GstQuery *positionQuery;                                                                 /**< pointer that holds a position query object */

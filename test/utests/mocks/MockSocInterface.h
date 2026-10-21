@@ -29,6 +29,7 @@ class MockSocInterface
 {
 public:
 	MOCK_METHOD(bool, IsPlaybackQualityFromSink, (), (const));
+	MOCK_METHOD(long long, GetVideoPts, (GstElement* video_sink, GstElement* video_dec, bool isWesteros), (const));
 
 };
 

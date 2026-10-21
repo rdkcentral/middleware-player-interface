@@ -21,6 +21,10 @@
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
+#include "MockSocInterface.h"
+
+MockSocInterface *g_mockSocInterface = nullptr;
+
 DefaultSocInterface::DefaultSocInterface()
 {
 }
@@ -206,8 +210,12 @@ long long SocInterface::ReadVideoPts(GstElement */*element*/)
 {
 	return 0;
 }
-long long SocInterface::GetVideoPts(GstElement */*video_sink*/, GstElement */*video_dec*/, bool /*isWesteros*/)
+long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
 {
+	if (g_mockSocInterface)
+	{
+		return g_mockSocInterface->GetVideoPts(video_sink, video_dec, isWesteros);
+	}
 	return 0;
 }
 bool SocInterface::StartsWith( const char *inputStr, const char *prefix )
