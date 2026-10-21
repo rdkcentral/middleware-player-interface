@@ -358,6 +358,28 @@ public:
 	 */
 	void clearFailedKeyIds();
 
+	/**
+	 * @fn		clearFailedSlots
+	 * @brief	Reset only the key entries flagged as failed so that the key can be
+	 *		negotiated again. Unlike clearFailedKeyIds(), the primary key marker
+	 *		of slots that are not failed is left untouched.
+	 *
+	 * @return	void.
+	 */
+	void clearFailedSlots();
+
+	/**
+	 * @fn		markSessionFailed
+	 * @brief	Flag the cached slot holding the given key ID as failed (for example after a
+	 *		decrypt failure on an already created session). The session object is not
+	 *		deleted here, because it may still be in use by a running pipeline; it is evicted
+	 *		by the next clearDrmSession(false), which runs at tune start.
+	 *
+	 * @param	keyId - key ID as returned by DrmHelper::getKey()
+	 * @return	bool - true if a cached slot holding the key was found and flagged
+	 */
+	bool markSessionFailed(const std::vector<uint8_t> &keyId);
+
 
 	/**
 	 * @fn		getFailedKeyIdStatus

@@ -167,6 +167,61 @@ void DrmSessionManager::clearFailedKeyIds()
 }
 
 /**
+ * @brief Support for Problem 1 fix: reset only the failed key entries, leaving other slots
+ *        (and their primary key markers) untouched
+ */
+void DrmSessionManager::clearFailedSlots()
+{
+	std::lock_guard<std::mutex> guard(cachedKeyMutex);
+	if (cachedKeyIDs == nullptr)
+	{
+		return;
+	}
+	for (int i = 0; i < mMaxDRMSessions; i++)
+	{
+		if (cachedKeyIDs[i].isFailedKeyEntries)
+		{
+			cachedKeyIDs[i].data.clear();
+			cachedKeyIDs[i].isFailedKeyEntries = false;
+			cachedKeyIDs[i].creationTime = 0;
+			cachedKeyIDs[i].isPrimaryKeyId = false;
+		}
+	}
+}
+
+/**
+ * @brief Support for Problem 2/3 fix: flag the slot holding the given key ID as failed,
+ *        without deleting the session (a running pipeline may still use it)
+ */
+bool DrmSessionManager::markSessionFailed(const std::vector<uint8_t> &keyId)
+{
+	bool found = false;
+	if (!keyId.empty())
+	{
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		for (int i = 0; (cachedKeyIDs != nullptr) && (i < mMaxDRMSessions) && !found; i++)
+		{
+			for (auto &entry : cachedKeyIDs[i].data)
+			{
+				if (entry.keyId == keyId)
+				{
+					MW_LOG_WARN("Marking session slot %d as failed for keyID %s", i, PlayerLogManager::getHexDebugStr(keyId).c_str());
+					entry.isFailedKeyId = true;
+					cachedKeyIDs[i].isFailedKeyEntries = true;
+					found = true;
+					break;
+				}
+			}
+		}
+	}
+	if (!found)
+	{
+		MW_LOG_WARN("No cached session slot found for the failed keyID");
+	}
+	return found;
+}
+
+/**
  *  @brief Clean up the memory for accessToken.
  */
 void DrmSessionManager::clearAccessToken()
