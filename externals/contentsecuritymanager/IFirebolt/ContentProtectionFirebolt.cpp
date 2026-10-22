@@ -259,6 +259,16 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 			std::string initData = param.print_UnFormatted();
 			MW_LOG_WARN("ContentProtection %s param: %s",apiName, initData.c_str());
 			bool result = false;
+			// F1 (RDKEMW-24407): allow one automatic Update->Open fallback. When a
+			// session update fails (license delivered but required keys unusable, or a
+			// stale pooled session bound to previous content), drop the stale session
+			// and retry once with a fresh OpenDrmSession - the field auto-retry proved
+			// this recovers playback instead of failing the tune.
+			bool triedOpenFallback = false;
+			bool retryLicenseFlow = true;
+			while (retryLicenseFlow)
+			{
+			retryLicenseFlow = false;
 			//invoke "openDrmSession" or "updateDrmSession" with retries for specific error cases
 			do
 			{
@@ -441,7 +451,24 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 					}
 					else
 					{
-						MW_LOG_ERR("ContentProtection license request failed, response for %s : statusCode: %d, reasonCode: %d", apiName, *statusCode, *reasonCode);
+						// F4 (RDKEMW-24407): don't mask a client-side / CDM failure as a
+						// SecManager rejection. If SecManager itself reported success
+						// (class 0 / reason 0) but we still failed, the fault is on the
+						// client side (e.g. license delivered but the required keyId is
+						// unusable / Key State 3 on a reused-updated session), not a
+						// transport or license-server error. Report the true origin so
+						// triage/dashboards point at the right component instead of "200:1".
+						bool secManagerReportedSuccess =
+							(*statusCode == CONTENT_SECURITY_MANAGER_DRM_GEN_ERR_NONE) &&
+							(*reasonCode == CONTENT_SECURITY_MANAGER_DRM_GEN_ERR_NONE);
+						if (secManagerReportedSuccess || (result && !ret))
+						{
+							MW_LOG_ERR("ContentProtection %s failed CLIENT-SIDE (SecManager reported success): required key unusable / license not applied for sessionId %" PRId64 " (statusCode: %d, reasonCode: %d) - NOT a SecManager/license-server error", apiName, sessionId, *statusCode, *reasonCode);
+						}
+						else
+						{
+							MW_LOG_ERR("ContentProtection license request failed, response for %s : statusCode: %d, reasonCode: %d", apiName, *statusCode, *reasonCode);
+						}
 						break;
 					}
 				}
@@ -452,6 +479,36 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 				}
 			}
 			while(retryCount < MAX_LICENSE_REQUEST_ATTEMPTS);
+
+			// F1 (RDKEMW-24407): Update->Open fallback. If the update path failed and
+			// we have not yet tried a fresh open, release the stale bound session and
+			// retry once as a new OpenDrmSession.
+			if (!ret && update && !triedOpenFallback && IsActive())
+			{
+				MW_LOG_WARN("ContentProtection %s failed (statusCode:%d reasonCode:%d); performing Update->Open fallback with a fresh session (stale sessionId:%" PRId64 ")", apiName, *statusCode, *reasonCode, sessionId);
+				// We already hold mContentProtectionMutex here, so close inline instead
+				// of calling CloseDrmSession() (which would re-lock and deadlock).
+				auto closeRes = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().closeDrmSession(std::to_string(sessionId));
+				if (closeRes.error() != Firebolt::Error::None)
+				{
+					MW_LOG_WARN("ContentProtection Update->Open fallback: closeDrmSession for stale sessionId %" PRId64 " returned Firebolt Error: %d", sessionId, static_cast<int>(closeRes.error()));
+				}
+				// Invalidate the caller's stale session so it isn't reused and so the
+				// fresh session returned by OpenDrmSession is adopted below.
+				session.setSessionInvalid();
+				// Switch to the open path and reset per-attempt state.
+				update = false;
+				apiName = "OpenDrmSession";
+				triedOpenFallback = true;
+				retryCount = 0;
+				ret = false;
+				// Reset default error codes so a genuine open failure is reported accurately.
+				*statusCode = CONTENT_SECURITY_MANAGER_DRM_FAILURE;
+				*reasonCode = CONTENT_SECURITY_MANAGER_DRM_GEN_FAILURE;
+				errorCode = CONTENT_SECURITY_MANAGER_DRM_GEN_ERR_NONE;
+				retryLicenseFlow = true;
+			}
+			} // end while(retryLicenseFlow) - F1 Update->Open fallback loop
 		}
 		else
 		{
