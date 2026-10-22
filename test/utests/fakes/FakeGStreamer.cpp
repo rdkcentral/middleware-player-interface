@@ -411,7 +411,11 @@ gboolean gst_element_link_many(GstElement *element_1, GstElement *element_2, ...
 gboolean gst_element_sync_state_with_parent(GstElement *element)
 {
 	TRACE_FUNC();
-	return FALSE;
+	if (g_mockGStreamer != nullptr)
+	{
+		return g_mockGStreamer->gst_element_sync_state_with_parent(element);
+	}
+	return TRUE;
 }
 
 GstPad *gst_element_get_static_pad(GstElement *element, const gchar *name)
