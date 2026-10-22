@@ -38,6 +38,7 @@
 #include "GstUtils.h"
 #include "DemuxDataTypes.h"
 #include "MediaSample.h"
+#include "GstHandlerControl.h"
 
 // Forward declarations
 class InterfacePlayerPriv;
@@ -171,8 +172,6 @@ class InterfacePlayerRDK
 		void *mDRMSessionManager;
 		std::map<InterfaceCB, std::function<void()>> callbackMap;
 		std::map<InterfaceCB, std::function<void(int)>> setupStreamCallbackMap;
-        
-		PlayerScheduler mScheduler;
 		InterfacePlayerRDK(bool isRialto = false);
 		~InterfacePlayerRDK();
 		InterfacePlayerPriv* GetPrivatePlayer();
@@ -801,7 +800,12 @@ class InterfacePlayerRDK
 		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
 
 	private:
+		/**
+		 * @brief Cancel any pending idle/timer callbacks scheduled against this instance, so they can't fire after destruction.
+		 */
+		void CancelPendingCallbacks();
 		InterfacePlayerPriv *interfacePlayerPriv;
+		GstHandlerControl idleCallbackControl; /**< guards IdleCallbackOnFirstFrame/OnEOS/IdleCallback/FirstVideoFrameDisplayed */
 };
 struct data
 {
