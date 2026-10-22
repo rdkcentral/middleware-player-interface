@@ -169,6 +169,7 @@ public:
 	 * @retval KeyState
 	 */
 	virtual KeyState getState() = 0;
+	virtual bool IsInvalidated() const { return false; }
 
 	/**
 	 * @brief Waits for the current state of DRM Session to match required.. Timeout is that from the helper.

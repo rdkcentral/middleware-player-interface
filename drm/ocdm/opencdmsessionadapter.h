@@ -117,8 +117,10 @@ protected:
 
 	DrmHelperPtr m_drmHelper;
 	DrmCallbacks *m_drmCallbacks;
+	std::atomic<bool> m_sessionReinitializationRequired;
 
 	bool verifyOutputProtection();
+	void reinitializeDRMSessionIfRequired();
 public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
@@ -139,6 +141,7 @@ public:
 	DrmData * generateKeyRequest(string& destinationURL, uint32_t timeout) override;
 	int processDRMKey(DrmData* key, uint32_t timeout) override;
 	KeyState getState() override;
+	bool IsInvalidated() const override { return m_sessionReinitializationRequired.load(); }
 	void clearDecryptContext() override;
 #if defined(USE_OPENCDM_ADAPTER)
 	void setKeyId(const std::vector<uint8_t>& keyId) override;
