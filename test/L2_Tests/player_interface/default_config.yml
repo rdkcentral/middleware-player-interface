@@ -1,0 +1,29 @@
+globalConfig:
+      includes:
+            deviceConfig: ./configs/device_config.yml
+      local:
+            log:
+                  directory: ./logs
+                  delimiter: /
+        
+rackConfig:
+    rack1:
+        name: "rack1"
+        description: "Localhost Setup"
+        slot1:
+            name: "slot1"
+            devices:
+                - dut:
+                    ip: "127.0.0.1"  
+                    description: "Localhost"
+                    platform: "linux"
+                    pi-cli : ../middleware-player-interface/build/test/pi-cli/pi-cli
+                    segment_dir : ../test_streams
+                    consoles:
+                        - default:
+                            type: "ssh"
+                            ip: "127.0.0.1"
+                            port: "8822"
+                            username: "testuser"
+                            password: "1234"
+                            
