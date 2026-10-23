@@ -301,12 +301,12 @@ type_found (GstElement * typefind, guint probability,
   for(; tmp; tmp = tmp->next)
   {
     GstElement *current = GST_ELEMENT(tmp->data);
+    GstElement *peer = tmp->prev ? GST_ELEMENT(tmp->prev->data) : typefind;
     GST_DEBUG_OBJECT(subtecbin, "element %s", gst_element_get_name(current));
     gst_bin_add(GST_BIN(subtecbin), current);
-    if (tmp->prev)
-      gst_element_link(GST_ELEMENT(tmp->prev->data), current);
-    else
-      gst_element_link(typefind, current);
+    if (!gst_element_link(peer, current))
+      GST_WARNING_OBJECT(subtecbin, "failed to link %s -> %s",
+          gst_element_get_name(peer), gst_element_get_name(current));
     gst_object_unref(current);
   }
 

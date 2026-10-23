@@ -42,6 +42,8 @@
 
 #include <sys/time.h>
 #include <set>
+#include <thread>
+#include <chrono>
 #define LICENSE_RENEWAL_MESSAGE_TYPE "1"
 
 /**
@@ -351,10 +353,16 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 				}
 			} 
 
-			// wait for 5sec for all the logs to be flushed
-			sleep(5);
-			// Now kill self
-			processHandler.SelfKill();
+			// Defer the self-kill by 5sec on a worker thread so the killed
+			// OCDM process can restart and logs can flush, without blocking
+			// this decrypt/key path which would otherwise stall playback.
+			std::thread([]()
+			{
+				std::this_thread::sleep_for(std::chrono::seconds(5));
+				// Now kill self
+				ProcessHandler handler;
+				handler.SelfKill();
+			}).detach();
 		}
 		else {
 #ifdef USE_THUNDER_OCDM_API_0_2

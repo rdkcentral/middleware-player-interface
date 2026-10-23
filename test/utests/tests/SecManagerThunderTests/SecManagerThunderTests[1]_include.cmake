@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/SecManagerThunderTests/SecManagerThunderTests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/SecManagerThunderTests/SecManagerThunderTests[1]_tests.cmake")
+else()
+  add_test(SecManagerThunderTests_NOT_BUILT SecManagerThunderTests_NOT_BUILT)
+endif()

@@ -52,4 +52,5 @@ endif()
 
 target_link_libraries(${EXEC_NAME} fakes ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} -lpthread)
 
+player_utest_add_cov(${EXEC_NAME})
 player_utest_run_add(${EXEC_NAME})
