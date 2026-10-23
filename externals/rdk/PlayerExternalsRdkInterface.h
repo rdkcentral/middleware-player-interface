@@ -87,6 +87,9 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 
         //replace-start
         std::shared_ptr<DeviceInterfaceBase> m_pDeviceInterfaceBase = nullptr;
+        // Set once when the device interface is observed unavailable, so a
+        // warning is logged per state transition instead of per call.
+        bool m_deviceInterfaceUnavailableLogged = false;
         //replace-with
         //std::shared_ptr<DeviceFireboltInterface> m_pDeviceInterfaceBase = nullptr;
         //replace-end

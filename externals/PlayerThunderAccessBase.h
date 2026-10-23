@@ -110,7 +110,7 @@ struct PlayerAudioData{
     int pk;
     std::string mixType;
 
-    PlayerAudioData(std::string lang, std::string content_Type, std::string nm, std::string t, int pk_int, std::string mix_Type)
+    PlayerAudioData(const std::string& lang, const std::string& content_Type, const std::string& nm, const std::string& t, int pk_int, const std::string& mix_Type)
     : language(std::move(lang)),
     contentType(std::move(content_Type)),
     name(std::move(nm)),
@@ -146,7 +146,7 @@ struct PlayerTextData{
     std::string name;
     int pk;
 
-    PlayerTextData(std::string t, std::string lang, int ccSer, std::string cc_Type, std::string nm, int pk_int)
+    PlayerTextData(const std::string& t, const std::string& lang, int ccSer, const std::string& cc_Type, const std::string& nm, int pk_int)
     :type(std::move(t)),
     language(std::move(lang)),
     ccServiceNumber(ccSer),
@@ -204,7 +204,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    virtual bool UnSubscribeEvent (std::string eventName) = 0;
+    virtual bool UnSubscribeEvent (const std::string& eventName) = 0;
 
     /**
      *   @fn SetVideoRectangle
@@ -218,7 +218,7 @@ public:
      *   @retval true if success
      *   @retval false if failure
      */
-    virtual bool SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim) = 0;
+    virtual bool SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim) = 0;
 
     /**
      *   @fn SetPreferredAudioLanguages_OTA
@@ -244,12 +244,12 @@ public:
      *   @param port port number
      *   @param  videoInputType string video input type
      */
-    virtual void StartHelperVideoin(int port, std::string videoInputType) = 0;
+    virtual void StartHelperVideoin(int port, const std::string& videoInputType) = 0;
     /**
      *   @fn StopHelper
      *   @param  videoInputType string video input type
      */
-    virtual void StopHelperVideoin(std::string videoInputType) = 0;
+    virtual void StopHelperVideoin(const std::string& videoInputType) = 0;
 
     /**
      *   @fn RegisterEventOnVideoStreamInfoUpdateHdmiin
@@ -276,7 +276,7 @@ public:
      *   @param preferredRenditionString player's preferred rendition
      *   @param atsc_preferredRenditionString ATSC preferred rendition
      */
-    virtual void StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString) = 0;
+    virtual void StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString) = 0;
 
     /**
      *   @fn StopOta
@@ -288,7 +288,7 @@ public:
      * @param audData vector to be filled with audio data
      * @return string of current track pk
      */
-    virtual std::string GetAudioTracksOta(std::vector<PlayerAudioData> audData) = 0;
+    virtual std::string GetAudioTracksOta(std::vector<PlayerAudioData>& audData) = 0;
 
     /**
      * @fn SetAudioTrackOta
@@ -303,7 +303,7 @@ public:
      * @param txtData vector to be filled with text data
      * @return true if successful, false if failed
      */
-    virtual bool GetTextTracksOta(std::vector<PlayerTextData> txtData) = 0;
+    virtual bool GetTextTracksOta(std::vector<PlayerTextData>& txtData) = 0;
 
     /**
      * @fn DisableContentRestrictionsOta
@@ -333,7 +333,7 @@ public:
      * @param onPlayerErrorHandlerCb player error handler callback
      * @return true if successful, false if failed
      */
-    virtual bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) = 0;
+    virtual bool StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) = 0;
 
     /**
      * @fn StopRmf
@@ -389,7 +389,7 @@ public:
      * @param metaData metaData
      * @return true if successful, false if failed
      */
-    virtual bool PersistentStoreSaveWatermark(const char* base64Image, std::string metaData) = 0;
+    virtual bool PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData) = 0;
 
     /**
      * @fn PersistentStoreLoadWatermark

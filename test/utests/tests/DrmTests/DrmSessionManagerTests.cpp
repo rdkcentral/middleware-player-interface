@@ -1880,7 +1880,7 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_NewInstance) {
     DrmSessionManager manager(5, nullptr, cb);
     
     // Debug: Print initial public state values.
-    std::cout << "Initial drmSessionContexts: " << manager.drmSessionContexts << std::endl;
+    std::cout << "Initial drmSessionContexts: " << manager.drmSessionContexts.get() << std::endl;
     std::cout << "Initial m_drmConfigParam: " << manager.m_drmConfigParam << std::endl;
     std::cout << "Initial playerSecInstance: " << manager.playerSecInstance << std::endl;
     std::cout << "Initial mCustomData: " << manager.mCustomData << std::endl;
@@ -1891,7 +1891,7 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_NewInstance) {
     std::cout << "clearSessionData() invoked" << std::endl;
     
     // Debug: Print state values after clearSessionData is called.
-    std::cout << "Post-clear drmSessionContexts: " << manager.drmSessionContexts << std::endl;
+    std::cout << "Post-clear drmSessionContexts: " << manager.drmSessionContexts.get() << std::endl;
     std::cout << "Post-clear m_drmConfigParam: " << manager.m_drmConfigParam << std::endl;
     std::cout << "Post-clear playerSecInstance: " << manager.playerSecInstance << std::endl;
     std::cout << "Post-clear mCustomData: " << manager.mCustomData << std::endl;
@@ -1942,7 +1942,7 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_MultipleCalls) {
     DrmSessionManager manager(5, nullptr, cb);
     
     // Debug: Print initial public state values.
-    std::cout << "Initial drmSessionContexts: " << manager.drmSessionContexts << std::endl;
+    std::cout << "Initial drmSessionContexts: " << manager.drmSessionContexts.get() << std::endl;
     std::cout << "Initial m_drmConfigParam: " << manager.m_drmConfigParam << std::endl;
     std::cout << "Initial playerSecInstance: " << manager.playerSecInstance << std::endl;
     std::cout << "Initial mCustomData: " << manager.mCustomData << std::endl;
@@ -1953,7 +1953,7 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_MultipleCalls) {
     std::cout << "clearSessionData() first call invoked" << std::endl;
     
     // Capture state after the first call.
-    auto state_drmSessionContexts = manager.drmSessionContexts;
+    auto state_drmSessionContexts = manager.drmSessionContexts.get();
     auto state_m_drmConfigParam = manager.m_drmConfigParam;
     auto state_playerSecInstance = manager.playerSecInstance;
     auto state_mCustomData = manager.mCustomData;
@@ -1969,13 +1969,13 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_MultipleCalls) {
     std::cout << "clearSessionData() second call invoked" << std::endl;
     
     // Debug: Print state values after the second call.
-    std::cout << "Post-second call - drmSessionContexts: " << manager.drmSessionContexts << std::endl;
+    std::cout << "Post-second call - drmSessionContexts: " << manager.drmSessionContexts.get() << std::endl;
     std::cout << "Post-second call - m_drmConfigParam: " << manager.m_drmConfigParam << std::endl;
     std::cout << "Post-second call - playerSecInstance: " << manager.playerSecInstance << std::endl;
     std::cout << "Post-second call - mCustomData: " << manager.mCustomData << std::endl;
     
     // Verify that subsequent calls do not alter the cleared state.
-    EXPECT_EQ(manager.drmSessionContexts, state_drmSessionContexts);
+    EXPECT_EQ(manager.drmSessionContexts.get(), state_drmSessionContexts);
     EXPECT_EQ(manager.m_drmConfigParam, state_m_drmConfigParam);
     EXPECT_EQ(manager.playerSecInstance, state_playerSecInstance);
     EXPECT_EQ(manager.mCustomData, state_mCustomData);

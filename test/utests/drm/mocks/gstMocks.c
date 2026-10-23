@@ -27,6 +27,13 @@ GType _gst_caps_type = 0;
 GType _gst_buffer_type = 0;
 
 
+/* Test hooks: record the arguments of the most recent time code meta request. */
+guint g_mockTimeCodeMetaCount = 0;
+guint g_mockTimeCodeHours = 0;
+guint g_mockTimeCodeMinutes = 0;
+guint g_mockTimeCodeSeconds = 0;
+guint g_mockTimeCodeFrames = 0;
+
 GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 																GstBuffer * buffer,
 																guint fps_n,
@@ -39,11 +46,33 @@ GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 																guint frames,
 																guint field_count)
 {
+	g_mockTimeCodeMetaCount++;
+	g_mockTimeCodeHours = hours;
+	g_mockTimeCodeMinutes = minutes;
+	g_mockTimeCodeSeconds = seconds;
+	g_mockTimeCodeFrames = frames;
 	return NULL;
 }
 
+/* Test hooks: when g_mockGstMapData is set, gst_buffer_map() exposes that memory
+ * (with g_mockGstMapSize bytes). Otherwise a zero-filled default block is returned,
+ * so readers of GstMapInfo never see uninitialized data. */
+const guint8 *g_mockGstMapData = NULL;
+gsize g_mockGstMapSize = 0;
+static guint8 g_defaultGstMapData[2048];
+
 gboolean gst_buffer_map(GstBuffer *buffer, GstMapInfo *info, GstMapFlags flags)
 {
+	if (g_mockGstMapData != NULL)
+	{
+		info->data = (guint8 *)g_mockGstMapData;
+		info->size = g_mockGstMapSize;
+	}
+	else
+	{
+		info->data = g_defaultGstMapData;
+		info->size = sizeof(g_defaultGstMapData);
+	}
 	return TRUE;
 }
 

@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/InfraTests/InfraL1Tests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/InfraTests/InfraL1Tests[1]_tests.cmake")
+else()
+  add_test(InfraL1Tests_NOT_BUILT InfraL1Tests_NOT_BUILT)
+endif()

@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmHelperTests/DrmHelperTests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmHelperTests/DrmHelperTests[1]_tests.cmake")
+else()
+  add_test(DrmHelperTests_NOT_BUILT DrmHelperTests_NOT_BUILT)
+endif()
