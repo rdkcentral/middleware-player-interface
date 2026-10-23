@@ -80,8 +80,8 @@ extern FakeThunderControl &g_FakeThunder;
 // so the control block must outlive every other static in the binary.
 FakeThunderControl &g_FakeThunder = *(new FakeThunderControl());
 
-ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
-	: remoteObject(nullptr), controllerObject(nullptr), pluginCallsign(std::move(callsign))
+ThunderAccessPlayer::ThunderAccessPlayer(const std::string& callsign)
+	: remoteObject(nullptr), controllerObject(nullptr), pluginCallsign(callsign)
 {
 }
 
@@ -92,7 +92,7 @@ bool ThunderAccessPlayer::ActivatePlugin()
 	return g_FakeThunder.activateResult;
 }
 
-bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject &param,
+bool ThunderAccessPlayer::InvokeJSONRPC(const std::string& method, const JsonObject &param,
 										JsonObject &result, const uint32_t waitTime)
 {
 	(void)waitTime;
@@ -111,7 +111,7 @@ bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject &pa
 }
 
 bool ThunderAccessPlayer::SubscribeEvent(
-	std::string eventName,
+	const std::string& eventName,
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer &)> functionHandler)
 {
 	if (g_FakeThunder.subscribeResult)
@@ -121,7 +121,7 @@ bool ThunderAccessPlayer::SubscribeEvent(
 	return g_FakeThunder.subscribeResult;
 }
 
-bool ThunderAccessPlayer::UnSubscribeEvent(std::string eventName)
+bool ThunderAccessPlayer::UnSubscribeEvent(const std::string& eventName)
 {
 	g_FakeThunder.unsubscribed.push_back(eventName);
 	g_FakeThunder.handlers.erase(eventName);
