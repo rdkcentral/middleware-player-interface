@@ -468,9 +468,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 
 		}
 	
-	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
-	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
-	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
+	
 	MediaCodecInfo* codecInfoByTrack[GST_TRACK_COUNT] = {
 		&codecInfo.video,
 		&codecInfo.audio,
