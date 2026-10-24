@@ -20,7 +20,6 @@
 #include <iostream>
 #include <atomic>
 #include <fstream>
-#include <limits>
 #include "InterfacePlayerRDK.h"
 #include "InterfacePlayerPriv.h"
 #include <string.h>
@@ -52,14 +51,13 @@ constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 
 // Add near existing injection constants in anonymous namespace
 constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
-constexpr uint32_t kDefaultFirstFrameTimeoutMs = 3000;
-constexpr uint32_t kMinFirstFrameTimeoutMs = 50; // optional lower guard
-constexpr uint32_t kMaxFirstFrameTimeoutMs = static_cast<uint32_t>(std::numeric_limits<int>::max());
+constexpr int kDefaultFirstFrameTimeoutMs = 3000;
+constexpr int kMinFirstFrameTimeoutMs = 50; // optional lower guard
 
-static uint32_t GetFirstFrameTimeoutMs()
+static int GetFirstFrameTimeoutMs()
 {
     std::ifstream injectionFile(kFirstFrameTimeoutInjectionFile);
-    uint32_t timeoutMs = 0;
+    int timeoutMs = 0;
 
     // Missing/unreadable/invalid/too-small => default
     if (!(injectionFile >> timeoutMs) || timeoutMs < kMinFirstFrameTimeoutMs)
@@ -68,13 +66,7 @@ static uint32_t GetFirstFrameTimeoutMs()
         return kDefaultFirstFrameTimeoutMs;
     }
 
-    // Keep value within int range since it is passed to TimerAdd(int) and telemetry (int)
-    if (timeoutMs > kMaxFirstFrameTimeoutMs)
-    {
-        timeoutMs = kMaxFirstFrameTimeoutMs;
-    }
-
-    MW_LOG_WARN("Using injected first-frame timeout: %u ms", timeoutMs);
+    MW_LOG_WARN("Using injected first-frame timeout: %d ms", timeoutMs);
     return timeoutMs;
 }
 
@@ -471,8 +463,8 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		if (interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId == GST_TASK_ID_INVALID)
 		{
 			// In ConfigurePipeline(), replace timeout argument:
-                        const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
-                        TimerAdd(FirstFrameTimeoutCallback, static_cast<int>(firstFrameTimeoutMs), interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
+                        const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+                        TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
 
 		}
 	
@@ -5307,14 +5299,14 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 	{
 
 		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
-		const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
-		MW_LOG_ERR("Tune not completed: first frame not rendered within %u ms", firstFrameTimeoutMs);
+		const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", firstFrameTimeoutMs);
 
 #ifdef PLAYER_TELEMETRY_SUPPORT
 		std::map<std::string, int> intMetrics;
 		std::map<std::string, std::string> sMetrics;
 		std::map<std::string, float> fMetrics;
-		intMetrics["timeoutMs"] = static_cast<int>(firstFrameTimeoutMs);
+		intMetrics["timeoutMs"] = firstFrameTimeoutMs;
 		intMetrics["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
 		sMetrics["api"] = "FirstFrameTimeoutCallback";
 		sMetrics["error"] = "first_frame_not_rendered";
