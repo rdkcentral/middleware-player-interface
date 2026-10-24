@@ -276,7 +276,7 @@ void g_free(gpointer mem)
 {
 	if (g_mockGLib != nullptr)
 	{
-		g_mockGLib->free_memory(mem);
+		g_mockGLib->freeMemory(mem);
 	}
 }
 
