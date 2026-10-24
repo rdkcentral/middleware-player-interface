@@ -20,6 +20,7 @@
 #include <iostream>
 #include <atomic>
 #include <fstream>
+#include <limits>
 #include "InterfacePlayerRDK.h"
 #include "InterfacePlayerPriv.h"
 #include <string.h>
@@ -53,6 +54,7 @@ constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
 constexpr uint32_t kDefaultFirstFrameTimeoutMs = 3000;
 constexpr uint32_t kMinFirstFrameTimeoutMs = 50; // optional lower guard
+constexpr uint32_t kMaxFirstFrameTimeoutMs = static_cast<uint32_t>(std::numeric_limits<int>::max());
 
 static uint32_t GetFirstFrameTimeoutMs()
 {
@@ -64,6 +66,12 @@ static uint32_t GetFirstFrameTimeoutMs()
     {
         MW_LOG_MIL("Using default first-frame timeout: %u ms", kDefaultFirstFrameTimeoutMs);
         return kDefaultFirstFrameTimeoutMs;
+    }
+
+    // Keep value within int range since it is passed to TimerAdd(int) and telemetry (int)
+    if (timeoutMs > kMaxFirstFrameTimeoutMs)
+    {
+        timeoutMs = kMaxFirstFrameTimeoutMs;
     }
 
     MW_LOG_WARN("Using injected first-frame timeout: %u ms", timeoutMs);
@@ -464,7 +472,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		{
 			// In ConfigurePipeline(), replace timeout argument:
                         const uint32_t firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
-                        TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
+                        TimerAdd(FirstFrameTimeoutCallback, static_cast<int>(firstFrameTimeoutMs), interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
 
 		}
 	
