@@ -4274,10 +4274,14 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 	bool audioOnly = false;
 
 	/* first frame arrived; cancel watchdog */
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext)
 	{
-		TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+		MW_LOG_ERR("InterfacePlayerRDK::NotifyFirstFrame: private context not initialized, aborting notification");
+		return;
 	}
+
+	/* first frame arrived; cancel watchdog */
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
 
 	bool requireFirstVideoFrameDisplay = false;
 	if (!interfacePlayerPriv->gstPrivateContext->firstFrameReceived && (interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived
