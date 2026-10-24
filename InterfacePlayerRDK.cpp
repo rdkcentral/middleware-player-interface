@@ -448,9 +448,12 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 {
 	mFirstFrameRequired = FirstFrameFlag;
 
-	/* First-frame watchdog: tune not completed if callback never arrives */
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !m_gstConfigParam)
 	{
+		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
+		return;
+	}
+	/* First-frame watchdog: tune not completed if callback never arrives */
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
@@ -464,7 +467,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
                         TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
 
 		}
-	}
+	
 	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
 	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
 	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
