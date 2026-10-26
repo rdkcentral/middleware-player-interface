@@ -27,6 +27,8 @@
 
 #include <string>
 
+class DrmSession;
+
 /**
  * @class DrmCallbacks
  * @brief DRM callback interface
@@ -36,6 +38,7 @@ class DrmCallbacks
 public:
 	virtual void Individualization(const std::string& payload) = 0;
 	virtual void LicenseRenewal(DrmHelperPtr drmHelper, void* userData) = 0;
+	virtual void DrmSessionError(DrmSession* session, const std::string& message) {}
 	virtual ~DrmCallbacks() {};
 };
 
