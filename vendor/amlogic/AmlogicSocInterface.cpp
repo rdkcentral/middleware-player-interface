@@ -146,9 +146,28 @@ GstPad* AmlogicSocInterface::GetSourcePad(GstElement* source)
  * @param name Element name.
  * @return True if it's a video sink, false otherwise.
  */
-bool AmlogicSocInterface::IsVideoSink(const char* name)
+
+/*bool AmlogicSocInterface::IsVideoSink(const char* name)
 {
 	return name && StartsWith(name, "westerossink");
+}
+*/
+bool AmlogicSocInterface::IsVideoSink(const char* name, GstElement *element)
+{
+	// First check if it's a sink at all
+    if (!GST_OBJECT_FLAG_IS_SET(element, GST_ELEMENT_FLAG_SINK)) {
+        return FALSE;
+    }
+
+    // Get element factory and check class metadata
+    GstElementFactory *factory = gst_element_get_factory(element);
+    if (!factory) return FALSE;
+
+    const gchar *klass = gst_element_factory_get_metadata(factory, GST_ELEMENT_METADATA_KLASS);
+    if (!klass) return FALSE;
+
+    // Video sinks have both "Sink" and "Video" in their klass
+    return (strstr(klass, "Sink") != NULL && strstr(klass, "Video") != NULL);
 }
 
 /**
@@ -180,9 +199,21 @@ void AmlogicSocInterface::SvpFreeContext(void *svpCtx)
  * @param name Element name.
  * @return True if it's an audio sink or audio decoder, false otherwise.
  */
-bool AmlogicSocInterface::IsAudioSinkOrAudioDecoder(const char* name)
+bool AmlogicSocInterface::IsAudioSinkOrAudioDecoder(const char* name, GstElement* element)
 {
-	return name && StartsWith(name, "amlhalasink");
+    GstElementFactory* factory = gst_element_get_factory(element);
+    if (!factory)
+        return false;
+
+    const gchar* klass =
+        gst_element_factory_get_metadata(factory, GST_ELEMENT_METADATA_KLASS);
+
+    if (!klass)
+        return false;
+
+    return (strstr(klass, "Audio") != NULL) &&
+           ((strstr(klass, "Decoder") != NULL) ||
+            (strstr(klass, "Sink") != NULL));
 }
 
 /**
@@ -191,9 +222,23 @@ bool AmlogicSocInterface::IsAudioSinkOrAudioDecoder(const char* name)
  * @param isWesteros Westeros flag.
  * @return True if it's a video decoder, false otherwise.
  */
-bool AmlogicSocInterface::IsVideoDecoder(const char* name)
+/*bool AmlogicSocInterface::IsVideoDecoder(const char* name)
 {
 	return name && StartsWith(name, "westerossink");
+}
+*/
+bool AmlogicSocInterface::IsVideoDecoder(const char* name, GstElement* element)
+{
+	// Get element factory
+    GstElementFactory *factory = gst_element_get_factory(element);
+    if (!factory) return FALSE;
+
+    // Get class metadata
+    const gchar *klass = gst_element_factory_get_metadata(factory, GST_ELEMENT_METADATA_KLASS);
+    if (!klass) return FALSE;
+
+return (strstr(klass, "Decoder") != NULL) ||
+       (strstr(klass, "Sink") != NULL && strstr(klass, "Video") != NULL);
 }
 
 /**
@@ -213,16 +258,22 @@ bool AmlogicSocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject 
 
 	bool status = false;
 	const char* srcName = GST_OBJECT_NAME(src);
-	if (srcName && StartsWith(srcName, "amlhalasink"))
-	{
-		gst_object_replace(reinterpret_cast<GstObject **>(audio_sink), src);
+    if (srcName &&
+        (StartsWith(srcName, "amlhalasink") ||
+         StartsWith(srcName, "rdkaudsink")))
+    {
+        gst_object_replace(reinterpret_cast<GstObject **>(audio_sink), src);
 
-		if (*audio_sink)  // Ensure audio_sink was set correctly
-		{
-			g_object_set(*audio_sink, "disable-xrun", TRUE, NULL);
-			status = true;
-		}
-	}
+        if (*audio_sink)
+        {
+            if (StartsWith(srcName, "amlhalasink"))
+            {
+                g_object_set(*audio_sink, "disable-xrun", TRUE, NULL);
+            }
+
+            status = true;
+        }
+    }    
 	return status;
 }
 /**
@@ -231,9 +282,24 @@ bool AmlogicSocInterface::ConfigureAudioSink(GstElement **audio_sink, GstObject 
  * @param IsWesteros Westeros flag.
  * @return True if it's an audio or video decoder, false otherwise.
  */
-bool AmlogicSocInterface::IsAudioOrVideoDecoder(const char* name)
+/*bool AmlogicSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
 	return name && StartsWith(name, "westerossink");
+}
+*/
+bool AmlogicSocInterface::IsAudioOrVideoDecoder(const char* name, GstElement* element)
+{
+	// Get element factory
+    GstElementFactory *factory = gst_element_get_factory(element);
+    if (!factory) return FALSE;
+
+    // Get class metadata
+    const gchar *klass = gst_element_factory_get_metadata(factory, GST_ELEMENT_METADATA_KLASS);
+    if (!klass) return FALSE;
+
+    // Any decoder (audio or video) will have "Decoder" in its klass
+return (strstr(klass, "Decoder") != NULL) ||
+       (strstr(klass, "Sink") != NULL && strstr(klass, "Video") != NULL);
 }
 
 /**

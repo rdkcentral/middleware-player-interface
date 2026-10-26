@@ -60,7 +60,7 @@ void MtkSocInterface::SetAC4Tracks(GstElement *src, int trackId)
 	g_object_set(src, "ac4-presentation-group-index", trackId, NULL);
 }
 
-bool MtkSocInterface::IsVideoSink(const char* name)
+bool MtkSocInterface::IsVideoSink(const char* name, GstElement *element)
 {
 	return name && StartsWith(name, "westerossink");
 }
@@ -70,7 +70,7 @@ bool MtkSocInterface::IsVideoSink(const char* name)
  * @param name Element name.
  * @return True if it's a video decoder, false otherwise.
  */
-bool MtkSocInterface::IsVideoDecoder(const char* name)
+bool MtkSocInterface::IsVideoDecoder(const char* name, GstElement *element)
 {
 	return name && StartsWith(name, "westerossink");
 }
@@ -80,7 +80,7 @@ bool MtkSocInterface::IsVideoDecoder(const char* name)
  * @param name Element name.
  * @return True if it's an audio or video decoder, false otherwise.
  */
-bool MtkSocInterface::IsAudioOrVideoDecoder(const char* name)
+bool MtkSocInterface::IsAudioOrVideoDecoder(const char* name, GstElement *element)
 {
 	bool AudioOrVideoDecoder = false;
 
