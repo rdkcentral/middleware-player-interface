@@ -123,6 +123,7 @@ public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
 	void keyUpdateOCDM(const uint8_t key[], const uint8_t keySize);
+	void errorMessageOCDM(const char message[]);
 	const std::vector<std::vector<uint8_t>>& getUsableKeys() const override;
 	long long timeBeforeCallback;
 
