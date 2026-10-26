@@ -4605,6 +4605,13 @@ static gboolean VideoDecoderPtsCheckerForEOS(gpointer user_data)
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gint64 currentPTS = pInterfacePlayerRDK->GetVideoPTS();                       /* Gets the currentPTS from the 'video-pts' property of the element */
 
+	if (currentPTS <= 0)
+	{
+		MW_LOG_WARN("VideoDecoderPtsCheckerForEOS: invalid decoder PTS %" G_GINT64_FORMAT ", skipping EOS inference", currentPTS);
+		privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = GST_TASK_ID_INVALID;
+		return G_SOURCE_REMOVE;
+	}
+
 	if (currentPTS == privatePlayer->gstPrivateContext->lastKnownPTS)
 	{
 		MW_LOG_MIL("PTS not changed");
