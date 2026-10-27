@@ -219,7 +219,7 @@ TEST(ContentSecurityManager_ReleaseSession, ValidPositiveSessionId) {
     std::cout << "[ContentSecurityManager_ReleaseSession] ValidPositiveSessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -251,7 +251,7 @@ TEST(ContentSecurityManager_ReleaseSession, ZeroSessionId) {
     std::cout << "[ContentSecurityManager_ReleaseSession] ZeroSessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 0;
+    std::string sessionId = std::to_string(0);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -284,7 +284,7 @@ TEST(ContentSecurityManager_ReleaseSession, NegativeSessionId) {
     std::cout << "[ContentSecurityManager_ReleaseSession] NegativeSessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = -100;
+    std::string sessionId = std::to_string(-100);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -318,7 +318,7 @@ TEST(ContentSecurityManager_ReleaseSession, MaxInt64SessionId) {
     std::cout << "[ContentSecurityManager_ReleaseSession] MaxInt64SessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = INT64_MAX;
+    std::string sessionId = std::to_string(INT64_MAX);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -350,7 +350,7 @@ TEST(ContentSecurityManager_ReleaseSession, MinInt64SessionId) {
     std::cout << "[ContentSecurityManager_ReleaseSession] MinInt64SessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = INT64_MIN;
+    std::string sessionId = std::to_string(INT64_MIN);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -383,7 +383,7 @@ TEST(ContentSecurityManager_ReleaseSession, MultipleCallsSameSession) {
     std::cout << "[ContentSecurityManager_ReleaseSession] MultipleCallsSameSession - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 999;
+    std::string sessionId = std::to_string(999);
     
     EXPECT_NO_THROW({
         manager.ReleaseSession(sessionId);
@@ -421,7 +421,7 @@ TEST(ContentSecurityManager_UpdateSessionState, ActivateValidSession) {
     std::cout << "[ContentSecurityManager_UpdateSessionState] ActivateValidSession - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     
     bool result = manager.UpdateSessionState(sessionId, true);
     
@@ -455,7 +455,7 @@ TEST(ContentSecurityManager_UpdateSessionState, DeactivateValidSession) {
     std::cout << "[ContentSecurityManager_UpdateSessionState] DeactivateValidSession - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 54321;
+    std::string sessionId = std::to_string(54321);
     
     bool result = manager.UpdateSessionState(sessionId, false);
     
@@ -488,7 +488,7 @@ TEST(ContentSecurityManager_UpdateSessionState, NegativeSessionId) {
     std::cout << "[ContentSecurityManager_UpdateSessionState] NegativeSessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = -999;
+    std::string sessionId = std::to_string(-999);
     
     bool resultActivate = manager.UpdateSessionState(sessionId, true);
     bool resultDeactivate = manager.UpdateSessionState(sessionId, false);
@@ -522,7 +522,7 @@ TEST(ContentSecurityManager_UpdateSessionState, ZeroSessionId) {
     std::cout << "[ContentSecurityManager_UpdateSessionState] ZeroSessionId - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 0;
+    std::string sessionId = std::to_string(0);
     
     bool result = manager.UpdateSessionState(sessionId, true);
     
@@ -554,7 +554,7 @@ TEST(ContentSecurityManager_UpdateSessionState, ToggleMultipleTimes) {
     std::cout << "[ContentSecurityManager_UpdateSessionState] ToggleMultipleTimes - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 7777;
+    std::string sessionId = std::to_string(7777);
     
     EXPECT_NO_THROW({
         manager.UpdateSessionState(sessionId, true);
@@ -594,7 +594,7 @@ TEST(ContentSecurityManager_VideoWindow, ValidDimensions) {
     std::cout << "[ContentSecurityManager_VideoWindow] ValidDimensions - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     int64_t width = 1920;
     int64_t height = 1080;
     
@@ -628,7 +628,7 @@ TEST(ContentSecurityManager_VideoWindow, Resolution4K) {
     std::cout << "[ContentSecurityManager_VideoWindow] Resolution4K - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 100;
+    std::string sessionId = std::to_string(100);
     int64_t width = 3840;
     int64_t height = 2160;
     
@@ -662,7 +662,7 @@ TEST(ContentSecurityManager_VideoWindow, MinimalDimensions) {
     std::cout << "[ContentSecurityManager_VideoWindow] MinimalDimensions - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 200;
+    std::string sessionId = std::to_string(200);
     int64_t width = 1;
     int64_t height = 1;
     
@@ -696,7 +696,7 @@ TEST(ContentSecurityManager_VideoWindow, ZeroWidth) {
     std::cout << "[ContentSecurityManager_VideoWindow] ZeroWidth - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 300;
+    std::string sessionId = std::to_string(300);
     int64_t width = 0;
     int64_t height = 1080;
     
@@ -730,7 +730,7 @@ TEST(ContentSecurityManager_VideoWindow, ZeroHeight) {
     std::cout << "[ContentSecurityManager_VideoWindow] ZeroHeight - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 400;
+    std::string sessionId = std::to_string(400);
     int64_t width = 1920;
     int64_t height = 0;
     
@@ -764,7 +764,7 @@ TEST(ContentSecurityManager_VideoWindow, NegativeDimensions) {
     std::cout << "[ContentSecurityManager_VideoWindow] NegativeDimensions - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 500;
+    std::string sessionId = std::to_string(500);
     int64_t width = -100;
     int64_t height = -200;
     
@@ -798,7 +798,7 @@ TEST(ContentSecurityManager_VideoWindow, LargeDimensions) {
     std::cout << "[ContentSecurityManager_VideoWindow] LargeDimensions - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 600;
+    std::string sessionId = std::to_string(600);
     int64_t width = 1000000;
     int64_t height = 1000000;
     
@@ -836,7 +836,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, NormalSpeed) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] NormalSpeed - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     int64_t speed = 1;
     int64_t position = 1000;
     
@@ -870,7 +870,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, FastForward2x) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] FastForward2x - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 100;
+    std::string sessionId = std::to_string(100);
     int64_t speed = 2;
     int64_t position = 5000;
     
@@ -904,7 +904,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, Rewind) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] Rewind - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 200;
+    std::string sessionId = std::to_string(200);
     int64_t speed = -1;
     int64_t position = 3000;
     
@@ -938,7 +938,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, ZeroSpeedPaused) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] ZeroSpeedPaused - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 300;
+    std::string sessionId = std::to_string(300);
     int64_t speed = 0;
     int64_t position = 2000;
     
@@ -972,7 +972,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, ZeroPosition) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] ZeroPosition - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 400;
+    std::string sessionId = std::to_string(400);
     int64_t speed = 1;
     int64_t position = 0;
     
@@ -1006,7 +1006,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, NegativePosition) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] NegativePosition - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 500;
+    std::string sessionId = std::to_string(500);
     int64_t speed = 1;
     int64_t position = -1000;
     
@@ -1040,7 +1040,7 @@ TEST(ContentSecurityManager_PlaybackSpeed, HighSpeedFastForward) {
     std::cout << "[ContentSecurityManager_PlaybackSpeed] HighSpeedFastForward - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 600;
+    std::string sessionId = std::to_string(600);
     int64_t speed = 16;
     int64_t position = 10000;
     
@@ -1407,7 +1407,7 @@ TEST(FakeSecManager, UpdateSessionState_ReturnsFalse) {
     
     FakeSecManager manager;
     
-    bool result = manager.UpdateSessionState(12345, true);
+    bool result = manager.UpdateSessionState("12345", true);
     
     EXPECT_FALSE(result);
     
@@ -1438,7 +1438,7 @@ TEST(FakeSecManager, SetPlaybackSpeedState_ReturnsFalse) {
     
     FakeSecManager manager;
     
-    bool result = manager.setPlaybackSpeedState(12345, 1, 1000);
+    bool result = manager.setPlaybackSpeedState("12345", 1, 1000);
     
     EXPECT_FALSE(result);
     
@@ -1469,7 +1469,7 @@ TEST(FakeSecManager, SetVideoWindowSize_ReturnsFalse) {
     
     FakeSecManager manager;
     
-    bool result = manager.setVideoWindowSize(12345, 1920, 1080);
+    bool result = manager.setVideoWindowSize("12345", 1920, 1080);
     
     EXPECT_FALSE(result);
     
@@ -1501,7 +1501,7 @@ TEST(FakeSecManager, ReleaseSession_NoException) {
     FakeSecManager manager;
     
     EXPECT_NO_THROW({
-        manager.ReleaseSession(12345);
+        manager.ReleaseSession("12345");
     });
     
     std::cout << "[FakeSecManager] ReleaseSession_NoException - PASS" << std::endl;
@@ -1536,7 +1536,7 @@ TEST(ContentSecurityManager_EdgeCases, MultipleSessionsSequential) {
     TestableContentSecurityManager manager;
     
     for (int i = 0; i < 10; i++) {
-        int64_t sessionId = 1000 + i;
+        std::string sessionId = std::to_string(1000 + i);
         
         EXPECT_NO_THROW({
             manager.UpdateSessionState(sessionId, true);
@@ -1573,7 +1573,7 @@ TEST(ContentSecurityManager_EdgeCases, RapidStateChanges) {
     std::cout << "[ContentSecurityManager_EdgeCases] RapidStateChanges - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 99999;
+    std::string sessionId = std::to_string(99999);
     
     EXPECT_NO_THROW({
         for (int i = 0; i < 100; i++) {
@@ -1612,10 +1612,10 @@ TEST(ContentSecurityManager_EdgeCases, MaxInt64Values) {
     int64_t maxValue = INT64_MAX;
     
     EXPECT_NO_THROW({
-        manager.UpdateSessionState(maxValue, true);
-        manager.setVideoWindowSize(maxValue, maxValue, maxValue);
-        manager.setPlaybackSpeedState(maxValue, maxValue, maxValue);
-        manager.ReleaseSession(maxValue);
+        manager.UpdateSessionState(std::to_string(maxValue), true);
+        manager.setVideoWindowSize(std::to_string(maxValue), maxValue, maxValue);
+        manager.setPlaybackSpeedState(std::to_string(maxValue), maxValue, maxValue);
+        manager.ReleaseSession(std::to_string(maxValue));
     });
     
     std::cout << "[ContentSecurityManager_EdgeCases] MaxInt64Values - PASS" << std::endl;
@@ -1647,10 +1647,10 @@ TEST(ContentSecurityManager_EdgeCases, MinInt64Values) {
     int64_t minValue = INT64_MIN;
     
     EXPECT_NO_THROW({
-        manager.UpdateSessionState(minValue, false);
-        manager.setVideoWindowSize(minValue, minValue, minValue);
-        manager.setPlaybackSpeedState(minValue, minValue, minValue);
-        manager.ReleaseSession(minValue);
+        manager.UpdateSessionState(std::to_string(minValue), false);
+        manager.setVideoWindowSize(std::to_string(minValue), minValue, minValue);
+        manager.setPlaybackSpeedState(std::to_string(minValue), minValue, minValue);
+        manager.ReleaseSession(std::to_string(minValue));
     });
     
     std::cout << "[ContentSecurityManager_EdgeCases] MinInt64Values - PASS" << std::endl;
@@ -1683,7 +1683,7 @@ TEST(ContentSecurityManager_SetDrmSessionState, ValidSessionActive) {
     std::cout << "[ContentSecurityManager_SetDrmSessionState] ValidSessionActive - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     
     // Base class implementation returns false
     bool result = manager.SetDrmSessionState(sessionId, true);
@@ -1715,7 +1715,7 @@ TEST(ContentSecurityManager_SetDrmSessionState, ValidSessionInactive) {
     std::cout << "[ContentSecurityManager_SetDrmSessionState] ValidSessionInactive - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 54321;
+    std::string sessionId = std::to_string(54321);
     
     bool result = manager.SetDrmSessionState(sessionId, false);
     EXPECT_FALSE(result);
@@ -1747,10 +1747,10 @@ TEST(ContentSecurityManager_SetDrmSessionState, BoundaryValues) {
     
     TestableContentSecurityManager manager;
     
-    EXPECT_FALSE(manager.SetDrmSessionState(INT64_MAX, true));
-    EXPECT_FALSE(manager.SetDrmSessionState(INT64_MIN, false));
-    EXPECT_FALSE(manager.SetDrmSessionState(0, true));
-    EXPECT_FALSE(manager.SetDrmSessionState(-1, false));
+    EXPECT_FALSE(manager.SetDrmSessionState(std::to_string(INT64_MAX), true));
+    EXPECT_FALSE(manager.SetDrmSessionState(std::to_string(INT64_MIN), false));
+    EXPECT_FALSE(manager.SetDrmSessionState("0", true));
+    EXPECT_FALSE(manager.SetDrmSessionState("-1", false));
     
     std::cout << "[ContentSecurityManager_SetDrmSessionState] BoundaryValues - PASS" << std::endl;
 }
@@ -1782,7 +1782,7 @@ TEST(ContentSecurityManager_CloseDrmSession, ValidSession) {
     std::cout << "[ContentSecurityManager_CloseDrmSession] ValidSession - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 98765;
+    std::string sessionId = std::to_string(98765);
     
     // Should execute without exception (empty implementation)
     EXPECT_NO_THROW(manager.CloseDrmSession(sessionId));
@@ -1813,7 +1813,7 @@ TEST(ContentSecurityManager_CloseDrmSession, MultipleCallsSameSession) {
     std::cout << "[ContentSecurityManager_CloseDrmSession] MultipleCallsSameSession - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 11111;
+    std::string sessionId = std::to_string(11111);
     
     EXPECT_NO_THROW({
         manager.CloseDrmSession(sessionId);
@@ -1849,10 +1849,10 @@ TEST(ContentSecurityManager_CloseDrmSession, BoundaryValues) {
     TestableContentSecurityManager manager;
     
     EXPECT_NO_THROW({
-        manager.CloseDrmSession(INT64_MAX);
-        manager.CloseDrmSession(INT64_MIN);
-        manager.CloseDrmSession(0);
-        manager.CloseDrmSession(-12345);
+        manager.CloseDrmSession(std::to_string(INT64_MAX));
+        manager.CloseDrmSession(std::to_string(INT64_MIN));
+        manager.CloseDrmSession("0");
+        manager.CloseDrmSession("-12345");
     });
     
     std::cout << "[ContentSecurityManager_CloseDrmSession] BoundaryValues - PASS" << std::endl;
@@ -1885,7 +1885,7 @@ TEST(ContentSecurityManager_SetPlaybackPosition, NormalPlayback) {
     std::cout << "[ContentSecurityManager_SetPlaybackPosition] NormalPlayback - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = 1.0f;
     int32_t position = 120; // 2 minutes
     
@@ -1918,7 +1918,7 @@ TEST(ContentSecurityManager_SetPlaybackPosition, FastForward) {
     std::cout << "[ContentSecurityManager_SetPlaybackPosition] FastForward - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 67890;
+    std::string sessionId = std::to_string(67890);
     float speed = 4.0f;
     int32_t position = 300; // 5 minutes
     
@@ -1951,7 +1951,7 @@ TEST(ContentSecurityManager_SetPlaybackPosition, Rewind) {
     std::cout << "[ContentSecurityManager_SetPlaybackPosition] Rewind - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 11111;
+    std::string sessionId = std::to_string(11111);
     float speed = -2.0f;
     int32_t position = 600; // 10 minutes
     
@@ -1984,7 +1984,7 @@ TEST(ContentSecurityManager_SetPlaybackPosition, PausedState) {
     std::cout << "[ContentSecurityManager_SetPlaybackPosition] PausedState - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 22222;
+    std::string sessionId = std::to_string(22222);
     float speed = 0.0f;
     int32_t position = 450;
     
@@ -2019,20 +2019,20 @@ TEST(ContentSecurityManager_SetPlaybackPosition, EdgeCases) {
     TestableContentSecurityManager manager;
     
     // Negative session ID
-    EXPECT_FALSE(manager.SetPlaybackPosition(-1, 1.0f, 100));
+    EXPECT_FALSE(manager.SetPlaybackPosition("-1", 1.0f, 100));
     
     // Zero position
-    EXPECT_FALSE(manager.SetPlaybackPosition(12345, 1.0f, 0));
+    EXPECT_FALSE(manager.SetPlaybackPosition("12345", 1.0f, 0));
     
     // Negative position
-    EXPECT_FALSE(manager.SetPlaybackPosition(12345, 1.0f, -100));
+    EXPECT_FALSE(manager.SetPlaybackPosition("12345", 1.0f, -100));
     
     // Very high speed
-    EXPECT_FALSE(manager.SetPlaybackPosition(12345, 32.0f, 100));
+    EXPECT_FALSE(manager.SetPlaybackPosition("12345", 32.0f, 100));
     
     // Boundary session IDs
-    EXPECT_FALSE(manager.SetPlaybackPosition(INT64_MAX, 1.0f, 1000));
-    EXPECT_FALSE(manager.SetPlaybackPosition(INT64_MIN, 1.0f, 1000));
+    EXPECT_FALSE(manager.SetPlaybackPosition(std::to_string(INT64_MAX), 1.0f, 1000));
+    EXPECT_FALSE(manager.SetPlaybackPosition(std::to_string(INT64_MIN), 1.0f, 1000));
     
     std::cout << "[ContentSecurityManager_SetPlaybackPosition] EdgeCases - PASS" << std::endl;
 }
@@ -2064,7 +2064,7 @@ TEST(ContentSecurityManager_setWindowSize, ValidDimensions) {
     std::cout << "[ContentSecurityManager_setWindowSize] ValidDimensions - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     int64_t width = 1920;
     int64_t height = 1080;
     
@@ -2099,7 +2099,7 @@ TEST(ContentSecurityManager_setWindowSize, Resolution4K) {
     
     TestableContentSecurityManager manager;
     
-    bool result = manager.setWindowSize(99999, 3840, 2160);
+    bool result = manager.setWindowSize("99999", 3840, 2160);
     EXPECT_FALSE(result);
     
     std::cout << "[ContentSecurityManager_setWindowSize] Resolution4K - PASS" << std::endl;
@@ -2130,19 +2130,19 @@ TEST(ContentSecurityManager_setWindowSize, BoundaryConditions) {
     TestableContentSecurityManager manager;
     
     // Zero dimensions
-    EXPECT_FALSE(manager.setWindowSize(12345, 0, 1080));
-    EXPECT_FALSE(manager.setWindowSize(12345, 1920, 0));
-    EXPECT_FALSE(manager.setWindowSize(12345, 0, 0));
+    EXPECT_FALSE(manager.setWindowSize("12345", 0, 1080));
+    EXPECT_FALSE(manager.setWindowSize("12345", 1920, 0));
+    EXPECT_FALSE(manager.setWindowSize("12345", 0, 0));
     
     // Negative dimensions
-    EXPECT_FALSE(manager.setWindowSize(12345, -1920, 1080));
-    EXPECT_FALSE(manager.setWindowSize(12345, 1920, -1080));
+    EXPECT_FALSE(manager.setWindowSize("12345", -1920, 1080));
+    EXPECT_FALSE(manager.setWindowSize("12345", 1920, -1080));
     
     // Negative session ID
-    EXPECT_FALSE(manager.setWindowSize(-1, 1920, 1080));
+    EXPECT_FALSE(manager.setWindowSize("-1", 1920, 1080));
     
     // Extreme values
-    EXPECT_FALSE(manager.setWindowSize(INT64_MAX, INT64_MAX, INT64_MAX));
+    EXPECT_FALSE(manager.setWindowSize(std::to_string(INT64_MAX), INT64_MAX, INT64_MAX));
     
     std::cout << "[ContentSecurityManager_setWindowSize] BoundaryConditions - PASS" << std::endl;
 }
@@ -2371,8 +2371,8 @@ TEST(ContentSecurityManager_Lifecycle, InstanceCreationAndDestruction) {
         ASSERT_NE(instance, nullptr);
         
         // Perform operations
-        instance->ReleaseSession(12345);
-        instance->UpdateSessionState(67890, true);
+        instance->ReleaseSession("12345");
+        instance->UpdateSessionState("67890", true);
         
         ContentSecurityManager::DestroyInstance();
     }
@@ -2484,7 +2484,7 @@ TEST(ContentSecurityManager_Integration, AllAPIsSequentially) {
     ContentSecurityManager::UseFireboltSDK(true);
     
     // Session operations
-    int64_t sessionId = 88888;
+    std::string sessionId = std::to_string(88888);
     manager->UpdateSessionState(sessionId, true);
     manager->setVideoWindowSize(sessionId, 1920, 1080);
     manager->setPlaybackSpeedState(sessionId, 1, 0);
@@ -2530,7 +2530,7 @@ TEST(ContentSecurityManager_Integration, ConcurrentSessionOperations) {
     ContentSecurityManager* manager = ContentSecurityManager::GetInstance();
     ASSERT_NE(manager, nullptr);
     
-    std::vector<int64_t> sessionIds = {1001, 1002, 1003, 1004, 1005};
+    std::vector<std::string> sessionIds = {"1001", "1002", "1003", "1004", "1005"};
     
     // Activate all sessions
     for (auto sessionId : sessionIds) {
@@ -2540,13 +2540,13 @@ TEST(ContentSecurityManager_Integration, ConcurrentSessionOperations) {
     }
     
     // Modify middle session
-    manager->setVideoWindowSize(1003, 3840, 2160);
-    manager->setPlaybackSpeedState(1003, 2, 500);
+    manager->setVideoWindowSize("1003", 3840, 2160);
+    manager->setPlaybackSpeedState("1003", 2, 500);
     
     // Deactivate alternating sessions
-    manager->UpdateSessionState(1001, false);
-    manager->UpdateSessionState(1003, false);
-    manager->UpdateSessionState(1005, false);
+    manager->UpdateSessionState("1001", false);
+    manager->UpdateSessionState("1003", false);
+    manager->UpdateSessionState("1005", false);
     
     // Release all sessions
     for (auto sessionId : sessionIds) {
@@ -2579,7 +2579,7 @@ TEST(ContentSecurityManager_Integration, StateTransitionCoverage) {
     std::cout << "[ContentSecurityManager_Integration] StateTransitionCoverage - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t sessionId = 77777;
+    std::string sessionId = std::to_string(77777);
     
     // Inactive → Active
     manager.UpdateSessionState(sessionId, true);
