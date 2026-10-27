@@ -370,9 +370,17 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _,_,0))
-		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_NULL),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_sinkbin, GST_STATE_NULL))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _, _, 100 * GST_MSECOND))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_NULL),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
