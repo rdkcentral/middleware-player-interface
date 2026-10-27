@@ -30,8 +30,9 @@
 #include <atomic>
 #include <memory>
 #include <sstream>
+#include <string>
 
-#define CONTENT_SECURITY_MGR_INVALID_SESSION_ID (-1)
+#define CONTENT_SECURITY_MGR_INVALID_SESSION_ID ""
 
 class ContentSecurityManager;
 
@@ -52,9 +53,9 @@ private:
 	class SessionManager
 	{
 		private:
-		int64_t mID;	//set once undermutex in constructor
+		std::string mID;	//set once under mutex in constructor
 		std::atomic<std::size_t> mInputSummaryHash;	//can be changed by setInputSummaryHash
-		SessionManager(int64_t sessionID, std::size_t inputSummaryHash);
+		SessionManager(const std::string& sessionID, std::size_t inputSummaryHash);
 
 		public:
 		/**
@@ -62,9 +63,9 @@ private:
 		 * @brief
 		 * Get a shared pointer to an object corresponding to the sessionID, creating a new one if required
 		*/
-		static std::shared_ptr<ContentSecurityManagerSession::SessionManager> getInstance(int64_t sessionID, std::size_t inputSummaryHash);
+		static std::shared_ptr<ContentSecurityManagerSession::SessionManager> getInstance(const std::string& sessionID, std::size_t inputSummaryHash);
 
-		int64_t getID(){return mID;}
+		const std::string& getID(){return mID;}
 		std::size_t getInputSummaryHash(){return mInputSummaryHash.load();}
 		void setInputSummaryHash(std::size_t inputSummaryHash);
 
@@ -83,7 +84,7 @@ public:
 	* this is only intended to be used in ContentSecurityManager::acquireLicence()
 	* it is the responsibility of ContentSecurityManager::acquireLicence() to ensure sessionID is valid
 	*/
-	ContentSecurityManagerSession(int64_t sessionID, std::size_t inputSummaryHash);
+	ContentSecurityManagerSession(const std::string& sessionID, std::size_t inputSummaryHash);
 
 	/**
  	* @brief constructor for an invalid object*/
@@ -116,7 +117,7 @@ public:
 	 * the ContentSecurityManagerSession on which this method is called
 	 * otherwise the session may be closed before the ID can be used
 	 */
-	int64_t getSessionID(void) const;
+	std::string getSessionID(void) const;
 	std::size_t getInputSummaryHash();
 
 	bool isSessionValid(void) const

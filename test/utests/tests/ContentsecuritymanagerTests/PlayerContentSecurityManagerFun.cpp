@@ -156,7 +156,7 @@ TEST(ContentSecurityManager, ReleaseSession_TypicalValidSessionID) {
     EXPECT_NO_THROW({
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object using default constructor" << std::endl;
-        int64_t sessionId = 12345;
+        std::string sessionId = std::to_string(12345);
         std::cout << "Invoking ReleaseSession with sessionId: " << sessionId << std::endl;
         manager.ReleaseSession(sessionId);
         std::cout << "Method ReleaseSession executed successfully for sessionId: " << sessionId << std::endl;
@@ -187,7 +187,7 @@ TEST(ContentSecurityManager, ReleaseSession_NegativeSessionID) {
     EXPECT_NO_THROW({
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object using default constructor" << std::endl;
-        int64_t sessionId = -100;
+        std::string sessionId = std::to_string(-100);
         std::cout << "Invoking ReleaseSession with sessionId: " << sessionId << std::endl;
         manager.ReleaseSession(sessionId);
         std::cout << "Method ReleaseSession executed successfully for sessionId: " << sessionId << std::endl;
@@ -220,7 +220,7 @@ TEST(ContentSecurityManager, ReleaseSession_MaximumInt64SessionID) {
     EXPECT_NO_THROW({
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object using default constructor" << std::endl;
-        int64_t sessionId = 9223372036854775807;
+        std::string sessionId = std::to_string(9223372036854775807);
         std::cout << "Invoking ReleaseSession with sessionId: " << sessionId << std::endl;
         manager.ReleaseSession(sessionId);
         std::cout << "Method ReleaseSession executed successfully for sessionId: " << sessionId << std::endl;
@@ -250,7 +250,7 @@ TEST(ContentSecurityManager, ReleaseSession_MinimumInt64SessionID) {
     EXPECT_NO_THROW({
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object using default constructor" << std::endl;
-        int64_t sessionId = std::numeric_limits<int64_t>::min();
+        std::string sessionId = std::to_string(std::numeric_limits<int64_t>::min());
         std::cout << "Invoking ReleaseSession with sessionId: " << sessionId << std::endl;
         manager.ReleaseSession(sessionId);
         std::cout << "Method ReleaseSession executed successfully for sessionId: " << sessionId << std::endl;
@@ -280,7 +280,7 @@ TEST(ContentSecurityManager, UpdateActiveSessionValidPositiveId) {
     GTEST_SKIP();
     std::cout << "Entering UpdateActiveSessionValidPositiveId test" << std::endl;
     TestContentSecurityManager csm;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = true;
     std::cout << "Invoking UpdateSessionState with sessionId: " << sessionId << ", active: " << std::boolalpha << active << std::endl;
     bool result = false;
@@ -314,7 +314,7 @@ TEST(ContentSecurityManager, UpdateInactiveSessionValidPositiveId) {
     GTEST_SKIP();
     std::cout << "Entering UpdateInactiveSessionValidPositiveId test" << std::endl;
     TestContentSecurityManager csm;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = false;
     std::cout << "Invoking UpdateSessionState with sessionId: " << sessionId << ", active: " << std::boolalpha << active << std::endl;
     bool result = false;
@@ -346,7 +346,7 @@ TEST(ContentSecurityManager, UpdateInactiveSessionValidPositiveId) {
 TEST(ContentSecurityManager, UpdateSessionWithNegativeSessionId) {
     std::cout << "Entering UpdateSessionWithNegativeSessionId test" << std::endl;
     TestContentSecurityManager csm;
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     bool active = false;
     std::cout << "Invoking UpdateSessionState with sessionId: " << sessionId << ", active: " << std::boolalpha << active << std::endl;
     bool result = true;
@@ -380,7 +380,7 @@ TEST(ContentSecurityManager, UpdateSessionWithLargeSessionId) {
     GTEST_SKIP();
     std::cout << "Entering UpdateSessionWithLargeSessionId test" << std::endl;
     TestContentSecurityManager csm;
-    int64_t sessionId = INT64_MAX;
+    std::string sessionId = std::to_string(INT64_MAX);
     bool active = true;
     std::cout << "Invoking UpdateSessionState with sessionId: " << sessionId << ", active: " << std::boolalpha << active << std::endl;
     bool result = false;
@@ -415,7 +415,7 @@ TEST(ContentSecurityManager, UpdateSessionWithLargeSessionId) {
 TEST(ContentSecurityManager, UpdateSessionWithSmallSessionId) {
     std::cout << "Entering UpdateSessionWithSmallSessionId test" << std::endl;
     TestContentSecurityManager csm;
-    int64_t sessionId = INT64_MIN;
+    std::string sessionId = std::to_string(INT64_MIN);
     bool active = false;
     std::cout << "Invoking UpdateSessionState with sessionId: " << sessionId << ", active: " << std::boolalpha << active << std::endl;
     bool result = true;
@@ -533,7 +533,7 @@ TEST(ContentSecurityManager, ValidInput_PositiveValues) {
         std::cout << "Created ContentSecurityManager object using default constructor." << std::endl;
         
         // Input parameters.
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 2;
         int64_t playback_position = 5000;
         
@@ -576,7 +576,7 @@ TEST(ContentSecurityManager, NegativeSessionId) {
         TestContentSecurityManager contentSecManager;
         std::cout << "Created ContentSecurityManager object using default constructor." << std::endl;
         
-        int64_t sessionId = -1;
+        std::string sessionId = std::to_string(-1);
         int64_t playback_speed = 2;
         int64_t playback_position = 5000;
         
@@ -620,7 +620,7 @@ TEST(ContentSecurityManager, NegativePlaybackSpeed) {
         TestContentSecurityManager contentSecManager;
         std::cout << "Created ContentSecurityManager object using default constructor." << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = -2;
         int64_t playback_position = 5000;
         
@@ -661,7 +661,7 @@ TEST(ContentSecurityManager, NegativePlaybackPosition) {
         TestContentSecurityManager contentSecManager;
         std::cout << "Created ContentSecurityManager object using default constructor." << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 2;
         int64_t playback_position = -5000;
         
@@ -705,7 +705,7 @@ TEST(ContentSecurityManager, ZeroPlaybackSpeed) {
         TestContentSecurityManager contentSecManager;
         std::cout << "Created ContentSecurityManager object using default constructor." << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 0;
         int64_t playback_position = 5000;
         
@@ -750,7 +750,7 @@ TEST(ContentSecurityManager, ValidInputTypicalResolution) {
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object." << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t video_width = 1920;
         int64_t video_height = 1080;
         
@@ -793,7 +793,7 @@ TEST(ContentSecurityManager, ValidInputMinimalNonZeroDimensions) {
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object." << std::endl;
         
-        int64_t sessionId = 1;
+        std::string sessionId = std::to_string(1);
         int64_t video_width = 1;
         int64_t video_height = 1;
         
@@ -836,7 +836,7 @@ TEST(ContentSecurityManager, NegativeInputNegativeSessionId) {
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object." << std::endl;
         
-        int64_t sessionId = -10;
+        std::string sessionId = std::to_string(-10);
         int64_t video_width = 1920;
         int64_t video_height = 1080;
         
@@ -877,7 +877,7 @@ TEST(ContentSecurityManager, NegativeInputZeroVideoWidth) {
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object." << std::endl;
         
-        int64_t sessionId = 50;
+        std::string sessionId = std::to_string(50);
         int64_t video_width = 0;
         int64_t video_height = 1080;
         
@@ -918,7 +918,7 @@ TEST(ContentSecurityManager, NegativeInputZeroVideoHeight) {
         TestContentSecurityManager manager;
         std::cout << "Created ContentSecurityManager object." << std::endl;
         
-        int64_t sessionId = 50;
+        std::string sessionId = std::to_string(50);
         int64_t video_width = 1920;
         int64_t video_height = 0;
         
@@ -954,7 +954,7 @@ TEST(ContentSecurityManager, NegativeInputZeroVideoHeight) {
  */
 TEST_F(ContentSecurityManagerTest, CloseDrmSessionValidPositive) {
     std::cout << "Entering CloseDrmSessionValidPositive test" << std::endl;
-    int64_t sessionId = 100;
+    std::string sessionId = std::to_string(100);
     std::cout << "Invoking CloseDrmSession with sessionId: " << sessionId << std::endl;
     EXPECT_NO_THROW({
         manager->CloseDrmSession(sessionId);
@@ -982,7 +982,7 @@ TEST_F(ContentSecurityManagerTest, CloseDrmSessionValidPositive) {
  */
 TEST_F(ContentSecurityManagerTest, CloseDrmSessionNegative) {
     std::cout << "Entering CloseDrmSessionNegative test" << std::endl;
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     std::cout << "Invoking CloseDrmSession with sessionId: " << sessionId << std::endl;
     EXPECT_NO_THROW({
         manager->CloseDrmSession(sessionId);
@@ -1012,7 +1012,7 @@ TEST_F(ContentSecurityManagerTest, CloseDrmSessionNegative) {
  */
 TEST_F(ContentSecurityManagerTest, CloseDrmSessionMaxInt64) {
     std::cout << "Entering CloseDrmSessionMaxInt64 test" << std::endl;
-    int64_t sessionId = 9223372036854775807LL;
+    std::string sessionId = std::to_string(9223372036854775807LL);
     std::cout << "Invoking CloseDrmSession with sessionId: " << sessionId << std::endl;
     EXPECT_NO_THROW({
         manager->CloseDrmSession(sessionId);
@@ -1040,7 +1040,7 @@ TEST_F(ContentSecurityManagerTest, CloseDrmSessionMaxInt64) {
  */
 TEST_F(ContentSecurityManagerTest, CloseDrmSessionMinInt64) {
     std::cout << "Entering CloseDrmSessionMinInt64 test" << std::endl;
-    int64_t sessionId = -9223372036854775807LL - 1;
+    std::string sessionId = std::to_string(-9223372036854775807LL - 1);
     std::cout << "Invoking CloseDrmSession with sessionId: " << sessionId << std::endl;
     EXPECT_NO_THROW({
         manager->CloseDrmSession(sessionId);
@@ -1109,7 +1109,7 @@ TEST_F(ContentSecurityManagerTest, ContentSecurityManager_ContentSecurityManager
  */
 TEST_F(ContentSecurityManagerTest, SetDrmSessionState_PositiveActive) {
     std::cout << "Entering SetDrmSessionState_PositiveActive test" << std::endl;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = true;
     std::cout << "Invoking ContentSecurityManager::SetDrmSessionState with sessionId: " << sessionId 
               << " and active: " << std::boolalpha << active << std::endl;
@@ -1140,7 +1140,7 @@ TEST_F(ContentSecurityManagerTest, SetDrmSessionState_PositiveActive) {
  */
 TEST_F(ContentSecurityManagerTest, SetDrmSessionState_PositiveInactive) {
     std::cout << "Entering SetDrmSessionState_PositiveInactive test" << std::endl;
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = false;
     std::cout << "Invoking ContentSecurityManager::SetDrmSessionState with sessionId: " << sessionId 
               << " and active: " << std::boolalpha << active << std::endl;
@@ -1174,7 +1174,7 @@ TEST_F(ContentSecurityManagerTest, SetDrmSessionState_PositiveInactive) {
  */
 TEST_F(ContentSecurityManagerTest, SetDrmSessionState_MaximumInt64Active) {
     std::cout << "Entering SetDrmSessionState_MaximumInt64Active test" << std::endl;
-    int64_t sessionId = 9223372036854775807LL;
+    std::string sessionId = std::to_string(9223372036854775807LL);
     bool active = true;
     std::cout << "Invoking ContentSecurityManager::SetDrmSessionState with sessionId: " << sessionId 
               << " and active: " << std::boolalpha << active << std::endl;
@@ -1204,7 +1204,7 @@ TEST_F(ContentSecurityManagerTest, SetDrmSessionState_MaximumInt64Active) {
  */
 TEST_F(ContentSecurityManagerTest, SetDrmSessionState_MinimumInt64Inactive) {
     std::cout << "Entering SetDrmSessionState_MinimumInt64Inactive test" << std::endl;
-    int64_t sessionId = (-9223372036854775807LL - 1);
+    std::string sessionId = std::to_string((-9223372036854775807LL - 1));
     bool active = false;
     std::cout << "Invoking ContentSecurityManager::SetDrmSessionState with sessionId: " << sessionId 
               << " and active: " << std::boolalpha << active << std::endl;
@@ -1236,7 +1236,7 @@ TEST_F(ContentSecurityManagerTest, ValidNormalPlaybackPositionUpdate) {
     GTEST_SKIP();
     std::cout << "Entering ValidNormalPlaybackPositionUpdate test" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = 1.0;
     int32_t position = 30;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1274,7 +1274,7 @@ TEST_F(ContentSecurityManagerTest, ValidUpdatedPlaybackWithIncreasedSpeed) {
     GTEST_SKIP();
     std::cout << "Entering ValidUpdatedPlaybackWithIncreasedSpeed test" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = 1.5;
     int32_t position = 45;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1309,7 +1309,7 @@ TEST_F(ContentSecurityManagerTest, ReversePlaybackScenarioWithNegativeSpeed) {
     GTEST_SKIP();
     std::cout << "Entering ReversePlaybackScenarioWithNegativeSpeed test" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = -1.0;
     int32_t position = 30;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1345,7 +1345,7 @@ TEST_F(ContentSecurityManagerTest, ReversePlaybackScenarioWithNegativeSpeed) {
 TEST_F(ContentSecurityManagerTest, InvalidSessionId) {
     std::cout << "Entering InvalidSessionId test" << std::endl;
     
-    int64_t sessionId = -12345;
+    std::string sessionId = std::to_string(-12345);
     float speed = 1.0;
     int32_t position = 30;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1380,7 +1380,7 @@ TEST_F(ContentSecurityManagerTest, InvalidSessionId) {
 TEST_F(ContentSecurityManagerTest, InvalidPlaybackPosition) {
     std::cout << "Entering InvalidPlaybackPosition test" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = 1.0;
     int32_t position = -10;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1414,7 +1414,7 @@ TEST_F(ContentSecurityManagerTest, InvalidPlaybackPosition) {
 TEST_F(ContentSecurityManagerTest, MinimumBoundaryForSpeed) {
     std::cout << "Entering MinimumBoundaryForSpeed test" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     float speed = 0.0;
     int32_t position = 30;
     std::cout << "Invoking SetPlaybackPosition with sessionId: " << sessionId 
@@ -1448,7 +1448,7 @@ TEST_F(ContentSecurityManagerTest, MinimumBoundaryForSpeed) {
 TEST_F(ContentSecurityManagerTest, ValidPositiveValues) {
     std::cout << "Entering ValidPositiveValues test" << std::endl;
     
-    int64_t sessionId = 1;
+    std::string sessionId = std::to_string(1);
     int64_t video_width = 1920;
     int64_t video_height = 1080;
     std::cout << "Invoking setWindowSize with sessionId = " << sessionId 
@@ -1484,7 +1484,7 @@ TEST_F(ContentSecurityManagerTest, ValidPositiveValues) {
 TEST_F(ContentSecurityManagerTest, ZeroDimensionsValidSessionId) {
     std::cout << "Entering ZeroDimensionsValidSessionId test" << std::endl;
     
-    int64_t sessionId = 1;
+    std::string sessionId = std::to_string(1);
     int64_t video_width = 0;
     int64_t video_height = 0;
     std::cout << "Invoking setWindowSize with sessionId = " << sessionId 
@@ -1519,7 +1519,7 @@ TEST_F(ContentSecurityManagerTest, ZeroDimensionsValidSessionId) {
 TEST_F(ContentSecurityManagerTest, NegativeSessionIdPositiveDimensions) {
     std::cout << "Entering NegativeSessionIdPositiveDimensions test" << std::endl;
     
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     int64_t video_width = 640;
     int64_t video_height = 480;
     std::cout << "Invoking setWindowSize with sessionId = " << sessionId 
@@ -1554,7 +1554,7 @@ TEST_F(ContentSecurityManagerTest, NegativeSessionIdPositiveDimensions) {
 TEST_F(ContentSecurityManagerTest, PositiveSessionIdNegativeVideoWidth) {
     std::cout << "Entering PositiveSessionIdNegativeVideoWidth test" << std::endl;
     
-    int64_t sessionId = 10;
+    std::string sessionId = std::to_string(10);
     int64_t video_width = -640;
     int64_t video_height = 480;
     std::cout << "Invoking setWindowSize with sessionId = " << sessionId 
@@ -1591,7 +1591,7 @@ TEST_F(ContentSecurityManagerTest, PositiveSessionIdNegativeVideoWidth) {
 TEST_F(ContentSecurityManagerTest, MixedPositiveSessionIdNegativeVideoHeight) {
     std::cout << "Entering MixedPositiveSessionIdNegativeVideoHeight test" << std::endl;
     
-    int64_t sessionId = 10;
+    std::string sessionId = std::to_string(10);
     int64_t video_width = 1280;
     int64_t video_height = -720;
     std::cout << "Invoking setWindowSize with sessionId = " << sessionId 
@@ -1708,7 +1708,7 @@ TEST(FakeSecManager, ReleaseSession_TypicalValidSessionId) {
     FakeSecManager fakeSecManager;
     
     // Define test input sessionId
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     std::cout << "Test input sessionId: " << sessionId << std::endl;
     
     // Invoking ReleaseSession method
@@ -1745,7 +1745,7 @@ TEST(FakeSecManager, ReleaseSession_NegativeSessionId) {
     FakeSecManager fakeSecManager;
     
     // Define test input sessionId
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     std::cout << "Test input sessionId: " << sessionId << std::endl;
     
     // Invoking ReleaseSession method
@@ -1782,7 +1782,7 @@ TEST(FakeSecManager, ReleaseSession_Int64Max) {
     FakeSecManager fakeSecManager;
     
     // Define test input sessionId as maximum int64_t value
-    int64_t sessionId = 9223372036854775807LL;
+    std::string sessionId = std::to_string(9223372036854775807LL);
     std::cout << "Test input sessionId (INT64_MAX): " << sessionId << std::endl;
     
     // Invoking ReleaseSession method
@@ -1820,7 +1820,7 @@ TEST(FakeSecManager, ValidSessionIdTrue) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = true;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -1860,7 +1860,7 @@ TEST(FakeSecManager, ValidSessionIdFalse) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = std::to_string(12345);
     bool active = false;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -1901,7 +1901,7 @@ TEST(FakeSecManager, NegativeSessionIdTrue) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     bool active = true;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -1941,7 +1941,7 @@ TEST(FakeSecManager, NegativeSessionIdFalse) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     bool active = false;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -1981,7 +1981,7 @@ TEST(FakeSecManager, MaxSessionIdTrue) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = 9223372036854775807LL;
+    std::string sessionId = std::to_string(9223372036854775807LL);
     bool active = true;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -2020,7 +2020,7 @@ TEST(FakeSecManager, MaxSessionIdFalse) {
     FakeSecManager fsm;
     std::cout << "Created FakeSecManager object" << std::endl;
     
-    int64_t sessionId = 9223372036854775807LL;
+    std::string sessionId = std::to_string(9223372036854775807LL);
     bool active = false;
     std::cout << "Invoking FakeSecManager::UpdateSessionState with sessionId = " << sessionId 
               << " and active = " << active << std::endl;
@@ -2060,7 +2060,7 @@ TEST(FakeSecManager, ValidTypicalInput)
         FakeSecManager fsm;
         std::cout << "FakeSecManager object created using default constructor." << std::endl;
         
-        int64_t sessionId = 123;
+        std::string sessionId = std::to_string(123);
         int64_t speed = 150;
         int64_t position = 500;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2101,7 +2101,7 @@ TEST(FakeSecManager, NegativeSessionId_SetPlaybackSpeedState)
         FakeSecManager fsm;
         std::cout << "FakeSecManager object created using default constructor." << std::endl;
         
-        int64_t sessionId = -100;
+        std::string sessionId = std::to_string(-100);
         int64_t speed = 150;
         int64_t position = 500;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2143,7 +2143,7 @@ TEST(FakeSecManager, NegativeSpeed)
         FakeSecManager fsm;
         std::cout << "FakeSecManager object created using default constructor." << std::endl;
         
-        int64_t sessionId = 123;
+        std::string sessionId = std::to_string(123);
         int64_t speed = -150;
         int64_t position = 500;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2185,7 +2185,7 @@ TEST(FakeSecManager, NegativePosition)
         FakeSecManager fsm;
         std::cout << "FakeSecManager object created using default constructor." << std::endl;
         
-        int64_t sessionId = 123;
+        std::string sessionId = std::to_string(123);
         int64_t speed = 150;
         int64_t position = -500;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2225,7 +2225,7 @@ TEST(FakeSecManager, NormalValues) {
     
     // Create an object of FakeSecManager using the default constructor
     FakeSecManager secMgr;
-    int64_t sessionId = 1;
+    std::string sessionId = std::to_string(1);
     int64_t video_width = 640;
     int64_t video_height = 480;
     
@@ -2266,7 +2266,7 @@ TEST(FakeSecManager, NegativeSessionId_setVideoWindowSize) {
     
     EXPECT_NO_THROW(FakeSecManager secMgr);
     FakeSecManager secMgr;
-    int64_t sessionId = -1;
+    std::string sessionId = std::to_string(-1);
     int64_t video_width = 640;
     int64_t video_height = 480;
     
@@ -2306,7 +2306,7 @@ TEST(FakeSecManager, NegativeVideoWindowWidth) {
     
     EXPECT_NO_THROW(FakeSecManager secMgr);
     FakeSecManager secMgr;
-    int64_t sessionId = 1;
+    std::string sessionId = std::to_string(1);
     int64_t video_width = -640;
     int64_t video_height = 480;
     
@@ -2345,7 +2345,7 @@ TEST(FakeSecManager, NegativeVideoWindowHeight) {
     
     EXPECT_NO_THROW(FakeSecManager secMgr);
     FakeSecManager secMgr;
-    int64_t sessionId = 1;
+    std::string sessionId = std::to_string(1);
     int64_t video_width = 640;
     int64_t video_height = -480;
     
@@ -2578,7 +2578,7 @@ TEST(FakeSecManager, ValidInputPositiveValues) {
         FakeSecManager fakeSecManager;
         std::cout << "Constructed FakeSecManager object successfully" << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 2;
         int64_t playback_position = 5000;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2616,7 +2616,7 @@ TEST(FakeSecManager, NegativeSessionId_NegativeSessionId) {
         FakeSecManager fakeSecManager;
         std::cout << "Constructed FakeSecManager object successfully" << std::endl;
         
-        int64_t sessionId = -1;
+        std::string sessionId = std::to_string(-1);
         int64_t playback_speed = 2;
         int64_t playback_position = 5000;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2655,7 +2655,7 @@ TEST(FakeSecManager, NegativePlaybackSpeed) {
         FakeSecManager fakeSecManager;
         std::cout << "Constructed FakeSecManager object successfully" << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = -2;
         int64_t playback_position = 5000;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2693,7 +2693,7 @@ TEST(FakeSecManager, NegativePlaybackPosition) {
         FakeSecManager fakeSecManager;
         std::cout << "Constructed FakeSecManager object successfully" << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 2;
         int64_t playback_position = -5000;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
@@ -2735,7 +2735,7 @@ TEST(FakeSecManager, ZeroPlaybackSpeed) {
         FakeSecManager fakeSecManager;
         std::cout << "Constructed FakeSecManager object successfully" << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = std::to_string(100);
         int64_t playback_speed = 0;
         int64_t playback_position = 5000;
         std::cout << "Invoking setPlaybackSpeedState with sessionId: " << sessionId 
