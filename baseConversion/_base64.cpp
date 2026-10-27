@@ -35,6 +35,14 @@
  */
 char *base64_Encode(const unsigned char *src, size_t len)
 {
+	if( !src )
+	{
+		return NULL;
+	}
+	if( !len )
+	{
+		return strdup("");
+	}
 	const unsigned char *fin = &src[len];
 	const static char *encode = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // base64
 	char *rc = (char *)malloc(((len+2)/3)*4+1);
@@ -64,6 +72,10 @@ char *base64_Encode(const unsigned char *src, size_t len)
  */
 unsigned char *base64_Decode(const char *src, size_t *outLen, size_t srcLen)
 {
+	if( !src || !outLen )
+	{
+		return NULL;
+	}
 	static const signed char decode[256] =
 	{
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,

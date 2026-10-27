@@ -62,7 +62,7 @@ ThunderSecurityPlayerData gSecurityPlayerData;
 ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
                  : remoteObject(NULL)
                    ,controllerObject(NULL)
-                   ,pluginCallsign(callsign)
+                   ,pluginCallsign(std::move(callsign))
 {
     MW_LOG_INFO( "[ThunderAccessPlayer]Inside");
     uint32_t status = Core::ERROR_NONE;
@@ -229,6 +229,6 @@ bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject &pa
         ret = false;
     }
 
-    result = result_internal;
+    result = std::move(result_internal);
     return ret;
 }

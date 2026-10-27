@@ -92,7 +92,7 @@ public:
 	const std::string EMPTY_DRM_METADATA;
 	
 	const std::string EMPTY_STRING;
-	DrmHelper(const struct DrmInfo drmInfo) : mDrmInfo(drmInfo), TIMEOUT_SECONDS(5000U), EMPTY_DRM_METADATA(), EMPTY_STRING() ,bOutputProtectionEnabled(false), protectionScheme() {}
+	DrmHelper(const struct DrmInfo& drmInfo) : mDrmInfo(drmInfo), TIMEOUT_SECONDS(5000U), EMPTY_DRM_METADATA(), EMPTY_STRING() ,bOutputProtectionEnabled(false), protectionScheme() {}
 	DrmHelper(const DrmHelper&) = delete;
 	DrmHelper& operator=(const DrmHelper&) = delete;
 	

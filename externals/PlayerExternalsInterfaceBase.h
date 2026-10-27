@@ -53,7 +53,7 @@ class PlayerExternalsInterfaceBase
 
     public:
 
-        PlayerExternalsInterfaceBase():m_sourceWidth(0),m_sourceHeight(0),m_gstElement(nullptr){}
+        PlayerExternalsInterfaceBase():m_isHDCPEnabled(false),m_displayWidth(0),m_displayHeight(0),m_sourceWidth(0),m_sourceHeight(0),m_gstElement(nullptr){}
 
         virtual void Initialize() = 0;
         /**
@@ -76,11 +76,15 @@ class PlayerExternalsInterfaceBase
                 return false;
             }
 
-            g_object_get(m_gstElement, "video_height", &sourceHeight, NULL);
-            g_object_get(m_gstElement, "video_width", &sourceWidth, NULL);
+            // Read both properties in a single g_object_get() call to avoid re-reading m_gstElement between calls
+            GstElement* element = m_gstElement;
+            g_object_get(element,
+                         "video_height", &sourceHeight,
+                         "video_width", &sourceWidth,
+                         NULL);
 
             if(sourceWidth != m_sourceWidth || sourceHeight != m_sourceHeight) {
-                MW_LOG_WARN("viddec (%p) --> says width %d, height %d", m_gstElement, sourceWidth, sourceHeight);
+                MW_LOG_WARN("viddec --> says width %d, height %d", sourceWidth, sourceHeight);
                 m_sourceWidth   = sourceWidth;
                 m_sourceHeight  = sourceHeight;
             }

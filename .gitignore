@@ -1,2 +1,7 @@
 build/
+build_aamp/
 .libs/
+
+sync/aamp
+sync/*.patch
+sync/*.temp

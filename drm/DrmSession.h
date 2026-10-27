@@ -29,6 +29,9 @@
 #include <stdint.h>
 #include <vector>
 #include <gst/gst.h>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include "DrmUtils.h"
 #include "ContentSecurityManagerSession.h"
 
@@ -67,7 +70,76 @@ protected:
 	std::string m_keySystem;
 	bool m_OutputProtectionEnabled;
 	ContentSecurityManagerSession mContentSecurityManagerSession;
+
+	/* DELIA-70726 fix:
+	 * Lifecycle guard used to prevent the DrmSession object from being
+	 * deleted (e.g. by DrmSessionManager during DRM session slot
+	 * reuse/eviction on back-to-back channel changes) while a GStreamer
+	 * pipeline thread (multiqueue/decryptor) is concurrently inside
+	 * decrypt()/verifyOutputProtection(). Without this guard, deletion of
+	 * a session that is still referenced by an old, not-yet-fully-torn-down
+	 * pipeline results in a use-after-free SIGSEGV inside
+	 * OCDMSessionAdapter::verifyOutputProtection().
+	 */
+	std::mutex mLifecycleMutex;
+	std::condition_variable mLifecycleCV;
+	int mActiveOperations;
+	bool mMarkedForDestruction;
+
 public:
+	/**
+	 * @fn DrmSession
+	 * @param keySystem : DRM key system uuid
+	 */
+	DrmSession(const string &keySystem);
+
+	/**
+		 * @brief Copy constructor disabled
+		 *
+		 */
+	DrmSession(const DrmSession&) = delete;
+
+	/**
+	 * @fn ~DrmSession
+	 */
+	virtual ~DrmSession();
+
+	/**
+	 * @brief assignment operator disabled
+	 *
+	 */
+	DrmSession& operator=(const DrmSession&) = delete;
+
+	/**
+	 * @fn AcquireForUse
+	 * @brief Must be called by any external caller (e.g. the GStreamer
+	 *        decryptor element) before invoking decrypt() on a DrmSession
+	 *        obtained via a raw/cached pointer. Returns false if the
+	 *        session is already being torn down, in which case decrypt()
+	 *        MUST NOT be called on this object.
+	 * @retval true if it is safe to call decrypt(), false otherwise.
+	 */
+	bool AcquireForUse();
+
+	/**
+	 * @fn ReleaseAfterUse
+	 * @brief Must be called exactly once for every successful AcquireForUse(),
+	 *        after the decrypt() call completes.
+	 */
+	void ReleaseAfterUse();
+
+	/**
+	 * @fn PrepareForDestruction
+	 * @brief Must be called by the owner (DrmSessionManager) before deleting
+	 *        this DrmSession. Marks the session so that any new
+	 *        AcquireForUse() calls fail fast, and blocks (bounded) until all
+	 *        in-flight decrypt() operations that already acquired the guard
+	 *        have completed, making it safe to free the object.
+	 * @param timeoutMs maximum time to wait for in-flight operations to drain.
+	 */
+	void PrepareForDestruction(uint32_t timeoutMs = 3000);
+
+
 	/**
 	 * @brief Create drm session with given init data
 	 * @param f_pbInitData : pointer to initdata
@@ -102,7 +174,7 @@ public:
 	 * @param caps : Caps of the media that is currently being decrypted
 	 * @retval Returns status of decrypt request.
 	 */
-        virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
+	virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
 
 	/**
 	 * @fn decrypt
@@ -138,30 +210,18 @@ public:
 
 	/**
 	 * @brief Get the list of usable key IDs from the DRM session
-	 * @retval Reference to vector of usable key IDs
-	 * @note Default implementation returns the reference to an empty vector
+	 * @retval Snapshot copy of usable key IDs, taken under the session's
+	 *         internal lock where applicable. Callers receive their own
+	 *         independent copy and need not hold any external lock.
 	 */
-	virtual const std::vector<std::vector<uint8_t>>& getUsableKeys() const;
+	virtual std::vector<std::vector<uint8_t>> getUsableKeys() const { return {}; }
 
 	/**
-	 * @fn DrmSession
-	 * @param keySystem : DRM key system uuid
+	 * @brief Return the Rialto media key session ID, or -1 if not applicable.
 	 */
-	DrmSession(const string &keySystem);
-	/**     
-     	 * @brief Copy constructor disabled
-     	 *
-     	 */
-	DrmSession(const DrmSession&) = delete;
-	/**
- 	 * @brief assignment operator disabled
- 	 *
- 	 */
-	DrmSession& operator=(const DrmSession&) = delete;
-	/**
-	 * @fn ~DrmSession
-	 */
-	virtual ~DrmSession();
+	virtual int32_t getMediaKeySessionId() const { return -1; }
+
+	virtual void setKeyId(const std::vector<uint8_t>& keyId) {};
 
 	/**
 	 * @fn getKeySystem
@@ -175,9 +235,6 @@ public:
 	 * @retval void
 	 */
 	void setOutputProtection(bool bValue) { m_OutputProtectionEnabled = bValue;}
-#if defined(USE_OPENCDM_ADAPTER)
-	virtual void setKeyId(const std::vector<uint8_t>& keyId) {};
-#endif
 	void setSecManagerSession(ContentSecurityManagerSession session){mContentSecurityManagerSession=session;}
 	ContentSecurityManagerSession getSecManagerSession() const { return mContentSecurityManagerSession;}
 };

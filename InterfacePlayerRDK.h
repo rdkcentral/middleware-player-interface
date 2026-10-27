@@ -37,10 +37,17 @@
 #include "SocUtils.h"
 #include "GstUtils.h"
 #include "DemuxDataTypes.h"
+#include "MediaSample.h"
 
 // Forward declarations
 class InterfacePlayerPriv;
-class AampGrowableBuffer;
+
+/**
+ * @brief PTS ticks per millisecond on the MPEG / 'video-pts' 90 kHz clock.
+ *        Used to convert a millisecond playback position into 90 kHz ticks
+ *        when the 'video-pts' property is not exposed by the platform.
+ */
+inline constexpr long long MPEG_PTS_TICKS_PER_MS = 90LL;
 
 struct MonitorAVState
 {
@@ -166,8 +173,8 @@ class InterfacePlayerRDK
 		std::map<InterfaceCB, std::function<void(int)>> setupStreamCallbackMap;
         
 		PlayerScheduler mScheduler;
-        	InterfacePlayerRDK();
-        	~InterfacePlayerRDK();
+		InterfacePlayerRDK(bool isRialto = false);
+		~InterfacePlayerRDK();
 		InterfacePlayerPriv* GetPrivatePlayer();
 		/**
 		 * @brief Clears the flags for an idle task.
@@ -328,7 +335,7 @@ class InterfacePlayerRDK
         	 *@param[in] drmID preferred drm
         	 */
         	void SetPreferredDRM(const char *drmID);
-        	/**
+			/**
         	 * @brief Configures the GStreamer pipeline.
         	 * @param format Video format.
         	 * @param audioFormat Audio format.
@@ -340,8 +347,30 @@ class InterfacePlayerRDK
         	 * @param rate Bitrate.
         	 * @param pipelineName Pipeline name.
         	 * @param PipelinePriority Pipeline priority.
+        	 * @param FirstFrameFlag Whether the first-frame callback is required.
+        	 * @param url URL of the manifest used to configure stream setup.
+        	 * @param enableLiveLatency Whether to enable live-latency mode in the
+        	 *        RialtoSink streams-info context. Defaults to false.
         	 */
-        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url);
+        	void ConfigurePipeline(int, int, int, bool, bool, bool, int32_t, gint, const char *, int, bool, std::string url, bool enableLiveLatency = false);
+
+        	/**
+        	 * @brief Configures the GStreamer pipeline.
+        	 * @param codecInfo Codec information for the stream.
+        	 * @param bESChangeStatus Whether ES change status is enabled.
+        	 * @param setReadyAfterPipelineCreation Whether to set the player as ready after pipeline creation.
+        	 * @param isSubEnable Whether subtitles are enabled.
+        	 * @param trackId Track ID.
+        	 * @param rate Bitrate.
+        	 * @param pipelineName Pipeline name.
+        	 * @param PipelinePriority Pipeline priority.
+        	 * @param FirstFrameFlag Whether the first-frame callback is required.
+        	 * @param url URL of the manifest used to configure stream setup.
+        	 * @param enableLiveLatency Whether to enable live-latency mode in the
+        	 *        RialtoSink streams-info context. Defaults to false.
+        	 */
+			void ConfigurePipeline(StreamCodecInfo&& codecInfo, bool bESChangeStatus, bool setReadyAfterPipelineCreation, bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string url, bool enableLiveLatency = false);
+
         	/**
         	 * @brief Enables or disables pausing on playback start.
         	 * @param enable True to enable pausing, false to disable.
@@ -515,6 +544,13 @@ class InterfacePlayerRDK
         	 * @return The video PTS value.
         	 */
         	long long GetVideoPTS(void);
+		/**
+		 * @brief Gets the current video playback position via
+		 *        gst_element_query_position on the video sinkbin.
+		 * @return The playback position in milliseconds, or 0 if the
+		 *         pipeline is not in PLAYING/PAUSED state or the query fails.
+		 */
+		long long GetVideoPosition(void);
         	/**
         	 * @brief Sets the callback for the first frame.
         	 * @param[in] callback The callback function to be called on the first frame.

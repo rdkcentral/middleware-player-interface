@@ -20,6 +20,7 @@
 #include <memory>
 #include <iostream>
 
+#include "PlayerLogManager.h"
 #include "VerimatrixHelper.h"
 #include "DrmUtils.h"
 #include "DrmConstants.h"
@@ -71,7 +72,7 @@ bool VerimatrixHelper::parsePssh(const uint8_t* initData, uint32_t initDataLen)
 	std::string keyfile = pssh.substr(sp, ep - sp);
 	MW_LOG_WARN("keyfile %s", keyfile.c_str());
 
-	mKeyID.assign((uint8_t *)keyfile.c_str(), (uint8_t *)keyfile.c_str() + keyfile.length());
+	mKeyID.assign(keyfile.c_str(), keyfile.c_str() + keyfile.length());
 
 	return true;
 }
@@ -98,7 +99,7 @@ void VerimatrixHelper::createInitData(std::vector<uint8_t>& initData) const
 	else
 		MW_LOG_WARN("unknown mediaFormat %d", mDrmInfo.mediaFormat);
 
-	initData.assign((uint8_t *)init, (uint8_t *)init + strlen(init));
+	initData.assign(init, init + strlen(init));
 }
 
 void VerimatrixHelper::getKey(std::vector<uint8_t>& keyID) const
@@ -121,10 +122,15 @@ void VerimatrixHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo
 
 void VerimatrixHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
 {
-	if(mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
-		licenseResponse->setData((unsigned char*)mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
-	else if(mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)
-		licenseResponse->setData((unsigned char*)mKeyID.data(), mKeyID.size());
+	if(!licenseResponse)
+	{
+		MW_LOG_WARN("invalid license response");
+		return;
+	}
+	if (mDrmInfo.mediaFormat == eMEDIAFORMAT_HLS)
+		licenseResponse->setData(mDrmInfo.keyURI.c_str(), mDrmInfo.keyURI.length());
+	else if (mDrmInfo.mediaFormat == eMEDIAFORMAT_DASH)
+		licenseResponse->setData(reinterpret_cast<const char*>(mKeyID.data()), mKeyID.size());
 	else
 		MW_LOG_WARN("unknown mediaFormat %d", mDrmInfo.mediaFormat);
 }

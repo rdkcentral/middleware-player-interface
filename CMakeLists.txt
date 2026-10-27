@@ -18,12 +18,74 @@
 
 cmake_minimum_required(VERSION 3.5)
 project(Playergstinterface VERSION 0.1.0)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ---------------------------------------------------------------------------
+# Player Interface build-time version / Git metadata
+# Values are baked into version.h at compile time — no runtime git needed.
+# ---------------------------------------------------------------------------
+
+if(NOT DEFINED PI_VERSION OR PI_VERSION STREQUAL "")
+    set(PI_VERSION "${CMAKE_PROJECT_VERSION}")
+endif()
+
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} tag --points-at HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    string(REGEX REPLACE "[\r\n].*" "" PI_GIT_TAG "${PI_GIT_TAG}")
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE PI_GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+else()
+    set(PI_GIT_REVISION "unknown")
+    set(PI_GIT_TAG      "unknown")
+    set(PI_GIT_BRANCH   "unknown")
+endif()
+
+if(NOT PI_GIT_REVISION)
+    set(PI_GIT_REVISION "unknown")
+endif()
+if(NOT PI_GIT_TAG)
+    set(PI_GIT_TAG "none")
+endif()
+if(NOT PI_GIT_BRANCH)
+    set(PI_GIT_BRANCH "unknown")
+endif()
+
+message(STATUS "[PlayerInterface] Version   : ${PI_VERSION}")
+message(STATUS "[PlayerInterface] Git Rev   : ${PI_GIT_REVISION}")
+message(STATUS "[PlayerInterface] Git Tag   : ${PI_GIT_TAG}")
+message(STATUS "[PlayerInterface] Git Branch: ${PI_GIT_BRANCH}")
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/version.h"
+    @ONLY
+)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+# ---------------------------------------------------------------------------
 # Set default install prefix
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
 endif()
-set(CMAKE_CXX_STANDARD 17)
 find_package(OpenSSL REQUIRED)
 option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
 
@@ -34,18 +96,21 @@ endif()
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
 
+if(COVERAGE_ENABLED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-plugins-base-1.0)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
+pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
-else()
-	include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS})
-endif(CMAKE_SYSTEM_NAME STREQUAL Linux)
+include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
-#include_directories(${GST_INCLUDE_DIRS} ${GSTREAMER_INCLUDE_DIRS} ${GSTREAMERBASE_INCLUDE_DIRS} ${GSTREAMERVIDEO_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} subtitle playerisobmff isobmff
 	closedcaptions
 	closedcaptions/subtec
@@ -112,7 +177,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 	execute_process (
 		COMMAND bash -c "xcrun --show-sdk-path" OUTPUT_VARIABLE osxSdkPath OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
-	set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++14 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
+	set(OS_CXX_FLAGS "${OS_CXX_FLAGS}  -std=c++17 -g -x objective-c++ -Wno-inconsistent-missing-override -F${osxSdkPath}/System/Library/Frameworks")
 	set(OS_LD_FLAGS "${OS_LD_FLAGS} -F${osxSdkPath}/System/Library/Frameworks -framework Cocoa -L${osxSdkPath}/../MacOSX.sdk/usr/lib -L.libs/lib -L/usr/local/lib/")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot ${osxSdkPath}/../MacOSX.sdk -I/usr/local/include")
 	string(STRIP ${OS_LD_FLAGS} OS_LD_FLAGS)
@@ -130,7 +195,10 @@ else()
 endif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-	set(GSTREAMER_LINK_LIBRARIES "")
+	# Zero out short-name library variables that require link_directories() to resolve.
+	# The Xcode generator appends $(CONFIGURATION) to link_directories() paths, causing
+	# spurious "search path not found" warnings. Full-path _LINK_LIBRARIES variables are
+	# used instead via separate target_link_libraries() calls below.
 	set(GST_LIBRARIES "")
 	set(GSTREAMERBASE_LIBRARIES "")
 	set(GSTVIDEO_LIBRARIES "")
@@ -163,8 +231,10 @@ set(LIBPLAYERGSTINTERFACE_HEADERS
 	vendor/realtek/RealtekSocInterface.h
 	vendor/brcm/BrcmSocInterface.h
 	vendor/default/DefaultSocInterface.h
+	vendor/mtk/MtkSocInterface.h
 	subtitle/vttCue.h
 	ProcessHandler.h
+	MediaSample.h
 )
 
 install(FILES closedcaptions/CCTrackInfo.h
@@ -197,13 +267,19 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/subtecparser/TtmlSubtecParser.hpp
 	GstUtils.h
 	DemuxDataTypes.h
+	MediaSample.h
 	PlayerMetadata.hpp
 	subtec/subtecparser/WebvttSubtecDevInterface.hpp
 	subtec/subtecparser/TextStyleAttributes.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	closedcaptions/direct-rialto/IDirectRialtoCC.h
 	DESTINATION include)
+
+# Install the generated version header
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/version.h"
+    DESTINATION include)
 
 set(SOURCES
 	InterfacePlayerRDK.cpp
@@ -224,6 +300,7 @@ if(NOT (CMAKE_PLATFORM_UBUNTU OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
 		vendor/amlogic/AmlogicSocInterface.cpp
 		vendor/realtek/RealtekSocInterface.cpp
 		vendor/brcm/BrcmSocInterface.cpp
+		vendor/mtk/MtkSocInterface.cpp
 	)
 endif()
 
@@ -400,7 +477,7 @@ if (CMAKE_SUBTITLE_SUPPORT)
 		)
 
 
-	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp closedcaptions/direct-rialto/PlayerDirectRialtoCCManager.cpp)
 endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
@@ -414,6 +491,7 @@ target_include_directories(playergstinterface PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/playerjsonobject
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/subtec
+	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/direct-rialto
 	${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 
 if (CMAKE_SUBTITLE_SUPPORT)
@@ -430,9 +508,9 @@ endif()
 
 target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 
-target_link_libraries(playergstinterface ${GST_LIBRARIES} ${GSTREAMER_LIBRARIES} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
+target_link_libraries(playergstinterface ${GST_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
-target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
+target_link_libraries(playergstinterface ${GSTREAMERVIDEO_LINK_LIBRARIES})
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
@@ -455,7 +533,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libplayergstinterface.pc"
 	)
 
 target_link_libraries(subtec playerlogmanager)
-target_link_libraries(playergstinterface ${GSTVIDEO_LIBRARIES} ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface subtec)
 target_link_libraries(playergstinterface baseconversion)
 target_link_libraries(playergstinterface playerfbinterface)

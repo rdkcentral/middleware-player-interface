@@ -125,6 +125,7 @@ struct gst_media_stream
 	GstElement *sinkbin;              /**< Sink element to consume data */
 	GstElement *source;                       /**< to provide data to the pipeline */
 	GstStreamOutputFormat format; /**< Stream output format for this stream */
+	MediaCodecInfo codecInfo; /**< Codec and encryption information for this stream */
 	bool pendingSeek;                         /**< Flag denotes if a seek event has to be sent to the source */
 	bool resetPosition;                       /**< To indicate that the position of the stream is reset */
 	bool bufferUnderrun;
@@ -137,7 +138,7 @@ struct gst_media_stream
 	GstPad *demuxPad;                  /**< Demux src pad >*/
 	gulong demuxProbeId;       /**< Demux pad probe ID >*/
 
-	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID),
+	gst_media_stream() : sinkbin(NULL), source(NULL), format(GST_FORMAT_INVALID), codecInfo(),
 	pendingSeek(false), resetPosition(false),
 	bufferUnderrun(false), eosReached(false), sourceConfigured(false), sourceLock(PTHREAD_MUTEX_INITIALIZER), timeScale(1), trackId(-1), firstBufferProcessed(false), demuxPad(NULL), demuxProbeId(0)
 	{
@@ -187,6 +188,7 @@ struct GstPlayerPriv
 	bool audioMuted;                                                                         /**< Audio mute status. */
 	std::mutex volumeMuteMutex;                                                      /**< Mutex to ensure setVolumeOrMuteUnMute is thread-safe. */
 	bool subtitleMuted;                                                                      /**< Subtitle mute status. */
+	bool setSubtitlePending;                                                         /**< true to delay subtitle setting until gstreamer pipeline ready. */
 	double audioVolume;                                                                      /**< Audio volume. */
 	guint eosCallbackIdleTaskId;                                             /**< ID of idle handler created for notifying EOS event. */
 	std::atomic<bool> eosCallbackIdleTaskPending;            /**< Set if any eos callback is pending. */
@@ -212,7 +214,6 @@ struct GstPlayerPriv
 	int numberOfVideoBuffersSent;                                                    /**< Number of video buffers sent to pipeline */
 	gint64 segmentStart;                                                                     /**< segment start value; required when qtdemux is enabled or restamping is disabled; -1 to send a segment.start query to gstreamer */
 	GstQuery *positionQuery;                                                                 /**< pointer that holds a position query object */
-	GstQuery *durationQuery;                                                                 /**< pointer that holds a duration query object */
 	bool paused;                                                                                     /**< if pipeline is deliberately put in PAUSED state due to user interaction */
 	GstState pipelineState;                                                                  /**< current state of pipeline */
 	GstTaskControlData firstVideoFrameDisplayedCallbackTask; /**< Task control data of the handler created for notifying state changed to Playing */
@@ -232,7 +233,7 @@ struct GstPlayerPriv
 		gpointer instance;
 		gulong id;
 		std::string name;
-		CallbackData(gpointer _instance, gulong _id, std::string _name) : instance(_instance), id(_id), name(_name) {};
+		CallbackData(gpointer _instance, gulong _id, std::string _name) : instance(_instance), id(_id), name(std::move(_name)) {};
 		CallbackData(const CallbackData &original) : instance(original.instance), id(original.id), name(original.name) {};
 		CallbackData(CallbackData &&original) : instance(original.instance), id(original.id), name(original.name) {};
 		CallbackData &operator=(const CallbackData &) = delete;
@@ -262,7 +263,7 @@ class InterfacePlayerPriv
 	private:
 	protected:
 	public:
-		InterfacePlayerPriv();
+		InterfacePlayerPriv(bool isRialto);
 		~InterfacePlayerPriv();
 		GstPlayerPriv *gstPrivateContext;
 		std::shared_ptr<SocInterface> socInterface;

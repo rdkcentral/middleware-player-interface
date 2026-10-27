@@ -43,6 +43,20 @@ PlayerHlsDrmSessionInterface::PlayerHlsDrmSessionInterface()
 }
 
 /**
+ * @brief Destructor
+ */
+PlayerHlsDrmSessionInterface::~PlayerHlsDrmSessionInterface()
+{
+#ifndef USE_OPENCDM_ADAPTER
+	if(m_pHlsDrmSessionManager != nullptr)
+	{
+		delete m_pHlsDrmSessionManager;
+		m_pHlsDrmSessionManager = nullptr;
+	}
+#endif
+}
+
+/**
  * @brief getInstance Get DRM instance
  *        Get an instance of the Hls DRM Session Manager
  */
@@ -74,7 +88,7 @@ std::shared_ptr<HlsDrmBase> PlayerHlsDrmSessionInterface::createSession(const st
 /**
  * @brief Registers GetAccessKey callback from application
  */
-void PlayerHlsDrmSessionInterface::RegisterGetHlsDrmSessionCb(const GetHlsDrmSessionCallback Callback)
+void PlayerHlsDrmSessionInterface::RegisterGetHlsDrmSessionCb(GetHlsDrmSessionCallback Callback)
 {
-	return m_pHlsDrmSessionManager->RegisterGetHlsDrmSessionCb(Callback);
+	return m_pHlsDrmSessionManager->RegisterGetHlsDrmSessionCb(std::move(Callback));
 }

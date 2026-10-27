@@ -37,7 +37,8 @@
  * @brief SecManagerThunder Constructor
  */
 SecManagerThunder::SecManagerThunder() : mSecManagerObj(SECMANAGER_CALL_SIGN), mSecMutex(), mSchedulerStarted(false),
-	mRegisteredEvents(), mWatermarkPluginObj(WATERMARK_PLUGIN_CALLSIGN), mWatMutex(), mSpeedStateMutex()
+	mRegisteredEvents(), mWatermarkPluginObj(WATERMARK_PLUGIN_CALLSIGN), mWatMutex(), mSpeedStateMutex(),
+	mLoadClutMutex(), mLoadClutInFlight()
 {
 	std::lock_guard<std::mutex> lock(mSecMutex);
 	mSecManagerObj.ActivatePlugin();	
@@ -229,10 +230,9 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 						 * where input data changes e.g. following a call to updatePlaybackSession
 						 * the input data to the shared session is updated here*/
 						newSession = ContentSecurityManagerSession(response["sessionId"].Number(), 
-								ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetadata,
-									contMetaLen, licenseRequest, keySystemId,
-									mediaUsage, accessToken, isVideoMuted));
-
+							ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetaDataStr.c_str(),
+								contMetaLen, licenseRequestStr.c_str(), keySystemId,
+								mediaUsage, accessTokenStr.c_str(), isVideoMuted));
 						std::string license = response["license"].String();
 						MW_LOG_TRACE("SecManager obtained license with length: %d and data: %s",license.size(), license.c_str());
 						if (!license.empty())
@@ -245,23 +245,27 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 
 							if (licenseDecoded != nullptr && licenseDecodedLen != 0)
 							{
-								MW_LOG_INFO("SecManager license post base64 decode length: %d", *licenseResponseLength);
 								*licenseResponse = (char*) malloc(licenseDecodedLen);
 								if (*licenseResponse)
 								{
 									memcpy(*licenseResponse, licenseDecoded, licenseDecodedLen);
 									*licenseResponseLength = licenseDecodedLen;
+								        MW_LOG_INFO("SecManager license post base64 decode length: %d", *licenseResponseLength);
+									ret = true;
 								}
 								else
 								{
 									MW_LOG_ERR("SecManager failed to allocate memory for license!");
 								}
-								free(licenseDecoded);
-								ret = true;
 							}
 							else
 							{
 								MW_LOG_ERR("SecManager license base64 decode failed!");
+							}
+							
+							if (licenseDecoded != nullptr)
+							{
+								free(licenseDecoded);
 							}
 						}
 					}
@@ -533,27 +537,27 @@ void SecManagerThunder::RegisterAllEvents ()
 {
 	bool bSubscribed = false;
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> watermarkSessionMethod = std::bind(&SecManagerThunder::watermarkSessionHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onWatermarkSession"), watermarkSessionMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onWatermarkSession"), std::move(watermarkSessionMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onWatermarkSession");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> addWatermarkMethod = std::bind(&SecManagerThunder::addWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onAddWatermark"), addWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onAddWatermark"), std::move(addWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onAddWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> updateWatermarkMethod = std::bind(&SecManagerThunder::updateWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onUpdateWatermark"), updateWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onUpdateWatermark"), std::move(updateWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onUpdateWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> removeWatermarkMethod = std::bind(&SecManagerThunder::removeWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onRemoveWatermark"), removeWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onRemoveWatermark"), std::move(removeWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onRemoveWatermark");
 
 	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> showWatermarkMethod = std::bind(&SecManagerThunder::showWatermarkHandler, this, std::placeholders::_1);
-	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onDisplayWatermark"), showWatermarkMethod);
+	bSubscribed = mSecManagerObj.SubscribeEvent(_T("onDisplayWatermark"), std::move(showWatermarkMethod));
 	if(bSubscribed)
 		mRegisteredEvents.push_back("onDisplayWatermark");
 }
@@ -615,24 +619,21 @@ void SecManagerThunder::addWatermarkHandler(const JsonObject& parameters)
 
 		int smKey = parameters["graphicImageBufferKey"].Number();
 		int smSize = parameters["graphicImageSize"].Number();/*ToDo : graphicImageSize (long) long conversion*/
+		bool adjustVisibility = parameters["adjustVisibilityRequired"].Boolean();
+		int sessionId = parameters["sessionId"].Number();
 		MW_LOG_WARN("ContentSecurityManager::%s:%d graphicId : %d smKey: %d smSize: %d", __FUNCTION__, __LINE__, graphicId, smKey, smSize);
-		ContentSecurityManager::GetInstance()->ScheduleTask(PlayerAsyncTaskObj([graphicId, smKey, smSize](void *data)
+		ContentSecurityManager::GetInstance()->ScheduleTask(PlayerAsyncTaskObj([graphicId, smKey, smSize, adjustVisibility, sessionId](void *data)
 					{
 					SecManagerThunder *instance = static_cast<SecManagerThunder *>(data);
 					instance->UpdateWatermark(graphicId, smKey, smSize);
+					if (adjustVisibility)
+					{
+					    MW_LOG_WARN("ContentSecurityManager::addWatermarkHandler adjustVisibilityRequired is true, invoking GetWaterMarkPalette after UpdateWatermark. graphicId : %d", graphicId);
+					    instance->GetWaterMarkPalette(sessionId, graphicId);
+					}
 					}, (void *)ContentSecurityManager::GetInstance()));
 
-		if (parameters["adjustVisibilityRequired"].Boolean())
-		{
-			int sessionId = parameters["sessionId"].Number();
-			MW_LOG_WARN("ContentSecurityManager::%s:%d adjustVisibilityRequired is true, invoking GetWaterMarkPalette. graphicId : %d", __FUNCTION__, __LINE__, graphicId);
-			ContentSecurityManager::GetInstance()->ScheduleTask(PlayerAsyncTaskObj([sessionId, graphicId](void *data)
-						{
-						SecManagerThunder *instance = static_cast<SecManagerThunder *>(data);
-						instance->GetWaterMarkPalette(sessionId, graphicId);
-						}, (void *)ContentSecurityManager::GetInstance()));
-		}
-		else
+		if (!adjustVisibility)
 		{
 			MW_LOG_WARN("ContentSecurityManager::%s:%d adjustVisibilityRequired is false, graphicId : %d", __FUNCTION__, __LINE__, graphicId);
 		}
@@ -683,6 +684,10 @@ void SecManagerThunder::removeWatermarkHandler(const JsonObject& parameters)
 	{
 		int graphicId = parameters["graphicId"].Number();
 		MW_LOG_WARN("ContentSecurityManager::%s:%d graphicId : %d ", __FUNCTION__, __LINE__, graphicId);
+                {
+                    std::lock_guard<std::mutex> lock(mLoadClutMutex);
+                    mLoadClutInFlight.erase(graphicId);
+                }
 		ContentSecurityManager::GetInstance()->ScheduleTask(PlayerAsyncTaskObj([graphicId](void *data)
 					{
 					SecManagerThunder *instance = static_cast<SecManagerThunder *>(data);
@@ -885,6 +890,15 @@ void SecManagerThunder::AlwaysShowWatermarkOnTop(bool show)
  */
 void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
 {
+        {
+             std::lock_guard<std::mutex> lock(mLoadClutMutex);
+             if (mLoadClutInFlight.count(graphicId) > 0)
+             {
+                 MW_LOG_WARN("ContentSecurityManager::%s:%d loadClutWatermark already in-flight for graphicId %d, skipping duplicate call", __FUNCTION__, __LINE__, graphicId);
+                 return;
+             }
+             mLoadClutInFlight.insert(graphicId);
+        }
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -923,6 +937,10 @@ void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
 	{
 		MW_LOG_ERR("ContentSecurityManager::%s thunder invocation failed!", __FUNCTION__);
 	}
+        {
+             std::lock_guard<std::mutex> lock(mLoadClutMutex);
+             mLoadClutInFlight.erase(graphicId);
+        }
 }
 
 /**

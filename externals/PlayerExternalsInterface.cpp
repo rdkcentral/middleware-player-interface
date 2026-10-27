@@ -26,7 +26,7 @@
 #include "PlayerExternalUtils.h"
 #include <utility>
 
-#ifdef IARM_MGR
+#if defined(IARM_MGR) || defined(USE_FIREBOLT)
 #include "PlayerExternalsRdkInterface.h"
 #endif
 
@@ -38,7 +38,7 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::s_pPlayerOP 
  */
 PlayerExternalsInterface::PlayerExternalsInterface()
 {
-#ifdef IARM_MGR
+#if defined(IARM_MGR) || defined(USE_FIREBOLT)
     MW_PRE_LOGGER_LOG("Device API IARM/Firebolt\n");
     m_pIarmInterface = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 #else
@@ -109,6 +109,14 @@ std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::GetPlayerExt
     }
 
     return s_pPlayerOP;
+}
+
+/**
+ * @brief Creates a new independent (non-singleton) instance
+ */
+std::shared_ptr<PlayerExternalsInterface> PlayerExternalsInterface::createInstance()
+{
+    return std::shared_ptr<PlayerExternalsInterface>(new PlayerExternalsInterface());
 }
 
 /**

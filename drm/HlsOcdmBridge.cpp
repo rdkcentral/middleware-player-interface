@@ -100,3 +100,12 @@ void HlsOcdmBridge::CancelKeyWait(void)
 	//TBD:Unimplemented
 }
 
+/**
+ * @brief GetState Function to get current DRM State
+ */
+DRMState HlsOcdmBridge::GetState()
+{
+	std::lock_guard<std::mutex> guard(m_Mutex);
+	return m_drmState;
+}
+

@@ -274,7 +274,7 @@ namespace
     }
 }
 
-void CCDataController::sendCCSetAttribute(gsw_CcAttributes * attrib, short type, gsw_CcType ccType)
+void CCDataController::sendCCSetAttribute(gsw_CcAttributes * attrib, uint32_t type, gsw_CcType ccType)
 {
     using AttributesArray = std::array<uint32_t, 14> ;
 
@@ -312,7 +312,7 @@ void CCDataController::sendCCSetAttribute(gsw_CcAttributes * attrib, short type,
 
     const auto ccTypeValue = getValue(ccType);
 
-    channel.SendCCSetAttributePacket(ccTypeValue, uint32_t{type}, attributes);
+    channel.SendCCSetAttributePacket(ccTypeValue, type, attributes);
 }
 
 void closedCaptionDecodeCb(void *context, int decoderIndex, int event)

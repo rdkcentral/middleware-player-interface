@@ -21,6 +21,7 @@
  * @file OcdmBasicSessionAdapter.cpp
  * @brief Handles operations on OCDM session
  */
+#include <utility>
 #include "opencdmsessionadapter.h"
 #include "DrmHelper.h"
 
@@ -32,7 +33,7 @@ class OCDMBasicSessionAdapter : public OCDMSessionAdapter
 {
 public:
 	OCDMBasicSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *drmCallbacks)
-	: OCDMSessionAdapter(drmHelper, drmCallbacks)
+	: OCDMSessionAdapter(std::move(drmHelper), drmCallbacks)
 	{};
 	~OCDMBasicSessionAdapter() {};
 

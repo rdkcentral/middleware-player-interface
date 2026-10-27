@@ -34,7 +34,7 @@ public:
     Packet() : m_buffer(), m_counter(std::numeric_limits<std::uint32_t>::max()) {}
     Packet(std::uint32_t counter) : m_buffer(), m_counter(counter) {}
 
-    const uint32_t getType()
+    uint32_t getType()
     {
         uint32_t type = 0;
 
@@ -54,7 +54,7 @@ public:
         return m_buffer;
     }
     
-    const std::uint32_t getCounter()
+    std::uint32_t getCounter()
     {
         return m_counter;
     }

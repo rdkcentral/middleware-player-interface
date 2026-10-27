@@ -244,7 +244,7 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 	}
 
 	{
-		std::lock_guard<std::mutex> lock(mContentProtectionMutex);
+		std::unique_lock<std::mutex> lock(mContentProtectionMutex);
 		if (!accessTokenStr.empty() &&
 				!contentMetaDataStr.empty() &&
 				!licenseRequestStr.empty())
@@ -273,13 +273,13 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 				if(!update)
 				{
 					result = OpenDrmSession(clientId, appId, keySystem,
-							licenseRequest, initData, sessionId, errorCode, drmSession);
+							licenseRequestStr, initData, sessionId, errorCode, drmSession);
 				}
 				else
 				{
 					result = 
 						UpdateDrmSession(sessionId, errorCode,
-								licenseRequest, initData, drmSession);					
+								licenseRequestStr, initData, drmSession);
 				}
 				if (drmSession.empty())
 				{
@@ -326,17 +326,21 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 										*licenseResponseLength = licenseDecodedLen;
 
 										MW_LOG_INFO("ContentProtection license post base64 decode length: %zu", *licenseResponseLength);
+										ret = true;
 									}
 									else
 									{
 										MW_LOG_ERR("ContentProtection failed to allocate memory for license!");
 									}
-									free(licenseDecoded);
-									ret = true;
 								}
 								else
 								{
 									MW_LOG_ERR("ContentProtection license base64 decode failed!");
+								}
+								
+								if (licenseDecoded != nullptr)
+								{
+									free(licenseDecoded);
 								}
 							}
 						}
@@ -402,7 +406,11 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 					{
 						++retryCount;
 						MW_LOG_WARN("ContentProtection license request failed, response for %s : statusCode: %d, reasonCode: %d, so retrying with delay %d, retry count : %u", apiName, *statusCode, *reasonCode, sleepTime, retryCount );
-						ms_sleep(sleepTime);						
+						// Release lock before sleeping to avoid blocking other threads
+						lock.unlock();
+						ms_sleep(sleepTime);
+						// Re-acquire lock for next iteration
+						lock.lock();
 					}
 					else
 					{

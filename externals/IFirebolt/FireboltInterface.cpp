@@ -48,6 +48,8 @@ FireboltInterface::FireboltInterface()
 
 	if (!firebolt_endpoint) {
 		MW_LOG_ERR("FIREBOLT_ENDPOINT not set; cannot initialize Firebolt");
+		mListenerId = 0;
+		mIsConnected = false;
 		return;
 	}
 	std::string url = firebolt_endpoint;

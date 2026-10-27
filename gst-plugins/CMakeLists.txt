@@ -35,7 +35,10 @@ pkg_check_modules(CURL REQUIRED libcurl)
 # Mac OS X
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
     pkg_check_modules(GSTREAMERVIDEO REQUIRED gstreamer-video-1.0)
-    link_directories(${GSTREAMERVIDEO_LIBRARY_DIRS})
+    # link_directories(${GSTREAMERVIDEO_LIBRARY_DIRS}) omitted: the Xcode generator
+    # appends $(CONFIGURATION) to these paths, causing spurious "search path
+    # not found" warnings for non-existent .../lib/Debug directories.
+    pkg_check_modules(UUID REQUIRED uuid)
     set(OS_CXX_FLAGS "${OS_CXX_FLAGS} -g -x objective-c++")
     set(OS_LD_FLAGS "${OS_LD_FLAGS} -framework Cocoa")
     string(STRIP "${OS_LD_FLAGS}" OS_LD_FLAGS)
@@ -53,12 +56,19 @@ include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
 include_directories(${MW_ROOT}/closedcaptions)
 include_directories(${MW_ROOT}/)
 
-set(GST_COMMON_DEPENDENCIES ${OS_LD_FLAGS} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES} ${CURL_LIBRARIES} ${CLI_LD_FLAGS} -ldl -luuid ${SEC_CLIENT_LIB})
+if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    # On Darwin use full-path _LINK_LIBRARIES to avoid needing link_directories().
+    set(GST_COMMON_DEPENDENCIES ${OS_LD_FLAGS} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${UUID_LINK_LIBRARIES} ${CLI_LD_FLAGS} ${SEC_CLIENT_LIB})
+else()
+    set(GST_COMMON_DEPENDENCIES ${OS_LD_FLAGS} ${GSTREAMERBASE_LIBRARIES} ${GSTREAMER_LIBRARIES} ${CURL_LIBRARIES} ${CLI_LD_FLAGS} -ldl -luuid ${SEC_CLIENT_LIB})
+endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-multichar")
 
-if(CMAKE_IARM_MGR)
-	message("CMAKE_IARM_MGR set")
+
+if(NOT CMAKE_USE_FIREBOLT AND NOT CMAKE_PLATFORM_UBUNTU AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+	message("Enabling IARM_MGR")
+
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIARM_MGR")
 endif()
 

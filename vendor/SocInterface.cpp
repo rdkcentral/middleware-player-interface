@@ -24,7 +24,13 @@
 #include "vendor/amlogic/AmlogicSocInterface.h"
 #include "vendor/brcm/BrcmSocInterface.h"
 #include "vendor/realtek/RealtekSocInterface.h"
+#include "vendor/mtk/MtkSocInterface.h"
 #endif
+
+
+/**Initially re-sets the IsRialtoMode */
+bool SocInterface::mIsRialtoMode = false;
+
 
 /**
  * @brief Checks if the input string starts with the given prefix.
@@ -62,6 +68,7 @@ SocPlatformType InferPlatformFromPluginScan()
 		{"amlhalasink", SOC_PLATFORM_AMLOGIC},
 		{"omxeac3dec", SOC_PLATFORM_REALTEK},
 		{"brcmaudiodecoder", SOC_PLATFORM_BROADCOM},
+		{"mtkaudiosink", SOC_PLATFORM_MEDIATEK},
 	};
 	
 	GstRegistry* registry = gst_registry_get();
@@ -128,6 +135,11 @@ SocPlatformType SocInterface::InferPlatformFromDeviceProperties( void )
 						platform = SOC_PLATFORM_BROADCOM;
 						break;
 					}
+					else if (strcmp(socName, "MEDIATEK") == 0)
+					{
+						platform = SOC_PLATFORM_MEDIATEK;
+						break;
+					}
 				}
 				else
 				{
@@ -146,6 +158,21 @@ SocPlatformType SocInterface::InferPlatformFromDeviceProperties( void )
 
 
 /**
+ * @brief Loads the instance with rialto mode or not 
+ *
+ * @return A pointer to the created SocInterface object, or nullptr on failure.
+ */
+std::shared_ptr<SocInterface> SocInterface::CreateSocInterface(bool isRialto)
+{
+	if(isRialto == true)
+	{
+	    MW_LOG_MIL("Rialto is enabled and creating default soc");
+	}
+	mIsRialtoMode = isRialto;
+	return CreateSocInterface();
+}
+
+/**
  * @brief Creates an instance of the SoC-specific interface based on the detected platform.
  *
  * @return A pointer to the created SocInterface object, or nullptr on failure.
@@ -158,21 +185,33 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
 		SocPlatformType platformType = InferPlatformFromDeviceProperties();
 		if(platformType == SOC_PLATFORM_DEFAULT)
 		{
-			platformType = InferPlatformFromPluginScan();
+			if(!mIsRialtoMode)
+			{
+				MW_LOG_MIL("Performing InterfacePluginScan| Rialto-Enabled");
+				platformType = InferPlatformFromPluginScan();
+            }
 		}
 #if !defined(__APPLE__) && !defined(UBUNTU)
 		switch (platformType)
 		{
 			case SOC_PLATFORM_AMLOGIC:
+				MW_LOG_MIL("Setting up SoC Interface for AMLOGIC");
 				socInterface = std::make_shared<AmlogicSocInterface>();
 				break;
 			case SOC_PLATFORM_BROADCOM:
+				MW_LOG_MIL("Setting up SoC Interface for BROADCOM");
 				socInterface = std::make_shared<BrcmSocInterface>();
 				break;
 			case SOC_PLATFORM_REALTEK:
+				MW_LOG_MIL("Setting up SoC Interface for REALTEK");
 				socInterface = std::make_shared<RealtekSocInterface>();
 				break;
+			case SOC_PLATFORM_MEDIATEK:
+				MW_LOG_MIL("Setting up SoC Interface for MEDIATEK");
+				socInterface = std::make_shared<MtkSocInterface>();
+				break;
 			default:
+				MW_LOG_MIL("Setting up SoC Interface for Default");
 				socInterface = std::make_shared<DefaultSocInterface>();
 				break;
 		}
@@ -192,20 +231,76 @@ std::shared_ptr<SocInterface> SocInterface::CreateSocInterface()
  * @param video_dec The video decoder element.
  * @param isWesteros A flag for Westeros logic.
  *
- * @return Video PTS in nanoseconds, or -1 on error.
+ * @return Video PTS in 90 kHz ticks, or -1 if the 'video-pts'
+ *         property is not supported on this platform.
  */
-long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
+long long SocInterface::ReadVideoPts(GstElement *element)
 {
-	gint64 currentPTS = 0;
-	if(video_dec)
+	long long result = 0;
+	if (element)
 	{
-		g_object_get(video_dec, "video-pts", &currentPTS, NULL);
-		if(!isWesteros)
+		if (mVideoPtsPropertySupported)
 		{
-			currentPTS *= 2;
+			gint64 currentPTS = 0;
+			g_object_get(element, "video-pts", &currentPTS, NULL);
+			result = static_cast<long long>(currentPTS);
+		}
+		else
+		{
+			/* The 'video-pts' property is not exposed on this platform.*/
+			result = -1;
 		}
 	}
-	return (long long)currentPTS;
+	return result;
+}
+
+long long SocInterface::GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros)
+{
+	long long result = ReadVideoPts(video_dec);
+	if (result != -1 && !isWesteros)
+	{
+		result *= 2;
+	}
+	return result;
+}
+
+/**
+ * @brief Probe whether the 'video-pts' GObject property is supported and
+ *        update mVideoPtsPropertySupported accordingly.
+ *
+ * @param element The GStreamer element to probe.
+ */
+void SocInterface::CheckVideoPtsPropertySupport(GstElement *element)
+{
+	if (element)
+	{
+		GParamSpec *pspec = g_object_class_find_property(
+			G_OBJECT_GET_CLASS(element), "video-pts");
+		mVideoPtsPropertySupported = (pspec != NULL);
+		MW_LOG_WARN("SocInterface: 'video-pts' property is %s on %s",
+			mVideoPtsPropertySupported ? "supported" : "NOT supported",
+			GST_ELEMENT_NAME(element));
+	}
+	else
+	{
+		MW_LOG_WARN("SocInterface: cannot probe 'video-pts' property, element is NULL");
+	}
+}
+
+/**
+ * @brief Discover decoder-specific properties at video decoder creation time.
+ */
+void SocInterface::DiscoverVideoDecoderProperties(GstElement *element)
+{
+	CheckVideoPtsPropertySupport(element);
+}
+
+/**
+ * @brief Discover sink-specific properties at video sink creation time.
+ *        Base implementation is a no-op.
+ */
+void SocInterface::DiscoverVideoSinkProperties(GstElement */*element*/)
+{
 }
 
 /**

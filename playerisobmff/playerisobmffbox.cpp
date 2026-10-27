@@ -1408,17 +1408,28 @@ SencIsoBmffBox* SencIsoBmffBox::constructSencBox(uint32_t sz, uint8_t *ptr)
 */
 void SencIsoBmffBox::truncate(uint32_t firstSampleSize)
 {
-	if (numSamples > 1)
+	if (numSamples <= 1)
 	{
-		if (firstSampleSize)
-		{
-			auto newEnd{sampleCountLoc + sizeof(uint32_t) + firstSampleSize};
-			auto oldSize{getSize()};
-			auto newSize{static_cast<uint32_t>(newEnd - getBase())};
+		return;
+	}
 
-			if ((oldSize - newSize) >= PLAYER_SIZEOF_SIZE_AND_TAG)
+	if (firstSampleSize)
+	{
+		uint8_t *base = getBase();
+		uint32_t oldSize = getSize();
+		uint8_t *end = base + oldSize;
+
+		uint8_t *newEnd = sampleCountLoc + sizeof(uint32_t) + firstSampleSize;
+		if (newEnd <= base || newEnd > end)
+		{
+			MW_LOG_INFO("SencIsoBmffBox::truncate: computed end is out of bounds");
+		}
+		else
+		{
+			uint32_t newSize = static_cast<uint32_t>(newEnd - base);
+			if (newSize <= oldSize && (oldSize - newSize) >= PLAYER_SIZEOF_SIZE_AND_TAG)
 			{
-				PLAYER_WRITE_U32(getBase(), newSize);
+				PLAYER_WRITE_U32(base, newSize);
 				SkipIsoBmffBox skip{oldSize - newSize, newEnd};
 			}
 			else
@@ -1426,10 +1437,10 @@ void SencIsoBmffBox::truncate(uint32_t firstSampleSize)
 				MW_LOG_INFO("No room for a skip box");
 			}
 		}
-
-		numSamples = 1;
-		PLAYER_WRITE_U32(sampleCountLoc, numSamples);
 	}
+
+	numSamples = 1;
+	PLAYER_WRITE_U32(sampleCountLoc, numSamples);
 }
 
 /**

@@ -25,6 +25,7 @@
 
 #include <dlfcn.h>
 #include <mutex>
+#include <utility>
 #include <gst/gst.h>
 #include "opencdmsessionadapter.h"
 #include "PlayerLogManager.h"
@@ -38,7 +39,7 @@ class OCDMGSTSessionAdapter : public OCDMSessionAdapter
 {
         void ExtractSEI( GstBuffer *buffer);
 public:
-	OCDMGSTSessionAdapter(DrmHelperPtr drmHelper,  DrmCallbacks *drmCallbacks) : OCDMSessionAdapter(drmHelper, drmCallbacks)
+	OCDMGSTSessionAdapter(DrmHelperPtr drmHelper,  DrmCallbacks *drmCallbacks) : OCDMSessionAdapter(std::move(drmHelper), drmCallbacks)
 , OCDMGSTSessionDecrypt(nullptr)
 	{
                 const char* ocdmgstsessiondecrypt = "opencdm_gstreamer_session_decrypt_buffer";

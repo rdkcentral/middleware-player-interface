@@ -60,6 +60,13 @@ GstHandlerControl::ScopeHelper GstHandlerControl::getScopeHelper()
 
 bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string name)
 {
+	// Negative delays are treated as an immediate timeout.
+	if (MaximumDelayMilliseconds < 0)
+	{
+		MW_LOG_ERR("GstHandlerControl: invalid negative delay %d", MaximumDelayMilliseconds);
+		return false;
+	}
+
 	const std::chrono::steady_clock::time_point end =
 	std::chrono::milliseconds{MaximumDelayMilliseconds} + std::chrono::steady_clock::now();
 

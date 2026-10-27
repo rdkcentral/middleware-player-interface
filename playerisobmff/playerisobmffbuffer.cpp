@@ -58,6 +58,30 @@ void PlayerIsoBmffBuffer::setBuffer(uint8_t *buf, size_t sz)
 }
 
 /**
+ *  @brief Get buffer pointer
+ */
+uint8_t* PlayerIsoBmffBuffer::getBuffer() const
+{
+	return buffer;
+}
+
+/**
+ *  @brief Get buffer size
+ */
+size_t PlayerIsoBmffBuffer::getBufferSize() const
+{
+	return bufSize;
+}
+
+/**
+ *  @brief Get parsed mdat box count
+ */
+size_t PlayerIsoBmffBuffer::getMdatCount() const
+{
+	return mdatCount;
+}
+
+/**
  *	@fn parseBuffer
  *  @param[in] correctBoxSize - flag to correct the box size
  *	@param[in] newTrackId - new track id to overwrite the existing track id, when value is -1, it will not override
@@ -83,11 +107,18 @@ bool PlayerIsoBmffBuffer::parseBuffer(bool correctBoxSize, int newTrackId)
 /**
  *  @brief Get list of box handles in a parsed buffer
  */
-player_isobmff::IsoBmffBox* PlayerIsoBmffBuffer::getChunkedfBox() const
+player_isobmff::IsoBmffBox* PlayerIsoBmffBuffer::getChunkedBox() const
 {
 	return this->chunkedBox;
 }
 
+/**
+ *  @brief Deprecated alias for getChunkedBox()
+ */
+player_isobmff::IsoBmffBox* PlayerIsoBmffBuffer::getChunkedfBox() const
+{
+	return getChunkedBox();
+}
 /**
  *  @brief Print ISOBMFF boxes
  */

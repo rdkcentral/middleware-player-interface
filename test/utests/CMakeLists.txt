@@ -90,4 +90,15 @@ function(player_utest_run_add test_suite)
 		gtest_discover_tests(${test_suite} DISCOVERY_TIMEOUT 10 TEST_PREFIX ${test_suite}:)
 	endif()
 endfunction()
+
+function(player_utest_add_cov TARGET)
+  # gcov doesn't work that well with Apple build tools, but the alternatives are not attractive:
+  #  * use llvm (doesn't work with Apple clang)
+  #  * use xcodebuild (there is no HTML report and very different tool chain)
+
+  target_compile_options(${TARGET} PRIVATE --coverage)
+  target_link_options(${TARGET} PRIVATE --coverage)
+
+endfunction()
+
 add_subdirectory(tests)

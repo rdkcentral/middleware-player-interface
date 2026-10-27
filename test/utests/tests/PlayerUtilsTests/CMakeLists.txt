@@ -23,7 +23,7 @@ set(DRM_ROOT ${UTESTS_ROOT}/drm)
 set(EXEC_NAME PlayerUtilsTests)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DREALTEKCE=1")
 
-include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/test/aampcli ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerjsonobject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/externals/contentsecuritymanager)
+include_directories(${PLAYER_ROOT} ${PLAYER_ROOT}/test/aampcli ${PLAYER_ROOT}/drm ${PLAYER_ROOT}/drm/helper ${PLAYER_ROOT}/subtitle ${PLAYER_ROOT}/middleware/subtitle ${PLAYER_ROOT}/downloader ${PLAYER_ROOT}/isobmff ${PLAYER_ROOT}/subtec/subtecparser ${PLAYER_ROOT}/playerJsonObject ${PLAYER_ROOT}/subtec/libsubtec ${PLAYER_ROOT}/externals/contentsecuritymanager)
 include_directories(${PLAYER_ROOT}/tsb/api)
 include_directories(${PLAYER_ROOT}/middleware)
 include_directories(${PLAYER_ROOT}/externals)
@@ -72,6 +72,6 @@ if (COVERAGE_ENABLED)
 	APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-target_link_libraries(${EXEC_NAME} fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+target_link_libraries(${EXEC_NAME} playerlogmanager baseconversion fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})
