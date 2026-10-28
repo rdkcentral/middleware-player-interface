@@ -339,9 +339,9 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 			ProcessHandler processHandler;
 			// In Release another process handles opencdm which needs to be restarts .In Sprint this process is not available.
 			// So check if process exists before killing it .
-			if (processHandler.KillProcess("WPEFramework")) /** Current OCDM process **/
+			if (processHandler.KillProcess("Thunder")) /** Current OCDM process **/
 			{
-				MW_LOG_WARN("OCDM HWError reported.. Killed the process WPEFramework for recovery..");
+				MW_LOG_WARN("OCDM HWError reported.. Killed the process Thunder for recovery..");
 			}
 			else 
 			{

@@ -35,7 +35,7 @@
 #include "PlayerThunderInterface.h"
 
 using namespace std;
-using namespace WPEFramework;
+using namespace Thunder;
 
 #define THUNDER_RPC_TIMEOUT 5000
 
@@ -326,7 +326,7 @@ private:
      *   @param[in] functionHandler : Event function pointer
      *   @return NA
      */
-    void RegisterEvent_VIDEOIN(string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    void RegisterEvent_VIDEOIN(string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler);
 
     /**
      *   @fn GetScreenResolution
@@ -404,7 +404,7 @@ private:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    bool SubscribeEvent (string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler);
 
     /**
      * @fn GetAudioTrackInternal

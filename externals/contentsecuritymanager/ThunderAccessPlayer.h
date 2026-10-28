@@ -41,7 +41,7 @@
 #pragma GCC diagnostic pop
 
 using namespace std;
-using namespace WPEFramework;
+using namespace Thunder;
 
 #define THUNDER_RPC_TIMEOUT 5000
 
@@ -107,7 +107,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool SubscribeEvent (std::string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    bool SubscribeEvent (std::string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler);
     /**
      *   @fn UnSubscribeEvent
      *   @note   unSubscribe event data for the specific plugin

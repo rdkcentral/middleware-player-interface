@@ -15,18 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# - Try to find WPEFramework
+# - Try to find Thunder
 # Once done this will define
-#  WPEFRAMEWORK_FOUND - System has WPEFramework
-#  WPEFRAMEWORK_INCLUDE_DIRS - The WPEFramework include directories
-#  WPEFRAMEWORK_LIBRARIES - The libraries needed to use WPEFramework
+#  WPEFRAMEWORK_FOUND - System has Thunder
+#  WPEFRAMEWORK_INCLUDE_DIRS - The Thunder include directories
+#  WPEFRAMEWORK_LIBRARIES - The libraries needed to use Thunder
 #
 # Be extremely careful! WPEFRAMEWORK_PLUGINS_INCLUDE_DIRS and WPEFRAMEWORK_LIBRARIES is already defined in
-# WPEFramework/Source/plugins!!
+# Thunder/Source/plugins!!
 # So here we purposely left one underscore away
 
 find_package(PkgConfig)
-pkg_check_modules(PC_WPEFRAMEWORK WPEFrameworkCore)
+pkg_check_modules(PC_WPEFRAMEWORK ThunderCore)
 
 if(PC_WPEFRAMEWORK_FOUND)
     if(WPEFRAMEWORK_FIND_VERSION AND PC_WPEFRAMEWORK_VERSION)
@@ -47,14 +47,14 @@ if(PC_WPEFRAMEWORK_FOUND)
         HINTS ${PC_WPEFRAMEWORK_INCLUDEDIR} ${PC_WPEFRAMEWORK_INCLUDE_DIRS})
 
 if (USE_THUNDER_R4)
-       set(WPEFRAMEWORK_LIBS WPEFrameworkPlugins WPEFrameworkCore WPEFrameworkCOM WPEFrameworkWebSocket)
+       set(WPEFRAMEWORK_LIBS ThunderPlugins ThunderCore ThunderCOM ThunderWebSocket)
 else()
-    set(WPEFRAMEWORK_LIBS WPEFrameworkPlugins WPEFrameworkCore WPEFrameworkTracing WPEFrameworkProtocols)
+    set(WPEFRAMEWORK_LIBS ThunderPlugins ThunderCore ThunderTracing ThunderProtocols)
 endif()
 
-# Add WPEFrameworkSecurityUtil if DISABLE_SECURITY_TOKEN is not enabled
+# Add ThunderSecurityUtil if DISABLE_SECURITY_TOKEN is not enabled
 if (NOT DISABLE_SECURITY_TOKEN)
-    list(APPEND WPEFRAMEWORK_LIBS WPEFrameworkSecurityUtil)
+    list(APPEND WPEFRAMEWORK_LIBS ThunderSecurityUtil)
 endif()
 
     set(WPEFRAMEWORK_LIBRARY )
@@ -74,7 +74,7 @@ else()
 endif()
 
 if (WPEFRAMEWORK_VERBOSE_BUILD)
-    message(STATUS "WPEFramework   : ${WPEFRAMEWORK_FOUND_TEXT}")
+    message(STATUS "Thunder   : ${WPEFRAMEWORK_FOUND_TEXT}")
     message(STATUS "  version      : ${PC_WPEFRAMEWORK_VERSION}")
     message(STATUS "  cflags       : ${PC_WPEFRAMEWORK_CFLAGS}")
     message(STATUS "  cflags other : ${PC_WPEFRAMEWORK_CFLAGS_OTHER}")
@@ -96,14 +96,14 @@ find_package_handle_standard_args(WPEFRAMEWORK DEFAULT_MSG
 
 if(WPEFRAMEWORK_FOUND)
 else()
-    message(WARNING "Could not find WPEFramework")
+    message(WARNING "Could not find Thunder")
 endif()
 
 mark_as_advanced(
     WPEFRAMEWORK_DEFINITIONS
     WPEFRAMEWORK_INCLUDE_DIRS
     WPEFRAMEWORK_LIBRARIES
-    WPEFRAMEWORK_LIBRARY_WPEFrameworkPlugins
-    WPEFRAMEWORK_LIBRARY_WPEFrameworkCore
-    WPEFRAMEWORK_LIBRARY_WPEFrameworkTracing
-    WPEFRAMEWORK_LIBRARY_WPEFrameworkProtocols)
+    WPEFRAMEWORK_LIBRARY_ThunderPlugins
+    WPEFRAMEWORK_LIBRARY_ThunderCore
+    WPEFRAMEWORK_LIBRARY_ThunderTracing
+    WPEFRAMEWORK_LIBRARY_ThunderProtocols)

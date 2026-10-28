@@ -33,7 +33,7 @@
 #pragma GCC diagnostic pop
 
 using namespace std;
-using namespace WPEFramework;
+using namespace Thunder;
 #endif
 #define SERVER_DETAILS  "127.0.0.1:9998"
 
@@ -159,7 +159,7 @@ bool ThunderAccessPlayer::ActivatePlugin()
 /**
  * @brief  subscribeEvent
  */
-bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler)
 {
     bool ret = true;
     uint32_t status = Core::ERROR_NONE;

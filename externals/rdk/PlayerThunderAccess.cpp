@@ -33,7 +33,7 @@
 
 
 using namespace std;
-using namespace WPEFramework;
+using namespace Thunder;
 
 #define SERVER_DETAILS  "127.0.0.1:9998"
 #define MAX_LENGTH 1024
@@ -213,7 +213,7 @@ bool PlayerThunderAccess::ActivatePlugin()
 /**
  * @brief  subscribeEvent
  */
-bool PlayerThunderAccess::SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+bool PlayerThunderAccess::SubscribeEvent (string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler)
 {
     bool ret = true;
     uint32_t status = Core::ERROR_NONE;
@@ -380,7 +380,7 @@ bool PlayerThunderAccess::GetScreenResolution(int & screenWidth, int & screenHei
 /**
  *  @brief  Registers  Event to input plugin and to mRegisteredEvents list for later use.
  */
-void PlayerThunderAccess::RegisterEvent_VIDEOIN(string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+void PlayerThunderAccess::RegisterEvent_VIDEOIN(string eventName, std::function<void(const Thunder::Core::JSON::VariantContainer&)> functionHandler)
 {
 	bool bSubscribed;
 	bSubscribed = SubscribeEvent(_T(eventName), std::move(functionHandler));
@@ -399,11 +399,11 @@ void PlayerThunderAccess::RegisterAllEventsVideoin(std::function<void(std::strin
     mOnSignalChangedCb = std::move(OnSignalChangedCb);
     mOnInputStatusChangedCb = std::move(OnInputStatusChangedCb);
 
-	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> inputStatusChangedMethod = std::bind(&PlayerThunderAccess::OnInputStatusChanged, this, std::placeholders::_1);
+	std::function<void(const Thunder::Core::JSON::VariantContainer&)> inputStatusChangedMethod = std::bind(&PlayerThunderAccess::OnInputStatusChanged, this, std::placeholders::_1);
 
 	RegisterEvent_VIDEOIN("onInputStatusChanged",std::move(inputStatusChangedMethod));
 
-	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> signalChangedMethod = std::bind(&PlayerThunderAccess::OnSignalChanged, this, std::placeholders::_1);
+	std::function<void(const Thunder::Core::JSON::VariantContainer&)> signalChangedMethod = std::bind(&PlayerThunderAccess::OnSignalChanged, this, std::placeholders::_1);
 
 	RegisterEvent_VIDEOIN("onSignalChanged",std::move(signalChangedMethod));
 }
@@ -483,7 +483,7 @@ void PlayerThunderAccess::StopHelperVideoin(std::string videoInputType)
 void PlayerThunderAccess::RegisterEventOnVideoStreamInfoUpdateHdmiin(std::function<void(PlayerVideoStreamInfoData)> videoInfoUpdatedMethodCb)
 {
     mVideoInfoUpdatedMethodCb = std::move(videoInfoUpdatedMethodCb);
-    std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> videoInfoUpdatedMethod = std::bind(&PlayerThunderAccess::OnVideoStreamInfoUpdate, this, std::placeholders::_1);
+    std::function<void(const Thunder::Core::JSON::VariantContainer&)> videoInfoUpdatedMethod = std::bind(&PlayerThunderAccess::OnVideoStreamInfoUpdate, this, std::placeholders::_1);
     RegisterEvent_VIDEOIN("videoStreamInfoUpdate", std::move(videoInfoUpdatedMethod));
 }
 
@@ -509,7 +509,7 @@ void PlayerThunderAccess::OnVideoStreamInfoUpdate(const JsonObject& parameters)
 void PlayerThunderAccess::RegisterOnPlayerStatusOta(std::function<void(PlayerStatusData)> onPlayerStatusCb)
 {
     mOnPlayerStatusCb = std::move(onPlayerStatusCb);
-    std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> actualMethod = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_OTA, this, std::placeholders::_1);
+    std::function<void(const Thunder::Core::JSON::VariantContainer&)> actualMethod = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_OTA, this, std::placeholders::_1);
     mEventSubscribed = SubscribeEvent(_T("onPlayerStatus"), std::move(actualMethod));
 }
 
@@ -938,8 +938,8 @@ bool PlayerThunderAccess::StartRmf(std::string url, std::function<void(std::stri
 
     JsonObject result;
 
-	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> eventHandler = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_RMF, this, std::placeholders::_1);
-	std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> errorHandler = std::bind(&PlayerThunderAccess::onPlayerErrorHandler_RMF, this, std::placeholders::_1);
+	std::function<void(const Thunder::Core::JSON::VariantContainer&)> eventHandler = std::bind(&PlayerThunderAccess::onPlayerStatusHandler_RMF, this, std::placeholders::_1);
+	std::function<void(const Thunder::Core::JSON::VariantContainer&)> errorHandler = std::bind(&PlayerThunderAccess::onPlayerErrorHandler_RMF, this, std::placeholders::_1);
 
 	if(true != SubscribeEvent(_T("onStatusChanged"), std::move(eventHandler)))
 	{
