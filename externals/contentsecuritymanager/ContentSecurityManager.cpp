@@ -167,7 +167,7 @@ bool ContentSecurityManager::AcquireLicense(std::string clientId, std::string ap
 /**
  * @brief To update session state to SecManager
  */
-bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
+bool ContentSecurityManager::UpdateSessionState(const std::string& sessionId, bool active)
 {
 	bool success = false;
 	success = SetDrmSessionState(sessionId, active);
@@ -177,7 +177,7 @@ bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
 /**
  * @brief To notify SecManager to release a session
  */
-void ContentSecurityManager::ReleaseSession(int64_t sessionId)
+void ContentSecurityManager::ReleaseSession(const std::string& sessionId)
 {
 	CloseDrmSession(sessionId);
 }
@@ -185,7 +185,7 @@ void ContentSecurityManager::ReleaseSession(int64_t sessionId)
 /**
  * @brief To update session state to SecManager
  */
-bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height)
+bool ContentSecurityManager::setVideoWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height)
 {
 	bool rpcResult = false;
 	rpcResult = setWindowSize(sessionId, video_width, video_height);
@@ -195,7 +195,7 @@ bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video
 /**
  * @brief To set Playback Speed State to SecManager
  */
-bool ContentSecurityManager::setPlaybackSpeedState(int64_t sessionId, int64_t playback_speed, int64_t playback_position)
+bool ContentSecurityManager::setPlaybackSpeedState(const std::string& sessionId, int64_t playback_speed, int64_t playback_position)
 {
 	bool rpcResult = false;
 	rpcResult = SetPlaybackPosition(sessionId, static_cast<float>(playback_speed), static_cast<int32_t>(playback_position));

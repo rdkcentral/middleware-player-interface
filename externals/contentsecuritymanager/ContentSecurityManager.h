@@ -106,7 +106,7 @@ public:
 	 * @param[in] sessionId - session id
 	 * @param[in] active - true if session is active, false otherwise
 	 */
-	virtual bool UpdateSessionState(int64_t sessionId, bool active);
+	virtual bool UpdateSessionState(const std::string& sessionId, bool active);
 
 	/**
 	 * @fn setVideoWindowSize
@@ -115,7 +115,7 @@ public:
 	 * @param[in] video_width - video width 
 	 * @param[in] video_height - video height 
 	 */
-	virtual bool setVideoWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height);
+	virtual bool setVideoWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height);
 	/**
 	 * @fn setPlaybackSpeedState
 	 *
@@ -123,14 +123,14 @@ public:
 	 * @param[in] playback_speed - playback speed 
 	 * @param[in] playback_position - playback position	 
 	 */
-	virtual bool setPlaybackSpeedState(int64_t sessionId, int64_t playback_speed, int64_t playback_position);
+	virtual bool setPlaybackSpeedState(const std::string& sessionId, int64_t playback_speed, int64_t playback_position);
 	
         /**
          * @fn ReleaseSession - this should only be used by ContentSecurityManagerSession::SessionManager::~SessionManager();
          *
          * @param[in] sessionId - session id
          */
-        virtual void ReleaseSession(int64_t sessionId);
+        virtual void ReleaseSession(const std::string& sessionId);
 
 	/**
 	 * @fn getSessionToken
@@ -185,13 +185,13 @@ protected:
          * @param active Whether the session should be marked active
          * @return true on success, false otherwise
          */
-    	virtual bool SetDrmSessionState(int64_t sessionId, bool active) { return false; }
+	        virtual bool SetDrmSessionState(const std::string& sessionId, bool active) { return false; }
         /**
          * @brief Closes an existing DRM session
          * @param sessionId DRM session ID
          * @return true if closed successfully
          */
-	virtual void CloseDrmSession(int64_t sessionId) {}
+	virtual void CloseDrmSession(const std::string& sessionId) {}
         /**
          * @brief Sets playback state for watermark alignment
          * @param sessionId Session ID
@@ -199,7 +199,7 @@ protected:
          * @param position Current position in seconds
          * @return true if command succeeded
          */
-	virtual bool SetPlaybackPosition(int64_t sessionId, float speed, int32_t position) { return false; }
+	virtual bool SetPlaybackPosition(const std::string& sessionId, float speed, int32_t position) { return false; }
 	/**
 	 * @fn setWindowSize
 	 *
@@ -207,7 +207,7 @@ protected:
 	 * @param[in] video_width - video width 
 	 * @param[in] video_height - video height 
          */
-        virtual bool setWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height) { return false; };
+        virtual bool setWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height) { return false; };
 
 	/**
 	 * @fn ContentSecurityManager
@@ -260,20 +260,20 @@ public:
 		return false;
 	}
 
-	bool UpdateSessionState(int64_t sessionId, bool active) override
+	bool UpdateSessionState(const std::string& sessionId, bool active) override
 	{
 		return false;
 	}
 
-	bool setPlaybackSpeedState(int64_t sessionId, int64_t speed, int64_t position) override
+	bool setPlaybackSpeedState(const std::string& sessionId, int64_t speed, int64_t position) override
 	{
 		return false;
 	}
-        bool setVideoWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height) override
+        bool setVideoWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height) override
 	{
 		return false;
 	}
-        void ReleaseSession(int64_t sessionId) override
+        void ReleaseSession(const std::string& sessionId) override
 	{
 		
 	}

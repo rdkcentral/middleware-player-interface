@@ -57,7 +57,7 @@ TEST(ContentProtectionFirebolt, CloseDrmSession_with_valid_session)
         // Logging internal state after construction (if any known state exists - simulated log)
         std::cout << "ContentProtectionFirebolt object created. (Internal state logged if available)" << std::endl;
         
-        int64_t sessionId = 12345;
+        std::string sessionId = "12345";
         std::cout << "Invoking CloseDrmSession with sessionId = " << sessionId << std::endl;
         EXPECT_NO_THROW({
             cp.CloseDrmSession(sessionId);
@@ -98,7 +98,7 @@ TEST(ContentProtectionFirebolt, CloseDrmSession_with_negative_session)
         // Logging the initial state of the object (if any known state exists - simulated log)
         std::cout << "ContentProtectionFirebolt object created. (Internal state logged if available)" << std::endl;
         
-        int64_t sessionId = -1;
+        std::string sessionId = "-1";
         std::cout << "Invoking CloseDrmSession with sessionId = " << sessionId << std::endl;
         EXPECT_NO_THROW({
             cp.CloseDrmSession(sessionId);
@@ -139,7 +139,7 @@ TEST(ContentProtectionFirebolt, CloseDrmSession_with_zero_session)
         // Logging the initial state of the object (if any known state exists - simulated log)
         std::cout << "ContentProtectionFirebolt object created. (Internal state logged if available)" << std::endl;
         
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::cout << "Invoking CloseDrmSession with sessionId = " << sessionId << std::endl;
         EXPECT_NO_THROW({
             cp.CloseDrmSession(sessionId);
@@ -562,7 +562,7 @@ TEST(ContentProtectionFirebolt, PositiveTestWithValidParameters) {
         std::string keySystem = "widevine";
         std::string licenseRequest = "licenseChallenge";
         std::string initData = "initDataPayload";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
       
@@ -625,7 +625,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyClientId) {
         std::string keySystem = "widevine";
         std::string licenseRequest = "licenseChallenge";
         std::string initData = "initDataPayload";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
   
@@ -685,7 +685,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyAppId) {
         std::string keySystem = "widevine";
         std::string licenseRequest = "licenseChallenge";
         std::string initData = "initDataPayload";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
 
@@ -749,7 +749,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyKeySystem) {
         std::string keySystem = "";
         std::string licenseRequest = "licenseChallenge";
         std::string initData = "initDataPayload";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
   
@@ -809,7 +809,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyLicenseRequest) {
         std::string keySystem = "widevine";
         std::string licenseRequest = "";
         std::string initData = "initDataPayload";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
   
@@ -868,7 +868,7 @@ TEST(ContentProtectionFirebolt, NegativeTestEmptyInitData) {
         std::string keySystem = "widevine";
         std::string licenseRequest = "licenseChallenge";
         std::string initData = "";
-        int64_t sessionId = 0;
+        std::string sessionId = "0";
         std::string response = "";
         int32_t err = 0;
   
@@ -923,7 +923,7 @@ TEST(ContentProtectionFirebolt, ValidPositiveSessionID_ActiveTrue) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = 1;
+        std::string sessionId = "1";
         bool active = true;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -963,7 +963,7 @@ TEST(ContentProtectionFirebolt, ValidPositiveSessionID_ActiveFalse) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = 1;
+        std::string sessionId = "1";
         bool active = false;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -1006,7 +1006,7 @@ TEST(ContentProtectionFirebolt, NegativeSessionID_ActiveTrue) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = -1;
+        std::string sessionId = "-1";
         bool active = true;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -1047,7 +1047,7 @@ TEST(ContentProtectionFirebolt, NegativeSessionID_ActiveFalse) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = -1;
+        std::string sessionId = "-1";
         bool active = false;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -1087,7 +1087,7 @@ TEST(ContentProtectionFirebolt, MaxInt64SessionID_ActiveTrue) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = std::numeric_limits<int64_t>::max();
+        std::string sessionId = "9223372036854775807";
         bool active = true;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -1127,7 +1127,7 @@ TEST(ContentProtectionFirebolt, MaxInt64SessionID_ActiveFalse) {
         ContentProtectionFirebolt cp;
         std::cout << "Constructed ContentProtectionFirebolt object" << std::endl;
         
-        int64_t sessionId = std::numeric_limits<int64_t>::max();
+        std::string sessionId = "9223372036854775807";
         bool active = false;
         std::cout << "Invoking SetDrmSessionState with sessionId: " << sessionId 
                   << " and active: " << (active ? "true" : "false") << std::endl;
@@ -1168,7 +1168,7 @@ TEST(ContentProtectionFirebolt, ValidInputTypicalParameters)
         ContentProtectionFirebolt obj;
         std::cout << "Created ContentProtectionFirebolt instance using default constructor." << std::endl;
         
-        int64_t sessionId = 100;
+        std::string sessionId = "100";
         float speed = 1.0f;
         int32_t position = 30;
         
@@ -1209,7 +1209,7 @@ TEST(ContentProtectionFirebolt, NegativeSessionId)
         ContentProtectionFirebolt obj;
         std::cout << "Created ContentProtectionFirebolt instance using default constructor." << std::endl;
         
-        int64_t sessionId = -50;
+        std::string sessionId = "-50";
         float speed = 1.0f;
         int32_t position = 30;
         
@@ -1249,7 +1249,7 @@ TEST(ContentProtectionFirebolt, NegativePlaybackSpeed)
         ContentProtectionFirebolt obj;
         std::cout << "Created ContentProtectionFirebolt instance using default constructor." << std::endl;
         
-        int64_t sessionId = 101;
+        std::string sessionId = "101";
         float speed = -1.0f;
         int32_t position = 45;
         
@@ -1292,7 +1292,7 @@ TEST(ContentProtectionFirebolt, NegativePosition)
         ContentProtectionFirebolt obj;
         std::cout << "Created ContentProtectionFirebolt instance using default constructor." << std::endl;
         
-        int64_t sessionId = 102;
+        std::string sessionId = "102";
         float speed = 1.0f;
         int32_t position = -10;
         
@@ -1332,7 +1332,7 @@ TEST(ContentProtectionFirebolt, ZeroPlaybackSpeed)
         ContentProtectionFirebolt obj;
         std::cout << "Created ContentProtectionFirebolt instance using default constructor." << std::endl;
         
-        int64_t sessionId = 103;
+        std::string sessionId = "103";
         float speed = 0.0f;
         int32_t position = 30;
         
@@ -1374,7 +1374,7 @@ TEST(ContentProtectionFirebolt, ShowWatermark_Enable_ValidPositiveSessionId) {
         
         // Parameters for test
         bool show = true;
-        int64_t sessionId = 12345;
+        std::string sessionId = "12345";
         std::cout << "Invoking ShowWatermark with parameters: show = " << show 
                   << ", sessionId = " << sessionId << std::endl;
         
@@ -1416,7 +1416,7 @@ TEST(ContentProtectionFirebolt, ShowWatermark_Disable_ValidPositiveSessionId) {
         
         // Set test parameters
         bool show = false;
-        int64_t sessionId = 12345;
+        std::string sessionId = "12345";
         std::cout << "Invoking ShowWatermark with parameters: show = " << show 
                   << ", sessionId = " << sessionId << std::endl;
         
@@ -1461,7 +1461,7 @@ TEST(ContentProtectionFirebolt, ShowWatermark_Disable_NegativeSessionId) {
         
         // Set test parameters
         bool show = false;
-        int64_t sessionId = -1;
+        std::string sessionId = "-1";
         std::cout << "Invoking ShowWatermark with parameters: show = " << show 
                   << ", sessionId = " << sessionId << " (negative sessionId)" << std::endl;
         
@@ -1503,7 +1503,7 @@ TEST(ContentProtectionFirebolt, ShowWatermark_Enable_INT64_MAX) {
         
         // Set test parameters
         bool show = true;
-        int64_t sessionId = std::numeric_limits<int64_t>::max();
+        std::string sessionId = "9223372036854775807";
         std::cout << "Invoking ShowWatermark with parameters: show = " << show 
                   << ", sessionId = " << sessionId << " (INT64_MAX)" << std::endl;
         
@@ -1543,7 +1543,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_ValidInputs_ReturnsSuccess)
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
     ContentProtectionFirebolt cp;
-    int64_t sessionId = 12345;
+    std::string sessionId = "12345";
     std::string licenseRequest;
     char licenseReqBuffer[64];
     strncpy(licenseReqBuffer, "validLicenseRequest", sizeof(licenseReqBuffer)-1);
@@ -1598,7 +1598,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_NegativeSessionId_ReturnsFailur
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
     ContentProtectionFirebolt cp;
-    int64_t sessionId = -1;
+    std::string sessionId = "-1";
     std::string licenseRequest;
     char licenseReqBuffer[64];
     strncpy(licenseReqBuffer, "validLicenseRequest", sizeof(licenseReqBuffer)-1);
@@ -1656,7 +1656,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyLicenseRequest_ReturnsFail
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
     ContentProtectionFirebolt cp;
-    int64_t sessionId = 12345;
+    std::string sessionId = "12345";
     std::string licenseRequest = "";
     std::string initData;
     char initDataBuffer[64];
@@ -1709,7 +1709,7 @@ TEST(ContentProtectionFirebolt, UpdateDrmSession_EmptyInitData_ReturnsFailure)
 
     EXPECT_NO_THROW({ ContentProtectionFirebolt cp; });
     ContentProtectionFirebolt cp;
-    int64_t sessionId = 12345;
+    std::string sessionId = "12345";
     std::string licenseRequest;
     char licenseReqBuffer[64];
     strncpy(licenseReqBuffer, "validLicenseRequest", sizeof(licenseReqBuffer)-1);

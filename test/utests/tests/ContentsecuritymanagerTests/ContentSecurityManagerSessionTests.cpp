@@ -91,7 +91,7 @@ TEST(ContentSecurityManagerSession, DefaultConstructor) {
 TEST(ContentSecurityManagerSession, ConstructorWithValidId) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithValidId - START" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = "12345";
     std::size_t hash = 67890;
     
     ContentSecurityManagerSession session(sessionId, hash);
@@ -125,14 +125,13 @@ TEST(ContentSecurityManagerSession, ConstructorWithValidId) {
 TEST(ContentSecurityManagerSession, ConstructorWithZeroId) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithZeroId - START" << std::endl;
     
-    int64_t sessionId = 0;  // Invalid session ID
+    std::string sessionId = "";  // Empty session ID is the only invalid value
     std::size_t hash = 1234;
     
     ContentSecurityManagerSession session(sessionId, hash);
     
-    // Zero session ID is treated as invalid by implementation
     EXPECT_FALSE(session.isSessionValid());
-    EXPECT_EQ(session.getSessionID(), -1);  // Invalid session returns -1
+    EXPECT_EQ(session.getSessionID(), "");
     EXPECT_EQ(session.getInputSummaryHash(), 0u);  // Hash not stored for invalid session
     
     std::cout << "[ContentSecurityManagerSession] ConstructorWithZeroId - PASS" << std::endl;
@@ -160,13 +159,13 @@ TEST(ContentSecurityManagerSession, ConstructorWithZeroId) {
 TEST(ContentSecurityManagerSession, ConstructorWithNegativeId) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithNegativeId - START" << std::endl;
     
-    int64_t sessionId = -100;  // Invalid session ID
+    std::string sessionId = "-100";  // Any non-empty string is a valid session ID
     std::size_t hash = 5000;
     
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(sessionId, hash);
-        // Negative session ID is treated as invalid by implementation
-        EXPECT_EQ(session.getSessionID(), -1);  // Invalid session returns -1
+        EXPECT_TRUE(session.isSessionValid());
+        EXPECT_EQ(session.getSessionID(), sessionId);
     });
     
     std::cout << "[ContentSecurityManagerSession] ConstructorWithNegativeId - PASS" << std::endl;
@@ -194,7 +193,7 @@ TEST(ContentSecurityManagerSession, ConstructorWithNegativeId) {
 TEST(ContentSecurityManagerSession, ConstructorWithMaxInt64Id) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithMaxInt64Id - START" << std::endl;
     
-    int64_t sessionId = INT64_MAX;
+    std::string sessionId = "9223372036854775807";
     std::size_t hash = 9999;
     
     EXPECT_NO_THROW({
@@ -228,13 +227,13 @@ TEST(ContentSecurityManagerSession, ConstructorWithMaxInt64Id) {
 TEST(ContentSecurityManagerSession, ConstructorWithMinInt64Id) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithMinInt64Id - START" << std::endl;
     
-    int64_t sessionId = INT64_MIN;  // Invalid session ID (negative)
+    std::string sessionId = "-9223372036854775808";  // Any non-empty string is a valid session ID
     std::size_t hash = 1111;
     
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(sessionId, hash);
-        // INT64_MIN is treated as invalid by implementation
-        EXPECT_EQ(session.getSessionID(), -1);  // Invalid session returns -1
+        EXPECT_TRUE(session.isSessionValid());
+        EXPECT_EQ(session.getSessionID(), sessionId);
     });
     
     std::cout << "[ContentSecurityManagerSession] ConstructorWithMinInt64Id - PASS" << std::endl;
@@ -262,7 +261,7 @@ TEST(ContentSecurityManagerSession, ConstructorWithMinInt64Id) {
 TEST(ContentSecurityManagerSession, ConstructorWithZeroHash) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithZeroHash - START" << std::endl;
     
-    int64_t sessionId = 2000;
+    std::string sessionId = "2000";
     std::size_t hash = 0;
     
     ContentSecurityManagerSession session(sessionId, hash);
@@ -295,7 +294,7 @@ TEST(ContentSecurityManagerSession, ConstructorWithZeroHash) {
 TEST(ContentSecurityManagerSession, ConstructorWithMaxHash) {
     std::cout << "[ContentSecurityManagerSession] ConstructorWithMaxHash - START" << std::endl;
     
-    int64_t sessionId = 3000;
+    std::string sessionId = "3000";
     std::size_t hash = std::numeric_limits<std::size_t>::max();
     
     ContentSecurityManagerSession session(sessionId, hash);
@@ -332,7 +331,7 @@ TEST(ContentSecurityManagerSession, ConstructorWithMaxHash) {
 TEST(ContentSecurityManagerSession, CopyConstructor) {
     std::cout << "[ContentSecurityManagerSession] CopyConstructor - START" << std::endl;
     
-    int64_t sessionId = 99999;
+    std::string sessionId = "99999";
     std::size_t hash = 11111;
     
     ContentSecurityManagerSession session1(sessionId, hash);
@@ -399,7 +398,7 @@ TEST(ContentSecurityManagerSession, CopyConstructorFromInvalid) {
 TEST(ContentSecurityManagerSession, AssignmentOperator) {
     std::cout << "[ContentSecurityManagerSession] AssignmentOperator - START" << std::endl;
     
-    int64_t sessionId = 77777;
+    std::string sessionId = "77777";
     std::size_t hash = 22222;
     
     ContentSecurityManagerSession session1(sessionId, hash);
@@ -439,7 +438,7 @@ TEST(ContentSecurityManagerSession, AssignmentOperator) {
 TEST(ContentSecurityManagerSession, AssignmentChain) {
     std::cout << "[ContentSecurityManagerSession] AssignmentChain - START" << std::endl;
     
-    int64_t sessionId = 44444;
+    std::string sessionId = "44444";
     std::size_t hash = 88888;
     
     ContentSecurityManagerSession session1(sessionId, hash);
@@ -482,7 +481,7 @@ TEST(ContentSecurityManagerSession, AssignmentChain) {
 TEST(ContentSecurityManagerSession, GetSessionID_ValidSession) {
     std::cout << "[ContentSecurityManagerSession] GetSessionID_ValidSession - START" << std::endl;
     
-    int64_t sessionId = 12345;
+    std::string sessionId = "12345";
     ContentSecurityManagerSession session(sessionId, 100);
     
     EXPECT_EQ(session.getSessionID(), sessionId);
@@ -542,7 +541,7 @@ TEST(ContentSecurityManagerSession, GetInputSummaryHash_ValidInput) {
     std::cout << "[ContentSecurityManagerSession] GetInputSummaryHash_ValidInput - START" << std::endl;
     
     std::size_t hash = 12345;
-    ContentSecurityManagerSession session(1000, hash);
+    ContentSecurityManagerSession session("1000", hash);
     
     EXPECT_EQ(session.getInputSummaryHash(), hash);
     
@@ -571,7 +570,7 @@ TEST(ContentSecurityManagerSession, GetInputSummaryHash_ValidInput) {
 TEST(ContentSecurityManagerSession, GetInputSummaryHash_ZeroHash) {
     std::cout << "[ContentSecurityManagerSession] GetInputSummaryHash_ZeroHash - START" << std::endl;
     
-    ContentSecurityManagerSession session(1001, 0);
+    ContentSecurityManagerSession session("1001", 0);
     
     EXPECT_EQ(session.getInputSummaryHash(), 0);
     
@@ -633,7 +632,7 @@ TEST(ContentSecurityManagerSession, GetInputSummaryHash_DefaultConstructor) {
 TEST(ContentSecurityManagerSession, IsSessionValid_ValidSession) {
     std::cout << "[ContentSecurityManagerSession] IsSessionValid_ValidSession - START" << std::endl;
     
-    ContentSecurityManagerSession session(12345, 67890);
+    ContentSecurityManagerSession session("12345", 67890);
     
     EXPECT_TRUE(session.isSessionValid());
     
@@ -691,7 +690,7 @@ TEST(ContentSecurityManagerSession, IsSessionValid_InvalidSession) {
 TEST(ContentSecurityManagerSession, SetSessionInvalid) {
     std::cout << "[ContentSecurityManagerSession] SetSessionInvalid - START" << std::endl;
     
-    int64_t sessionId = 55555;
+    std::string sessionId = "55555";
     std::size_t hash = 33333;
     
     ContentSecurityManagerSession session(sessionId, hash);
@@ -727,7 +726,7 @@ TEST(ContentSecurityManagerSession, SetSessionInvalid) {
 TEST(ContentSecurityManagerSession, SetSessionInvalid_MultipleTimes) {
     std::cout << "[ContentSecurityManagerSession] SetSessionInvalid_MultipleTimes - START" << std::endl;
     
-    ContentSecurityManagerSession session(11111, 22222);
+    ContentSecurityManagerSession session("11111", 22222);
     
     session.setSessionInvalid();
     EXPECT_FALSE(session.isSessionValid());
@@ -767,7 +766,7 @@ TEST(ContentSecurityManagerSession, SetSessionInvalid_MultipleTimes) {
 TEST(ContentSecurityManagerSession, ToString_ValidSession) {
     std::cout << "[ContentSecurityManagerSession] ToString_ValidSession - START" << std::endl;
     
-    int64_t sessionId = 44444;
+    std::string sessionId = "44444";
     std::size_t hash = 88888;
     
     ContentSecurityManagerSession session(sessionId, hash);
@@ -834,7 +833,7 @@ TEST(ContentSecurityManagerSession, ToString_InvalidSession) {
 TEST(ContentSecurityManagerSession, ToString_AfterInvalidation) {
     std::cout << "[ContentSecurityManagerSession] ToString_AfterInvalidation - START" << std::endl;
     
-    ContentSecurityManagerSession session(99999, 11111);
+    ContentSecurityManagerSession session("99999", 11111);
     
     session.setSessionInvalid();
     std::string str = session.ToString();
@@ -871,7 +870,7 @@ TEST(ContentSecurityManagerSession, ToString_AfterInvalidation) {
 TEST(ContentSecurityManagerSession, CompleteLifecycle) {
     std::cout << "[ContentSecurityManagerSession] CompleteLifecycle - START" << std::endl;
     
-    int64_t sessionId = 88888;
+    std::string sessionId = "88888";
     std::size_t hash = 77777;
     
     {
@@ -921,12 +920,12 @@ TEST(ContentSecurityManagerSession, MultipleValidSessions) {
     std::vector<ContentSecurityManagerSession> sessions;
     
     for (int i = 0; i < 10; i++) {
-        sessions.emplace_back(1000 + i, 2000 + i);
+        sessions.emplace_back(std::to_string(1000 + i), 2000 + i);
     }
     
     for (size_t i = 0; i < sessions.size(); i++) {
         EXPECT_TRUE(sessions[i].isSessionValid());
-        EXPECT_EQ(sessions[i].getSessionID(), 1000 + static_cast<int64_t>(i));
+        EXPECT_EQ(sessions[i].getSessionID(), std::to_string(1000 + i));
         EXPECT_EQ(sessions[i].getInputSummaryHash(), 2000 + i);
     }
     
@@ -957,13 +956,13 @@ TEST(ContentSecurityManagerSession, ReassignmentOverwrite) {
     
     ContentSecurityManagerSession session;
     
-    // Start from i=1 to avoid sessionId=0 which is invalid
+    // Any non-empty ID is valid, so start from i=1 only to keep IDs distinct and readable
     for (int i = 1; i <= 5; i++) {
-        ContentSecurityManagerSession tempSession(100 * i, 200 * i);
+        ContentSecurityManagerSession tempSession(std::to_string(100 * i), 200 * i);
         session = tempSession;
         
         EXPECT_TRUE(session.isSessionValid());
-        EXPECT_EQ(session.getSessionID(), 100 * i);
+        EXPECT_EQ(session.getSessionID(), std::to_string(100 * i));
         EXPECT_EQ(session.getInputSummaryHash(), 200 * i);
     }
     
@@ -992,19 +991,19 @@ TEST(ContentSecurityManagerSession, ReassignmentOverwrite) {
 TEST(ContentSecurityManagerSession, BoundarySessionIds) {
     std::cout << "[ContentSecurityManagerSession] BoundarySessionIds - START" << std::endl;
     
-    // Valid boundary values (positive)
-    std::vector<int64_t> validValues = {
-        1,
-        INT64_MAX,
-        INT64_MAX - 1
+    // Valid boundary values (any non-empty string)
+    std::vector<std::string> validValues = {
+        "1",
+        "0",
+        "-1",
+        "9223372036854775807",
+        "9223372036854775806",
+        "-9223372036854775808"
     };
     
-    // Invalid boundary values (zero and negative)
-    std::vector<int64_t> invalidValues = {
-        0,
-        -1,
-        INT64_MIN,
-        INT64_MIN + 1
+    // Invalid boundary value (empty string)
+    std::vector<std::string> invalidValues = {
+        ""
     };
     
     // Test valid sessionIds
@@ -1015,11 +1014,12 @@ TEST(ContentSecurityManagerSession, BoundarySessionIds) {
         });
     }
     
-    // Test invalid sessionIds (should return -1)
+    // Test invalid sessionIds (should return the invalid ID)
     for (auto sessionId : invalidValues) {
         EXPECT_NO_THROW({
             ContentSecurityManagerSession session(sessionId, 100);
-            EXPECT_EQ(session.getSessionID(), -1);  // Invalid IDs return -1
+            EXPECT_FALSE(session.isSessionValid());
+            EXPECT_EQ(session.getSessionID(), "");
         });
     }
     
@@ -1057,7 +1057,7 @@ TEST(ContentSecurityManagerSession, BoundaryHashValues) {
     
     for (auto hash : boundaryValues) {
         EXPECT_NO_THROW({
-            ContentSecurityManagerSession session(100, hash);
+            ContentSecurityManagerSession session("100", hash);
             EXPECT_EQ(session.getInputSummaryHash(), hash);
         });
     }
