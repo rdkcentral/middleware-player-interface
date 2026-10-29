@@ -7,9 +7,10 @@ extern "C" {
 #include <libavutil/mathematics.h>
 #include <libavutil/mem.h>
 #include <libavutil/opt.h>
+}
+
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-}
 
 #include <algorithm>
 #include <chrono>
@@ -974,7 +975,7 @@ void FfmpegDemuxSource::Stop()
 
 int FfmpegDemuxSource::InterruptCallback(void* opaque)
 {
-    const auto* source = static_cast<const FfmpegDemuxSource*>(opaque);
+    auto* source = static_cast<FfmpegDemuxSource*>(opaque);
     if (source->stopping_) {
         return 1;
     }
