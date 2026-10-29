@@ -25,19 +25,20 @@ Then build and run `pi-cli` as your regular user:
 ```sh
 cd test/pi-cli
 ./build.sh
-LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  ./build/pi-player-simulator "https://example.com/clear-stream.m3u8"
+./run.sh "https://example.com/clear-stream.m3u8"
 ```
 
 For DASH, pass a clear `.mpd` URL instead. The simulator starts playback
 immediately from the command-line URL. There is no URL editor in the UI.
+The launcher sets the player-interface runtime library path before starting
+the simulator; running the binary directly does not inherit environment
+variables set by `build.sh`.
 
 If `playergstinterface` is installed to another prefix, set
-`PLAYER_INTERFACE_PREFIX` before running `./build.sh` and point
-`LD_LIBRARY_PATH` at that prefix's `lib` directory when launching. The build
+`PLAYER_INTERFACE_PREFIX` before running `./build.sh` and `./run.sh`. The build
 script configures the pkg-config paths, checks the required modules, and
 installs missing Ubuntu build, UI, and GStreamer runtime packages through
-`sudo apt-get`. Run the script without `sudo`.
+`sudo apt-get`. Run the scripts without `sudo`.
 
 The script does not build or install `playergstinterface`; that remains a
 separate prerequisite. Extra CMake options can be passed to the script, for
