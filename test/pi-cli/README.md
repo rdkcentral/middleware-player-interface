@@ -9,7 +9,8 @@ for decoding, synchronization, and rendering.
 pi-cli does not create a playback pipeline, decode media, or write manifests,
 segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
-injection. DRM and subtitles are out of scope.
+injection. FFmpeg selects the playback audio/video streams before probing and
+applies a network-read timeout. DRM and subtitles are out of scope.
 
 The initial codec scope is H.264 video and AAC audio. FFmpeg's Annex-B H.264
 packets are converted to the AVC length-prefixed form expected by Player
@@ -74,9 +75,11 @@ Player Interface platform implementation and stream support.
 
 Timing milestones use monotonic elapsed time and are printed to stderr, for
 example `[PI-CLI] +1234ms ffmpeg-manifest-and-stream-info-ready`. They cover
-manifest/stream probing, Player Interface setup, first sample processing,
-first decoded frame, and advancing playback position. Player Interface bus
-errors and FFmpeg ingest failures are reported with their details.
+manifest open, stream selection/probing, initial packet arrival, Player
+Interface setup, first sample processing, first decoded frame, and advancing
+playback position. Network reads time out instead of waiting indefinitely.
+Player Interface bus errors and FFmpeg ingest failures are reported with their
+details.
 
 ## Validation
 

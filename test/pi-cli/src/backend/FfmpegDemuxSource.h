@@ -18,6 +18,7 @@ struct AVFormatContext;
 
 class FfmpegDemuxSource {
 public:
+    using ProgressCallback = std::function<void(const std::string&)>;
     using SendSampleCallback =
         std::function<bool(int, MediaSample&&, bool&)>;
     using EndOfStreamCallback = std::function<void(int)>;
@@ -28,7 +29,7 @@ public:
     FfmpegDemuxSource(const FfmpegDemuxSource&) = delete;
     FfmpegDemuxSource& operator=(const FfmpegDemuxSource&) = delete;
 
-    bool Open(const std::string& url);
+    bool Open(const std::string& url, ProgressCallback progress);
     StreamCodecInfo GetCodecInfo() const;
     int GetMediaMode() const;
     long long GetDurationMilliseconds() const;
@@ -113,6 +114,7 @@ private:
     void DemuxLoop();
     void FeedLoop(Track& track);
     void MarkInputEos();
+    void ReportProgress(const std::string& milestone) const;
     void SetError(std::string error);
     bool InputReady() const;
 
@@ -131,6 +133,7 @@ private:
     std::mutex inputPauseMutex_;
     std::condition_variable inputPauseCondition_;
     std::thread demuxThread_;
+    ProgressCallback progress_;
     SendSampleCallback sendSample_;
     EndOfStreamCallback endOfStream_;
 };

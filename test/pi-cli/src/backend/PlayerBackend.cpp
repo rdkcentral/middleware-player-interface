@@ -38,7 +38,9 @@ bool PlayerBackend::Start()
 
     source_ = std::make_unique<FfmpegDemuxSource>();
     LogStartupMilestone("ffmpeg-manifest-open-begin");
-    if (!source_->Open(url_)) {
+    if (!source_->Open(url_, [this](const std::string& milestone) {
+            LogStartupMilestone(milestone);
+        })) {
         std::string error;
         source_->TakeError(error);
         statusMessage_ = error.empty() ? "Could not open the stream"

@@ -46,7 +46,8 @@ FfmpegDemuxSource::~FfmpegDemuxSource()
     Stop();
 }
 
-bool FfmpegDemuxSource::Open(const std::string& url)
+bool FfmpegDemuxSource::Open(const std::string& url,
+                             ProgressCallback progress)
 {
     if (url.empty()) {
         SetError("A stream URL is required");
@@ -54,6 +55,7 @@ bool FfmpegDemuxSource::Open(const std::string& url)
     }
 
     url_ = url;
+    progress_ = std::move(progress);
     stopping_ = false;
     inputPaused_ = false;
     feedingEnabled_ = true;
@@ -81,6 +83,8 @@ bool FfmpegDemuxSource::Open(const std::string& url)
     AVDictionary* options = nullptr;
     av_dict_set(&options, "probesize", "2000000", 0);
     av_dict_set(&options, "analyzeduration", "5000000", 0);
+    av_dict_set(&options, "rw_timeout", "30000000", 0);
+    ReportProgress("ffmpeg-format-open-begin");
     int result = avformat_open_input(&formatContext_,
                                      url_.c_str(),
                                      nullptr,
@@ -91,7 +95,56 @@ bool FfmpegDemuxSource::Open(const std::string& url)
         Stop();
         return false;
     }
+    const std::string inputFormat = formatContext_->iformat != nullptr
+        ? formatContext_->iformat->name
+        : "";
+    ReportProgress("ffmpeg-format-open-complete: " +
+                   (inputFormat.empty() ? std::string("unknown")
+                                        : inputFormat));
 
+    int videoIndex = av_find_best_stream(formatContext_,
+                                         AVMEDIA_TYPE_VIDEO,
+                                         -1,
+                                         -1,
+                                         nullptr,
+                                         0);
+    int audioIndex = av_find_best_stream(formatContext_,
+                                         AVMEDIA_TYPE_AUDIO,
+                                         -1,
+                                         videoIndex >= 0 ? videoIndex : -1,
+                                         nullptr,
+                                         0);
+    const bool selectedBeforeProbe = videoIndex >= 0 || audioIndex >= 0;
+    if (selectedBeforeProbe) {
+        for (unsigned int index = 0;
+             index < formatContext_->nb_streams;
+             ++index) {
+            AVStream* stream = formatContext_->streams[index];
+            const bool unselectedVideo =
+                videoIndex >= 0 &&
+                stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+                static_cast<int>(index) != videoIndex;
+            const bool unselectedAudio =
+                audioIndex >= 0 &&
+                stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+                static_cast<int>(index) != audioIndex;
+            const bool unsupportedStream =
+                stream->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE ||
+                stream->codecpar->codec_type == AVMEDIA_TYPE_DATA;
+            if (unselectedVideo || unselectedAudio || unsupportedStream) {
+                stream->discard = AVDISCARD_ALL;
+            }
+        }
+        std::ostringstream streamSelection;
+        streamSelection << "ffmpeg-selected-streams-before-probe: video="
+                        << videoIndex << " audio=" << audioIndex
+                        << " total=" << formatContext_->nb_streams;
+        ReportProgress(streamSelection.str());
+    } else {
+        ReportProgress("ffmpeg-streams-not-yet-discoverable; probing all");
+    }
+
+    ReportProgress("ffmpeg-stream-info-probe-begin");
     result = avformat_find_stream_info(formatContext_, nullptr);
     if (result < 0) {
         SetError("Could not read stream information: " +
@@ -99,10 +152,8 @@ bool FfmpegDemuxSource::Open(const std::string& url)
         Stop();
         return false;
     }
+    ReportProgress("ffmpeg-stream-info-probe-complete");
 
-    const std::string inputFormat = formatContext_->iformat != nullptr
-        ? formatContext_->iformat->name
-        : "";
     if (inputFormat.find("hls") != std::string::npos) {
         mediaMode_ = kPlayerInterfaceHlsMediaMode;
     } else if (inputFormat.find("dash") != std::string::npos) {
@@ -115,24 +166,29 @@ bool FfmpegDemuxSource::Open(const std::string& url)
         return false;
     }
 
-    const int videoIndex = av_find_best_stream(formatContext_,
-                                                AVMEDIA_TYPE_VIDEO,
-                                                -1,
-                                                -1,
-                                                nullptr,
-                                                0);
-    const int audioIndex = av_find_best_stream(formatContext_,
-                                                AVMEDIA_TYPE_AUDIO,
-                                                -1,
-                                                videoIndex >= 0 ? videoIndex : -1,
-                                                nullptr,
-                                                0);
+    if (videoIndex < 0) {
+        videoIndex = av_find_best_stream(formatContext_,
+                                         AVMEDIA_TYPE_VIDEO,
+                                         -1,
+                                         -1,
+                                         nullptr,
+                                         0);
+    }
+    if (audioIndex < 0) {
+        audioIndex = av_find_best_stream(formatContext_,
+                                         AVMEDIA_TYPE_AUDIO,
+                                         -1,
+                                         videoIndex >= 0 ? videoIndex : -1,
+                                         nullptr,
+                                         0);
+    }
     if (videoIndex < 0 && audioIndex < 0) {
         SetError("The manifest has no supported audio or video streams");
         Stop();
         return false;
     }
 
+    ReportProgress("ffmpeg-track-codec-info-begin");
     tracks_[0].streamIndex = videoIndex >= 0 ? videoIndex : -1;
     tracks_[1].streamIndex = audioIndex >= 0 ? audioIndex : -1;
     if (videoIndex >= 0 && !InitializeTrack(tracks_[0])) {
@@ -143,12 +199,14 @@ bool FfmpegDemuxSource::Open(const std::string& url)
         Stop();
         return false;
     }
+    ReportProgress("ffmpeg-track-codec-info-complete");
 
     if (formatContext_->duration != AV_NOPTS_VALUE &&
         formatContext_->duration > 0) {
         durationMilliseconds_ = formatContext_->duration / 1000;
     }
 
+    ReportProgress("ffmpeg-initial-packet-probe-begin");
     if (!PrimeTracks()) {
         if (error_.empty()) {
             SetError("Could not obtain codec configuration and initial samples");
@@ -156,6 +214,7 @@ bool FfmpegDemuxSource::Open(const std::string& url)
         Stop();
         return false;
     }
+    ReportProgress("ffmpeg-initial-packet-probe-complete");
 
     return true;
 }
@@ -1012,6 +1071,14 @@ void FfmpegDemuxSource::MarkInputEos()
             track.inputEos = true;
         }
         track.condition.notify_all();
+    }
+}
+
+void FfmpegDemuxSource::ReportProgress(
+    const std::string& milestone) const
+{
+    if (progress_) {
+        progress_(milestone);
     }
 }
 
