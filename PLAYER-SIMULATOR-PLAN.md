@@ -41,7 +41,7 @@ on a separate-window fallback or an API change before proceeding.
 - Replace the old interactive `pi-cli` prototype under `test/pi-cli/`.
 - Keep production player-interface code unchanged.
 
-### Phase 1 — Standalone CMake and scaffold — implemented; Ubuntu test pending
+### Phase 1 — Standalone CMake and scaffold — complete
 
 - CMake configures directly from `test/pi-cli/`; it finds the installed
   `playergstinterface` package using pkg-config.
@@ -53,18 +53,19 @@ on a separate-window fallback or an API change before proceeding.
 - Do not require `BUILD_PICLI`, the root CMake project, or changes to the
   install script.
 
-**Test gate:** install the interface to a local prefix, run
-`PLAYER_INTERFACE_PREFIX="$HOME/.local" bash ./build.sh` from `test/pi-cli`,
-then run the executable as documented in the README. Expected output:
+**Test gate:** passed on Ubuntu. The standalone build found all four pkg-config
+modules, built the executable, and running it printed
 `pi-player-simulator scaffold`.
 
-### Phase 2 — EGL UI
+### Phase 2 — EGL UI — implemented; Ubuntu test pending
 
 - Draw a URL field, Play/Pause/Stop controls, status, and a video rectangle.
 - Keep playback mocked in this phase.
 
-**Test gate:** launch, enter text, resize the surface, and close cleanly on
-Ubuntu.
+**Test gate:** from `test/pi-cli`, run `./build.sh`, then run
+`LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator`.
+Enter a URL, verify Play/Pause/Stop update the mocked status, resize the window,
+and close it cleanly.
 
 ### Phase 3 — Connect the player interface
 

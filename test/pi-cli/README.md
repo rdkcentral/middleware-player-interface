@@ -41,7 +41,7 @@ The standalone CMake checks for:
 
 - `libplayergstinterface` via its installed pkg-config file (this supplies the
   interface headers, library, and GStreamer compile/link requirements)
-- `sdl2`, `egl`, and `glesv2` for the planned graphical UI
+- `sdl2`, `egl`, and `glesv2` for the SDL window and OpenGL ES UI
 
 Later playback phases also need runtime GStreamer factories for `playbin`,
 `appsrc`, `appsink`, HLS/DASH demux, H.264/AAC, and optionally `glimagesink`.
@@ -53,3 +53,10 @@ does not install OS packages. Automatic dependency installation can be added
 later after the Ubuntu package list is verified. No player-interface source,
 root CMake, or install script changes are needed to build this standalone test
 app.
+
+## Phase 2 UI test
+
+Run the app using the commands in the Ubuntu build section. The window provides
+an editable URL field, mocked Play/Pause/Stop controls, a status line, and a
+video placeholder. Type a URL, click the controls to verify the status, resize
+the window, and close it. Playback is not connected in this phase.
