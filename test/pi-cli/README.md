@@ -1,22 +1,26 @@
 # Player Interface CLI Test Player
 
 `pi-player-simulator` exercises `InterfacePlayerRDK` with real clear HLS and
-DASH playback. FFmpeg fetches manifests and media over HTTP(S), demuxes
-compressed audio/video packets in memory, and pi-cli passes those samples to
-Player Interface through `SendHelper()`. Player Interface remains responsible
-for decoding, synchronization, and rendering.
+DASH playback. FFmpeg demuxes compressed audio/video packets in memory, and
+pi-cli passes those samples to Player Interface through `SendHelper()`.
+Player Interface remains responsible for decoding, synchronization, and
+rendering.
 
 pi-cli does not create a playback pipeline, decode media, or write manifests,
 segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
 injection; its appsrc queues use AAMP's default limits of 15 MiB for video and
 1.5 MiB for audio. For DASH, pi-cli filters the MPD
-in memory to the lowest-bandwidth
-video representation and one non-commentary audio adaptation set before FFmpeg
-opens the stream. This avoids opening every representation's initialization
-segment and reduces software decode/render load on the default desktop sink.
-HLS track selection and network reads are bounded by timeouts. DRM and
-subtitles are out of scope.
+in memory to the lowest-bandwidth video representation and one non-commentary
+audio adaptation set before FFmpeg opens the stream. A loopback-only,
+memory-backed HTTP proxy prefetches the selected tracks' initialization and
+first media segments concurrently, then maintains a four-segment lookahead.
+It supports representation-level `SegmentTemplate` entries using `$Number$`
+or `$Time$`; unsupported DASH layouts fall back to FFmpeg's direct HTTP
+fetching. The cache is capped at 32 MiB and media is never written to disk.
+This avoids opening every representation's initialization segment and reduces
+software decode/render load on the default desktop sink. HLS track selection
+and network reads are bounded by timeouts. DRM and subtitles are out of scope.
 
 The initial codec scope is H.264 video and AAC audio. FFmpeg's Annex-B H.264
 packets are converted to the AVC length-prefixed form expected by Player

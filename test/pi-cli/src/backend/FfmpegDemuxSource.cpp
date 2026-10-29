@@ -1,4 +1,5 @@
 #include "FfmpegDemuxSource.h"
+#include "DashResourceProxy.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -564,6 +565,16 @@ bool FfmpegDemuxSource::Open(const std::string& url,
             Stop();
             return false;
         }
+        dashResourceProxy_ = std::make_unique<DashResourceProxy>();
+        if (dashResourceProxy_->Start(
+                dashManifest.data, dashManifestUrl, progress_)) {
+            ReportProgress("ffmpeg-dash-parallel-prefetch-enabled");
+        } else {
+            dashResourceProxy_.reset();
+            ReportProgress(
+                "ffmpeg-dash-parallel-prefetch-unavailable; "
+                "using direct FFmpeg HTTP fetches");
+        }
         std::ostringstream selectionLog;
         selectionLog << "ffmpeg-dash-manifest-filtered: video="
                      << (dashManifest.keptVideo ? "yes" : "no")
@@ -1050,6 +1061,10 @@ void FfmpegDemuxSource::Stop()
     if (formatContext_ != nullptr) {
         const std::lock_guard<std::mutex> lock(demuxMutex_);
         avformat_close_input(&formatContext_);
+    }
+    if (dashResourceProxy_ != nullptr) {
+        dashResourceProxy_->Stop();
+        dashResourceProxy_.reset();
     }
 }
 

@@ -9,12 +9,14 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
 struct AVFormatContext;
+class DashResourceProxy;
 
 class FfmpegDemuxSource {
 public:
@@ -125,6 +127,7 @@ private:
     bool InputReady() const;
 
     AVFormatContext* formatContext_ = nullptr;
+    std::unique_ptr<DashResourceProxy> dashResourceProxy_;
     std::array<Track, 2> tracks_{};
     mutable std::mutex demuxMutex_;
     mutable std::mutex errorMutex_;

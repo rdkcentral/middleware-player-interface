@@ -63,11 +63,11 @@ if ! pkg-config --exists libplayergstinterface; then
 fi
 
 missing_modules=()
-for module in glib-2.0 libavformat libavcodec libavutil libxml-2.0; do
+for module in glib-2.0 gio-2.0 libavformat libavcodec libavutil libxml-2.0; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
         case "${module}" in
-            glib-2.0) add_system_package libglib2.0-dev ;;
+            glib-2.0|gio-2.0) add_system_package libglib2.0-dev ;;
             libavformat) add_system_package libavformat-dev ;;
             libavcodec) add_system_package libavcodec-dev ;;
             libavutil) add_system_package libavutil-dev ;;
@@ -81,7 +81,7 @@ if ((${#missing_modules[@]} > 0)); then
 fi
 
 still_missing=()
-for module in glib-2.0 libavformat libavcodec libavutil libxml-2.0; do
+for module in glib-2.0 gio-2.0 libavformat libavcodec libavutil libxml-2.0; do
     if ! pkg-config --exists "${module}"; then
         still_missing+=("${module}")
     fi
