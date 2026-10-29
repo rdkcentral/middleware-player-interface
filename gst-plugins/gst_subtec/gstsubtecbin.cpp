@@ -295,10 +295,10 @@ type_found (GstElement * typefind, guint probability,
                                     caps,
                                     GST_PAD_SINK, 
                                     TRUE);
-    GList *tmp = sub_parser_factories;
+    GList *factory_iter = sub_parser_factories;
 
-    for (; tmp; tmp = tmp->next) {
-      GstElementFactory *factory = (GstElementFactory *) tmp->data;
+    for (; factory_iter; factory_iter = factory_iter->next) {
+      GstElementFactory *factory = (GstElementFactory *) factory_iter->data;
       GST_DEBUG_OBJECT(subtecbin, "factory name %s can sink caps %d", gst_plugin_feature_get_name ((GstPluginFeature *) factory), gst_element_factory_can_sink_all_caps(factory, caps));
       if (gst_element_factory_can_sink_all_caps(factory, caps))
       {
@@ -322,6 +322,7 @@ type_found (GstElement * typefind, guint probability,
   }
 
   GList *chain = NULL;
+  GList *tmp = NULL;
 
   if (subtecbin->demux)
   {
