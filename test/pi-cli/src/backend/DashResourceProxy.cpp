@@ -267,7 +267,49 @@ bool ParsePeriodStart(xmlNodePtr period, double& startSeconds)
     return std::isfinite(startSeconds);
 }
 
-bool BuildSegmentValues(xmlNodePtr segmentTemplate,
+std::string InheritedTemplateProperty(xmlNodePtr node, const char* name)
+{
+    for (; node != nullptr; node = node->parent) {
+        for (xmlNodePtr child = node->children;
+             child != nullptr;
+             child = child->next) {
+            if (child->type == XML_ELEMENT_NODE &&
+                xmlStrEqual(child->name, BAD_CAST "SegmentTemplate")) {
+                const std::string value = XmlProperty(child, name);
+                if (!value.empty()) {
+                    return value;
+                }
+            }
+        }
+    }
+    return {};
+}
+
+xmlNodePtr FindInheritedSegmentTimeline(xmlNodePtr node)
+{
+    for (; node != nullptr; node = node->parent) {
+        for (xmlNodePtr child = node->children;
+             child != nullptr;
+             child = child->next) {
+            if (child->type != XML_ELEMENT_NODE ||
+                !xmlStrEqual(child->name, BAD_CAST "SegmentTemplate")) {
+                continue;
+            }
+            for (xmlNodePtr templateChild = child->children;
+                 templateChild != nullptr;
+                 templateChild = templateChild->next) {
+                if (templateChild->type == XML_ELEMENT_NODE &&
+                    xmlStrEqual(templateChild->name,
+                                BAD_CAST "SegmentTimeline")) {
+                    return templateChild;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool BuildSegmentValues(xmlNodePtr representation,
                         bool usesTime,
                         int64_t startNumber,
                         std::vector<int64_t>& values)
@@ -284,16 +326,7 @@ bool BuildSegmentValues(xmlNodePtr segmentTemplate,
         return true;
     }
 
-    xmlNodePtr timeline = nullptr;
-    for (xmlNodePtr child = segmentTemplate->children;
-         child != nullptr;
-         child = child->next) {
-        if (child->type == XML_ELEMENT_NODE &&
-            xmlStrEqual(child->name, BAD_CAST "SegmentTimeline")) {
-            timeline = child;
-            break;
-        }
-    }
+    xmlNodePtr timeline = FindInheritedSegmentTimeline(representation);
     if (timeline == nullptr) {
         return false;
     }
@@ -588,36 +621,38 @@ struct DashResourceProxy::Impl {
                     }
 
                     const std::string startNumber =
-                        XmlProperty(segmentTemplate, "startNumber");
+                        InheritedTemplateProperty(representation,
+                                                  "startNumber");
                     if (!startNumber.empty() &&
                         !ParseInteger(startNumber, track.media.startNumber)) {
                         xmlFreeDoc(document);
                         return false;
                     }
                     const std::string timescale =
-                        XmlProperty(segmentTemplate, "timescale");
+                        InheritedTemplateProperty(representation, "timescale");
                     if (!timescale.empty() &&
                         (!ParseInteger(timescale, track.media.timescale) ||
                          track.media.timescale <= 0)) {
                         track.media.hasSeekTiming = false;
                     }
                     const std::string duration =
-                        XmlProperty(segmentTemplate, "duration");
+                        InheritedTemplateProperty(representation, "duration");
                     if (!duration.empty() &&
                         (!ParseInteger(duration, track.media.duration) ||
                          track.media.duration <= 0)) {
                         track.media.hasSeekTiming = false;
                     }
                     const std::string presentationTimeOffset =
-                        XmlProperty(segmentTemplate,
-                                    "presentationTimeOffset");
+                        InheritedTemplateProperty(
+                            representation,
+                            "presentationTimeOffset");
                     if (!presentationTimeOffset.empty() &&
                         !ParseInteger(presentationTimeOffset,
                                       track.media.presentationTimeOffset)) {
                         track.media.hasSeekTiming = false;
                     }
                     if (!BuildSegmentValues(
-                            segmentTemplate,
+                            representation,
                             track.media.usesTime,
                             track.media.startNumber,
                             track.media.segmentValues)) {
@@ -1079,6 +1114,9 @@ private:
             const std::string& routeId = entry.first;
             const MediaRoute& route = entry.second;
             if (!route.hasSeekTiming) {
+                Report("ffmpeg-dash-seek-prefetch-skipped: route=" +
+                       routeId +
+                       " reason=segment-timing-unavailable");
                 continue;
             }
 
