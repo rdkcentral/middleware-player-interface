@@ -363,6 +363,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("ConfigurePipeline");
 	mFirstFrameRequired = FirstFrameFlag;
 	MediaCodecInfo* codecInfoByTrack[GST_TRACK_COUNT] = {
 		&codecInfo.video,
@@ -642,6 +643,7 @@ void InterfacePlayerRDK::SetPauseOnStartPlayback(bool enable)
  */
 gboolean InterfacePlayerRDK::IdleCallbackOnFirstFrame(gpointer user_data)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("IdleCallbackOnFirstFrame");
 	InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK *)user_data;
 	InterfacePlayerPriv* privatePlayer = nullptr;
 
@@ -663,7 +665,7 @@ gboolean InterfacePlayerRDK::IdleCallbackOnFirstFrame(gpointer user_data)
  * @param[in] pInterfacePlayerRDK pointer to InterfacePlayerRDK instance
  */
 static void GstPlayer_OnFirstVideoFrameCallback(GstElement* object, guint arg0, gpointer arg1,
-												InterfacePlayerRDK * pInterfacePlayerRDK)
+                                                                              InterfacePlayerRDK * pInterfacePlayerRDK)
 
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
@@ -705,6 +707,7 @@ static void GstPlayer_OnAudioFirstFrameAudDecoder(GstElement* object, guint arg0
  */
 gboolean InterfacePlayerRDK::IdleCallbackOnEOS(gpointer user_data)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("IdleCallbackOnEOS");
 	InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK *)user_data;
 
 	InterfacePlayerPriv* privatePlayer = nullptr;
@@ -966,6 +969,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
  * @brief check if element is instance
  */
 static void type_check_instance( const char * str, GstElement * elem);
+static std::string SafeName(GstElement *element);
 
 /**
  * @fn InterfacePlayerRDK_SignalEOS
@@ -976,6 +980,7 @@ static void GstPlayer_SignalEOS(gst_media_stream& stream)
 {
 	if (stream.source)
 	{
+		PLAYER_TUNE_PROFILE_SCOPE_CONTEXT("gst_app_src_end_of_stream", std::string("element=") + SafeName(stream.source));
 		auto ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
 		//GST_FLOW_OK is expected in PAUSED or PLAYING states; GST_FLOW_FLUSHING is expected in other states.
 		if (ret != GST_FLOW_OK)
@@ -1369,7 +1374,11 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		GstState current;																	/* To hold the current state of the element */
 		GstState pending;																	/* Pending state, used in printing the pending state of the element */
 
-		auto stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout,  this function is MT-safe */
+		GstStateChangeReturn stateChangeReturn;
+		{
+			PLAYER_TUNE_PROFILE_SCOPE_CONTEXT("gst_element_get_state", std::string("element=") + SafeName(element) + " target=" + gst_element_state_get_name(targetState));
+			stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout, this function is MT-safe */
+		}
 		switch(stateChangeReturn)
 		{
 			case GST_STATE_CHANGE_FAILURE:
@@ -1399,7 +1408,10 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		{
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
-		rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		{
+			PLAYER_TUNE_PROFILE_SCOPE_CONTEXT("gst_element_set_state", std::string("element=") + SafeName(element) + " target=" + gst_element_state_get_name(targetState));
+			rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		}
 		if(syncOnlyTransition)
 		{
 			MW_LOG_MIL("InterfacePlayerRDK: %s state set to %s",  SafeName(element).c_str(), gst_element_state_get_name(targetState));
@@ -1501,6 +1513,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 
 void InterfacePlayerRDK::Stop(bool keepLastFrame)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("Stop");
 	std::lock_guard<std::mutex> lock(mMutex);
 	/*  make the execution of this function more deterministic and
 	 *  reduce scope for potential pipeline lockups*/
@@ -1676,6 +1689,7 @@ bool InterfacePlayerRDK::IsUsingRialtoSink()
  */
 bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, bool isAppSeek)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("Flush");
 	GstState aud_current;
 	GstState aud_pending;
 	GstState current;
@@ -1726,7 +1740,10 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		}
 	}
 	GstStateChangeReturn ret;
-	ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
+	{
+		PLAYER_TUNE_PROFILE_SCOPE("gst_pipeline_get_state_for_flush");
+		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
+	}
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Pipeline state %s, ret %u", gst_element_state_get_name(current), ret);
@@ -1750,7 +1767,10 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		/* pipeline may enter paused state even when audio decoder is not ready, check again */
 		if (interfacePlayerPriv->gstPrivateContext->audio_dec)
 		{
-			ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
+			{
+				PLAYER_TUNE_PROFILE_SCOPE("gst_audio_decoder_get_state_for_flush");
+				ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
+			}
 			if ((aud_current != GST_STATE_PLAYING && aud_current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 			{
 				if (shouldTearDown)
@@ -1799,8 +1819,13 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			}
 		}
 	}
-	if (!gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
-						  position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+	gboolean seekSucceeded;
+	{
+		PLAYER_TUNE_PROFILE_SCOPE("gst_element_seek_for_flush");
+		seekSucceeded = gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
+									position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+	}
+	if (!seekSucceeded)
 	{
 		MW_LOG_ERR("Seek failed");
 		SetPendingSeek(true);
@@ -3272,6 +3297,9 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 			GST_BUFFER_DURATION(buffer) = duration;
 			if (sample.mDrmMetadata.mIsEncrypted)
 			{
+				if (isFirstBuffer)
+				{
+				}
 				// Set DRM metadata to buffer
 				DecorateGstBufferWithDrmMetadata(buffer, sample.mDrmMetadata);
 			}
@@ -3954,6 +3982,7 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 	}
 	if(notifyFirstFrameCallback)
 	{
+		PLAYER_TUNE_PROFILE_SCOPE("first_frame_callback_dispatch");
 		notifyFirstFrameCallback(mediaType, notifyFirstBuffer, (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified && PipelineSetToReady), requireFirstVideoFrameDisplay, audioOnly);
 	}
 
@@ -5039,6 +5068,9 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 		case GST_MESSAGE_STATE_CHANGED:
 			GstState old_state, new_state, pending_state;
 			gst_message_parse_state_changed(msg, &old_state, &new_state, &pending_state);
+			if (GST_MESSAGE_SRC(msg) == GST_OBJECT(privatePlayer->gstPrivateContext->pipeline))
+			{
+			}
 
 			if (NULL != msg->src &&
 				((GST_MESSAGE_SRC(msg) == GST_OBJECT(privatePlayer->gstPrivateContext->pipeline)) ||
@@ -5179,10 +5211,13 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 				{
  					MW_LOG_MIL("InterfacePlayerRDK setting encrypted player (%p) instance for %s decryptor", pInterfacePlayerRDK->mEncrypt, GST_OBJECT_NAME(msg->src));
  					// Set both properties atomically to avoid potential use-after-free if property notifications trigger unrefs
-					g_object_set(msg->src,
-					             privatePlayer->mPlayerName.c_str(), pInterfacePlayerRDK->mDRMSessionManager,
-					             "drm-session-manager", pInterfacePlayerRDK->mEncrypt,
-					             NULL);
+					{
+						PLAYER_TUNE_PROFILE_SCOPE("drm_decryptor_bind");
+						g_object_set(msg->src,
+						             privatePlayer->mPlayerName.c_str(), pInterfacePlayerRDK->mDRMSessionManager,
+						             "drm-session-manager", pInterfacePlayerRDK->mEncrypt,
+						             NULL);
+					}
 				}
 			}
 			break;
@@ -5197,7 +5232,10 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
 				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem,  NULL);
-				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
+				{
+					PLAYER_TUNE_PROFILE_SCOPE("gst_element_set_context");
+					gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
+				}
 			}
 
 			break;
@@ -5255,6 +5293,7 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
  */
 void InterfacePlayerRDK::NotifyEOS()
 {
+	PLAYER_TUNE_PROFILE_SCOPE("NotifyEOS");
 	if (!interfacePlayerPriv->gstPrivateContext->eosSignalled)
 	{
 		if (!interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
@@ -5319,6 +5358,7 @@ void InterfacePlayerRDK::NotifyFragmentCachingComplete()
  */
 void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffering)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("EndOfStreamReached");
 	MW_LOG_MIL("entering InterfacePlayer_EndOfStreamReached type %d", mediaType);
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 

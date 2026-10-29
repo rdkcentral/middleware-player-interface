@@ -21,8 +21,83 @@
 #include <gmock/gmock.h>
 #include <stdio.h>
 #include <cstring>
+#include <stdlib.h>
+#include <unistd.h>
 #include "PlayerLogManager.h"
 
+namespace
+{
+int tuneProfileContextEvaluations = 0;
+
+std::string MakeTuneProfileContext()
+{
+    ++tuneProfileContextEvaluations;
+    return "kind=unit";
+}
+
+void ProfileContextWithEarlyReturn()
+{
+    PLAYER_TUNE_PROFILE_SCOPE_CONTEXT("context_api", MakeTuneProfileContext());
+    return;
+}
+
+void ProfileWithoutContextWithEarlyReturn()
+{
+    PLAYER_TUNE_PROFILE_SCOPE("plain_api");
+    return;
+}
+}
+
+TEST(PlayerTuneProfiling, EnabledAndDisabledScopes)
+{
+    testing::GTEST_FLAG(death_test_style) = "threadsafe";
+
+    ASSERT_EXIT(
+        {
+            setenv("PI_TUNE_PROFILING", "0", 1);
+            dup2(STDERR_FILENO, STDOUT_FILENO);
+            PlayerLogManager::disableLogRedirection = true;
+            tuneProfileContextEvaluations = 0;
+            ProfileContextWithEarlyReturn();
+            ProfileWithoutContextWithEarlyReturn();
+            if (tuneProfileContextEvaluations != 0)
+            {
+                _exit(1);
+            }
+            fflush(stdout);
+            _exit(0);
+        },
+        ::testing::ExitedWithCode(0), "^$");
+
+    ASSERT_EXIT(
+        {
+            setenv("PI_TUNE_PROFILING", "1", 1);
+            dup2(STDERR_FILENO, STDOUT_FILENO);
+            PlayerLogManager::disableLogRedirection = true;
+            tuneProfileContextEvaluations = 0;
+            ProfileContextWithEarlyReturn();
+            if (tuneProfileContextEvaluations != 1)
+            {
+                _exit(1);
+            }
+            fflush(stdout);
+            _exit(0);
+        },
+        ::testing::ExitedWithCode(0),
+        "\\[PI_TUNE_PROF\\] api=context_api context=kind=unit duration_ms=[0-9]+\\.[0-9]+");
+
+    ASSERT_EXIT(
+        {
+            setenv("PI_TUNE_PROFILING", "1", 1);
+            dup2(STDERR_FILENO, STDOUT_FILENO);
+            PlayerLogManager::disableLogRedirection = true;
+            ProfileWithoutContextWithEarlyReturn();
+            fflush(stdout);
+            _exit(0);
+        },
+        ::testing::ExitedWithCode(0),
+        "\\[PI_TUNE_PROF\\] api=plain_api duration_ms=[0-9]+\\.[0-9]+");
+}
 
 /**
  * @brief Verify that DumpBinaryBlob correctly processes a valid binary blob with multiple bytes
