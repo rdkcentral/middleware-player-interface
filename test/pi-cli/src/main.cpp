@@ -127,7 +127,6 @@ bool RenderUi(SDL_Renderer* renderer,
               int width,
               int height,
               const std::string& url,
-              const std::string& status,
               bool urlFocused,
               const std::array<Button, 3>& buttons,
               TextCache& urlText,
@@ -442,7 +441,7 @@ int main()
                         url.empty() ? "Enter stream URL" : url,
                         url.empty() ? secondary : foreground) ||
             !UpdateText(renderer, font, statusText, status, foreground) ||
-            !RenderUi(renderer, font, width, height, url, status, urlFocused,
+            !RenderUi(renderer, font, width, height, url, urlFocused,
                       buttons, urlText, statusLabel, statusText, videoLabel,
                       playLabel, pauseLabel, stopLabel)) {
             exitCode = 1;
