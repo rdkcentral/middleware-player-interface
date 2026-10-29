@@ -7,6 +7,7 @@
 #include <mutex>
 
 class InterfacePlayerRDK;
+class FfmpegDemuxSource;
 struct BusEventData;
 
 struct PlaybackStatus {
@@ -25,7 +26,7 @@ public:
     PlayerBackend(const PlayerBackend&) = delete;
     PlayerBackend& operator=(const PlayerBackend&) = delete;
 
-    void Start();
+    bool Start();
     void PumpEvents();
     bool Play();
     bool Pause();
@@ -40,6 +41,7 @@ private:
 
     std::string url_;
     std::string statusMessage_ = "Starting playback";
+    std::unique_ptr<FfmpegDemuxSource> source_;
     std::unique_ptr<InterfacePlayerRDK> player_;
     std::chrono::steady_clock::time_point startupAt_{};
     std::chrono::steady_clock::time_point nextPositionQuery_{};
@@ -50,6 +52,8 @@ private:
     std::atomic<bool> pipelinePlayingNotified_{false};
     std::atomic<bool> firstVideoFrameReported_{false};
     std::atomic<bool> firstVideoFrameDisplayedReported_{false};
+    std::atomic<bool> firstVideoBufferReported_{false};
+    std::atomic<bool> firstAudioBufferReported_{false};
     bool firstPositionReported_ = false;
     bool playing_ = false;
     bool stopped_ = false;

@@ -18,7 +18,9 @@ int main(int argc, char* argv[])
     }
 
     PlayerBackend backend(url);
-    backend.Start();
+    if (!backend.Start()) {
+        return 1;
+    }
 
     ConsolePlayer console;
     return console.Run(backend);

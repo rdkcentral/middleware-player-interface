@@ -143,7 +143,7 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
 
 int ConsolePlayer::Run(PlayerBackend& backend)
 {
-    std::cout << "Video is shown in the GStreamer sink window.\n";
+    std::cout << "Video output is provided by Player Interface.\n";
     PrintHelp();
     std::cout << "pi-cli> " << std::flush;
 

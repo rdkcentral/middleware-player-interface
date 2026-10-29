@@ -6,9 +6,15 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(PLAYERGSTINTERFACE REQUIRED IMPORTED_TARGET libplayergstinterface)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libavutil
+)
 
 add_executable(pi-player-simulator
     src/main.cpp
+    src/backend/FfmpegDemuxSource.cpp
     src/backend/PlayerBackend.cpp
     src/console/ConsolePlayer.cpp
 )
@@ -17,6 +23,7 @@ target_compile_features(pi-player-simulator PRIVATE cxx_std_17)
 target_link_libraries(pi-player-simulator PRIVATE
     PkgConfig::PLAYERGSTINTERFACE
     PkgConfig::GLIB
+    PkgConfig::FFMPEG
 )
 
 if(NOT UNIX)

@@ -1,26 +1,35 @@
-# Player Interface Simulator
+# Player Interface CLI Test Player
 
-`pi-player-simulator` is a standalone test application that consumes the
-installed `playergstinterface` package. Playback is configured and controlled
-through `InterfacePlayerRDK`; the simulator does not create its own GStreamer
-pipeline or inject media samples.
+`pi-player-simulator` exercises `InterfacePlayerRDK` with real clear HLS and
+DASH playback. FFmpeg fetches manifests and media over HTTP(S), demuxes
+compressed audio/video packets in memory, and pi-cli passes those samples to
+Player Interface through `SendHelper()`. Player Interface remains responsible
+for decoding, synchronization, and rendering.
 
-The initial playback scope is clear HTTP(S) HLS and DASH. DRM and subtitles
-are disabled.
+pi-cli does not create a playback pipeline, decode media, or write manifests,
+segments, or samples to local files. FFmpeg packet queues are heap-backed and
+bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
+injection. DRM and subtitles are out of scope.
 
-## Ubuntu build
+The initial codec scope is H.264 video and AAC audio. FFmpeg's Annex-B H.264
+packets are converted to the AVC length-prefixed form expected by Player
+Interface's elementary-stream caps. AAC packets retain their FFmpeg framing:
+ADTS for transport-stream inputs and raw AAC with codec configuration for
+containerized inputs.
+
+## Ubuntu build and run
 
 Build and install `playergstinterface` first. For the repository's usual
 `.libs` prefix:
 
 ```sh
-cd ~/Desktop/workspace/tuntime/middleware-player-interface
+cd ~/Desktop/workspace/player/middleware-player-interface
 cmake -S . -B build -DCMAKE_PLATFORM_UBUNTU=ON -DCMAKE_INSTALL_PREFIX="$PWD/.libs"
 cmake --build build --parallel
 cmake --install build
 ```
 
-Then build and run `pi-cli` as your regular user:
+Then build and run pi-cli as your regular user:
 
 ```sh
 cd test/pi-cli
@@ -28,33 +37,18 @@ cd test/pi-cli
 ./run.sh "https://example.com/clear-stream.m3u8"
 ```
 
-For DASH, pass a clear `.mpd` URL instead. The simulator starts playback
-immediately from the command-line URL. Video appears in the GStreamer sink's
-own window; pi-cli does not create a second graphics window.
-The launcher sets the player-interface runtime library path before starting
-the simulator; running the binary directly does not inherit environment
-variables set by `build.sh`.
+For DASH, pass a clear `.mpd` URL. The player-interface-owned output is used;
+pi-cli does not open a second graphics window. `run.sh` configures the player
+interface runtime library path. Running the binary directly does not inherit
+that setting.
 
-If `playergstinterface` is installed to another prefix, set
-`PLAYER_INTERFACE_PREFIX` before running `./build.sh` and `./run.sh`. The build
-script configures the pkg-config paths, checks the required modules, and
-installs missing Ubuntu build and GStreamer runtime packages through
-`sudo apt-get`. Run the scripts without `sudo`.
-
-The script does not build or install `playergstinterface`; that remains a
-separate prerequisite. Extra CMake options can be passed to the script, for
-example `./build.sh -DCMAKE_BUILD_TYPE=Debug`.
-
-## Playback and controls
-
-The backend sets `InterfacePlayerRDK` to its direct-URI playback mode and
-passes the URL to `ConfigurePipeline()`. The interface's own `playbin` handles
-HTTP source setup, HLS/DASH demuxing, decoding, and sink output. The simulator
-does not make a parallel `uridecodebin`, `appsink`, or other media pipeline.
+If Player Interface is installed to another prefix, set
+`PLAYER_INTERFACE_PREFIX` before running both scripts. `build.sh` checks for
+the Player Interface, GLib, and FFmpeg development modules, and installs
+missing Ubuntu build dependencies through `sudo apt-get`. Run scripts without
+`sudo`. The script does not build or install Player Interface itself.
 
 ## Console controls
-
-Type commands in the terminal while the GStreamer video window is playing:
 
 ```text
 play
@@ -71,39 +65,22 @@ status
 quit
 ```
 
-`seek` takes a target position in seconds. `trick 1x` returns to normal speed.
-The console pumps the GLib main context while waiting for input so the
-interface-owned GStreamer bus callbacks continue to run. Seek and trick
-requests use `InterfacePlayerRDK::Flush()`; the stream/sink must support the
-requested operation, so check GStreamer logs if playback does not respond.
+`seek` takes a target in seconds. The command repositions FFmpeg and flushes
+Player Interface. Trick-rate commands flush Player Interface and reposition
+the source at the current playback time. Actual trick playback depends on the
+Player Interface platform implementation and stream support.
 
-Startup timing milestones are printed to stderr with elapsed monotonic time,
-for example `[PI-CLI] +1234ms configure-pipeline-returned`. They include plugin
-initialization, pipeline configuration, the pipeline's PLAYING transition,
-the decoder's first-frame callback when available, and first advancing
-playback position. GStreamer errors and warnings include their details.
+## Startup diagnostics
 
-To diagnose slow HLS/DASH startup, enable targeted source/demux logs and save
-the combined output:
+Timing milestones use monotonic elapsed time and are printed to stderr, for
+example `[PI-CLI] +1234ms ffmpeg-manifest-and-stream-info-ready`. They cover
+manifest/stream probing, Player Interface setup, first sample processing,
+first decoded frame, and advancing playback position. Player Interface bus
+errors and FFmpeg ingest failures are reported with their details.
 
-```sh
-PI_CLI_GST_DEBUG='playbin:4,uridecodebin:4,dashdemux:6,souphttpsrc:6,qtdemux:4' \
-  ./run.sh "https://example.com/clear-stream.mpd" 2>&1 | tee startup.log
-```
+## Validation
 
-`PI_CLI_GST_DEBUG` is optional; without it the normal log volume is unchanged.
-Compare the elapsed time between `configure-pipeline-returned`,
-`pipeline-entered-playing`, `decoded-video-first-frame-callback`, and
-`playback-position-advanced`. The category logs help locate delays in manifest
-and segment requests or demuxing; these diagnostics measure startup and do not
-themselves speed it up.
-
-## Dependencies checked by `build.sh`
-
-- Installed `libplayergstinterface` pkg-config module
-- `glib-2.0` development module
-- GStreamer `playbin`, `souphttpsrc`, HLS/DASH demuxers, `autovideosink`,
-  `xvimagesink`, and H.264/AAC decoders
-
-`build.sh` installs missing Ubuntu packages when possible and reports any
-runtime factories that remain unavailable.
+Run `./build.sh`, then try one clear HLS and one clear DASH stream on Ubuntu.
+Verify audio/video output, pause/resume, seek, EOS/error reporting, and clean
+shutdown. This Windows workspace cannot establish Linux hardware output or
+runtime behavior.

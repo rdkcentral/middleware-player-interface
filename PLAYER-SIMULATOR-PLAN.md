@@ -1,92 +1,97 @@
-# Player Interface Simulator Plan
+# Player Interface CLI Test Player
 
-## Goal
+## Goal and constraints
 
-Build a lightweight Linux console test player under `test/pi-cli/` with direct
-playback through `InterfacePlayerRDK`. The simulator must not construct a
-separate GStreamer playback pipeline or modify the player-interface
-implementation.
+Build a lightweight Linux console player under `test/pi-cli/` that exercises
+Player Interface during real clear HLS and DASH playback. The simulator must
+not change Player Interface production or vendor code.
 
-Initial stream scope: clear HTTP(S) HLS and DASH; DRM and subtitles are
-disabled.
+- Use FFmpeg for manifest loading, HTTP(S) fetching, and demuxing.
+- Keep media payloads in bounded heap-backed queues; never write manifests or
+  media segments to local files.
+- Pass compressed audio/video samples through Player Interface's
+  `NeedData`/`EnoughData` and `SendHelper()` APIs.
+- Leave decoding, A/V synchronization, and rendering to Player Interface.
+- Do not create a second media pipeline or call media-pipeline APIs directly
+  from pi-cli.
+- Ignore DRM and subtitles initially. Start with H.264 video and AAC audio.
+- Keep the CLI controls and diagnostics independent of the AAMP CLI; use its
+  PI sample-injection flow only as architectural inspiration.
 
-## Architecture
+## Data flow
 
-- Build/install `playergstinterface` separately using its normal build.
-- Build `test/pi-cli` independently using its own CMake project and consume the
-  installed library through `libplayergstinterface.pc`.
-- Keep the CLI entry point small; put command parsing under `src/console/` and
-  player-interface calls under `src/backend/`.
-- Pass the command-line URL to `InterfacePlayerRDK::ConfigurePipeline()`.
-  The interface's own `playbin` performs URI source setup, adaptive demux,
-  decoding, and sink output. The simulator must not create another pipeline,
-  use `uridecodebin`/`appsink`, or feed samples through `SendHelper`.
-- Use `InterfacePlayerRDK` for play, pause, stop, seek/trick-play, position,
-  duration, and bus errors.
-- Do not modify player-interface production or vendor code.
-- Let the interface-owned default GStreamer sink display video in its native
-  window; the simulator does not create a second graphics window.
+```text
+HLS/DASH URL
+    |
+    v
+FFmpeg libavformat
+  manifest and segment HTTP(S) fetch
+  adaptive demux to compressed audio/video packets
+    |
+    v
+bounded heap queues <---- Player Interface NeedData / EnoughData
+    |
+    v
+Player Interface SendHelper()
+    |
+    v
+Player Interface decode, synchronization, and platform output
+```
 
-`Configs::media` is an integer in the installed public API; the media-format
-enum itself is private. The simulator selects the direct-URI/progressive mode
-and disables its appsrc option so the URL is handled by the interface-owned
-`playbin`.
+FFmpeg is an ingest/demux layer only; it does not decode or render. The
+simulator does not write to a disk cache. H.264 Annex-B packets are converted
+to four-byte length-prefixed access units with AVC codec configuration for
+Player Interface's H.264 caps. AAC uses the demuxer's ADTS framing for
+transport streams and raw AAC plus AudioSpecificConfig for containerized
+streams.
 
-## Phases and test gates
+## Implementation phases and gates
 
-### Phase 0 — Branch and clean test folder — complete
+### Phase 1 — Standalone build
 
-- Work on `feature/Simulator`, based on `develop`.
-- Keep the simulator isolated under `test/pi-cli/`.
-- Keep production player-interface code unchanged.
+- Keep the CLI entry point and console parser under `test/pi-cli/`.
+- Build against the installed Player Interface package and GLib.
+- Add FFmpeg `libavformat`, `libavcodec`, and `libavutil` development modules.
+- Do not add GStreamer factory checks or build a media pipeline in pi-cli.
 
-### Phase 1 — Standalone build and scaffold — complete
+**Gate:** configure and build on Ubuntu without changing the root Player
+Interface build.
 
-- Configure/build directly from `test/pi-cli/`.
-- Use the installed `playergstinterface` pkg-config module.
-- Let `build.sh` set pkg-config/runtime paths and install missing Ubuntu build
-  and GStreamer runtime dependencies.
-- Do not require the root CMake project or `BUILD_PICLI`.
+### Phase 2 — FFmpeg source and sample bridge
 
-**Test gate:** standalone CMake configure/build and launch on Ubuntu.
+- Open HLS/DASH manifests using FFmpeg's network protocols and demuxers.
+- Select supported H.264/AAC tracks; ignore subtitle streams.
+- Keep packet data in bounded heap-backed per-track queues.
+- Register Player Interface `NeedData` and `EnoughData` callbacks before
+  configuring streams.
+- Configure the Player Interface tracks from FFmpeg codec metadata, then feed
+  samples with timestamps and discontinuity state through `SendHelper()`.
+- Signal per-track end-of-stream after queued packets drain.
+- Stop and interrupt FFmpeg network reads cleanly during teardown.
 
-### Phase 2 — Console controls — implemented; Ubuntu test pending
+**Gate:** logs show packet injection and Player Interface callbacks for one
+clear HLS stream and one clear DASH stream. Confirm no media files are created.
 
-- Keep the entry point small and console command parsing in `src/console/`.
-- Accept the stream URL only as `./build/pi-player-simulator <url>`.
-- Support `play`, `pause`, `seek <seconds>`, `trick <rate>`, `stop`, `status`,
-  `help`, and `quit`.
-- Use the interface-owned GStreamer video sink window; do not create an SDL/EGL
-  UI or an X11 overlay.
+### Phase 3 — Console controls
 
-**Test gate:** launch with a URL; verify console commands, GStreamer bus
-processing during input, video output, and clean shutdown on Ubuntu.
+- Keep `play`, `pause`, `seek`, `trick`, `stop`, `status`, and `quit` in the
+  console frontend.
+- Coordinate seeks across FFmpeg demux and Player Interface flush operations.
+- Preserve `NeedData`/`EnoughData` backpressure during pause, seek, and resume.
+- Report FFmpeg and Player Interface failures explicitly.
 
-### Phase 3 — Interface-owned direct-URI playback — implemented; Ubuntu test pending
+**Gate:** on Ubuntu, verify pause/resume, seek, supported trick rates, EOS,
+errors, and clean shutdown. Platform-specific trick playback is not assumed
+until tested.
 
-- Initialize GStreamer through `InterfacePlayerRDK`.
-- Configure its own pipeline with the supplied URL in direct-URI mode.
-- Let the interface-owned `playbin` process HLS/DASH; do not add a separate
-  source or ingest pipeline.
-- Route play, pause, stop, seek/trick-play, status, and bus errors through the
-  interface API.
+### Phase 4 — Playback validation and coverage
 
-**Test gate:** play one clear HLS URL and one clear DASH URL on Ubuntu; verify
-video/audio output, pause/resume, stop, EOS/error reporting, and teardown.
+- Validate packet framing, timestamps, codec configuration, and A/V output on
+  representative HLS MPEG-TS, HLS fMP4, and DASH fMP4 streams.
+- Add support only for clear codecs/framing confirmed against Player Interface
+  caps; reject unsupported codecs clearly.
+- Use startup milestones to distinguish manifest probing, first packet
+  arrival, Player Interface setup, first sample processing, and first frame.
 
-### Phase 4 — Playback command validation — validate before expanding
-
-- Validate direct-URI seeking and trick rates through the public
-  `InterfacePlayerRDK::Flush()` method; report if a sink or stream rejects a
-  requested operation.
-- Keep the interface-owned video sink in control of its native output window.
-
-**Test gate:** verify seek targets and trick rates on a clear DASH stream, then
-confirm stop and quit tear down the pipeline cleanly.
-
-## Progressive testing rule
-
-Every phase must have an exact command and expected result in
-`test/pi-cli/README.md`. Run each phase's checks before continuing. Ubuntu
-GStreamer output and playback controls must be confirmed on Ubuntu; they cannot
-be inferred from the Windows development environment.
+**Gate:** build and playback checks on Ubuntu. Windows-only inspection cannot
+confirm Linux sink behavior or end-to-end playback.

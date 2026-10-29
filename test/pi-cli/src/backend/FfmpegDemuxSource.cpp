@@ -1,0 +1,1047 @@
+#include "FfmpegDemuxSource.h"
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/error.h>
+#include <libavutil/mathematics.h>
+#include <libavutil/mem.h>
+}
+
+#include <algorithm>
+#include <cmath>
+#include <cerrno>
+#include <cstring>
+#include <exception>
+#include <limits>
+#include <sstream>
+#include <system_error>
+
+namespace {
+
+constexpr size_t kMaximumQueuedBytes = 8 * 1024 * 1024;
+constexpr size_t kMaximumQueuedPackets = 128;
+constexpr size_t kMaximumPrimingPackets = 4096;
+// Configs::media uses these private HLS/DASH values in the installed API.
+constexpr int kPlayerInterfaceHlsMediaMode = 0;
+constexpr int kPlayerInterfaceDashMediaMode = 1;
+
+std::string AvErrorString(int error)
+{
+    char buffer[AV_ERROR_MAX_STRING_SIZE] = {};
+    av_strerror(error, buffer, sizeof(buffer));
+    return buffer;
+}
+
+} // namespace
+
+FfmpegDemuxSource::FfmpegDemuxSource()
+{
+    tracks_[0].mediaType = eGST_MEDIATYPE_VIDEO;
+    tracks_[1].mediaType = eGST_MEDIATYPE_AUDIO;
+}
+
+FfmpegDemuxSource::~FfmpegDemuxSource()
+{
+    Stop();
+}
+
+bool FfmpegDemuxSource::Open(const std::string& url)
+{
+    if (url.empty()) {
+        SetError("A stream URL is required");
+        return false;
+    }
+
+    url_ = url;
+    stopping_ = false;
+    inputPaused_ = false;
+    feedingEnabled_ = true;
+
+    static std::once_flag networkInitialization;
+    static int networkInitializationResult = 0;
+    std::call_once(networkInitialization, [] {
+        networkInitializationResult = avformat_network_init();
+    });
+    if (networkInitializationResult < 0) {
+        SetError("FFmpeg network initialization failed: " +
+                 AvErrorString(networkInitializationResult));
+        return false;
+    }
+
+    formatContext_ = avformat_alloc_context();
+    if (formatContext_ == nullptr) {
+        SetError("Could not allocate an FFmpeg input context");
+        return false;
+    }
+    formatContext_->interrupt_callback.callback =
+        &FfmpegDemuxSource::InterruptCallback;
+    formatContext_->interrupt_callback.opaque = this;
+
+    AVDictionary* options = nullptr;
+    av_dict_set(&options, "probesize", "2000000", 0);
+    av_dict_set(&options, "analyzeduration", "5000000", 0);
+    int result = avformat_open_input(&formatContext_,
+                                     url_.c_str(),
+                                     nullptr,
+                                     &options);
+    av_dict_free(&options);
+    if (result < 0) {
+        SetError("Could not open stream URL: " + AvErrorString(result));
+        Stop();
+        return false;
+    }
+
+    result = avformat_find_stream_info(formatContext_, nullptr);
+    if (result < 0) {
+        SetError("Could not read stream information: " +
+                 AvErrorString(result));
+        Stop();
+        return false;
+    }
+
+    const std::string inputFormat = formatContext_->iformat != nullptr
+        ? formatContext_->iformat->name
+        : "";
+    if (inputFormat.find("hls") != std::string::npos) {
+        mediaMode_ = kPlayerInterfaceHlsMediaMode;
+    } else if (inputFormat.find("dash") != std::string::npos) {
+        mediaMode_ = kPlayerInterfaceDashMediaMode;
+    } else {
+        SetError("Only HLS and DASH manifests are supported; FFmpeg opened " +
+                 (inputFormat.empty() ? std::string("an unknown format")
+                                      : inputFormat));
+        Stop();
+        return false;
+    }
+
+    const int videoIndex = av_find_best_stream(formatContext_,
+                                                AVMEDIA_TYPE_VIDEO,
+                                                -1,
+                                                -1,
+                                                nullptr,
+                                                0);
+    const int audioIndex = av_find_best_stream(formatContext_,
+                                                AVMEDIA_TYPE_AUDIO,
+                                                -1,
+                                                videoIndex >= 0 ? videoIndex : -1,
+                                                nullptr,
+                                                0);
+    if (videoIndex < 0 && audioIndex < 0) {
+        SetError("The manifest has no supported audio or video streams");
+        Stop();
+        return false;
+    }
+
+    tracks_[0].streamIndex = videoIndex >= 0 ? videoIndex : -1;
+    tracks_[1].streamIndex = audioIndex >= 0 ? audioIndex : -1;
+    if (videoIndex >= 0 && !InitializeTrack(tracks_[0])) {
+        Stop();
+        return false;
+    }
+    if (audioIndex >= 0 && !InitializeTrack(tracks_[1])) {
+        Stop();
+        return false;
+    }
+
+    if (formatContext_->duration != AV_NOPTS_VALUE &&
+        formatContext_->duration > 0) {
+        durationMilliseconds_ = formatContext_->duration / 1000;
+    }
+
+    if (!PrimeTracks()) {
+        if (error_.empty()) {
+            SetError("Could not obtain codec configuration and initial samples");
+        }
+        Stop();
+        return false;
+    }
+
+    return true;
+}
+
+StreamCodecInfo FfmpegDemuxSource::GetCodecInfo() const
+{
+    StreamCodecInfo info;
+    for (const Track& track : tracks_) {
+        if (track.streamIndex < 0) {
+            continue;
+        }
+
+        MediaCodecInfo* codecInfo =
+            track.mediaType == eGST_MEDIATYPE_VIDEO
+                ? &info.video
+                : &info.audio;
+        codecInfo->mCodecFormat = track.format;
+        codecInfo->mCodecData = track.codecData;
+        codecInfo->mIsEncrypted = false;
+        codecInfo->mNaluLengthPrefixed =
+            track.mediaType == eGST_MEDIATYPE_VIDEO;
+        if (track.mediaType == eGST_MEDIATYPE_VIDEO) {
+            codecInfo->mInfo.video.mWidth =
+                static_cast<uint16_t>(track.width);
+            codecInfo->mInfo.video.mHeight =
+                static_cast<uint16_t>(track.height);
+        } else {
+            codecInfo->mInfo.audio.mChannelCount =
+                static_cast<uint16_t>(track.channels);
+            codecInfo->mInfo.audio.mSampleRate =
+                static_cast<uint16_t>(track.sampleRate);
+        }
+    }
+    return info;
+}
+
+int FfmpegDemuxSource::GetMediaMode() const
+{
+    return mediaMode_;
+}
+
+long long FfmpegDemuxSource::GetDurationMilliseconds() const
+{
+    return durationMilliseconds_;
+}
+
+bool FfmpegDemuxSource::HasTrack(int mediaType) const
+{
+    return FindTrack(mediaType) != nullptr;
+}
+
+bool FfmpegDemuxSource::Start(SendSampleCallback sendSample,
+                              EndOfStreamCallback endOfStream)
+{
+    if (formatContext_ == nullptr || !sendSample || !endOfStream ||
+        stopping_) {
+        SetError("The FFmpeg source is not ready to start");
+        return false;
+    }
+
+    sendSample_ = std::move(sendSample);
+    endOfStream_ = std::move(endOfStream);
+    try {
+        for (Track& track : tracks_) {
+            if (track.streamIndex >= 0) {
+                track.feederThread =
+                    std::thread(&FfmpegDemuxSource::FeedLoop, this,
+                                std::ref(track));
+            }
+        }
+        demuxThread_ = std::thread(&FfmpegDemuxSource::DemuxLoop, this);
+    } catch (const std::system_error& error) {
+        SetError("Could not start FFmpeg worker threads: " +
+                 std::string(error.what()));
+        Stop();
+        return false;
+    }
+    return true;
+}
+
+void FfmpegDemuxSource::NeedData(int mediaType)
+{
+    Track* track = FindTrack(mediaType);
+    if (track == nullptr) {
+        SetError("Player Interface requested data for an unconfigured track");
+        return;
+    }
+
+    {
+        const std::lock_guard<std::mutex> lock(track->mutex);
+        track->needData = true;
+    }
+    track->condition.notify_all();
+}
+
+void FfmpegDemuxSource::EnoughData(int mediaType)
+{
+    Track* track = FindTrack(mediaType);
+    if (track == nullptr) {
+        SetError("Player Interface stopped data for an unconfigured track");
+        return;
+    }
+
+    {
+        const std::lock_guard<std::mutex> lock(track->mutex);
+        track->needData = false;
+    }
+    track->condition.notify_all();
+}
+
+void FfmpegDemuxSource::SetFeedingEnabled(bool enabled)
+{
+    feedingEnabled_ = enabled;
+    for (Track& track : tracks_) {
+        track.condition.notify_all();
+    }
+    if (enabled) {
+        return;
+    }
+
+    for (Track& track : tracks_) {
+        if (track.streamIndex < 0) {
+            continue;
+        }
+        std::unique_lock<std::mutex> lock(track.mutex);
+        track.condition.wait(lock, [&track, this] {
+            return !track.sending || stopping_;
+        });
+    }
+}
+
+bool FfmpegDemuxSource::Seek(double positionSeconds)
+{
+    if (formatContext_ == nullptr || !std::isfinite(positionSeconds) ||
+        positionSeconds < 0.0 || positionSeconds >
+            static_cast<double>(std::numeric_limits<int64_t>::max()) /
+                AV_TIME_BASE) {
+        return false;
+    }
+
+    inputPaused_ = true;
+    inputPauseCondition_.notify_all();
+    for (Track& track : tracks_) {
+        std::lock_guard<std::mutex> lock(track.mutex);
+        track.packets.clear();
+        track.queuedBytes = 0;
+        track.inputEos = false;
+        track.eosNotified = false;
+        track.discontinuityNext = true;
+        track.hasTimestamp = false;
+        track.condition.notify_all();
+    }
+
+    const int64_t target =
+        static_cast<int64_t>(positionSeconds * AV_TIME_BASE);
+    int result = 0;
+    {
+        const std::lock_guard<std::mutex> lock(demuxMutex_);
+        result = avformat_seek_file(formatContext_,
+                                    -1,
+                                    std::numeric_limits<int64_t>::min(),
+                                    target,
+                                    std::numeric_limits<int64_t>::max(),
+                                    AVSEEK_FLAG_BACKWARD);
+        if (result >= 0) {
+            avformat_flush(formatContext_);
+        }
+    }
+
+    if (result < 0) {
+        inputPaused_ = false;
+        ++seekGeneration_;
+        inputPauseCondition_.notify_all();
+        return false;
+    }
+
+    for (Track& track : tracks_) {
+        std::lock_guard<std::mutex> lock(track.mutex);
+        track.packets.clear();
+        track.queuedBytes = 0;
+        track.inputEos = false;
+        track.eosNotified = false;
+        track.discontinuityNext = true;
+        track.hasTimestamp = false;
+        track.condition.notify_all();
+    }
+    inputPaused_ = false;
+    ++seekGeneration_;
+    inputPauseCondition_.notify_all();
+    return true;
+}
+
+bool FfmpegDemuxSource::TakeError(std::string& error)
+{
+    const std::lock_guard<std::mutex> lock(errorMutex_);
+    if (error_.empty()) {
+        return false;
+    }
+    error = std::move(error_);
+    error_.clear();
+    return true;
+}
+
+void FfmpegDemuxSource::Stop()
+{
+    stopping_ = true;
+    inputPaused_ = true;
+    inputPauseCondition_.notify_all();
+    for (Track& track : tracks_) {
+        track.condition.notify_all();
+    }
+
+    if (demuxThread_.joinable()) {
+        demuxThread_.join();
+    }
+    for (Track& track : tracks_) {
+        if (track.feederThread.joinable()) {
+            track.feederThread.join();
+        }
+        std::lock_guard<std::mutex> lock(track.mutex);
+        track.packets.clear();
+        track.queuedBytes = 0;
+    }
+
+    if (formatContext_ != nullptr) {
+        const std::lock_guard<std::mutex> lock(demuxMutex_);
+        avformat_close_input(&formatContext_);
+    }
+}
+
+int FfmpegDemuxSource::InterruptCallback(void* opaque)
+{
+    const auto* source = static_cast<const FfmpegDemuxSource*>(opaque);
+    return source->stopping_ ? 1 : 0;
+}
+
+bool FfmpegDemuxSource::IsAdts(const uint8_t* data, size_t size)
+{
+    return data != nullptr && size >= 7 && data[0] == 0xff &&
+           (data[1] & 0xf6) == 0xf0;
+}
+
+bool FfmpegDemuxSource::FindStartCode(const uint8_t* data,
+                                      size_t size,
+                                      size_t from,
+                                      size_t& position,
+                                      size_t& length)
+{
+    if (data == nullptr || size < 3 || from >= size) {
+        return false;
+    }
+    for (size_t index = from; index + 2 < size; ++index) {
+        if (data[index] == 0 && data[index + 1] == 0) {
+            if (index + 3 < size && data[index + 2] == 0 &&
+                data[index + 3] == 1) {
+                position = index;
+                length = 4;
+                return true;
+            }
+            if (data[index + 2] == 1) {
+                position = index;
+                length = 3;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool FfmpegDemuxSource::BuildAvcConfiguration(
+    const std::vector<std::vector<uint8_t>>& sequenceParameterSets,
+    const std::vector<std::vector<uint8_t>>& pictureParameterSets,
+    std::vector<uint8_t>& configuration)
+{
+    if (sequenceParameterSets.empty() || pictureParameterSets.empty() ||
+        sequenceParameterSets.size() > 31 ||
+        pictureParameterSets.size() > 255) {
+        return false;
+    }
+    const std::vector<uint8_t>& firstSps = sequenceParameterSets.front();
+    if (firstSps.size() < 4) {
+        return false;
+    }
+
+    std::vector<uint8_t> result{
+        1,
+        firstSps[1],
+        firstSps[2],
+        firstSps[3],
+        0xff,
+        static_cast<uint8_t>(0xe0 | sequenceParameterSets.size())
+    };
+    auto appendParameterSet = [&result](const std::vector<uint8_t>& set) {
+        if (set.empty() || set.size() > std::numeric_limits<uint16_t>::max()) {
+            return false;
+        }
+        result.push_back(static_cast<uint8_t>((set.size() >> 8) & 0xff));
+        result.push_back(static_cast<uint8_t>(set.size() & 0xff));
+        result.insert(result.end(), set.begin(), set.end());
+        return true;
+    };
+
+    for (const auto& sps : sequenceParameterSets) {
+        if (!appendParameterSet(sps)) {
+            return false;
+        }
+    }
+    result.push_back(static_cast<uint8_t>(pictureParameterSets.size()));
+    for (const auto& pps : pictureParameterSets) {
+        if (!appendParameterSet(pps)) {
+            return false;
+        }
+    }
+    configuration = std::move(result);
+    return true;
+}
+
+FfmpegDemuxSource::Track* FfmpegDemuxSource::FindTrack(int mediaType)
+{
+    for (Track& track : tracks_) {
+        if (track.streamIndex >= 0 && track.mediaType == mediaType) {
+            return &track;
+        }
+    }
+    return nullptr;
+}
+
+const FfmpegDemuxSource::Track*
+FfmpegDemuxSource::FindTrack(int mediaType) const
+{
+    for (const Track& track : tracks_) {
+        if (track.streamIndex >= 0 && track.mediaType == mediaType) {
+            return &track;
+        }
+    }
+    return nullptr;
+}
+
+bool FfmpegDemuxSource::InitializeTrack(Track& track)
+{
+    AVStream* stream = formatContext_->streams[track.streamIndex];
+    AVCodecParameters* parameters = stream->codecpar;
+    track.timeBaseSeconds = av_q2d(stream->time_base);
+    if (track.timeBaseSeconds <= 0.0) {
+        SetError("FFmpeg returned an invalid track time base");
+        return false;
+    }
+
+    if (track.mediaType == eGST_MEDIATYPE_VIDEO) {
+        if (parameters->codec_id != AV_CODEC_ID_H264) {
+            SetError("Only H.264 video elementary streams are supported");
+            return false;
+        }
+        track.format = GST_FORMAT_VIDEO_ES_H264;
+        track.width = parameters->width;
+        track.height = parameters->height;
+        AVRational frameRate = stream->avg_frame_rate;
+        if (frameRate.num <= 0 || frameRate.den <= 0) {
+            frameRate = stream->r_frame_rate;
+        }
+        if (frameRate.num > 0 && frameRate.den > 0) {
+            track.fallbackDuration =
+                static_cast<double>(frameRate.den) / frameRate.num;
+        }
+
+        if (parameters->extradata_size > 0 &&
+            parameters->extradata != nullptr) {
+            const uint8_t* data = parameters->extradata;
+            const size_t size =
+                static_cast<size_t>(parameters->extradata_size);
+            if (data[0] == 1 && size >= 7) {
+                track.codecData.assign(data, data + size);
+                track.nalLengthSize = (data[4] & 0x03) + 1;
+                track.codecData[4] =
+                    static_cast<uint8_t>((track.codecData[4] & 0xfc) | 0x03);
+                track.inputAnnexB = false;
+            } else {
+                track.inputAnnexB = true;
+                CollectH264Configuration(track, data, size, true);
+            }
+        } else {
+            track.inputAnnexB = true;
+        }
+    } else {
+        if (parameters->codec_id != AV_CODEC_ID_AAC) {
+            SetError("Only AAC audio elementary streams are supported");
+            return false;
+        }
+        track.sampleRate = parameters->sample_rate;
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+        track.channels = parameters->ch_layout.nb_channels;
+#else
+        track.channels = parameters->channels;
+#endif
+        if (track.sampleRate > 0) {
+            track.fallbackDuration = 1024.0 / track.sampleRate;
+        }
+        if (parameters->extradata_size > 0 &&
+            parameters->extradata != nullptr &&
+            !IsAdts(parameters->extradata,
+                    static_cast<size_t>(parameters->extradata_size))) {
+            track.format = GST_FORMAT_AUDIO_ES_AAC_RAW;
+            track.codecData.assign(
+                parameters->extradata,
+                parameters->extradata + parameters->extradata_size);
+        }
+    }
+    return true;
+}
+
+bool FfmpegDemuxSource::PrimeTracks()
+{
+    for (size_t count = 0; count < kMaximumPrimingPackets; ++count) {
+        if (InputReady()) {
+            return true;
+        }
+        if (!ReadAndQueuePacket(true)) {
+            break;
+        }
+    }
+    return InputReady();
+}
+
+bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
+{
+    std::lock_guard<std::mutex> demuxLock(demuxMutex_);
+    if (stopping_) {
+        return false;
+    }
+    if (inputPaused_) {
+        return true;
+    }
+
+    AVPacket* packet = av_packet_alloc();
+    if (packet == nullptr) {
+        SetError("Could not allocate an FFmpeg packet");
+        return false;
+    }
+
+    const int result = av_read_frame(formatContext_, packet);
+    if (result < 0) {
+        av_packet_free(&packet);
+        if (result == AVERROR(EAGAIN)) {
+            return true;
+        }
+        if (result == AVERROR_EOF) {
+            MarkInputEos();
+            return false;
+        }
+        if (!stopping_) {
+            SetError("FFmpeg could not read the next media packet: " +
+                     AvErrorString(result));
+            MarkInputEos();
+        }
+        return false;
+    }
+
+    Track* track = nullptr;
+    for (Track& candidate : tracks_) {
+        if (candidate.streamIndex == packet->stream_index) {
+            track = &candidate;
+            break;
+        }
+    }
+
+    bool queued = true;
+    if (track != nullptr) {
+        QueuedPacket prepared;
+        if (!PreparePacket(*track, packet, prepared)) {
+            queued = false;
+            if (!stopping_) {
+                SetError("FFmpeg produced an unsupported or malformed media "
+                         "packet");
+                MarkInputEos();
+            }
+        } else if (!QueuePacket(*track, std::move(prepared))) {
+            queued = !stopping_ && inputPaused_;
+        }
+    }
+    av_packet_free(&packet);
+
+    if (!queued && priming && !stopping_) {
+        return false;
+    }
+    return queued || (!stopping_ && inputPaused_);
+}
+
+bool FfmpegDemuxSource::PreparePacket(Track& track,
+                                      const AVPacket* packet,
+                                      QueuedPacket& output)
+{
+    if (packet == nullptr || packet->data == nullptr || packet->size <= 0) {
+        return false;
+    }
+
+    if (track.mediaType == eGST_MEDIATYPE_VIDEO) {
+        if (!NormalizeH264(track,
+                           packet->data,
+                           static_cast<size_t>(packet->size),
+                           output.data)) {
+            return false;
+        }
+    } else {
+        const bool adts = IsAdts(packet->data,
+                                 static_cast<size_t>(packet->size));
+        if (!track.ready) {
+            if (adts) {
+                track.format = GST_FORMAT_AUDIO_ES_AAC;
+                track.codecData.clear();
+                if (track.channels == 0) {
+                    track.channels =
+                        ((packet->data[2] & 0x01) << 2) |
+                        ((packet->data[3] >> 6) & 0x03);
+                }
+                if (track.sampleRate == 0) {
+                    static constexpr int sampleRates[] = {
+                        96000, 88200, 64000, 48000, 44100, 32000,
+                        24000, 22050, 16000, 12000, 11025, 8000, 7350
+                    };
+                    const int index = (packet->data[2] >> 2) & 0x0f;
+                    if (index < static_cast<int>(
+                                    sizeof(sampleRates) / sizeof(sampleRates[0]))) {
+                        track.sampleRate = sampleRates[index];
+                        track.fallbackDuration = 1024.0 / track.sampleRate;
+                    }
+                }
+            } else if (track.format != GST_FORMAT_AUDIO_ES_AAC_RAW ||
+                       track.codecData.empty()) {
+                return false;
+            }
+        } else if ((track.format == GST_FORMAT_AUDIO_ES_AAC) != adts) {
+            return false;
+        }
+        output.data.assign(packet->data, packet->data + packet->size);
+    }
+
+    AVStream* stream = formatContext_->streams[track.streamIndex];
+    const double timeBase = av_q2d(stream->time_base);
+    double duration = packet->duration > 0
+        ? packet->duration * timeBase
+        : track.fallbackDuration;
+    const int64_t pts = packet->pts;
+    const int64_t dts = packet->dts;
+    double ptsSeconds = pts != AV_NOPTS_VALUE
+        ? pts * timeBase
+        : (dts != AV_NOPTS_VALUE
+               ? dts * timeBase
+               : (track.hasTimestamp
+                      ? track.lastTimestamp + duration
+                      : 0.0));
+    double dtsSeconds = dts != AV_NOPTS_VALUE ? dts * timeBase : ptsSeconds;
+    if (formatContext_->start_time != AV_NOPTS_VALUE) {
+        const double startTime =
+            static_cast<double>(formatContext_->start_time) / AV_TIME_BASE;
+        ptsSeconds -= startTime;
+        dtsSeconds -= startTime;
+    }
+    ptsSeconds = std::max(0.0, ptsSeconds);
+    dtsSeconds = std::max(0.0, dtsSeconds);
+    track.lastTimestamp = ptsSeconds;
+    track.hasTimestamp = true;
+
+    output.pts = ptsSeconds;
+    output.dts = dtsSeconds;
+    output.duration = std::max(0.0, duration);
+    track.ready = track.mediaType != eGST_MEDIATYPE_VIDEO ||
+                  !track.codecData.empty();
+    if (track.mediaType == eGST_MEDIATYPE_AUDIO) {
+        track.ready = track.format == GST_FORMAT_AUDIO_ES_AAC ||
+                      track.format == GST_FORMAT_AUDIO_ES_AAC_RAW;
+    }
+    return !output.data.empty();
+}
+
+bool FfmpegDemuxSource::NormalizeH264(Track& track,
+                                      const uint8_t* data,
+                                      size_t size,
+                                      std::vector<uint8_t>& output)
+{
+    if (data == nullptr || size == 0) {
+        return false;
+    }
+
+    size_t cursor = 0;
+    size_t naluCount = 0;
+    auto processNalu = [&](const uint8_t* nalu, size_t naluSize) {
+        if (naluSize == 0 ||
+            naluSize > std::numeric_limits<uint32_t>::max()) {
+            return false;
+        }
+        const uint8_t type = nalu[0] & 0x1f;
+        if (type == 7 && track.codecData.empty()) {
+            track.sequenceParameterSets.emplace_back(nalu, nalu + naluSize);
+        } else if (type == 8 && track.codecData.empty()) {
+            track.pictureParameterSets.emplace_back(nalu, nalu + naluSize);
+        }
+        const uint32_t length = static_cast<uint32_t>(naluSize);
+        output.push_back(static_cast<uint8_t>((length >> 24) & 0xff));
+        output.push_back(static_cast<uint8_t>((length >> 16) & 0xff));
+        output.push_back(static_cast<uint8_t>((length >> 8) & 0xff));
+        output.push_back(static_cast<uint8_t>(length & 0xff));
+        output.insert(output.end(), nalu, nalu + naluSize);
+        ++naluCount;
+        return true;
+    };
+
+    if (track.inputAnnexB) {
+        size_t startPosition = 0;
+        size_t startLength = 0;
+        if (!FindStartCode(data, size, 0, startPosition, startLength)) {
+            return false;
+        }
+        cursor = startPosition + startLength;
+        while (cursor < size) {
+            size_t nextPosition = 0;
+            size_t nextLength = 0;
+            const bool hasNext =
+                FindStartCode(data, size, cursor, nextPosition, nextLength);
+            size_t naluEnd = hasNext ? nextPosition : size;
+            while (naluEnd > cursor && data[naluEnd - 1] == 0) {
+                --naluEnd;
+            }
+            if (!processNalu(data + cursor, naluEnd - cursor)) {
+                return false;
+            }
+            if (!hasNext) {
+                break;
+            }
+            cursor = nextPosition + nextLength;
+        }
+    } else {
+        while (cursor < size) {
+            if (size - cursor < static_cast<size_t>(track.nalLengthSize)) {
+                return false;
+            }
+            uint32_t naluSize = 0;
+            for (int byte = 0; byte < track.nalLengthSize; ++byte) {
+                naluSize = (naluSize << 8) | data[cursor++];
+            }
+            if (naluSize == 0 || naluSize > size - cursor ||
+                !processNalu(data + cursor, naluSize)) {
+                return false;
+            }
+            cursor += naluSize;
+        }
+    }
+
+    if (naluCount == 0) {
+        return false;
+    }
+    if (track.codecData.empty()) {
+        BuildAvcConfiguration(track.sequenceParameterSets,
+                              track.pictureParameterSets,
+                              track.codecData);
+    }
+    return true;
+}
+
+bool FfmpegDemuxSource::CollectH264Configuration(
+    Track& track,
+    const uint8_t* data,
+    size_t size,
+    bool annexB)
+{
+    if (data == nullptr || size == 0) {
+        return false;
+    }
+
+    auto collect = [&track](const uint8_t* nalu, size_t naluSize) {
+        if (naluSize == 0) {
+            return false;
+        }
+        const uint8_t type = nalu[0] & 0x1f;
+        if (type == 7) {
+            track.sequenceParameterSets.emplace_back(nalu, nalu + naluSize);
+        } else if (type == 8) {
+            track.pictureParameterSets.emplace_back(nalu, nalu + naluSize);
+        }
+        return true;
+    };
+
+    size_t cursor = 0;
+    if (annexB) {
+        size_t startPosition = 0;
+        size_t startLength = 0;
+        if (!FindStartCode(data, size, 0, startPosition, startLength)) {
+            return false;
+        }
+        cursor = startPosition + startLength;
+        while (cursor < size) {
+            size_t nextPosition = 0;
+            size_t nextLength = 0;
+            const bool hasNext =
+                FindStartCode(data, size, cursor, nextPosition, nextLength);
+            size_t naluEnd = hasNext ? nextPosition : size;
+            while (naluEnd > cursor && data[naluEnd - 1] == 0) {
+                --naluEnd;
+            }
+            if (!collect(data + cursor, naluEnd - cursor)) {
+                return false;
+            }
+            if (!hasNext) {
+                break;
+            }
+            cursor = nextPosition + nextLength;
+        }
+    } else {
+        while (cursor < size) {
+            if (size - cursor < static_cast<size_t>(track.nalLengthSize)) {
+                return false;
+            }
+            uint32_t naluSize = 0;
+            for (int byte = 0; byte < track.nalLengthSize; ++byte) {
+                naluSize = (naluSize << 8) | data[cursor++];
+            }
+            if (naluSize == 0 || naluSize > size - cursor ||
+                !collect(data + cursor, naluSize)) {
+                return false;
+            }
+            cursor += naluSize;
+        }
+    }
+
+    return BuildAvcConfiguration(track.sequenceParameterSets,
+                                 track.pictureParameterSets,
+                                 track.codecData);
+}
+
+bool FfmpegDemuxSource::QueuePacket(Track& track, QueuedPacket&& packet)
+{
+    std::unique_lock<std::mutex> lock(track.mutex);
+    track.condition.wait(lock, [&] {
+        return stopping_ || inputPaused_ ||
+               (track.packets.size() < kMaximumQueuedPackets &&
+                (track.queuedBytes == 0 ||
+                 packet.data.size() <=
+                     kMaximumQueuedBytes -
+                         std::min(track.queuedBytes, kMaximumQueuedBytes)));
+    });
+    if (stopping_ || inputPaused_) {
+        return false;
+    }
+
+    packet.discontinuity = track.discontinuityNext;
+    track.discontinuityNext = false;
+    track.queuedBytes += packet.data.size();
+    track.packets.push_back(std::move(packet));
+    lock.unlock();
+    track.condition.notify_all();
+    return true;
+}
+
+void FfmpegDemuxSource::DemuxLoop()
+{
+    while (!stopping_) {
+        {
+            std::unique_lock<std::mutex> lock(inputPauseMutex_);
+            inputPauseCondition_.wait(lock, [this] {
+                return stopping_ || !inputPaused_;
+            });
+        }
+        if (stopping_) {
+            break;
+        }
+        const uint64_t generation = seekGeneration_;
+        if (!ReadAndQueuePacket(false)) {
+            if (stopping_) {
+                break;
+            }
+            std::unique_lock<std::mutex> lock(inputPauseMutex_);
+            inputPauseCondition_.wait(lock, [this, generation] {
+                return stopping_ || seekGeneration_ != generation;
+            });
+        }
+    }
+}
+
+void FfmpegDemuxSource::FeedLoop(Track& track)
+{
+    while (!stopping_) {
+        QueuedPacket packet;
+        bool signalEos = false;
+        {
+            std::unique_lock<std::mutex> lock(track.mutex);
+            track.condition.wait(lock, [&] {
+                return stopping_ ||
+                       (feedingEnabled_ && track.needData &&
+                        !track.packets.empty()) ||
+                       (track.inputEos && track.packets.empty() &&
+                        !track.eosNotified);
+            });
+            if (stopping_) {
+                return;
+            }
+            if (track.inputEos && track.packets.empty() &&
+                !track.eosNotified) {
+                track.eosNotified = true;
+                signalEos = true;
+            } else if (feedingEnabled_ && track.needData &&
+                       !track.packets.empty()) {
+                packet = std::move(track.packets.front());
+                track.packets.pop_front();
+                track.queuedBytes -= packet.data.size();
+                track.sending = true;
+            }
+        }
+        track.condition.notify_all();
+
+        if (signalEos) {
+            endOfStream_(track.mediaType);
+            continue;
+        }
+        if (packet.data.empty()) {
+            continue;
+        }
+
+        bool accepted = false;
+        try {
+            MediaSample sample(std::move(packet.data),
+                               packet.pts,
+                               packet.dts,
+                               packet.duration);
+            accepted = sendSample_(track.mediaType,
+                                   std::move(sample),
+                                   packet.discontinuity);
+        } catch (const std::exception& error) {
+            SetError("Could not submit a media sample: " +
+                     std::string(error.what()));
+        }
+
+        {
+            const std::lock_guard<std::mutex> lock(track.mutex);
+            track.sending = false;
+        }
+        track.condition.notify_all();
+
+        if (!accepted) {
+            if (!stopping_) {
+                SetError("Player Interface rejected a media sample");
+            }
+            return;
+        }
+    }
+}
+
+void FfmpegDemuxSource::MarkInputEos()
+{
+    for (Track& track : tracks_) {
+        if (track.streamIndex < 0) {
+            continue;
+        }
+        {
+            const std::lock_guard<std::mutex> lock(track.mutex);
+            track.inputEos = true;
+        }
+        track.condition.notify_all();
+    }
+}
+
+void FfmpegDemuxSource::SetError(std::string error)
+{
+    {
+        const std::lock_guard<std::mutex> lock(errorMutex_);
+        if (error_.empty()) {
+            error_ = std::move(error);
+        }
+    }
+    stopping_ = true;
+    inputPaused_ = false;
+    inputPauseCondition_.notify_all();
+    for (Track& track : tracks_) {
+        track.condition.notify_all();
+    }
+}
+
+bool FfmpegDemuxSource::InputReady() const
+{
+    for (const Track& track : tracks_) {
+        if (track.streamIndex < 0) {
+            continue;
+        }
+        if (!track.ready ||
+            (track.mediaType == eGST_MEDIATYPE_VIDEO &&
+             track.codecData.empty())) {
+            return false;
+        }
+    }
+    return true;
+}

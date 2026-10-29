@@ -20,8 +20,4 @@ if [[ ! -x "${EXECUTABLE}" ]]; then
 fi
 
 export LD_LIBRARY_PATH="${PLAYER_INTERFACE_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-if [[ -n "${PI_CLI_GST_DEBUG:-}" ]]; then
-    export GST_DEBUG="${PI_CLI_GST_DEBUG}"
-    export GST_DEBUG_NO_COLOR=1
-fi
 exec "${EXECUTABLE}" "$@"
