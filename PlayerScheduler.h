@@ -26,6 +26,7 @@
 #define __PLAYER_SCHEDULER_H__
 
 #include <functional>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <deque>
@@ -156,10 +157,11 @@ protected:
 	std::deque<PlayerAsyncTaskObj> mTaskQueue;	/**< Queue for storing scheduled tasks */
 	std::mutex mQMutex;			/**< Mutex for accessing mTaskQueue */
 	std::condition_variable mQCond;		/**< To notify when a task is queued in mTaskQueue */
-	bool mSchedulerRunning;			/**< Flag denotes if scheduler thread is running */
+	std::atomic_bool mSchedulerRunning;	/**< Flag denotes if scheduler thread is running */
 	std::thread mSchedulerThread;		/**< Scheduler thread */
-	std::mutex mExMutex;			/**< Execution mutex for synchronization */
-	std::unique_lock<std::mutex> mExLock;	/**< Lock to be used by SuspendScheduler and ResumeScheduler */
+	std::condition_variable mExCond;	/**< Notifies Suspend waiters when the worker is idle or resumed */
+	bool mSuspended;			/**< Suspend gate, guarded by mQMutex; may be released from any thread */
+	bool mExecuting;			/**< True while a task is executing, guarded by mQMutex */
 	int mNextTaskId;			/**< counter that holds ID value of next task to be scheduled */
 	int mCurrentTaskId;			/**< ID of current executed task */
 	bool mLockOut;				/**< flag indicates if the queue is locked out or not */
