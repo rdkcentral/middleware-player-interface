@@ -29,6 +29,8 @@
 #include <cstdarg>
 #include <cstring>
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
 #include "PlayerLogManager.h"
 #include "PlayerUtils.h"
 
@@ -85,6 +87,27 @@ static std::hash<std::thread::id> std_thread_hasher;
 
 // Sequential log counter for tracking missing log lines
 static std::atomic<uint32_t> gMwLogCounter(0);
+static bool IsTuneProfileEnabled()
+{
+	static const bool enabled = []()
+	{
+		const char* value = std::getenv("PI_TUNE_PROFILING");
+		return value && std::strcmp(value, "1") == 0;
+	}();
+	return enabled;
+}
+
+bool PlayerLogManager::IsTuneProfilingEnabled()
+{
+	return IsTuneProfileEnabled();
+}
+
+static long long GetTuneProfileTimeNs()
+{
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 std::size_t GetPlayerPrintableThreadID( void )
 {
 	return std_thread_hasher( std::this_thread::get_id() );
@@ -167,6 +190,42 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
 		    }
 		    va_end(args);
 	    }
+	}
+}
+
+PlayerLogManager::PlayerTuneProfileScope::PlayerTuneProfileScope(const char* api, const char* function, int line)
+	: mApi(api), mFunction(function), mLine(line), mContext(), mStartNs(0), mEnabled(IsTuneProfileEnabled())
+{
+	if (mEnabled)
+	{
+		mStartNs = GetTuneProfileTimeNs();
+	}
+}
+
+PlayerLogManager::PlayerTuneProfileScope::PlayerTuneProfileScope(const char* api, const char* function, int line, const std::string& context)
+	: mApi(api), mFunction(function), mLine(line), mContext(context), mStartNs(0), mEnabled(IsTuneProfileEnabled())
+{
+	if (mEnabled)
+	{
+		mStartNs = GetTuneProfileTimeNs();
+	}
+}
+
+PlayerLogManager::PlayerTuneProfileScope::~PlayerTuneProfileScope()
+{
+	if (mEnabled)
+	{
+		const double durationMs = static_cast<double>(GetTuneProfileTimeNs() - mStartNs) / 1000000.0;
+		if (mContext.empty())
+		{
+			logprintf(mLOGLEVEL_INFO, mFunction, mLine,
+				  "[PI_TUNE_PROF] api=%s duration_ms=%.3f", mApi, durationMs);
+		}
+		else
+		{
+			logprintf(mLOGLEVEL_INFO, mFunction, mLine,
+				  "[PI_TUNE_PROF] api=%s context=%s duration_ms=%.3f", mApi, mContext.c_str(), durationMs);
+		}
 	}
 }
 

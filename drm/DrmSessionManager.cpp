@@ -29,6 +29,7 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include "PlayerLogManager.h"
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -483,7 +484,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	/**
 	 * Create drm session without primaryKeyId markup OR retrieve old DRM session.
 	 */
-	code = getDrmSession(err, drmHelper, selectedSlot,  Instance);
+	{
+		PLAYER_TUNE_PROFILE_SCOPE_CONTEXT("drm_session_lookup", std::string("streamType=") + std::to_string(streamType) + " keySystem=" + drmHelper->ocdmSystemId());
+		code = getDrmSession(err, drmHelper, selectedSlot, Instance);
+	}
 	/**
 	 * KEY_READY code indicates that a previously created session is being reused.
 	 */
@@ -506,7 +510,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		MW_LOG_WARN(" Unable to get DrmSession : Key State %d ", code);
 		return nullptr;
 	}
-	code = initializeDrmSession(drmHelper, selectedSlot,  err);
+	{
+		PLAYER_TUNE_PROFILE_SCOPE("drm_session_init");
+		code = initializeDrmSession(drmHelper, selectedSlot, err);
+	}
 	if (code != KEY_INIT)
 	{
 		MW_LOG_WARN(" Unable to initialize DrmSession : Key State %d, err code: %d", code, err);
@@ -540,7 +547,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
-	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	{
+		PLAYER_TUNE_PROFILE_SCOPE("drm_license_acquire");
+		code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError, (GstMediaType)streamType, metaDataPtr, false);
+	}
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);
@@ -1042,7 +1052,10 @@ void DrmSessionManager::registerCallback()
                             (void*)&(instance->mPlayerSendWatermarkSessionUpdateEventCB));
 
                 // call the actual AAMP callback
-                instance->mPlayerSendWatermarkSessionUpdateEventCB(sessionHandle, status, system);
+				{
+					PLAYER_TUNE_PROFILE_SCOPE("watermark_session_callback_dispatch");
+					instance->mPlayerSendWatermarkSessionUpdateEventCB(sessionHandle, status, system);
+				}
             }
             else
             {

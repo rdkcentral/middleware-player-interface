@@ -492,6 +492,7 @@ bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_sp
 bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize,
 		const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_load_clut_rpc");
 	bool rpcResult = false;
 	JsonObject result;
 	JsonObject param;
@@ -507,12 +508,10 @@ bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, 
 	param["aspectRatio"] = std::to_string(aspectRatio).c_str();
 
 	MW_LOG_INFO("%s:%d SecManager call loadClutWatermark for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
-
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
 		rpcResult = mSecManagerObj.InvokeJSONRPC("loadClutWatermark", param, result);
 	}
-
 	if (rpcResult)
 	{
 		if (!result["success"].Boolean())
@@ -732,6 +731,7 @@ void SecManagerThunder::showWatermarkHandler(const JsonObject& parameters)
  */
 void SecManagerThunder::ShowWatermark(bool show)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_show_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -763,6 +763,7 @@ void SecManagerThunder::ShowWatermark(bool show)
  */
 void SecManagerThunder::CreateWatermark(int graphicId, int zIndex )
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_create_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -795,6 +796,7 @@ void SecManagerThunder::CreateWatermark(int graphicId, int zIndex )
  */
 void SecManagerThunder::DeleteWatermark(int graphicId)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_delete_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -826,6 +828,7 @@ void SecManagerThunder::DeleteWatermark(int graphicId)
  */
 void SecManagerThunder::UpdateWatermark(int graphicId, int smKey, int smSize )
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_update_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -860,6 +863,7 @@ void SecManagerThunder::UpdateWatermark(int graphicId, int smKey, int smSize )
  */
 void SecManagerThunder::AlwaysShowWatermarkOnTop(bool show)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_always_on_top_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -890,6 +894,7 @@ void SecManagerThunder::AlwaysShowWatermarkOnTop(bool show)
  */
 void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_get_palette_rpc");
         {
              std::lock_guard<std::mutex> lock(mLoadClutMutex);
              if (mLoadClutInFlight.count(graphicId) > 0)
@@ -948,6 +953,7 @@ void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
  */
 void SecManagerThunder::ModifyWatermarkPalette(int graphicId, int clutKey, int imageKey)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("watermark_modify_palette_rpc");
 	JsonObject param;
 	JsonObject result;
 

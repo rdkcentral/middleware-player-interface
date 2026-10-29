@@ -130,6 +130,7 @@ void ContentProtectionFirebolt::HandleWatermarkEvent(const std::string& sessionI
             sessionId.c_str(), statusStr.c_str(), appId.c_str());
 	if(mInitialized)
 	{
+		PLAYER_TUNE_PROFILE_SCOPE("watermark_cp_event_to_aamp_enqueue");
    		MW_LOG_INFO("HandleWaterMarkEvent Triggered");
     	PlayerJsonObject statusJson(statusStr);
 		int reasonCode = -1;
@@ -436,6 +437,7 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 
 void ContentProtectionFirebolt::CloseDrmSession(int64_t sessionId)
 {
+	PLAYER_TUNE_PROFILE_SCOPE("drm_session_close");
 	// Check if Firebolt is active before proceeding
 	if (!IsActive())
 	{
