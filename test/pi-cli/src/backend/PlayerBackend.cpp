@@ -10,8 +10,8 @@
 
 namespace {
 
-constexpr int kVideoAppSrcQueueBytes = 32 * 1024;
-constexpr int kAudioAppSrcQueueBytes = 16 * 1024;
+constexpr int kVideoAppSrcQueueBytes = 15 * 1024 * 1024;
+constexpr int kAudioAppSrcQueueBytes = 1536 * 1024;
 
 bool IsSupportedTrickRate(int rate)
 {

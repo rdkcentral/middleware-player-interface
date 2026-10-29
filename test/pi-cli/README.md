@@ -9,8 +9,8 @@ for decoding, synchronization, and rendering.
 pi-cli does not create a playback pipeline, decode media, or write manifests,
 segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
-injection; its appsrc queues are capped at 32 KiB for video and 16 KiB for
-audio so those callbacks provide timely backpressure. For DASH, pi-cli filters the MPD
+injection; its appsrc queues use AAMP's default limits of 15 MiB for video and
+1.5 MiB for audio. For DASH, pi-cli filters the MPD
 in memory to the lowest-bandwidth
 video representation and one non-commentary audio adaptation set before FFmpeg
 opens the stream. This avoids opening every representation's initialization
