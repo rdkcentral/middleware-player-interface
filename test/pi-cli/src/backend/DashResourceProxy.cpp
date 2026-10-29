@@ -826,6 +826,11 @@ struct DashResourceProxy::Impl {
         }
     }
 
+    void PrefetchForSeek(double positionSeconds)
+    {
+        PrefetchForSeekImpl(positionSeconds);
+    }
+
 private:
     std::string NewToken() const
     {
@@ -1052,7 +1057,7 @@ private:
         return lastFailure;
     }
 
-    void PrefetchForSeek(double positionSeconds)
+    void PrefetchForSeekImpl(double positionSeconds)
     {
         if (!std::isfinite(positionSeconds) || positionSeconds < 0.0) {
             return;
