@@ -61,6 +61,10 @@ bool PlayerBackend::Start()
     config->useWesterosSink = false;
     config->useRialtoSink = false;
     config->gstreamerBufferingBeforePlay = false;
+    config->videoBufBytes = 512 * 1024;
+    config->audioBufBytes = 128 * 1024;
+    LogStartupMilestone(
+        "player-interface-appsrc-buffer-limits: video=524288 audio=131072");
 
     player_->TearDownCallback([](bool, int) {});
     player_->StopCallback([](bool) {});
@@ -207,9 +211,11 @@ void PlayerBackend::PumpEvents()
         nextPositionQuery_ = now + std::chrono::milliseconds(250);
 
         if (now >= nextDurationQuery_) {
-            durationMs_ = player_->GetDurationMilliseconds();
             if (durationMs_ <= 0 && source_ != nullptr) {
                 durationMs_ = source_->GetDurationMilliseconds();
+            }
+            if (durationMs_ <= 0) {
+                durationMs_ = player_->GetDurationMilliseconds();
             }
             nextDurationQuery_ = now + std::chrono::seconds(1);
         }
@@ -364,6 +370,7 @@ void PlayerBackend::HandleBusEvent(const BusEventData& event)
                                            : "Warning: " + event.msg;
         break;
     case MESSAGE_EOS:
+        LogStartupMilestone("player-interface-eos");
         statusMessage_ = "End of stream";
         playing_ = false;
         break;

@@ -1243,6 +1243,8 @@ bool FfmpegDemuxSource::InitializeTrack(Track& track)
                 parameters->extradata + parameters->extradata_size);
         }
     }
+    track.ready = track.mediaType == eGST_MEDIATYPE_VIDEO &&
+                  !track.codecData.empty();
     return true;
 }
 
@@ -1419,7 +1421,9 @@ bool FfmpegDemuxSource::PreparePacket(Track& track,
     }
 
     const uint64_t packetNumber = ++track.packetsPrepared;
-    if (packetNumber <= 5) {
+    const uint64_t packetLogInterval =
+        track.mediaType == eGST_MEDIATYPE_VIDEO ? 25 : 50;
+    if (packetNumber <= 5 || packetNumber % packetLogInterval == 0) {
         std::ostringstream packetLog;
         packetLog << "ffmpeg-packet-prepared: track="
                   << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"
@@ -1669,6 +1673,9 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
         track.condition.notify_all();
 
         if (signalEos) {
+            ReportProgress(
+                std::string("player-interface-eos: track=") +
+                (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video" : "audio"));
             endOfStream_(track.mediaType);
             continue;
         }
@@ -1697,7 +1704,9 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
             sampleNumber = ++track.samplesSubmitted;
         }
         track.condition.notify_all();
-        if (sampleNumber <= 5) {
+        const uint64_t sampleLogInterval =
+            track.mediaType == eGST_MEDIATYPE_VIDEO ? 25 : 50;
+        if (sampleNumber <= 5 || sampleNumber % sampleLogInterval == 0) {
             std::ostringstream sampleLog;
             sampleLog << "player-interface-sample-result: track="
                       << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"

@@ -71,6 +71,8 @@ Interface build.
 - Keep packet data in bounded heap-backed per-track queues.
 - Register Player Interface `NeedData` and `EnoughData` callbacks before
   configuring streams.
+- Configure finite Player Interface appsrc queue limits so `EnoughData`
+  backpressure is active rather than leaving appsrc queues unlimited.
 - Configure the Player Interface tracks from FFmpeg codec metadata, then feed
   samples with timestamps and discontinuity state through `SendHelper()`.
 - Signal per-track end-of-stream after queued packets drain.
