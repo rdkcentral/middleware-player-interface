@@ -41,6 +41,7 @@ public:
     void NeedData(int mediaType);
     void EnoughData(int mediaType);
     void SetFeedingEnabled(bool enabled);
+    bool PrepareSeek(double positionSeconds);
     bool Seek(double positionSeconds);
     bool TakeError(std::string& error);
     void Stop();

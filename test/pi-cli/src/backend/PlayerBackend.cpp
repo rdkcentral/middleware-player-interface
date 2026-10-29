@@ -290,17 +290,48 @@ bool PlayerBackend::Seek(double positionSeconds)
     }
 
     const bool resumeFeeding = playing_;
-    source_->SetFeedingEnabled(false);
-    if (!source_->Seek(positionSeconds)) {
-        source_->SetFeedingEnabled(resumeFeeding);
-        statusMessage_ = "FFmpeg could not seek to the requested position";
+    const long long previousPositionMilliseconds =
+        player_->GetPositionMilliseconds();
+    const double previousPositionSeconds =
+        previousPositionMilliseconds > 0
+            ? static_cast<double>(previousPositionMilliseconds) / 1000.0
+            : 0.0;
+    if (!source_->PrepareSeek(positionSeconds)) {
+        statusMessage_ = "FFmpeg cannot seek to the requested position";
         return false;
     }
+    source_->SetFeedingEnabled(false);
+    LogStartupMilestone("player-interface-seek-flush-begin");
     if (!player_->Flush(positionSeconds, 1, false, true)) {
         source_->SetFeedingEnabled(resumeFeeding);
         statusMessage_ = "Player Interface seek request failed";
         return false;
     }
+    positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    LogStartupMilestone("player-interface-seek-flush-complete");
+
+    LogStartupMilestone("ffmpeg-seek-begin");
+    if (!source_->Seek(positionSeconds)) {
+        const bool sourceRestored =
+            source_->Seek(previousPositionSeconds);
+        const bool pipelineRestored =
+            sourceRestored &&
+            player_->Flush(previousPositionSeconds, 1, false, true);
+        if (pipelineRestored) {
+            source_->SetFeedingEnabled(resumeFeeding);
+            positionMs_ = static_cast<long long>(
+                previousPositionSeconds * 1000.0);
+            statusMessage_ =
+                "FFmpeg could not seek; playback restored to its prior position";
+        } else {
+            source_->SetFeedingEnabled(false);
+            playing_ = false;
+            statusMessage_ =
+                "FFmpeg could not seek and playback recovery failed";
+        }
+        return false;
+    }
+    LogStartupMilestone("ffmpeg-seek-complete");
 
     source_->SetFeedingEnabled(resumeFeeding);
     statusMessage_ = "Seek requested: " +
@@ -322,6 +353,10 @@ bool PlayerBackend::SetTrickRate(int rate)
     const double currentPositionSeconds =
         static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
     const bool resumeFeeding = playing_;
+    if (!source_->PrepareSeek(currentPositionSeconds)) {
+        statusMessage_ = "FFmpeg cannot reposition for trick play";
+        return false;
+    }
     source_->SetFeedingEnabled(false);
     if (!source_->Seek(currentPositionSeconds)) {
         source_->SetFeedingEnabled(resumeFeeding);

@@ -965,6 +965,21 @@ void FfmpegDemuxSource::SetFeedingEnabled(bool enabled)
     }
 }
 
+bool FfmpegDemuxSource::PrepareSeek(double positionSeconds)
+{
+    if (formatContext_ == nullptr || !std::isfinite(positionSeconds) ||
+        positionSeconds < 0.0 || positionSeconds >
+            static_cast<double>(std::numeric_limits<int64_t>::max()) /
+                AV_TIME_BASE) {
+        return false;
+    }
+
+    if (dashResourceProxy_ != nullptr) {
+        dashResourceProxy_->PrefetchForSeek(positionSeconds);
+    }
+    return true;
+}
+
 bool FfmpegDemuxSource::Seek(double positionSeconds)
 {
     if (formatContext_ == nullptr || !std::isfinite(positionSeconds) ||
@@ -985,10 +1000,6 @@ bool FfmpegDemuxSource::Seek(double positionSeconds)
         track.discontinuityNext = true;
         track.hasTimestamp = false;
         track.condition.notify_all();
-    }
-
-    if (dashResourceProxy_ != nullptr) {
-        dashResourceProxy_->PrefetchForSeek(positionSeconds);
     }
 
     const int64_t target =
