@@ -10,6 +10,9 @@
 
 namespace {
 
+constexpr int kVideoAppSrcQueueBytes = 32 * 1024;
+constexpr int kAudioAppSrcQueueBytes = 16 * 1024;
+
 bool IsSupportedTrickRate(int rate)
 {
     return rate == 1 || rate == 2 || rate == 4 || rate == 6 ||
@@ -61,10 +64,12 @@ bool PlayerBackend::Start()
     config->useWesterosSink = false;
     config->useRialtoSink = false;
     config->gstreamerBufferingBeforePlay = false;
-    config->videoBufBytes = 512 * 1024;
-    config->audioBufBytes = 128 * 1024;
+    config->videoBufBytes = kVideoAppSrcQueueBytes;
+    config->audioBufBytes = kAudioAppSrcQueueBytes;
     LogStartupMilestone(
-        "player-interface-appsrc-buffer-limits: video=524288 audio=131072");
+        "player-interface-appsrc-buffer-limits: video=" +
+        std::to_string(kVideoAppSrcQueueBytes) + " audio=" +
+        std::to_string(kAudioAppSrcQueueBytes));
 
     player_->TearDownCallback([](bool, int) {});
     player_->StopCallback([](bool) {});
@@ -220,10 +225,21 @@ void PlayerBackend::PumpEvents()
             nextDurationQuery_ = now + std::chrono::seconds(1);
         }
         if (now >= nextProgressLog_) {
-            LogStartupMilestone(
+            std::string progress =
                 "playback-progress: position-ms=" +
                 std::to_string(positionMs_) +
-                " duration-ms=" + std::to_string(durationMs_));
+                " duration-ms=" + std::to_string(durationMs_);
+            const GstPlaybackQualityStruct* quality =
+                player_->GetVideoPlaybackQuality();
+            if (quality != nullptr) {
+                progress += " frames-rendered=" +
+                            std::to_string(quality->rendered) +
+                            " frames-dropped=" +
+                            std::to_string(quality->dropped);
+            } else {
+                progress += " frame-stats=unavailable";
+            }
+            LogStartupMilestone(progress);
             nextProgressLog_ = now + std::chrono::seconds(5);
         }
     }
