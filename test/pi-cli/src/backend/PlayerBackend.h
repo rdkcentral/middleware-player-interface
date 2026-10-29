@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <chrono>
+#include <atomic>
+#include <mutex>
 
 class InterfacePlayerRDK;
 struct BusEventData;
@@ -31,13 +33,20 @@ public:
 
 private:
     void HandleBusEvent(const BusEventData& event);
+    void LogStartupMilestone(const char* milestone);
 
     std::string url_;
     std::string statusMessage_ = "Starting playback";
     std::unique_ptr<InterfacePlayerRDK> player_;
+    std::chrono::steady_clock::time_point startupAt_{};
     std::chrono::steady_clock::time_point nextPositionQuery_{};
+    std::chrono::steady_clock::time_point nextDurationQuery_{};
+    std::mutex startupLogMutex_;
     long long positionMs_ = 0;
     long durationMs_ = 0;
+    std::atomic<bool> pipelinePlayingNotified_{false};
+    std::atomic<bool> firstVideoFrameReported_{false};
+    bool firstPositionReported_ = false;
     bool playing_ = false;
     bool stopped_ = false;
 };

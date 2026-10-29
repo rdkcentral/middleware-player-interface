@@ -4,6 +4,7 @@
 
 #include <glib.h>
 
+#include <iostream>
 #include <utility>
 
 namespace {
@@ -24,7 +25,11 @@ PlayerBackend::~PlayerBackend()
 
 void PlayerBackend::Start()
 {
+    startupAt_ = std::chrono::steady_clock::now();
+    LogStartupMilestone("start");
+    LogStartupMilestone("plugin-initialization-begin");
     InterfacePlayerRDK::InitializePlayerGstreamerPlugins();
+    LogStartupMilestone("plugin-initialization-complete");
     player_ = std::make_unique<InterfacePlayerRDK>();
     player_->SetPlayerName("pi-player-simulator");
 
@@ -40,12 +45,34 @@ void PlayerBackend::Start()
 
     player_->TearDownCallback([](bool, int) {});
     player_->StopCallback([](bool) {});
+    player_->setupStreamCallbackMap[InterfaceCB::startNewSubtitleStream] =
+        [](int) {};
+    player_->callbackMap[InterfaceCB::idleCb] = [] {};
+    player_->callbackMap[InterfaceCB::progressCb] = [] {};
+    player_->callbackMap[InterfaceCB::firstVideoFrameReceived] = [] {};
+    player_->callbackMap[InterfaceCB::notifyEOS] = [] {};
+    player_->callbackMap[InterfaceCB::firstVideoFrameDisplayed] = [this] {
+        pipelinePlayingNotified_.store(true);
+        LogStartupMilestone("interface-playing-notification");
+    };
+    player_->FirstFrameCallback(
+        [this](int mediaType,
+               bool,
+               bool,
+               bool&,
+               bool&) {
+            if (mediaType == eGST_MEDIATYPE_VIDEO &&
+                !firstVideoFrameReported_.exchange(true)) {
+                LogStartupMilestone("decoded-video-first-frame-callback");
+            }
+        });
     player_->RegisterBusEvent([this](const BusEventData event) {
         HandleBusEvent(event);
     });
 
     StreamCodecInfo codecInfo;
     codecInfo.video.mCodecFormat = GST_FORMAT_UNKNOWN;
+    LogStartupMilestone("configure-pipeline-begin");
     player_->ConfigurePipeline(
         std::move(codecInfo),
         false,
@@ -55,12 +82,14 @@ void PlayerBackend::Start()
         1,
         "pi-player-simulator",
         -1,
-        false,
+        true,
         url_);
+    LogStartupMilestone("configure-pipeline-returned");
 
     playing_ = true;
     statusMessage_ = "Opening stream";
     nextPositionQuery_ = std::chrono::steady_clock::now();
+    nextDurationQuery_ = nextPositionQuery_;
 }
 
 void PlayerBackend::PumpEvents()
@@ -68,10 +97,19 @@ void PlayerBackend::PumpEvents()
     g_main_context_iteration(nullptr, FALSE);
 
     const auto now = std::chrono::steady_clock::now();
-    if (player_ != nullptr && !stopped_ && now >= nextPositionQuery_) {
+    if (player_ != nullptr && !stopped_ &&
+        pipelinePlayingNotified_.load() && now >= nextPositionQuery_) {
         positionMs_ = player_->GetPositionMilliseconds();
-        durationMs_ = player_->GetDurationMilliseconds();
+        if (positionMs_ > 0 && !firstPositionReported_) {
+            firstPositionReported_ = true;
+            LogStartupMilestone("playback-position-advanced");
+        }
         nextPositionQuery_ = now + std::chrono::milliseconds(250);
+
+        if (now >= nextDurationQuery_) {
+            durationMs_ = player_->GetDurationMilliseconds();
+            nextDurationQuery_ = now + std::chrono::seconds(1);
+        }
     }
 }
 
@@ -119,10 +157,12 @@ void PlayerBackend::HandleBusEvent(const BusEventData& event)
 {
     switch (event.msgType) {
     case MESSAGE_ERROR:
+        LogStartupMilestone("gstreamer-error");
         statusMessage_ = event.msg.empty() ? "Playback error" : event.msg;
         playing_ = false;
         break;
     case MESSAGE_WARNING:
+        LogStartupMilestone("gstreamer-warning");
         statusMessage_ = event.msg.empty() ? "Playback warning"
                                            : "Warning: " + event.msg;
         break;
@@ -131,8 +171,20 @@ void PlayerBackend::HandleBusEvent(const BusEventData& event)
         playing_ = false;
         break;
     case MESSAGE_APPLICATION:
-    case MESSAGE_STATE_CHANGE:
     case MESSAGE_CLOCK_LOST:
         break;
+    case MESSAGE_STATE_CHANGE:
+        if (event.msg == "pi-player-simulator") {
+            LogStartupMilestone("pipeline-state-change-notification");
+        }
+        break;
     }
+}
+
+void PlayerBackend::LogStartupMilestone(const char* milestone)
+{
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startupAt_).count();
+    const std::lock_guard<std::mutex> lock(startupLogMutex_);
+    std::clog << "[PI-CLI] +" << elapsed << "ms " << milestone << std::endl;
 }

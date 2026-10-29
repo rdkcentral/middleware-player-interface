@@ -51,17 +51,28 @@ passes the URL to `ConfigurePipeline()`. The interface's own `playbin` handles
 HTTP source setup, HLS/DASH demuxing, decoding, and sink output. The simulator
 does not make a parallel `uridecodebin`, `appsink`, or other media pipeline.
 
-Use the overlay's play/pause and stop buttons, or **Space** and **S**.
-Playback position and duration are displayed in the timeline. Seeking is not
-connected: the public direct-URI interface currently exposes no seek operation.
-The SDL/EGL controls and interface-owned video sink may appear in separate
-native windows. SDL2 does not provide a portable per-pixel transparent window
-flag, so video/control composition and z-order are not guaranteed.
+On Linux/X11, the UI locates the interface-owned `pi-player-simulator` video
+window and places an X11-shaped SDL controls window over it. Only the header and
+controls regions cover the video; the rest of the overlay window is clipped.
+This keeps the interface-owned pipeline and sink while composing the UI in the
+simulator. On desktops without X11/XWayland, controls remain in a separate
+window.
+
+Use the play/pause and stop buttons, or **Space** and **S**. Playback position
+and duration are displayed in the timeline. Seeking is not connected: the
+public direct-URI interface currently exposes no seek operation.
+
+Startup timing milestones are printed to stderr with elapsed monotonic time,
+for example `[PI-CLI] +1234ms configure-pipeline-returned`. They include
+plugin initialization, pipeline configuration, pipeline state notifications,
+the interface's first-frame notification, decoder first-frame callback when
+available, and first advancing playback position. These events measure startup;
+they do not accelerate stream loading.
 
 ## Dependencies checked by `build.sh`
 
 - Installed `libplayergstinterface` pkg-config module
-- `glib-2.0`, SDL2, SDL2_ttf, EGL, and GLESv2 development modules
+- `glib-2.0`, SDL2, SDL2_ttf, EGL, GLESv2, X11, and Xext development modules
 - SDL2_ttf-compatible system font
 - GStreamer `playbin`, `souphttpsrc`, HLS/DASH demuxers, `autovideosink`,
   and H.264/AAC decoders

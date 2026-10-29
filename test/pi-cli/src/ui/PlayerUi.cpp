@@ -1,6 +1,7 @@
 #include "PlayerUi.h"
 
 #include "../backend/PlayerBackend.h"
+#include "X11VideoOverlay.h"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -272,6 +273,9 @@ void DestroyTextCaches(const std::array<TextCache*, 5>& caches)
 
 int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
 {
+#if defined(PI_CLI_X11_OVERLAY)
+    SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
+#endif
     SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
 
@@ -301,6 +305,13 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
         return 1;
     }
     SDL_SetWindowMinimumSize(window, 480, 320);
+
+    X11VideoOverlay videoOverlay(window);
+    const bool overlaySupported = videoOverlay.Initialize();
+    if (!overlaySupported) {
+        std::cerr << "X11 video overlay unavailable; controls will use a "
+                     "separate window.\n";
+    }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -352,6 +363,8 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
     bool controlsVisible = true;
     int exitCode = 0;
     Uint32 lastPointerMotion = SDL_GetTicks();
+    Uint32 nextOverlaySync = 0;
+    bool overlayAttached = false;
 
     while (running) {
         SDL_Event event;
@@ -390,7 +403,12 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
 
         backend.PumpEvents();
         const PlaybackStatus status = backend.GetStatus();
-        if (status.playing && controlsVisible &&
+        const Uint32 currentTicks = SDL_GetTicks();
+        if (overlaySupported && videoOverlay.PointerMovedOverVideo()) {
+            controlsVisible = true;
+            lastPointerMotion = currentTicks;
+        }
+        if (status.playing && status.positionMs > 0 && controlsVisible &&
             SDL_GetTicks() - lastPointerMotion >= kControlsHideDelayMs) {
             controlsVisible = false;
         }
@@ -399,6 +417,17 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
         int height = 0;
         SDL_GetWindowSize(window, &width, &height);
         const Layout layout = CreateLayout(width, height);
+        if (overlaySupported && currentTicks >= nextOverlaySync) {
+            const bool attached = videoOverlay.Synchronize(
+                layout.topPanel, layout.controlsPanel, controlsVisible);
+            if (attached != overlayAttached) {
+                std::cerr << (attached
+                    ? "Attached simulator controls over the video window.\n"
+                    : "Video window not found; waiting to attach controls.\n");
+                overlayAttached = attached;
+            }
+            nextOverlaySync = currentTicks + 100;
+        }
 
         SDL_SetRenderDrawColor(renderer, 17, 20, 26, 255);
         if (SDL_RenderClear(renderer) != 0) {

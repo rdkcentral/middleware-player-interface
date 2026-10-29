@@ -11,10 +11,15 @@ pkg_check_modules(SDL2_TTF REQUIRED IMPORTED_TARGET SDL2_ttf)
 pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
 pkg_check_modules(GLESV2 REQUIRED IMPORTED_TARGET glesv2)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11 xext)
+endif()
+
 add_executable(pi-player-simulator
     src/main.cpp
     src/backend/PlayerBackend.cpp
     src/ui/PlayerUi.cpp
+    src/ui/X11VideoOverlay.cpp
 )
 
 target_compile_features(pi-player-simulator PRIVATE cxx_std_17)
@@ -26,6 +31,11 @@ target_link_libraries(pi-player-simulator PRIVATE
     PkgConfig::EGL
     PkgConfig::GLESV2
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(pi-player-simulator PRIVATE PI_CLI_X11_OVERLAY=1)
+    target_link_libraries(pi-player-simulator PRIVATE PkgConfig::X11)
+endif()
 
 if(BUILD_WITH_COVERAGE)
     target_compile_options(pi-player-simulator PRIVATE --coverage)

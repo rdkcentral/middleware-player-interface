@@ -63,7 +63,7 @@ if ! pkg-config --exists libplayergstinterface; then
 fi
 
 missing_modules=()
-for module in glib-2.0 sdl2 SDL2_ttf egl glesv2; do
+for module in glib-2.0 sdl2 SDL2_ttf egl glesv2 x11 xext; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
         case "${module}" in
@@ -72,6 +72,8 @@ for module in glib-2.0 sdl2 SDL2_ttf egl glesv2; do
             SDL2_ttf) add_system_package libsdl2-ttf-dev ;;
             egl) add_system_package libegl1-mesa-dev ;;
             glesv2) add_system_package libgles2-mesa-dev ;;
+            x11) add_system_package libx11-dev ;;
+            xext) add_system_package libxext-dev ;;
         esac
     fi
 done
@@ -132,7 +134,7 @@ if ((${#missing_factories[@]} > 0)); then
 fi
 
 still_missing=()
-for module in glib-2.0 sdl2 SDL2_ttf egl glesv2; do
+for module in glib-2.0 sdl2 SDL2_ttf egl glesv2 x11 xext; do
     if ! pkg-config --exists "${module}"; then
         still_missing+=("${module}")
     fi
