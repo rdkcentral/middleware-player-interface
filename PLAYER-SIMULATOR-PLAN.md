@@ -60,6 +60,8 @@ modules, built the executable, and running it printed
 ### Phase 2 — EGL UI — implemented; Ubuntu test pending
 
 - Draw a URL field, Play/Pause/Stop controls, status, and a video rectangle.
+- Use SDL_ttf with a system font instead of custom bitmap glyphs.
+- SDL2_ttf and the system DejaVu Sans font provide readable UI text.
 - Keep playback mocked in this phase.
 
 **Test gate:** from `test/pi-cli`, run `./build.sh`, then run

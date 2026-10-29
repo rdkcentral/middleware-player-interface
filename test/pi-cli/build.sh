@@ -21,7 +21,7 @@ export PKG_CONFIG_PATH="${PLAYER_INTERFACE_PREFIX}/lib/pkgconfig${PKG_CONFIG_PAT
 export LD_LIBRARY_PATH="${PLAYER_INTERFACE_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 missing_modules=()
-for module in libplayergstinterface sdl2 egl glesv2; do
+for module in libplayergstinterface sdl2 SDL2_ttf egl glesv2; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
     fi
@@ -38,6 +38,9 @@ if ((${#missing_modules[@]} > 0)); then
           " ${missing_modules[*]} " == *" egl "* || \
           " ${missing_modules[*]} " == *" glesv2 "* ]]; then
         printf 'Install the missing SDL2/EGL development packages.\n' >&2
+    fi
+    if [[ " ${missing_modules[*]} " == *" SDL2_ttf "* ]]; then
+        printf 'Install the SDL2_ttf development package (Ubuntu: libsdl2-ttf-dev).\n' >&2
     fi
     exit 1
 fi
