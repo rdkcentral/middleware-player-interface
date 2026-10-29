@@ -20,6 +20,7 @@ extern "C" {
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <exception>
 #include <limits>
 #include <sstream>
@@ -48,6 +49,7 @@ struct DashManifestSelection {
     size_t removedVideoRepresentations = 0;
     bool keptVideo = false;
     bool keptAudio = false;
+    std::string selectedVideoDescription;
 };
 
 class ProgressWatchdog {
@@ -202,21 +204,59 @@ std::string AdaptationSetMediaType(xmlNodePtr adaptationSet)
     return {};
 }
 
-void KeepFirstRepresentation(xmlNodePtr adaptationSet,
-                             size_t& removedVideoRepresentations)
+void KeepLowestBandwidthRepresentation(
+    xmlNodePtr adaptationSet,
+    DashManifestSelection& selection)
 {
-    bool keptRepresentation = false;
+    xmlNodePtr selectedRepresentation = nullptr;
+    uint64_t lowestBandwidth = std::numeric_limits<uint64_t>::max();
+    for (xmlNodePtr child = adaptationSet->children; child != nullptr;) {
+        if (child->type == XML_ELEMENT_NODE &&
+            xmlStrEqual(child->name, BAD_CAST "Representation")) {
+            if (selectedRepresentation == nullptr) {
+                selectedRepresentation = child;
+            }
+
+            const std::string bandwidthText = XmlProperty(child, "bandwidth");
+            if (!bandwidthText.empty()) {
+                char* parseEnd = nullptr;
+                errno = 0;
+                const unsigned long long bandwidth =
+                    std::strtoull(bandwidthText.c_str(), &parseEnd, 10);
+                if (errno == 0 && parseEnd != bandwidthText.c_str() &&
+                    parseEnd != nullptr && *parseEnd == '\0' &&
+                    bandwidth < lowestBandwidth) {
+                    lowestBandwidth = bandwidth;
+                    selectedRepresentation = child;
+                }
+            }
+        }
+        child = child->next;
+    }
+
+    if (selectedRepresentation == nullptr) {
+        return;
+    }
+
+    const std::string id = XmlProperty(selectedRepresentation, "id");
+    const std::string width = XmlProperty(selectedRepresentation, "width");
+    const std::string height = XmlProperty(selectedRepresentation, "height");
+    const std::string bandwidth =
+        XmlProperty(selectedRepresentation, "bandwidth");
+    selection.selectedVideoDescription =
+        "id=" + (id.empty() ? std::string("unknown") : id) +
+        " " + (width.empty() ? std::string("?") : width) + "x" +
+        (height.empty() ? std::string("?") : height) + " @" +
+        (bandwidth.empty() ? std::string("?") : bandwidth) + "bps";
+
     for (xmlNodePtr child = adaptationSet->children; child != nullptr;) {
         xmlNodePtr next = child->next;
         if (child->type == XML_ELEMENT_NODE &&
-            xmlStrEqual(child->name, BAD_CAST "Representation")) {
-            if (keptRepresentation) {
-                xmlUnlinkNode(child);
-                xmlFreeNode(child);
-                ++removedVideoRepresentations;
-            } else {
-                keptRepresentation = true;
-            }
+            xmlStrEqual(child->name, BAD_CAST "Representation") &&
+            child != selectedRepresentation) {
+            xmlUnlinkNode(child);
+            xmlFreeNode(child);
+            ++selection.removedVideoRepresentations;
         }
         child = next;
     }
@@ -303,9 +343,8 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
                     ++selection.removedAdaptationSets;
                 } else if (mediaType == "video") {
                     selection.keptVideo = true;
-                    KeepFirstRepresentation(
-                        adaptationSet,
-                        selection.removedVideoRepresentations);
+                    KeepLowestBandwidthRepresentation(adaptationSet,
+                                                      selection);
                 } else {
                     selection.keptAudio = true;
                 }
@@ -529,6 +568,11 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         selectionLog << "ffmpeg-dash-manifest-filtered: video="
                      << (dashManifest.keptVideo ? "yes" : "no")
                      << " audio=" << (dashManifest.keptAudio ? "yes" : "no")
+                     << " selected-video={"
+                     << (dashManifest.selectedVideoDescription.empty()
+                             ? "unknown"
+                             : dashManifest.selectedVideoDescription)
+                     << "}"
                      << " removed-adaptation-sets="
                      << dashManifest.removedAdaptationSets
                      << " removed-video-representations="
@@ -831,11 +875,29 @@ void FfmpegDemuxSource::NeedData(int mediaType)
         return;
     }
 
+    bool logTransition = false;
+    uint32_t transitionNumber = 0;
+    size_t queuedPackets = 0;
+    size_t queuedBytes = 0;
     {
         const std::lock_guard<std::mutex> lock(track->mutex);
+        if (!track->needData && track->needDataLogCount < 4) {
+            logTransition = true;
+            transitionNumber = ++track->needDataLogCount;
+            queuedPackets = track->packets.size();
+            queuedBytes = track->queuedBytes;
+        }
         track->needData = true;
     }
     track->condition.notify_all();
+    if (logTransition) {
+        ReportProgress(
+            std::string("player-interface-need-data: track=") +
+            (mediaType == eGST_MEDIATYPE_VIDEO ? "video" : "audio") +
+            " event=" + std::to_string(transitionNumber) +
+            " queued-packets=" + std::to_string(queuedPackets) +
+            " queued-bytes=" + std::to_string(queuedBytes));
+    }
 }
 
 void FfmpegDemuxSource::EnoughData(int mediaType)
@@ -846,11 +908,29 @@ void FfmpegDemuxSource::EnoughData(int mediaType)
         return;
     }
 
+    bool logTransition = false;
+    uint32_t transitionNumber = 0;
+    size_t queuedPackets = 0;
+    size_t queuedBytes = 0;
     {
         const std::lock_guard<std::mutex> lock(track->mutex);
+        if (track->needData && track->enoughDataLogCount < 4) {
+            logTransition = true;
+            transitionNumber = ++track->enoughDataLogCount;
+            queuedPackets = track->packets.size();
+            queuedBytes = track->queuedBytes;
+        }
         track->needData = false;
     }
     track->condition.notify_all();
+    if (logTransition) {
+        ReportProgress(
+            std::string("player-interface-enough-data: track=") +
+            (mediaType == eGST_MEDIATYPE_VIDEO ? "video" : "audio") +
+            " event=" + std::to_string(transitionNumber) +
+            " queued-packets=" + std::to_string(queuedPackets) +
+            " queued-bytes=" + std::to_string(queuedBytes));
+    }
 }
 
 void FfmpegDemuxSource::SetFeedingEnabled(bool enabled)
@@ -1334,7 +1414,24 @@ bool FfmpegDemuxSource::PreparePacket(Track& track,
         track.ready = track.format == GST_FORMAT_AUDIO_ES_AAC ||
                       track.format == GST_FORMAT_AUDIO_ES_AAC_RAW;
     }
-    return !output.data.empty();
+    if (output.data.empty()) {
+        return false;
+    }
+
+    const uint64_t packetNumber = ++track.packetsPrepared;
+    if (packetNumber <= 5) {
+        std::ostringstream packetLog;
+        packetLog << "ffmpeg-packet-prepared: track="
+                  << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"
+                                                               : "audio")
+                  << " n=" << packetNumber
+                  << " pts=" << output.pts
+                  << " dts=" << output.dts
+                  << " duration=" << output.duration
+                  << " bytes=" << output.data.size();
+        ReportProgress(packetLog.str());
+    }
+    return true;
 }
 
 bool FfmpegDemuxSource::NormalizeH264(Track& track,
@@ -1593,11 +1690,25 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
                      std::string(error.what()));
         }
 
+        uint64_t sampleNumber = 0;
         {
             const std::lock_guard<std::mutex> lock(track.mutex);
             track.sending = false;
+            sampleNumber = ++track.samplesSubmitted;
         }
         track.condition.notify_all();
+        if (sampleNumber <= 5) {
+            std::ostringstream sampleLog;
+            sampleLog << "player-interface-sample-result: track="
+                      << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"
+                                                                  : "audio")
+                      << " n=" << sampleNumber
+                      << " pts=" << packet.pts
+                      << " dts=" << packet.dts
+                      << " duration=" << packet.duration
+                      << " accepted=" << (accepted ? "yes" : "no");
+            ReportProgress(sampleLog.str());
+        }
 
         if (!accepted) {
             if (!stopping_) {

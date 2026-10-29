@@ -46,6 +46,7 @@ private:
     std::chrono::steady_clock::time_point startupAt_{};
     std::chrono::steady_clock::time_point nextPositionQuery_{};
     std::chrono::steady_clock::time_point nextDurationQuery_{};
+    std::chrono::steady_clock::time_point nextProgressLog_{};
     std::mutex startupLogMutex_;
     long long positionMs_ = 0;
     long durationMs_ = 0;

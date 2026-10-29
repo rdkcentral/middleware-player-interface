@@ -172,6 +172,7 @@ bool PlayerBackend::Start()
     statusMessage_ = "Opening stream";
     nextPositionQuery_ = std::chrono::steady_clock::now();
     nextDurationQuery_ = nextPositionQuery_;
+    nextProgressLog_ = nextPositionQuery_;
     return true;
 }
 
@@ -196,8 +197,8 @@ void PlayerBackend::PumpEvents()
     }
 
     const auto now = std::chrono::steady_clock::now();
-    if (player_ != nullptr && !stopped_ &&
-        pipelinePlayingNotified_.load() && now >= nextPositionQuery_) {
+    if (player_ != nullptr && !stopped_ && playing_ &&
+        now >= nextPositionQuery_) {
         positionMs_ = player_->GetPositionMilliseconds();
         if (positionMs_ > 0 && !firstPositionReported_) {
             firstPositionReported_ = true;
@@ -211,6 +212,13 @@ void PlayerBackend::PumpEvents()
                 durationMs_ = source_->GetDurationMilliseconds();
             }
             nextDurationQuery_ = now + std::chrono::seconds(1);
+        }
+        if (now >= nextProgressLog_) {
+            LogStartupMilestone(
+                "playback-progress: position-ms=" +
+                std::to_string(positionMs_) +
+                " duration-ms=" + std::to_string(durationMs_));
+            nextProgressLog_ = now + std::chrono::seconds(5);
         }
     }
 }

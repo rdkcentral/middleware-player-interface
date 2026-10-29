@@ -9,11 +9,12 @@ for decoding, synchronization, and rendering.
 pi-cli does not create a playback pipeline, decode media, or write manifests,
 segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
-injection. For DASH, pi-cli filters the MPD in memory to one video
-representation and one non-commentary audio adaptation set before FFmpeg opens
-the stream; this avoids FFmpeg opening every representation's initialization
-segment during startup. HLS track selection and network reads are bounded by
-timeouts. DRM and subtitles are out of scope.
+injection. For DASH, pi-cli filters the MPD in memory to the lowest-bandwidth
+video representation and one non-commentary audio adaptation set before FFmpeg
+opens the stream. This avoids opening every representation's initialization
+segment and reduces software decode/render load on the default desktop sink.
+HLS track selection and network reads are bounded by timeouts. DRM and
+subtitles are out of scope.
 
 The initial codec scope is H.264 video and AAC audio. FFmpeg's Annex-B H.264
 packets are converted to the AVC length-prefixed form expected by Player
@@ -80,7 +81,9 @@ Timing milestones use monotonic elapsed time and are printed to stderr, for
 example `[PI-CLI] +1234ms ffmpeg-manifest-and-stream-info-ready`. They cover
 DASH manifest fetch/filter, FFmpeg open, stream selection/probing, initial packet arrival, Player
 Interface setup, first sample processing, first decoded frame, and advancing
-playback position. Network reads time out instead of waiting indefinitely.
+playback position. The first five packet timestamps, feed-control transitions,
+sample submission results, and periodic playback position are also logged to
+diagnose stalls. Network reads time out instead of waiting indefinitely.
 Player Interface bus errors and FFmpeg ingest failures are reported with their
 details.
 

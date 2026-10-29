@@ -72,6 +72,10 @@ private:
         bool eosNotified = false;
         bool sending = false;
         bool discontinuityNext = true;
+        uint64_t packetsPrepared = 0;
+        uint64_t samplesSubmitted = 0;
+        uint32_t needDataLogCount = 0;
+        uint32_t enoughDataLogCount = 0;
         std::vector<uint8_t> codecData;
         std::vector<std::vector<uint8_t>> sequenceParameterSets;
         std::vector<std::vector<uint8_t>> pictureParameterSets;

@@ -61,10 +61,10 @@ Interface build.
 ### Phase 2 — FFmpeg source and sample bridge
 
 - Open HLS/DASH manifests using FFmpeg's network protocols and demuxers.
-- Filter DASH manifests in memory to one video representation and one
-  non-commentary audio adaptation set before opening FFmpeg's DASH demuxer;
-  that demuxer opens every advertised representation's initialization segment
-  during manifest open.
+- Filter DASH manifests in memory to the lowest-bandwidth video representation
+  and one non-commentary audio adaptation set before opening FFmpeg's DASH
+  demuxer; that demuxer opens every advertised representation's initialization
+  segment during manifest open.
 - Select playback audio/video tracks before stream probing and ignore subtitle
   streams.
 - Select supported H.264/AAC tracks; ignore subtitle streams.
@@ -77,6 +77,8 @@ Interface build.
 - Stop and interrupt FFmpeg network reads cleanly during teardown.
 - Bound network reads with a timeout and log each startup/probe stage,
   including DASH manifest fetch and filtering.
+- Log a bounded sample of packet timestamps, `NeedData`/`EnoughData` transitions,
+  sample submission results, and playback position to diagnose stalled output.
 
 **Gate:** logs show packet injection and Player Interface callbacks for one
 clear HLS stream and one clear DASH stream. Confirm no media files are created.
