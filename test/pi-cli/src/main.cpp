@@ -9,19 +9,28 @@
 
 namespace {
 
-constexpr int kMargin = 24;
-constexpr int kUrlY = 20;
-constexpr int kUrlHeight = 46;
-constexpr int kButtonY = 82;
-constexpr int kButtonWidth = 96;
+constexpr int kOverlayMargin = 16;
+constexpr int kOverlayHeight = 56;
+constexpr int kOverlayInset = 12;
 constexpr int kButtonHeight = 40;
-constexpr int kButtonGap = 12;
-constexpr int kVideoY = 170;
+constexpr Uint32 kControlsHideDelayMs = 3000;
 
 struct Button {
     SDL_Rect bounds;
     const char* label;
     SDL_Color color;
+};
+
+struct Layout {
+    SDL_Rect topPanel;
+    SDL_Rect openButton;
+    SDL_Rect urlField;
+    SDL_Rect urlClip;
+    SDL_Rect loadButton;
+    SDL_Rect streamClip;
+    SDL_Rect controlsPanel;
+    SDL_Rect statusClip;
+    std::array<Button, 3> playbackButtons;
 };
 
 struct TextCache {
@@ -31,6 +40,86 @@ struct TextCache {
     int width = 0;
     int height = 0;
 };
+
+Layout CreateLayout(int width, int height)
+{
+    const SDL_Color playColor{35, 122, 89, 255};
+    const SDL_Color pauseColor{159, 112, 43, 255};
+    const SDL_Color stopColor{158, 61, 64, 255};
+    const int panelWidth = std::max(0, width - 2 * kOverlayMargin);
+    const SDL_Rect topPanel{kOverlayMargin, kOverlayMargin,
+                            panelWidth, kOverlayHeight};
+    const int controlY = std::max(kOverlayMargin,
+                                  height - kOverlayMargin - kOverlayHeight);
+    const SDL_Rect controlsPanel{kOverlayMargin, controlY,
+                                 panelWidth, kOverlayHeight};
+
+    const SDL_Rect openButton{
+        topPanel.x + kOverlayInset,
+        topPanel.y + (kOverlayHeight - kButtonHeight) / 2,
+        132,
+        kButtonHeight
+    };
+    const SDL_Rect loadButton{
+        topPanel.x + topPanel.w - kOverlayInset - 76,
+        openButton.y,
+        76,
+        kButtonHeight
+    };
+    const SDL_Rect urlField{
+        openButton.x,
+        openButton.y,
+        std::max(80, loadButton.x - openButton.x - kOverlayInset),
+        kButtonHeight
+    };
+    const SDL_Rect urlClip{
+        urlField.x + 10,
+        urlField.y + 5,
+        std::max(0, urlField.w - 20),
+        urlField.h - 10
+    };
+    const int streamTextX = openButton.x + openButton.w + 16;
+    const SDL_Rect streamClip{
+        streamTextX,
+        topPanel.y + 10,
+        std::max(0, topPanel.x + topPanel.w - kOverlayInset - streamTextX),
+        topPanel.h - 20
+    };
+
+    const int buttonY = controlsPanel.y + (kOverlayHeight - kButtonHeight) / 2;
+    const SDL_Rect playBounds{
+        controlsPanel.x + kOverlayInset, buttonY, 76, kButtonHeight
+    };
+    const SDL_Rect pauseBounds{
+        playBounds.x + playBounds.w + 8, buttonY, 82, kButtonHeight
+    };
+    const SDL_Rect stopBounds{
+        pauseBounds.x + pauseBounds.w + 8, buttonY, 72, kButtonHeight
+    };
+    const int statusX = stopBounds.x + stopBounds.w + 20;
+    const SDL_Rect statusClip{
+        statusX,
+        controlsPanel.y + 10,
+        std::max(0, controlsPanel.x + controlsPanel.w - kOverlayInset - statusX),
+        controlsPanel.h - 20
+    };
+
+    return {
+        topPanel,
+        openButton,
+        urlField,
+        urlClip,
+        loadButton,
+        streamClip,
+        controlsPanel,
+        statusClip,
+        {{
+            {playBounds, "Play", playColor},
+            {pauseBounds, "Pause", pauseColor},
+            {stopBounds, "Stop", stopColor}
+        }}
+    };
+}
 
 bool SameColor(SDL_Color left, SDL_Color right)
 {
@@ -110,6 +199,69 @@ bool DrawText(SDL_Renderer* renderer,
            DrawCachedText(renderer, cache, x, y);
 }
 
+bool FitTextToWidth(TTF_Font* font,
+                    const std::string& text,
+                    int maxWidth,
+                    std::string& fitted)
+{
+    int textWidth = 0;
+    int textHeight = 0;
+    if (TTF_SizeUTF8(font, text.c_str(), &textWidth, &textHeight) != 0) {
+        std::cerr << "Could not measure stream URL: " << TTF_GetError() << '\n';
+        return false;
+    }
+    if (textWidth <= maxWidth) {
+        fitted = text;
+        return true;
+    }
+
+    const std::string ellipsis = "...";
+    int ellipsisWidth = 0;
+    if (TTF_SizeUTF8(font, ellipsis.c_str(), &ellipsisWidth, &textHeight) != 0) {
+        std::cerr << "Could not measure URL truncation marker: "
+                  << TTF_GetError() << '\n';
+        return false;
+    }
+    if (ellipsisWidth > maxWidth) {
+        fitted.clear();
+        return true;
+    }
+
+    std::vector<std::size_t> boundaries{0};
+    for (std::size_t offset = 0; offset < text.size();) {
+        const unsigned char firstByte = static_cast<unsigned char>(text[offset]);
+        std::size_t characterBytes = 1;
+        if ((firstByte & 0xE0) == 0xC0) {
+            characterBytes = 2;
+        } else if ((firstByte & 0xF0) == 0xE0) {
+            characterBytes = 3;
+        } else if ((firstByte & 0xF8) == 0xF0) {
+            characterBytes = 4;
+        }
+        offset = std::min(offset + characterBytes, text.size());
+        boundaries.push_back(offset);
+    }
+
+    std::size_t low = 0;
+    std::size_t high = boundaries.size() - 1;
+    while (low < high) {
+        const std::size_t middle = (low + high + 1) / 2;
+        const std::string candidate = text.substr(0, boundaries[middle]) + ellipsis;
+        if (TTF_SizeUTF8(font, candidate.c_str(), &textWidth, &textHeight) != 0) {
+            std::cerr << "Could not measure shortened stream URL: "
+                      << TTF_GetError() << '\n';
+            return false;
+        }
+        if (textWidth <= maxWidth) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    fitted = text.substr(0, boundaries[low]) + ellipsis;
+    return true;
+}
+
 bool FillRectangle(SDL_Renderer* renderer,
                    const SDL_Rect& rectangle,
                    SDL_Color color)
@@ -127,113 +279,187 @@ bool RenderUi(SDL_Renderer* renderer,
               int width,
               int height,
               const std::string& url,
-              bool urlFocused,
-              const std::array<Button, 3>& buttons,
+              const std::string& urlDraft,
+              bool editingUrl,
+              bool controlsVisible,
+              const Layout& layout,
               TextCache& urlText,
-              TextCache& statusLabel,
+              TextCache& currentStreamText,
               TextCache& statusText,
               TextCache& videoLabel,
               TextCache& playLabel,
               TextCache& pauseLabel,
-              TextCache& stopLabel)
+              TextCache& stopLabel,
+              TextCache& openLabel,
+              TextCache& loadLabel,
+              TextCache& shortcutLabel,
+              TextCache& controlsHint)
 {
-    const SDL_Color background{16, 19, 25, 255};
+    const SDL_Color background{7, 9, 13, 255};
     const SDL_Color foreground{238, 241, 245, 255};
     const SDL_Color secondary{151, 161, 175, 255};
     const SDL_Color field{25, 30, 39, 255};
     const SDL_Color border{57, 68, 84, 255};
+    const SDL_Color overlay{10, 12, 16, 220};
+    const SDL_Color openColor{43, 88, 130, 255};
     const SDL_Color video{7, 9, 13, 255};
 
-    if (SDL_SetRenderDrawColor(renderer, background.r, background.g,
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) != 0 ||
+        SDL_SetRenderDrawColor(renderer, background.r, background.g,
                                background.b, background.a) != 0 ||
         SDL_RenderClear(renderer) != 0) {
         std::cerr << "Could not clear simulator window: " << SDL_GetError() << '\n';
         return false;
     }
 
-    const SDL_Rect urlBounds{kMargin, kUrlY, width - 2 * kMargin, kUrlHeight};
-    const SDL_Rect urlInner{urlBounds.x + 2, urlBounds.y + 2,
-                            urlBounds.w - 4, urlBounds.h - 4};
-    if (!FillRectangle(renderer, urlBounds, border) ||
-        !FillRectangle(renderer, urlInner, field)) {
+    const SDL_Rect videoBounds{0, 0, width, height};
+    if (!FillRectangle(renderer, videoBounds, video) ||
+        !UpdateText(renderer, font, videoLabel,
+                    url.empty() ? "Open a stream to begin"
+                                : "Video will appear here",
+                    secondary)) {
+        return false;
+    }
+    const int videoTextX = (width - videoLabel.width) / 2;
+    const int videoTextY = (height - videoLabel.height) / 2;
+    if (!DrawCachedText(renderer, videoLabel, videoTextX, videoTextY)) {
         return false;
     }
 
-    const SDL_Rect urlClip{urlInner.x + 10, urlInner.y + 4,
-                           urlInner.w - 20, urlInner.h - 8};
-    if (SDL_RenderSetClipRect(renderer, &urlClip) != 0) {
-        std::cerr << "Could not clip URL text: " << SDL_GetError() << '\n';
+    if (!FillRectangle(renderer, layout.topPanel, overlay)) {
         return false;
     }
-    const std::string shownUrl = url.empty() ? "Enter stream URL" : url;
-    if (!DrawText(renderer, font, urlText, shownUrl, urlClip.x,
-                  urlClip.y + 1, url.empty() ? secondary : foreground)) {
-        SDL_RenderSetClipRect(renderer, nullptr);
-        return false;
-    }
-    if (urlFocused) {
+    if (editingUrl) {
+        const SDL_Rect fieldInner{
+            layout.urlField.x + 1,
+            layout.urlField.y + 1,
+            layout.urlField.w - 2,
+            layout.urlField.h - 2
+        };
+        if (!FillRectangle(renderer, layout.urlField, border) ||
+            !FillRectangle(renderer, fieldInner, field)) {
+            return false;
+        }
+
+        if (SDL_RenderSetClipRect(renderer, &layout.urlClip) != 0) {
+            std::cerr << "Could not clip URL text: " << SDL_GetError() << '\n';
+            return false;
+        }
+        const std::string editorText = urlDraft.empty()
+            ? "Paste stream URL"
+            : urlDraft;
+        if (!DrawText(renderer, font, urlText, editorText,
+                      layout.urlClip.x, layout.urlClip.y,
+                      urlDraft.empty() ? secondary : foreground)) {
+            SDL_RenderSetClipRect(renderer, nullptr);
+            return false;
+        }
+
         int textWidth = 0;
         int textHeight = 0;
-        if (!url.empty() && TTF_SizeUTF8(font, url.c_str(), &textWidth, &textHeight) != 0) {
+        if (!urlDraft.empty() &&
+            TTF_SizeUTF8(font, urlDraft.c_str(), &textWidth, &textHeight) != 0) {
             std::cerr << "Could not measure URL text: " << TTF_GetError() << '\n';
             SDL_RenderSetClipRect(renderer, nullptr);
             return false;
         }
-        const int cursorX = std::min(urlClip.x + textWidth, urlClip.x + urlClip.w - 2);
-        const SDL_Rect cursor{cursorX, urlClip.y + 2, 2, urlClip.h - 4};
-        if (!FillRectangle(renderer, cursor, foreground)) {
+        const int cursorX = std::min(layout.urlClip.x + textWidth,
+                                     layout.urlClip.x + layout.urlClip.w - 2);
+        const SDL_Rect cursor{cursorX, layout.urlClip.y + 2, 2,
+                              layout.urlClip.h - 4};
+        if (!FillRectangle(renderer, cursor, foreground) ||
+            SDL_RenderSetClipRect(renderer, nullptr) != 0) {
+            std::cerr << "Could not draw URL cursor: " << SDL_GetError() << '\n';
+            return false;
+        }
+
+        if (!FillRectangle(renderer, layout.loadButton, openColor) ||
+            !DrawCachedText(renderer, loadLabel,
+                            layout.loadButton.x +
+                                (layout.loadButton.w - loadLabel.width) / 2,
+                            layout.loadButton.y +
+                                (layout.loadButton.h - loadLabel.height) / 2)) {
+            return false;
+        }
+    } else {
+        if (!FillRectangle(renderer, layout.openButton, openColor) ||
+            !DrawCachedText(renderer, openLabel,
+                            layout.openButton.x +
+                                (layout.openButton.w - openLabel.width) / 2,
+                            layout.openButton.y +
+                                (layout.openButton.h - openLabel.height) / 2)) {
+            return false;
+        }
+
+        if (SDL_RenderSetClipRect(renderer, &layout.streamClip) != 0) {
+            std::cerr << "Could not clip current stream text: "
+                      << SDL_GetError() << '\n';
+            return false;
+        }
+        if (!DrawCachedText(renderer, shortcutLabel,
+                            layout.streamClip.x, layout.streamClip.y) ||
+            !DrawCachedText(renderer, currentStreamText,
+                            layout.streamClip.x + shortcutLabel.width + 12,
+                            layout.streamClip.y)) {
             SDL_RenderSetClipRect(renderer, nullptr);
             return false;
         }
-    }
-    if (SDL_RenderSetClipRect(renderer, nullptr) != 0) {
-        std::cerr << "Could not reset URL text clipping: " << SDL_GetError() << '\n';
-        return false;
-    }
-
-    const TextCache* buttonTexts[] = {&playLabel, &pauseLabel, &stopLabel};
-    for (std::size_t index = 0; index < buttons.size(); ++index) {
-        if (!FillRectangle(renderer, buttons[index].bounds, buttons[index].color) ||
-            !DrawCachedText(renderer, *buttonTexts[index],
-                            buttons[index].bounds.x +
-                                (buttons[index].bounds.w - buttonTexts[index]->width) / 2,
-                            buttons[index].bounds.y +
-                                (buttons[index].bounds.h - buttonTexts[index]->height) / 2)) {
+        if (SDL_RenderSetClipRect(renderer, nullptr) != 0) {
+            std::cerr << "Could not reset stream text clipping: "
+                      << SDL_GetError() << '\n';
             return false;
         }
     }
 
-    if (!DrawCachedText(renderer, statusLabel, kMargin, 140) ||
-        !DrawCachedText(renderer, statusText, kMargin + statusLabel.width + 10, 140)) {
-        return false;
-    }
+    if (controlsVisible) {
+        if (!FillRectangle(renderer, layout.controlsPanel, overlay)) {
+            return false;
+        }
+        const TextCache* buttonLabels[] = {&playLabel, &pauseLabel, &stopLabel};
+        for (std::size_t index = 0; index < layout.playbackButtons.size(); ++index) {
+            const Button& button = layout.playbackButtons[index];
+            const TextCache& label = *buttonLabels[index];
+            if (!FillRectangle(renderer, button.bounds, button.color) ||
+                !DrawCachedText(renderer, label,
+                                button.bounds.x + (button.bounds.w - label.width) / 2,
+                                button.bounds.y + (button.bounds.h - label.height) / 2)) {
+                return false;
+            }
+        }
 
-    const SDL_Rect videoBounds{kMargin, kVideoY,
-                               width - 2 * kMargin,
-                               std::max(80, height - kVideoY - kMargin)};
-    const SDL_Rect videoInner{videoBounds.x + 2, videoBounds.y + 2,
-                              videoBounds.w - 4, videoBounds.h - 4};
-    if (!FillRectangle(renderer, videoBounds, border) ||
-        !FillRectangle(renderer, videoInner, video) ||
-        !DrawCachedText(renderer, videoLabel,
-                        videoInner.x + (videoInner.w - videoLabel.width) / 2,
-                        videoInner.y + (videoInner.h - videoLabel.height) / 2)) {
-        return false;
+        if (SDL_RenderSetClipRect(renderer, &layout.statusClip) != 0) {
+            std::cerr << "Could not clip status text: " << SDL_GetError() << '\n';
+            return false;
+        }
+        if (!DrawCachedText(renderer, statusText,
+                            layout.statusClip.x, layout.statusClip.y) ||
+            SDL_RenderSetClipRect(renderer, nullptr) != 0) {
+            std::cerr << "Could not draw status text: " << SDL_GetError() << '\n';
+            return false;
+        }
+    } else {
+        const int hintX = width - controlsHint.width - 32;
+        const int hintY = height - controlsHint.height - 24;
+        const SDL_Rect hintPanel{hintX - 8, hintY - 4,
+                                 controlsHint.width + 16,
+                                 controlsHint.height + 8};
+        if (!FillRectangle(renderer, hintPanel, overlay) ||
+            !DrawCachedText(renderer, controlsHint, hintX, hintY)) {
+            return false;
+        }
     }
 
     SDL_RenderPresent(renderer);
     return true;
 }
 
-bool Contains(const Button& button, int x, int y)
+bool Contains(const SDL_Rect& rectangle, int x, int y)
 {
-    return x >= button.bounds.x &&
-           x < button.bounds.x + button.bounds.w &&
-           y >= button.bounds.y &&
-           y < button.bounds.y + button.bounds.h;
+    return x >= rectangle.x && x < rectangle.x + rectangle.w &&
+           y >= rectangle.y && y < rectangle.y + rectangle.h;
 }
 
-void DestroyTextCaches(const std::array<TextCache*, 7>& caches)
+void DestroyTextCaches(const std::array<TextCache*, 11>& caches)
 {
     for (TextCache* cache : caches) {
         if (cache->texture != nullptr) {
@@ -334,32 +560,32 @@ int main()
         {159, 112, 43, 255},
         {158, 61, 64, 255}
     };
-    const std::array<Button, 3> buttons{{
-        {{kMargin, kButtonY, kButtonWidth, kButtonHeight}, "Play", buttonColors[0]},
-        {{kMargin + kButtonWidth + kButtonGap, kButtonY,
-          kButtonWidth, kButtonHeight}, "Pause", buttonColors[1]},
-        {{kMargin + 2 * (kButtonWidth + kButtonGap), kButtonY,
-          kButtonWidth, kButtonHeight}, "Stop", buttonColors[2]}
-    }};
-
     TextCache urlText;
-    TextCache statusLabel;
+    TextCache currentStreamText;
     TextCache statusText;
     TextCache videoLabel;
     TextCache playLabel;
     TextCache pauseLabel;
     TextCache stopLabel;
-    const std::array<TextCache*, 7> textCaches{{
-        &urlText, &statusLabel, &statusText, &videoLabel,
-        &playLabel, &pauseLabel, &stopLabel
+    TextCache openLabel;
+    TextCache loadLabel;
+    TextCache shortcutLabel;
+    TextCache controlsHint;
+    const std::array<TextCache*, 11> textCaches{{
+        &urlText, &currentStreamText, &statusText, &videoLabel,
+        &playLabel, &pauseLabel, &stopLabel, &openLabel, &loadLabel,
+        &shortcutLabel, &controlsHint
     }};
 
     const bool textReady =
-        UpdateText(renderer, font, statusLabel, "Status", secondary) &&
-        UpdateText(renderer, font, videoLabel, "Video output area", secondary) &&
         UpdateText(renderer, font, playLabel, "Play", foreground) &&
         UpdateText(renderer, font, pauseLabel, "Pause", foreground) &&
-        UpdateText(renderer, font, stopLabel, "Stop", foreground);
+        UpdateText(renderer, font, stopLabel, "Stop", foreground) &&
+        UpdateText(renderer, font, openLabel, "Open stream", foreground) &&
+        UpdateText(renderer, font, loadLabel, "Load", foreground) &&
+        UpdateText(renderer, font, shortcutLabel, "Ctrl+L", secondary) &&
+        UpdateText(renderer, font, controlsHint,
+                   "Move mouse or press Space", secondary);
     if (!textReady) {
         DestroyTextCaches(textCaches);
         TTF_CloseFont(font);
@@ -371,82 +597,174 @@ int main()
     }
 
     std::string url;
-    std::string status = "Ready. Playback is mocked.";
-    bool urlFocused = false;
+    std::string urlDraft;
+    std::string status = "Ready";
+    bool editingUrl = false;
+    bool mockPlaying = false;
+    bool controlsVisible = true;
     bool running = true;
     int exitCode = 0;
+    Uint32 lastPointerMotion = SDL_GetTicks();
+
+    auto cancelUrlEdit = [&]() {
+        editingUrl = false;
+        urlDraft = url;
+        SDL_StopTextInput();
+    };
+    auto commitUrlEdit = [&]() {
+        if (urlDraft.empty()) {
+            status = "Enter a URL first";
+            return false;
+        }
+        url = urlDraft;
+        editingUrl = false;
+        mockPlaying = false;
+        status = "Stream selected";
+        SDL_StopTextInput();
+        return true;
+    };
 
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event) != 0) {
             if (event.type == SDL_QUIT) {
                 running = false;
+            } else if (event.type == SDL_MOUSEMOTION) {
+                controlsVisible = true;
+                lastPointerMotion = SDL_GetTicks();
             } else if (event.type == SDL_KEYDOWN &&
                        event.key.keysym.sym == SDLK_ESCAPE) {
-                running = false;
+                if (editingUrl) {
+                    cancelUrlEdit();
+                } else {
+                    running = false;
+                }
+            } else if (event.type == SDL_KEYDOWN &&
+                       (event.key.keysym.mod & KMOD_CTRL) != 0 &&
+                       event.key.keysym.sym == SDLK_l) {
+                if (!editingUrl) {
+                    editingUrl = true;
+                    urlDraft = url;
+                    controlsVisible = true;
+                    SDL_StartTextInput();
+                }
+            } else if (event.type == SDL_KEYDOWN && !editingUrl) {
+                controlsVisible = true;
+                lastPointerMotion = SDL_GetTicks();
+                if (event.key.keysym.sym == SDLK_SPACE) {
+                    if (url.empty()) {
+                        status = "Open a stream first";
+                    } else {
+                        mockPlaying = !mockPlaying;
+                        status = mockPlaying ? "Playing (mock)" : "Paused";
+                    }
+                } else if (event.key.keysym.sym == SDLK_s) {
+                    mockPlaying = false;
+                    status = "Stopped";
+                }
             } else if (event.type == SDL_MOUSEBUTTONDOWN &&
                        event.button.button == SDL_BUTTON_LEFT) {
-                const int mouseX = event.button.x;
-                const int mouseY = event.button.y;
+                controlsVisible = true;
+                lastPointerMotion = SDL_GetTicks();
                 int windowWidth = 0;
                 int windowHeight = 0;
                 SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-                urlFocused = mouseX >= kMargin &&
-                             mouseX < windowWidth - kMargin &&
-                             mouseY >= kUrlY &&
-                             mouseY < std::min(kUrlY + kUrlHeight, windowHeight);
-                if (urlFocused) {
-                    SDL_StartTextInput();
-                    continue;
-                }
+                const Layout layout = CreateLayout(windowWidth, windowHeight);
+                const int mouseX = event.button.x;
+                const int mouseY = event.button.y;
 
-                SDL_StopTextInput();
-                if (Contains(buttons[0], mouseX, mouseY)) {
-                    status = url.empty() ? "Enter a URL first." : "Playing (mock).";
-                } else if (Contains(buttons[1], mouseX, mouseY)) {
-                    status = "Paused (mock).";
-                } else if (Contains(buttons[2], mouseX, mouseY)) {
-                    status = "Stopped.";
+                if (editingUrl && Contains(layout.loadButton, mouseX, mouseY)) {
+                    commitUrlEdit();
+                } else if (editingUrl && Contains(layout.urlField, mouseX, mouseY)) {
+                    SDL_StartTextInput();
+                } else if (!editingUrl &&
+                           Contains(layout.openButton, mouseX, mouseY)) {
+                    editingUrl = true;
+                    urlDraft = url;
+                    status = "Enter URL, then load";
+                    SDL_StartTextInput();
+                } else if (Contains(layout.playbackButtons[0].bounds, mouseX, mouseY)) {
+                    if (editingUrl && !commitUrlEdit()) {
+                        continue;
+                    }
+                    if (url.empty()) {
+                        status = "Open a stream first";
+                    } else {
+                        mockPlaying = true;
+                        status = "Playing (mock)";
+                    }
+                } else if (Contains(layout.playbackButtons[1].bounds, mouseX, mouseY)) {
+                    cancelUrlEdit();
+                    mockPlaying = false;
+                    status = "Paused";
+                } else if (Contains(layout.playbackButtons[2].bounds, mouseX, mouseY)) {
+                    cancelUrlEdit();
+                    mockPlaying = false;
+                    status = "Stopped";
+                } else if (editingUrl) {
+                    cancelUrlEdit();
                 }
-            } else if (event.type == SDL_TEXTINPUT && urlFocused) {
+            } else if (event.type == SDL_TEXTINPUT && editingUrl) {
                 const std::string input(event.text.text);
-                if (url.size() + input.size() <= 512) {
-                    url += input;
+                if (urlDraft.size() + input.size() <= 512) {
+                    urlDraft += input;
                 }
-            } else if (event.type == SDL_KEYDOWN && urlFocused) {
-                if (event.key.keysym.sym == SDLK_BACKSPACE && !url.empty()) {
-                    std::size_t lastCharacter = url.size() - 1;
+            } else if (event.type == SDL_KEYDOWN && editingUrl) {
+                if (event.key.keysym.sym == SDLK_BACKSPACE && !urlDraft.empty()) {
+                    std::size_t lastCharacter = urlDraft.size() - 1;
                     while (lastCharacter > 0 &&
-                           (static_cast<unsigned char>(url[lastCharacter]) & 0xC0) == 0x80) {
+                           (static_cast<unsigned char>(urlDraft[lastCharacter]) & 0xC0) == 0x80) {
                         --lastCharacter;
                     }
-                    url.erase(lastCharacter);
+                    urlDraft.erase(lastCharacter);
                 } else if (event.key.keysym.sym == SDLK_RETURN ||
                            event.key.keysym.sym == SDLK_KP_ENTER) {
-                    urlFocused = false;
-                    SDL_StopTextInput();
-                    status = url.empty() ? "Ready. Playback is mocked."
-                                         : "URL entered. Playback is mocked.";
+                    commitUrlEdit();
                 } else if ((event.key.keysym.mod & KMOD_CTRL) != 0 &&
                            event.key.keysym.sym == SDLK_a) {
-                    url.clear();
+                    urlDraft.clear();
                 }
             }
+        }
+
+        if (mockPlaying && controlsVisible && !editingUrl &&
+            SDL_GetTicks() - lastPointerMotion >= kControlsHideDelayMs) {
+            controlsVisible = false;
         }
 
         int width = 0;
         int height = 0;
         SDL_GetWindowSize(window, &width, &height);
-        if (!UpdateText(renderer, font, urlText,
-                        url.empty() ? "Enter stream URL" : url,
-                        url.empty() ? secondary : foreground) ||
+        const Layout layout = CreateLayout(width, height);
+        const std::string fullUrl = url.empty() ? "No stream selected" : url;
+        std::string shownUrl;
+        if (!FitTextToWidth(font, fullUrl,
+                            layout.streamClip.w - shortcutLabel.width - 12,
+                            shownUrl)) {
+            exitCode = 1;
+            running = false;
+            continue;
+        }
+        const std::string shownVideo = url.empty()
+            ? "Open a stream to begin"
+            : "Video will appear here";
+        const std::string editorText = urlDraft.empty()
+            ? "Paste stream URL"
+            : urlDraft;
+        if (!UpdateText(renderer, font, currentStreamText, shownUrl, foreground) ||
             !UpdateText(renderer, font, statusText, status, foreground) ||
-            !RenderUi(renderer, font, width, height, url, urlFocused,
-                      buttons, urlText, statusLabel, statusText, videoLabel,
-                      playLabel, pauseLabel, stopLabel)) {
+            !UpdateText(renderer, font, videoLabel, shownVideo, secondary) ||
+            !UpdateText(renderer, font, urlText, editorText,
+                        urlDraft.empty() ? secondary : foreground) ||
+            !RenderUi(renderer, font, width, height, url, urlDraft,
+                      editingUrl, controlsVisible, layout, urlText,
+                      currentStreamText, statusText, videoLabel, playLabel,
+                      pauseLabel, stopLabel, openLabel, loadLabel, shortcutLabel,
+                      controlsHint)) {
             exitCode = 1;
             running = false;
         }
+        SDL_Delay(16);
     }
 
     SDL_StopTextInput();

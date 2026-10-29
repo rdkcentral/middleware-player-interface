@@ -62,15 +62,23 @@ modules, built the executable, and running it printed
 
 ### Phase 2 — EGL UI — implemented; Ubuntu test pending
 
-- Draw a URL field, Play/Pause/Stop controls, status, and a video rectangle.
+- Let the video surface fill the window; keep URL editing in an in-video
+  overlay opened with “Open stream” or Ctrl+L.
+- Put Play/Pause/Stop and status in a translucent bottom overlay inside the
+  video surface. Hide the controls after inactivity while mock-playing and
+  reveal them on pointer movement or keyboard activity.
+- Fit long stream URLs to the available top-overlay space, and support Space
+  for play/pause and S for stop.
 - Use SDL_ttf with a system font instead of custom bitmap glyphs.
 - SDL2_ttf and the system DejaVu Sans font provide readable UI text.
 - Keep playback mocked in this phase.
 
 **Test gate:** from `test/pi-cli`, run `./build.sh`, then run
 `LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator`.
-Enter a URL, verify Play/Pause/Stop update the mocked status, resize the window,
-and close it cleanly.
+Open or switch the URL from inside the video surface, verify the bottom
+Play/Pause/Stop controls and Space/S shortcuts update status, confirm controls
+reappear on mouse or keyboard activity after auto-hide, resize down to the
+minimum size, and close cleanly.
 
 ### Phase 3 — Connect the player interface
 

@@ -58,7 +58,12 @@ are needed to build this standalone test app.
 
 ## Phase 2 UI test
 
-Run the app using the commands in the Ubuntu build section. The window provides an editable URL field, mocked Play/Pause/Stop controls, a
-status line, and a video placeholder. Text is rendered with SDL_ttf and the
-system DejaVu Sans font. Type a URL, click the controls to verify the status,
-resize the window, and close it. Playback is not connected in this phase.
+Run the app using the commands in the Ubuntu build section. The video surface
+fills the window; use **Open stream** or **Ctrl+L** to edit or replace the URL.
+Play/Pause/Stop and status are in a translucent overlay at the bottom of the
+video. Long URLs are shortened to fit. While mock-playing, the controls hide
+after a short idle period; move the pointer or press a key to reveal them.
+**Space** toggles mock play/pause, **S** stops, **Enter** loads the edited URL,
+and **Esc** cancels URL editing (or closes the app when not editing). Resize to
+the minimum window size and close the app. Playback is not connected in this
+phase.
