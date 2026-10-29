@@ -36,7 +36,7 @@ public:
 
 private:
     void HandleBusEvent(const BusEventData& event);
-    void LogStartupMilestone(const char* milestone);
+    void LogStartupMilestone(const std::string& milestone);
 
     std::string url_;
     std::string statusMessage_ = "Starting playback";
@@ -49,6 +49,7 @@ private:
     long durationMs_ = 0;
     std::atomic<bool> pipelinePlayingNotified_{false};
     std::atomic<bool> firstVideoFrameReported_{false};
+    std::atomic<bool> firstVideoFrameDisplayedReported_{false};
     bool firstPositionReported_ = false;
     bool playing_ = false;
     bool stopped_ = false;

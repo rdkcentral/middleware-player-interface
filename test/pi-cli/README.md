@@ -78,11 +78,25 @@ requests use `InterfacePlayerRDK::Flush()`; the stream/sink must support the
 requested operation, so check GStreamer logs if playback does not respond.
 
 Startup timing milestones are printed to stderr with elapsed monotonic time,
-for example `[PI-CLI] +1234ms configure-pipeline-returned`. They include
-plugin initialization, pipeline configuration, pipeline state notifications,
-the interface's first-frame notification, decoder first-frame callback when
-available, and first advancing playback position. These events measure startup;
-they do not accelerate stream loading.
+for example `[PI-CLI] +1234ms configure-pipeline-returned`. They include plugin
+initialization, pipeline configuration, the pipeline's PLAYING transition,
+the decoder's first-frame callback when available, and first advancing
+playback position. GStreamer errors and warnings include their details.
+
+To diagnose slow HLS/DASH startup, enable targeted source/demux logs and save
+the combined output:
+
+```sh
+PI_CLI_GST_DEBUG='playbin:4,uridecodebin:4,dashdemux:6,souphttpsrc:6,qtdemux:4' \
+  ./run.sh "https://example.com/clear-stream.mpd" 2>&1 | tee startup.log
+```
+
+`PI_CLI_GST_DEBUG` is optional; without it the normal log volume is unchanged.
+Compare the elapsed time between `configure-pipeline-returned`,
+`pipeline-entered-playing`, `decoded-video-first-frame-callback`, and
+`playback-position-advanced`. The category logs help locate delays in manifest
+and segment requests or demuxing; these diagnostics measure startup and do not
+themselves speed it up.
 
 ## Dependencies checked by `build.sh`
 

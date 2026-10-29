@@ -52,8 +52,9 @@ void PlayerBackend::Start()
     player_->callbackMap[InterfaceCB::firstVideoFrameReceived] = [] {};
     player_->callbackMap[InterfaceCB::notifyEOS] = [] {};
     player_->callbackMap[InterfaceCB::firstVideoFrameDisplayed] = [this] {
-        pipelinePlayingNotified_.store(true);
-        LogStartupMilestone("interface-playing-notification");
+        if (!firstVideoFrameDisplayedReported_.exchange(true)) {
+            LogStartupMilestone("interface-first-video-frame-displayed-callback");
+        }
     };
     player_->FirstFrameCallback(
         [this](int mediaType,
@@ -211,12 +212,14 @@ void PlayerBackend::HandleBusEvent(const BusEventData& event)
 {
     switch (event.msgType) {
     case MESSAGE_ERROR:
-        LogStartupMilestone("gstreamer-error");
+        LogStartupMilestone("gstreamer-error: " + event.msg +
+                            " | debug: " + event.dbg_info);
         statusMessage_ = event.msg.empty() ? "Playback error" : event.msg;
         playing_ = false;
         break;
     case MESSAGE_WARNING:
-        LogStartupMilestone("gstreamer-warning");
+        LogStartupMilestone("gstreamer-warning: " + event.msg +
+                            " | debug: " + event.dbg_info);
         statusMessage_ = event.msg.empty() ? "Playback warning"
                                            : "Warning: " + event.msg;
         break;
@@ -228,14 +231,15 @@ void PlayerBackend::HandleBusEvent(const BusEventData& event)
     case MESSAGE_CLOCK_LOST:
         break;
     case MESSAGE_STATE_CHANGE:
-        if (event.msg == "pi-player-simulator") {
-            LogStartupMilestone("pipeline-state-change-notification");
+        if (event.firstBufferProcessed &&
+            !pipelinePlayingNotified_.exchange(true)) {
+            LogStartupMilestone("pipeline-entered-playing");
         }
         break;
     }
 }
 
-void PlayerBackend::LogStartupMilestone(const char* milestone)
+void PlayerBackend::LogStartupMilestone(const std::string& milestone)
 {
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - startupAt_).count();
