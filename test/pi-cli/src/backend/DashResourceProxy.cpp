@@ -55,6 +55,7 @@ struct SegmentTemplateInfo {
     double periodStartSeconds = 0.0;
     bool hasSeekTiming = true;
     std::vector<int64_t> segmentValues;
+    std::vector<int64_t> timelineValues;
 };
 
 struct PlannedTrack {
@@ -309,28 +310,15 @@ xmlNodePtr FindInheritedSegmentTimeline(xmlNodePtr node)
     return nullptr;
 }
 
-bool BuildSegmentValues(xmlNodePtr representation,
-                        bool usesTime,
-                        int64_t startNumber,
-                        std::vector<int64_t>& values)
+bool BuildSegmentTimelineValues(xmlNodePtr representation,
+                                std::vector<int64_t>& values)
 {
-    if (!usesTime) {
-        for (size_t index = 0; index < kPrefetchSegmentCount; ++index) {
-            if (startNumber >
-                std::numeric_limits<int64_t>::max() -
-                    static_cast<int64_t>(index)) {
-                return false;
-            }
-            values.push_back(startNumber + static_cast<int64_t>(index));
-        }
-        return true;
-    }
-
     xmlNodePtr timeline = FindInheritedSegmentTimeline(representation);
     if (timeline == nullptr) {
         return false;
     }
 
+    std::vector<int64_t> parsedValues;
     int64_t currentTime = 0;
     for (xmlNodePtr child = timeline->children;
          child != nullptr;
@@ -356,12 +344,14 @@ bool BuildSegmentValues(xmlNodePtr representation,
         }
 
         if (repeatValue >= 10000 ||
-            values.size() + static_cast<size_t>(repeatValue + 1) > 10000) {
+            parsedValues.size() +
+                    static_cast<size_t>(repeatValue + 1) >
+                10000) {
             return false;
         }
         const size_t count = static_cast<size_t>(repeatValue + 1);
         for (size_t index = 0; index < count; ++index) {
-            values.push_back(currentTime);
+            parsedValues.push_back(currentTime);
             if (currentTime >
                 std::numeric_limits<int64_t>::max() - durationValue) {
                 return false;
@@ -369,7 +359,31 @@ bool BuildSegmentValues(xmlNodePtr representation,
             currentTime += durationValue;
         }
     }
-    return values.size() >= kPrefetchSegmentCount;
+    if (parsedValues.size() < kPrefetchSegmentCount) {
+        return false;
+    }
+    values = std::move(parsedValues);
+    return true;
+}
+
+bool BuildSegmentValues(xmlNodePtr representation,
+                        bool usesTime,
+                        int64_t startNumber,
+                        std::vector<int64_t>& values)
+{
+    if (usesTime) {
+        return BuildSegmentTimelineValues(representation, values);
+    }
+
+    for (size_t index = 0; index < kPrefetchSegmentCount; ++index) {
+        if (startNumber >
+            std::numeric_limits<int64_t>::max() -
+                static_cast<int64_t>(index)) {
+            return false;
+        }
+        values.push_back(startNumber + static_cast<int64_t>(index));
+    }
+    return true;
 }
 
 std::string ResolveDashBase(xmlNodePtr representation,
@@ -446,6 +460,7 @@ struct DashResourceProxy::Impl {
         std::string variableToken;
         std::string localSuffix;
         std::vector<int64_t> segmentValues;
+        std::vector<int64_t> timelineValues;
         bool usesTime = false;
         int numberWidth = 0;
         int64_t startNumber = 1;
@@ -659,11 +674,17 @@ struct DashResourceProxy::Impl {
                         xmlFreeDoc(document);
                         return false;
                     }
+                    if (!track.media.usesTime) {
+                        BuildSegmentTimelineValues(
+                            representation,
+                            track.media.timelineValues);
+                    }
                     if (track.media.usesTime &&
                         track.media.segmentValues.empty()) {
                         track.media.hasSeekTiming = false;
                     } else if (!track.media.usesTime &&
-                               track.media.duration <= 0) {
+                               track.media.duration <= 0 &&
+                               track.media.timelineValues.empty()) {
                         track.media.hasSeekTiming = false;
                     }
                     tracks.push_back(std::move(track));
@@ -732,6 +753,7 @@ struct DashResourceProxy::Impl {
             route.variableToken = track.media.variableToken;
             route.localSuffix = track.media.localSuffix;
             route.segmentValues = track.media.segmentValues;
+            route.timelineValues = track.media.timelineValues;
             route.usesTime = track.media.usesTime;
             route.numberWidth = track.media.numberWidth;
             route.startNumber = track.media.startNumber;
@@ -1121,10 +1143,10 @@ private:
             }
 
             size_t segmentIndex = 0;
-            if (route.usesTime) {
-                if (route.segmentValues.empty()) {
-                    continue;
-                }
+            const std::vector<int64_t>& timelineValues =
+                route.usesTime ? route.segmentValues
+                               : route.timelineValues;
+            if (!timelineValues.empty()) {
                 const long double ticks =
                     (std::max(0.0, positionSeconds -
                                       route.periodStartSeconds) *
@@ -1136,14 +1158,14 @@ private:
                 const int64_t targetTime =
                     static_cast<int64_t>(std::floor(ticks));
                 const auto next = std::upper_bound(
-                    route.segmentValues.begin(),
-                    route.segmentValues.end(),
+                    timelineValues.begin(),
+                    timelineValues.end(),
                     targetTime);
-                if (next != route.segmentValues.begin()) {
+                if (next != timelineValues.begin()) {
                     segmentIndex = static_cast<size_t>(
-                        next - route.segmentValues.begin() - 1);
+                        next - timelineValues.begin() - 1);
                 }
-            } else {
+            } else if (!route.usesTime && route.duration > 0) {
                 const long double index =
                     (std::max(0.0, positionSeconds -
                                       route.periodStartSeconds) *
@@ -1157,6 +1179,11 @@ private:
                 }
                 segmentIndex =
                     static_cast<size_t>(std::floor(index));
+            } else {
+                Report("ffmpeg-dash-seek-prefetch-skipped: route=" +
+                       routeId +
+                       " reason=segment-timeline-unavailable");
+                continue;
             }
 
             size_t scheduled = 0;
