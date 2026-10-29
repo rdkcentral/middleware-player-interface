@@ -230,9 +230,30 @@ and must not be mislabeled.
   provide the exact Ubuntu build/run/test steps, and wait for Ubuntu validation
   before starting the next phase. Do not claim Linux/EGL validation from this
   Windows development environment.
+- Every phase must be independently testable and leave the project in a
+  runnable, understood state. Add phase-specific test commands, expected
+  results, and failure diagnostics to `test/pi-cli/README.md`; run them before
+  moving forward. A phase is not complete just because its code compiles.
 - Dependencies are documented and discovered by the new CMake files first.
   `install-middleware.sh` and root CMake integration are deferred until the
   integration phase.
+
+### Progressive test gates
+
+| Phase | Test before proceeding |
+|---|---|
+| 0 — Branch/replacement | Confirm the active branch is `feature/Simulator`, the old prototype is gone, and only intended `test/pi-cli/` files changed. |
+| 1 — CMake/dependencies | On Ubuntu, configure with `BUILD_PICLI=ON`, build and run the scaffold, verify required pkg-config modules, and record available GStreamer factories. |
+| 2 — EGL UI | Launch the UI, enter/edit a URL, resize the surface, observe the UI/video rectangle, then close cleanly. Record display/EGL diagnostics. |
+| 3 — Player/sink | Play a known local clear H.264/AAC source through `InterfacePlayerRDK`; verify source setup, samples/timestamps, sink output, rectangle behavior, EOS, and teardown. |
+| 4 — Manifest ingest | Test HLS first and DASH separately using local fixtures; confirm negotiated caps, sample flow, playback, and EOS for each before adding the other format. |
+| 5 — Controls/reliability | Exercise Play/Pause/Resume/Stop, URL replacement, EOS, malformed/unsupported input, callback teardown, and bounded queues with repeatable tests. |
+| 6 — Build integration | Configure/build with the simulator enabled and disabled on Ubuntu; verify non-Ubuntu/default product builds do not gain simulator dependencies. |
+| 7 — Acceptance | Run the documented end-to-end Ubuntu checklist, including video-region/EGL verification or the approved fallback. |
+
+If a gate fails, stop at that phase, capture the exact command, error/logs, and
+environment details, fix or explicitly revise the plan, then rerun that phase's
+checks before continuing.
 
 ### Target `test/pi-cli/` structure
 
