@@ -38,6 +38,8 @@ void PlayerBackend::Start()
     config->useRialtoSink = false;
     config->gstreamerBufferingBeforePlay = false;
 
+    player_->TearDownCallback([](bool, int) {});
+    player_->StopCallback([](bool) {});
     player_->RegisterBusEvent([this](const BusEventData event) {
         HandleBusEvent(event);
     });
