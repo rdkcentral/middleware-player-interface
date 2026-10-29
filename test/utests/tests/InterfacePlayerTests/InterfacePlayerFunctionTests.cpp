@@ -56,6 +56,7 @@ class InterfacePlayerTests : public ::testing::Test
 protected:
 	bool isPipelineSetup = false;
 	GstElement gst_element_pipeline = {.object = {.name = (gchar *)"Pipeline"}};
+	GstElement gst_element_bin = {.object = {.name = (gchar *)"playbin"}};
 	GstBus bus = {};
 	GstQuery query = {};
 	InterfacePlayerRDK *mInterfaceGstPlayer;
@@ -68,6 +69,9 @@ protected:
 	void SetUp() override
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
+		ON_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), _)).WillByDefault(Return(&gst_element_bin));
+		ON_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillByDefault(Return(TRUE));
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new NiceMock<MockGLib>();
 		g_mockPlayerScheduler = new NiceMock<MockPlayerScheduler>();	
 
@@ -118,11 +122,21 @@ public:
 		mInterfaceGstPlayer = nullptr;
 	}
 
+	void ExpectPipelineCreation()
+	{
+		EXPECT_CALL(*g_mockGStreamer, gst_pipeline_new(StrEq("testPipeline")))
+			.WillOnce(Return(&gst_element_pipeline));
+		EXPECT_CALL(*g_mockGStreamer, gst_pipeline_get_bus(GST_PIPELINE(&gst_element_pipeline)))
+			.WillOnce(Return(&bus));
+		EXPECT_CALL(*g_mockGStreamer, gst_query_new_position(GST_FORMAT_TIME))
+			.WillOnce(Return(&query));
+	}
+
 };
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerConfigParams->useWesterosSink = true;
 	EXPECT_EQ(mPlayerContext->using_westerossink, false);
 
@@ -137,7 +151,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].format, GST_FORMAT_INVALID);
@@ -145,8 +159,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithEncryptedCodecInfo)
 {
-	delete g_mockGStreamer;
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	MediaCodecInfo videoCodecInfo(GST_FORMAT_VIDEO_ES_H264);
 	videoCodecInfo.mIsEncrypted = true;
 
@@ -175,7 +188,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalid
 // the real caps arrive later from the demuxer via SetStreamCaps().
 TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
 
@@ -187,8 +200,8 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatO
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 {
-	g_mockGStreamer = nullptr;
-	mPlayerContext->buffering_enabled = true;
+	ExpectPipelineCreation();
+	mPlayerConfigParams->gstreamerBufferingBeforePlay = true;
 	mPlayerContext->rate = GST_NORMAL_PLAY_RATE;
 
 	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
@@ -200,7 +213,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
 
@@ -214,7 +227,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_ESChange)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].format = GST_FORMAT_AUDIO_ES_AC3;
@@ -458,6 +471,7 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mInterfaceGstPlayer->Stop(true);
 	EXPECT_EQ(mPlayerContext->syncControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->aSyncControl.isEnabled(),false);
+	EXPECT_EQ(mPlayerContext->bufferingTimeoutControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskID,0);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskIsPending,false);
 	EXPECT_EQ(mPlayerContext->bufferingTimeoutTimerId,PLAYER_TASK_ID_INVALID);
@@ -3069,13 +3083,34 @@ TEST_F(InterfacePlayerTests, EndOfStreamReached_FirstBufferProcessedTrue_TrickMo
 	EXPECT_TRUE(shouldHaltBuffering);
 }
 
-TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success) //failure case todo
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success)
 {
 	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
 	std::string manifestUrl = "http://example.com/manifest.mpd";
+	GstElement playbin = {.object = {.name = (gchar *)"playbin"}};
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(&playbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&gst_element_pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&playbin))
+		.WillOnce(Return(TRUE));
 	int retvalue = mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl);
 
 	EXPECT_EQ(retvalue, 0);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinCreationFails)
+{
+	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
+	std::string manifestUrl = "http://example.com/manifest.mpd";
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(nullptr));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl), -1);
+	EXPECT_EQ(mPlayerContext->stream[streamId].sinkbin, nullptr);
 }
 
 TEST_F(InterfacePlayerTests, DisableDecoderHandleNotified)
@@ -3484,7 +3519,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(ConfigurePipelineShouldReconfigureTest, ConfigurePipeline_ShouldReconfigureDecisionMatrix)
 {
 	auto param = GetParam();
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = param.initialFormat;
@@ -3507,3 +3542,4 @@ TEST_P(ConfigurePipelineShouldReconfigureTest, ConfigurePipeline_ShouldReconfigu
 		EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted, param.initiallyEncrypted);
 	}
 }
+

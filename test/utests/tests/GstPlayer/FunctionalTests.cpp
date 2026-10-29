@@ -58,6 +58,7 @@ protected:
 	{
 		g_mockPlayerUtils = new MockPlayerUtils();
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new MockGLib();
 		g_mockGstHandlerControl= new MockGstHandlerControl();
 	}
@@ -687,3 +688,4 @@ TEST_F(GstPlayerTests, MonitorAV )
 	}
 	DestroyAMPGstPlayer();
 }
+

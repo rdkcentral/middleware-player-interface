@@ -270,11 +270,11 @@ void g_clear_error(GError **err)
 
 }
 
-void g_free(gpointer mem)
+void (g_free)(gpointer mem)
 {
 	if (g_mockGLib != nullptr)
 	{
-		g_mockGLib->g_free(mem);
+		g_mockGLib->free_memory(mem);
 	}
 }
 
