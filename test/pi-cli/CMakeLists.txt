@@ -11,6 +11,7 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavcodec
     libavutil
 )
+pkg_check_modules(LIBXML2 REQUIRED IMPORTED_TARGET libxml-2.0)
 
 add_executable(pi-player-simulator
     src/main.cpp
@@ -24,6 +25,7 @@ target_link_libraries(pi-player-simulator PRIVATE
     PkgConfig::PLAYERGSTINTERFACE
     PkgConfig::GLIB
     PkgConfig::FFMPEG
+    PkgConfig::LIBXML2
 )
 
 if(NOT UNIX)

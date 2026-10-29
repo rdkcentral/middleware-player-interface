@@ -9,8 +9,11 @@ for decoding, synchronization, and rendering.
 pi-cli does not create a playback pipeline, decode media, or write manifests,
 segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
-injection. FFmpeg selects the playback audio/video streams before probing and
-applies a network-read timeout. DRM and subtitles are out of scope.
+injection. For DASH, pi-cli filters the MPD in memory to one video
+representation and one non-commentary audio adaptation set before FFmpeg opens
+the stream; this avoids FFmpeg opening every representation's initialization
+segment during startup. HLS track selection and network reads are bounded by
+timeouts. DRM and subtitles are out of scope.
 
 The initial codec scope is H.264 video and AAC audio. FFmpeg's Annex-B H.264
 packets are converted to the AVC length-prefixed form expected by Player
@@ -45,9 +48,9 @@ that setting.
 
 If Player Interface is installed to another prefix, set
 `PLAYER_INTERFACE_PREFIX` before running both scripts. `build.sh` checks for
-the Player Interface, GLib, and FFmpeg development modules, and installs
-missing Ubuntu build dependencies through `sudo apt-get`. Run scripts without
-`sudo`. The script does not build or install Player Interface itself.
+the Player Interface, GLib, FFmpeg, and libxml2 development modules, and
+installs missing Ubuntu build dependencies through `sudo apt-get`. Run scripts
+without `sudo`. The script does not build or install Player Interface itself.
 
 ## Console controls
 
@@ -75,7 +78,7 @@ Player Interface platform implementation and stream support.
 
 Timing milestones use monotonic elapsed time and are printed to stderr, for
 example `[PI-CLI] +1234ms ffmpeg-manifest-and-stream-info-ready`. They cover
-manifest open, stream selection/probing, initial packet arrival, Player
+DASH manifest fetch/filter, FFmpeg open, stream selection/probing, initial packet arrival, Player
 Interface setup, first sample processing, first decoded frame, and advancing
 playback position. Network reads time out instead of waiting indefinitely.
 Player Interface bus errors and FFmpeg ingest failures are reported with their

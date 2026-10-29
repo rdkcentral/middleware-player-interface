@@ -111,6 +111,8 @@ private:
                                   size_t size,
                                   bool annexB);
     bool QueuePacket(Track& track, QueuedPacket&& packet);
+    void BeginTimedIo();
+    bool EndTimedIo();
     void DemuxLoop();
     void FeedLoop(Track& track);
     void MarkInputEos();
@@ -130,6 +132,8 @@ private:
     std::atomic<bool> inputPaused_{false};
     std::atomic<bool> feedingEnabled_{true};
     std::atomic<uint64_t> seekGeneration_{0};
+    std::atomic<int64_t> ioDeadlineNanoseconds_{0};
+    std::atomic<bool> ioTimedOut_{false};
     std::mutex inputPauseMutex_;
     std::condition_variable inputPauseCondition_;
     std::thread demuxThread_;

@@ -6,11 +6,18 @@ extern "C" {
 #include <libavutil/error.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/mem.h>
+#include <libavutil/opt.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 }
 
 #include <algorithm>
+#include <chrono>
+#include <cctype>
+#include <climits>
 #include <cmath>
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <exception>
 #include <limits>
@@ -22,15 +29,362 @@ namespace {
 constexpr size_t kMaximumQueuedBytes = 8 * 1024 * 1024;
 constexpr size_t kMaximumQueuedPackets = 128;
 constexpr size_t kMaximumPrimingPackets = 4096;
+constexpr int kIoTimeoutSeconds = 30;
+constexpr size_t kMaximumManifestBytes = 16 * 1024 * 1024;
+constexpr int kManifestIoBufferSize = 32 * 1024;
 // Configs::media uses these private HLS/DASH values in the installed API.
 constexpr int kPlayerInterfaceHlsMediaMode = 0;
 constexpr int kPlayerInterfaceDashMediaMode = 1;
+
+struct ManifestMemory {
+    const std::vector<uint8_t>* data = nullptr;
+    size_t position = 0;
+};
+
+struct DashManifestSelection {
+    std::vector<uint8_t> data;
+    size_t removedAdaptationSets = 0;
+    size_t removedVideoRepresentations = 0;
+    bool keptVideo = false;
+    bool keptAudio = false;
+};
+
+class ProgressWatchdog {
+public:
+    ProgressWatchdog(FfmpegDemuxSource::ProgressCallback progress,
+                     std::string phase)
+        : progress_(std::move(progress))
+        , phase_(std::move(phase))
+        , thread_(&ProgressWatchdog::Run, this)
+    {
+    }
+
+    ~ProgressWatchdog()
+    {
+        {
+            const std::lock_guard<std::mutex> lock(mutex_);
+            stopped_ = true;
+        }
+        condition_.notify_all();
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+    ProgressWatchdog(const ProgressWatchdog&) = delete;
+    ProgressWatchdog& operator=(const ProgressWatchdog&) = delete;
+
+private:
+    void Run()
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        int elapsedSeconds = 5;
+        while (!condition_.wait_for(lock,
+                                    std::chrono::seconds(5),
+                                    [this] { return stopped_; })) {
+            lock.unlock();
+            if (progress_) {
+                progress_(phase_ + "-still-waiting-" +
+                          std::to_string(elapsedSeconds) + "s");
+            }
+            elapsedSeconds += 5;
+            lock.lock();
+        }
+    }
+
+    FfmpegDemuxSource::ProgressCallback progress_;
+    std::string phase_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    bool stopped_ = false;
+    std::thread thread_;
+};
 
 std::string AvErrorString(int error)
 {
     char buffer[AV_ERROR_MAX_STRING_SIZE] = {};
     av_strerror(error, buffer, sizeof(buffer));
     return buffer;
+}
+
+bool IsDashUrl(const std::string& url)
+{
+    const size_t pathEnd = url.find_first_of("?#");
+    const size_t end = pathEnd == std::string::npos ? url.size() : pathEnd;
+    if (end < 4) {
+        return false;
+    }
+
+    return std::tolower(static_cast<unsigned char>(url[end - 4])) == '.' &&
+           std::tolower(static_cast<unsigned char>(url[end - 3])) == 'm' &&
+           std::tolower(static_cast<unsigned char>(url[end - 2])) == 'p' &&
+           std::tolower(static_cast<unsigned char>(url[end - 1])) == 'd';
+}
+
+std::string XmlProperty(xmlNodePtr node, const char* name)
+{
+    xmlChar* value = xmlGetProp(node, BAD_CAST name);
+    if (value == nullptr) {
+        return {};
+    }
+    std::string result(reinterpret_cast<const char*>(value));
+    xmlFree(value);
+    return result;
+}
+
+bool HasRole(xmlNodePtr adaptationSet, const char* role)
+{
+    for (xmlNodePtr child = adaptationSet->children;
+         child != nullptr;
+         child = child->next) {
+        if (child->type == XML_ELEMENT_NODE &&
+            xmlStrEqual(child->name, BAD_CAST "Role")) {
+            std::string value = XmlProperty(child, "value");
+            std::transform(value.begin(), value.end(), value.begin(), [](char c) {
+                return static_cast<char>(
+                    std::tolower(static_cast<unsigned char>(c)));
+            });
+            if (value.find(role) != std::string::npos) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool IsTrickMode(xmlNodePtr adaptationSet)
+{
+    for (xmlNodePtr child = adaptationSet->children;
+         child != nullptr;
+         child = child->next) {
+        if (child->type != XML_ELEMENT_NODE ||
+            (!xmlStrEqual(child->name, BAD_CAST "EssentialProperty") &&
+             !xmlStrEqual(child->name, BAD_CAST "SupplementalProperty"))) {
+            continue;
+        }
+        const std::string scheme = XmlProperty(child, "schemeIdUri");
+        if (scheme.find("trickmode") != std::string::npos) {
+            return true;
+        }
+    }
+    return HasRole(adaptationSet, "trickmode");
+}
+
+std::string AdaptationSetMediaType(xmlNodePtr adaptationSet)
+{
+    std::string mediaType = XmlProperty(adaptationSet, "contentType");
+    if (!mediaType.empty()) {
+        return mediaType;
+    }
+
+    std::string mimeType = XmlProperty(adaptationSet, "mimeType");
+    if (mimeType.empty()) {
+        for (xmlNodePtr child = adaptationSet->children;
+             child != nullptr;
+             child = child->next) {
+            if (child->type == XML_ELEMENT_NODE &&
+                xmlStrEqual(child->name, BAD_CAST "Representation")) {
+                mimeType = XmlProperty(child, "mimeType");
+                if (!mimeType.empty()) {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (mimeType.rfind("video/", 0) == 0) {
+        return "video";
+    }
+    if (mimeType.rfind("audio/", 0) == 0) {
+        return "audio";
+    }
+    return {};
+}
+
+void KeepFirstRepresentation(xmlNodePtr adaptationSet,
+                             size_t& removedVideoRepresentations)
+{
+    bool keptRepresentation = false;
+    for (xmlNodePtr child = adaptationSet->children; child != nullptr;) {
+        xmlNodePtr next = child->next;
+        if (child->type == XML_ELEMENT_NODE &&
+            xmlStrEqual(child->name, BAD_CAST "Representation")) {
+            if (keptRepresentation) {
+                xmlUnlinkNode(child);
+                xmlFreeNode(child);
+                ++removedVideoRepresentations;
+            } else {
+                keptRepresentation = true;
+            }
+        }
+        child = next;
+    }
+}
+
+bool FilterDashManifest(const std::vector<uint8_t>& input,
+                        DashManifestSelection& selection,
+                        std::string& error)
+{
+    if (input.empty() || input.size() > static_cast<size_t>(INT_MAX)) {
+        error = "DASH manifest is empty or too large to parse";
+        return false;
+    }
+
+    xmlDocPtr document = xmlReadMemory(
+        reinterpret_cast<const char*>(input.data()),
+        static_cast<int>(input.size()),
+        nullptr,
+        nullptr,
+        XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING |
+            XML_PARSE_COMPACT);
+    if (document == nullptr) {
+        const xmlError* parseError = xmlGetLastError();
+        error = "Could not parse DASH manifest XML";
+        if (parseError != nullptr && parseError->message != nullptr) {
+            error += ": ";
+            error += parseError->message;
+        }
+        return false;
+    }
+
+    xmlNodePtr root = xmlDocGetRootElement(document);
+    if (root == nullptr || !xmlStrEqual(root->name, BAD_CAST "MPD")) {
+        error = "The DASH URL did not return an MPD document";
+        xmlFreeDoc(document);
+        return false;
+    }
+
+    for (xmlNodePtr period = root->children;
+         period != nullptr;
+         period = period->next) {
+        if (period->type != XML_ELEMENT_NODE ||
+            !xmlStrEqual(period->name, BAD_CAST "Period")) {
+            continue;
+        }
+
+        xmlNodePtr selectedVideo = nullptr;
+        xmlNodePtr selectedAudio = nullptr;
+        for (xmlNodePtr adaptationSet = period->children;
+             adaptationSet != nullptr;
+             adaptationSet = adaptationSet->next) {
+            if (adaptationSet->type != XML_ELEMENT_NODE ||
+                !xmlStrEqual(adaptationSet->name, BAD_CAST "AdaptationSet")) {
+                continue;
+            }
+
+            const std::string mediaType =
+                AdaptationSetMediaType(adaptationSet);
+            if (mediaType == "video" && selectedVideo == nullptr &&
+                !IsTrickMode(adaptationSet)) {
+                selectedVideo = adaptationSet;
+            } else if (mediaType == "audio" && selectedAudio == nullptr &&
+                       !HasRole(adaptationSet, "commentary") &&
+                       !HasRole(adaptationSet, "description")) {
+                selectedAudio = adaptationSet;
+            }
+        }
+
+        for (xmlNodePtr adaptationSet = period->children;
+             adaptationSet != nullptr;) {
+            xmlNodePtr next = adaptationSet->next;
+            if (adaptationSet->type == XML_ELEMENT_NODE &&
+                xmlStrEqual(adaptationSet->name, BAD_CAST "AdaptationSet")) {
+                const std::string mediaType =
+                    AdaptationSetMediaType(adaptationSet);
+                const bool keep =
+                    (mediaType == "video" &&
+                     adaptationSet == selectedVideo) ||
+                    (mediaType == "audio" &&
+                     adaptationSet == selectedAudio);
+                if (!keep) {
+                    xmlUnlinkNode(adaptationSet);
+                    xmlFreeNode(adaptationSet);
+                    ++selection.removedAdaptationSets;
+                } else if (mediaType == "video") {
+                    selection.keptVideo = true;
+                    KeepFirstRepresentation(
+                        adaptationSet,
+                        selection.removedVideoRepresentations);
+                } else {
+                    selection.keptAudio = true;
+                }
+            }
+            adaptationSet = next;
+        }
+    }
+
+    if (!selection.keptVideo && !selection.keptAudio) {
+        error = "The MPD has no supported audio or video adaptation set";
+        xmlFreeDoc(document);
+        return false;
+    }
+
+    xmlChar* serialized = nullptr;
+    int serializedSize = 0;
+    xmlDocDumpMemoryEnc(document, &serialized, &serializedSize, "UTF-8");
+    xmlFreeDoc(document);
+    if (serialized == nullptr || serializedSize <= 0) {
+        if (serialized != nullptr) {
+            xmlFree(serialized);
+        }
+        error = "Could not serialize the filtered DASH manifest";
+        return false;
+    }
+
+    selection.data.assign(serialized, serialized + serializedSize);
+    xmlFree(serialized);
+    return true;
+}
+
+int ReadManifestMemory(void* opaque, uint8_t* buffer, int bufferSize)
+{
+    auto* memory = static_cast<ManifestMemory*>(opaque);
+    if (memory == nullptr || memory->data == nullptr || bufferSize <= 0) {
+        return AVERROR(EINVAL);
+    }
+    if (memory->position >= memory->data->size()) {
+        return AVERROR_EOF;
+    }
+
+    const size_t count = std::min(
+        static_cast<size_t>(bufferSize),
+        memory->data->size() - memory->position);
+    std::memcpy(buffer, memory->data->data() + memory->position, count);
+    memory->position += count;
+    return static_cast<int>(count);
+}
+
+int64_t SeekManifestMemory(void* opaque, int64_t offset, int whence)
+{
+    auto* memory = static_cast<ManifestMemory*>(opaque);
+    if (memory == nullptr || memory->data == nullptr) {
+        return AVERROR(EINVAL);
+    }
+    whence &= ~AVSEEK_FORCE;
+    if (whence == AVSEEK_SIZE) {
+        return static_cast<int64_t>(memory->data->size());
+    }
+
+    int64_t base = 0;
+    if (whence == SEEK_CUR) {
+        base = static_cast<int64_t>(memory->position);
+    } else if (whence == SEEK_END) {
+        base = static_cast<int64_t>(memory->data->size());
+    } else if (whence != SEEK_SET) {
+        return AVERROR(EINVAL);
+    }
+
+    const int64_t size = static_cast<int64_t>(memory->data->size());
+    if (offset < -base || offset > size - base) {
+        return AVERROR(EINVAL);
+    }
+    const int64_t position = base + offset;
+    if (position < 0 ||
+        position > static_cast<int64_t>(memory->data->size())) {
+        return AVERROR(EINVAL);
+    }
+    memory->position = static_cast<size_t>(position);
+    return position;
 }
 
 } // namespace
@@ -80,18 +434,178 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         &FfmpegDemuxSource::InterruptCallback;
     formatContext_->interrupt_callback.opaque = this;
 
+    DashManifestSelection dashManifest;
+    AVIOContext* customManifestIo = nullptr;
+    ManifestMemory manifestMemory;
+    std::string dashManifestUrl = url_;
+    if (IsDashUrl(url_)) {
+        std::vector<uint8_t> manifestBytes;
+        AVIOContext* manifestInput = nullptr;
+        AVDictionary* manifestOptions = nullptr;
+        av_dict_set(&manifestOptions,
+                    "rw_timeout",
+                    std::to_string(kIoTimeoutSeconds * 1000000).c_str(),
+                    0);
+
+        ReportProgress("ffmpeg-dash-manifest-fetch-begin");
+        int fetchResult = 0;
+        BeginTimedIo();
+        {
+            ProgressWatchdog watchdog(progress_,
+                                      "ffmpeg-dash-manifest-fetch");
+            fetchResult = avio_open2(
+                &manifestInput,
+                url_.c_str(),
+                AVIO_FLAG_READ,
+                &formatContext_->interrupt_callback,
+                &manifestOptions);
+            if (fetchResult >= 0) {
+                uint8_t* resolvedUrl = nullptr;
+                if (av_opt_get(manifestInput,
+                               "location",
+                               AV_OPT_SEARCH_CHILDREN,
+                               &resolvedUrl) >= 0 &&
+                    resolvedUrl != nullptr &&
+                    resolvedUrl[0] != '\0') {
+                    dashManifestUrl =
+                        reinterpret_cast<const char*>(resolvedUrl);
+                }
+                av_free(resolvedUrl);
+
+                std::array<uint8_t, 8192> buffer{};
+                while (true) {
+                    const int bytesRead = avio_read(
+                        manifestInput,
+                        buffer.data(),
+                        static_cast<int>(buffer.size()));
+                    if (bytesRead == AVERROR_EOF || bytesRead == 0) {
+                        break;
+                    }
+                    if (bytesRead < 0) {
+                        fetchResult = bytesRead;
+                        break;
+                    }
+                    if (manifestBytes.size() + static_cast<size_t>(bytesRead) >
+                        kMaximumManifestBytes) {
+                        fetchResult = AVERROR(EMSGSIZE);
+                        break;
+                    }
+                    manifestBytes.insert(
+                        manifestBytes.end(),
+                        buffer.begin(),
+                        buffer.begin() + bytesRead);
+                }
+            }
+        }
+        if (manifestInput != nullptr) {
+            avio_closep(&manifestInput);
+        }
+        const bool manifestFetchTimedOut = EndTimedIo();
+        av_dict_free(&manifestOptions);
+        if (fetchResult < 0) {
+            if (manifestFetchTimedOut) {
+                SetError("DASH manifest fetch exceeded " +
+                         std::to_string(kIoTimeoutSeconds) + " seconds");
+            } else if (fetchResult == AVERROR(EMSGSIZE)) {
+                SetError("DASH manifest exceeds the 16 MiB in-memory limit");
+            } else {
+                SetError("Could not fetch DASH manifest: " +
+                         AvErrorString(fetchResult));
+            }
+            Stop();
+            return false;
+        }
+        ReportProgress("ffmpeg-dash-manifest-fetch-complete: " +
+                       std::to_string(manifestBytes.size()) + " bytes");
+
+        std::string filterError;
+        if (!FilterDashManifest(manifestBytes, dashManifest, filterError)) {
+            SetError(std::move(filterError));
+            Stop();
+            return false;
+        }
+        std::ostringstream selectionLog;
+        selectionLog << "ffmpeg-dash-manifest-filtered: video="
+                     << (dashManifest.keptVideo ? "yes" : "no")
+                     << " audio=" << (dashManifest.keptAudio ? "yes" : "no")
+                     << " removed-adaptation-sets="
+                     << dashManifest.removedAdaptationSets
+                     << " removed-video-representations="
+                     << dashManifest.removedVideoRepresentations;
+        ReportProgress(selectionLog.str());
+
+        manifestMemory.data = &dashManifest.data;
+        uint8_t* ioBuffer = static_cast<uint8_t*>(
+            av_malloc(kManifestIoBufferSize));
+        if (ioBuffer == nullptr) {
+            SetError("Could not allocate the in-memory DASH manifest buffer");
+            Stop();
+            return false;
+        }
+        customManifestIo = avio_alloc_context(
+            ioBuffer,
+            kManifestIoBufferSize,
+            0,
+            &manifestMemory,
+            &ReadManifestMemory,
+            nullptr,
+            &SeekManifestMemory);
+        if (customManifestIo == nullptr) {
+            av_free(ioBuffer);
+            SetError("Could not create an in-memory DASH manifest input");
+            Stop();
+            return false;
+        }
+        customManifestIo->seekable = AVIO_SEEKABLE_NORMAL;
+    }
+
     AVDictionary* options = nullptr;
     av_dict_set(&options, "probesize", "2000000", 0);
     av_dict_set(&options, "analyzeduration", "5000000", 0);
-    av_dict_set(&options, "rw_timeout", "30000000", 0);
+    av_dict_set(&options,
+                "rw_timeout",
+                std::to_string(kIoTimeoutSeconds * 1000000).c_str(),
+                0);
     ReportProgress("ffmpeg-format-open-begin");
-    int result = avformat_open_input(&formatContext_,
-                                     url_.c_str(),
-                                     nullptr,
-                                     &options);
+    int result = 0;
+    BeginTimedIo();
+    {
+        ProgressWatchdog watchdog(progress_, "ffmpeg-format-open");
+        if (customManifestIo != nullptr) {
+            const AVInputFormat* dashFormat =
+                av_find_input_format("dash");
+            if (dashFormat == nullptr) {
+                result = AVERROR_DEMUXER_NOT_FOUND;
+            } else {
+                formatContext_->pb = customManifestIo;
+                formatContext_->flags |= AVFMT_FLAG_CUSTOM_IO;
+                result = avformat_open_input(
+                    &formatContext_,
+                    dashManifestUrl.c_str(),
+                    dashFormat,
+                    &options);
+            }
+        } else {
+            result = avformat_open_input(&formatContext_,
+                                         url_.c_str(),
+                                         nullptr,
+                                         &options);
+        }
+    }
+    if (customManifestIo != nullptr) {
+        if (formatContext_ != nullptr &&
+            formatContext_->pb == customManifestIo) {
+            formatContext_->pb = nullptr;
+        }
+        avio_context_free(&customManifestIo);
+    }
+    const bool openTimedOut = EndTimedIo();
     av_dict_free(&options);
     if (result < 0) {
-        SetError("Could not open stream URL: " + AvErrorString(result));
+        SetError(openTimedOut
+                     ? "FFmpeg format open exceeded " +
+                           std::to_string(kIoTimeoutSeconds) + " seconds"
+                     : "Could not open stream URL: " + AvErrorString(result));
         Stop();
         return false;
     }
@@ -145,10 +659,18 @@ bool FfmpegDemuxSource::Open(const std::string& url,
     }
 
     ReportProgress("ffmpeg-stream-info-probe-begin");
-    result = avformat_find_stream_info(formatContext_, nullptr);
+    BeginTimedIo();
+    {
+        ProgressWatchdog watchdog(progress_, "ffmpeg-stream-info-probe");
+        result = avformat_find_stream_info(formatContext_, nullptr);
+    }
+    const bool streamInfoTimedOut = EndTimedIo();
     if (result < 0) {
-        SetError("Could not read stream information: " +
-                 AvErrorString(result));
+        SetError(streamInfoTimedOut
+                     ? "FFmpeg stream-info probe exceeded " +
+                           std::to_string(kIoTimeoutSeconds) + " seconds"
+                     : "Could not read stream information: " +
+                           AvErrorString(result));
         Stop();
         return false;
     }
@@ -207,7 +729,12 @@ bool FfmpegDemuxSource::Open(const std::string& url,
     }
 
     ReportProgress("ffmpeg-initial-packet-probe-begin");
-    if (!PrimeTracks()) {
+    bool primed = false;
+    {
+        ProgressWatchdog watchdog(progress_, "ffmpeg-initial-packet-probe");
+        primed = PrimeTracks();
+    }
+    if (!primed) {
         if (error_.empty()) {
             SetError("Could not obtain codec configuration and initial samples");
         }
@@ -448,7 +975,20 @@ void FfmpegDemuxSource::Stop()
 int FfmpegDemuxSource::InterruptCallback(void* opaque)
 {
     const auto* source = static_cast<const FfmpegDemuxSource*>(opaque);
-    return source->stopping_ ? 1 : 0;
+    if (source->stopping_) {
+        return 1;
+    }
+
+    const int64_t deadline = source->ioDeadlineNanoseconds_;
+    if (deadline > 0) {
+        const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        if (now >= deadline) {
+            source->ioTimedOut_ = true;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 bool FfmpegDemuxSource::IsAdts(const uint8_t* data, size_t size)
@@ -654,9 +1194,16 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
         return false;
     }
 
+    BeginTimedIo();
     const int result = av_read_frame(formatContext_, packet);
+    const bool readTimedOut = EndTimedIo();
     if (result < 0) {
         av_packet_free(&packet);
+        if (readTimedOut) {
+            SetError("FFmpeg media packet read exceeded " +
+                     std::to_string(kIoTimeoutSeconds) + " seconds");
+            return false;
+        }
         if (result == AVERROR(EAGAIN)) {
             return true;
         }
@@ -1080,6 +1627,23 @@ void FfmpegDemuxSource::ReportProgress(
     if (progress_) {
         progress_(milestone);
     }
+}
+
+void FfmpegDemuxSource::BeginTimedIo()
+{
+    const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    const int64_t timeout =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::seconds(kIoTimeoutSeconds)).count();
+    ioTimedOut_ = false;
+    ioDeadlineNanoseconds_ = now + timeout;
+}
+
+bool FfmpegDemuxSource::EndTimedIo()
+{
+    ioDeadlineNanoseconds_ = 0;
+    return ioTimedOut_.exchange(false);
 }
 
 void FfmpegDemuxSource::SetError(std::string error)

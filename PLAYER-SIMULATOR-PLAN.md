@@ -52,6 +52,7 @@ streams.
 - Keep the CLI entry point and console parser under `test/pi-cli/`.
 - Build against the installed Player Interface package and GLib.
 - Add FFmpeg `libavformat`, `libavcodec`, and `libavutil` development modules.
+- Add libxml2 for in-memory DASH manifest filtering.
 - Do not add GStreamer factory checks or build a media pipeline in pi-cli.
 
 **Gate:** configure and build on Ubuntu without changing the root Player
@@ -60,8 +61,12 @@ Interface build.
 ### Phase 2 — FFmpeg source and sample bridge
 
 - Open HLS/DASH manifests using FFmpeg's network protocols and demuxers.
-- Select the playback audio/video tracks before stream probing to avoid
-  probing unused manifest representations.
+- Filter DASH manifests in memory to one video representation and one
+  non-commentary audio adaptation set before opening FFmpeg's DASH demuxer;
+  that demuxer opens every advertised representation's initialization segment
+  during manifest open.
+- Select playback audio/video tracks before stream probing and ignore subtitle
+  streams.
 - Select supported H.264/AAC tracks; ignore subtitle streams.
 - Keep packet data in bounded heap-backed per-track queues.
 - Register Player Interface `NeedData` and `EnoughData` callbacks before
@@ -70,7 +75,8 @@ Interface build.
   samples with timestamps and discontinuity state through `SendHelper()`.
 - Signal per-track end-of-stream after queued packets drain.
 - Stop and interrupt FFmpeg network reads cleanly during teardown.
-- Bound network reads with a timeout and log each startup/probe stage.
+- Bound network reads with a timeout and log each startup/probe stage,
+  including DASH manifest fetch and filtering.
 
 **Gate:** logs show packet injection and Player Interface callbacks for one
 clear HLS stream and one clear DASH stream. Confirm no media files are created.
