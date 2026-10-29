@@ -1,124 +1,90 @@
-# Player Interface Simulator — Implementation Plan
+# Player Interface Simulator Plan
 
 ## Goal
 
-Create a small Linux test player under `test/pi-cli/` with an EGL-based UI. The
-existing `InterfacePlayerRDK` GStreamer sink renders video; the UI draws the
-controls and video layout. Start with clear DASH/HLS and ignore DRM/subtitles.
+Build a lightweight Linux test player under `test/pi-cli/` with an EGL-based
+control UI and direct playback through `InterfacePlayerRDK`. The simulator must
+not construct a separate GStreamer playback pipeline or modify the
+player-interface implementation.
 
-## Keep the build simple
+Initial stream scope: clear HTTP(S) HLS and DASH; DRM and subtitles are
+disabled.
+
+## Architecture
 
 - Build/install `playergstinterface` separately using its normal build.
-- Build `test/pi-cli` independently using its own `CMakeLists.txt`.
-- `pi-cli` consumes the installed headers and library through the existing
-  `libplayergstinterface.pc` pkg-config file.
-- Do not add `test/pi-cli` to the root CMake project. Do not change
-  player-interface business code, vendor code, root CMake, or
-  `install-middleware.sh` for the initial phases.
-- `test/pi-cli` needs pkg-config modules `libplayergstinterface`, `sdl2`,
-  `egl`, and `glesv2`. The interface pkg-config file supplies its GStreamer
-  compile/link requirements.
+- Build `test/pi-cli` independently using its own CMake project and consume the
+  installed library through `libplayergstinterface.pc`.
+- Keep the CLI entry point small; put SDL/EGL rendering under `src/ui/` and
+  player-interface calls under `src/backend/`.
+- Pass the command-line URL to `InterfacePlayerRDK::ConfigurePipeline()`.
+  The interface's own `playbin` performs URI source setup, adaptive demux,
+  decoding, and sink output. The simulator must not create another pipeline,
+  use `uridecodebin`/`appsink`, or feed samples through `SendHelper`.
+- Use `InterfacePlayerRDK` for pause, stop, position, duration, and bus errors.
+- Do not modify player-interface production or vendor code.
+- The default Ubuntu video sink may use a native window separate from SDL/EGL.
+  Video/control z-order is an Ubuntu validation item, not an assumed feature.
 
-The standalone Ubuntu build commands are maintained in
-[`test/pi-cli/README.md`](./test/pi-cli/README.md).
+`Configs::media` is an integer in the installed public API; the media-format
+enum itself is private. The simulator selects the direct-URI/progressive mode
+and disables its appsrc option so the URL is handled by the interface-owned
+`playbin`.
 
-## UI and video layout
-
-SDL2 handles the window/input loop; EGL/OpenGL ES draws the UI surface. Video
-comes from the interface-owned GStreamer sink, not a second player.
-
-The existing `SetVideoRectangle()` API may position video in the UI surface,
-but that depends on the default Ubuntu sink and its `rectangle` property. Test
-this before building more UI around it. Do not access private player internals.
-If the existing public API cannot render video in the surface, pause and agree
-on a separate-window fallback or an API change before proceeding.
-
-## Phases
+## Phases and test gates
 
 ### Phase 0 — Branch and clean test folder — complete
 
 - Work on `feature/Simulator`, based on `develop`.
-- Replace the old interactive `pi-cli` prototype under `test/pi-cli/`.
+- Keep the simulator isolated under `test/pi-cli/`.
 - Keep production player-interface code unchanged.
 
-### Phase 1 — Standalone CMake and scaffold — complete
+### Phase 1 — Standalone build and scaffold — complete
 
-- CMake configures directly from `test/pi-cli/`; it finds the installed
-  `playergstinterface` package using pkg-config.
-- `test/pi-cli/build.sh` sets the local install-prefix paths, checks required
-  pkg-config modules, installs missing Ubuntu build/UI packages when needed,
-  then configures and builds the executable.
-- The interface package remains a local prerequisite; the script does not
-  replace building/installing `playergstinterface`.
-- List required build/runtime dependencies in the README. The script reports
-  dependency failures explicitly if automatic installation is unavailable or
-  fails.
-- Do not require `BUILD_PICLI`, the root CMake project, or changes to the
-  install script.
+- Configure/build directly from `test/pi-cli/`.
+- Use the installed `playergstinterface` pkg-config module.
+- Let `build.sh` set pkg-config/runtime paths and install missing Ubuntu build,
+  UI, font, and GStreamer runtime dependencies.
+- Do not require the root CMake project or `BUILD_PICLI`.
 
-**Test gate:** passed on Ubuntu. The standalone build found all four pkg-config
-modules, built the executable, and running it printed
-`pi-player-simulator scaffold`.
+**Test gate:** standalone CMake configure/build and launch on Ubuntu.
 
-### Phase 2 — EGL UI — implemented; Ubuntu test pending
+### Phase 2 — EGL UI — implemented; visual test pending
 
-- Let the video surface fill the window; keep URL editing in an in-video
-  overlay opened with “Open stream” or Ctrl+L.
-- Put Play/Pause/Stop and status in a translucent bottom overlay inside the
-  video surface. Hide the controls after inactivity while mock-playing and
-  reveal them on pointer movement or keyboard activity.
-- Fit long stream URLs to the available top-overlay space, and support Space
-  for play/pause and S for stop.
-- Use SDL_ttf with a system font instead of custom bitmap glyphs.
-- SDL2_ttf and the system DejaVu Sans font provide readable UI text.
-- Keep playback mocked in this phase.
+- Keep the entry point small and UI code in `src/ui/`.
+- Accept the stream URL only as `./build/pi-player-simulator <url>`.
+- Render play/pause, stop, status, and a playback timeline in an overlay.
+- Use SDL2_ttf with a system font and hide controls after inactivity while
+  playing.
 
-**Test gate:** from `test/pi-cli`, run `./build.sh`, then run
-`LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator`.
-Open or switch the URL from inside the video surface, verify the bottom
-Play/Pause/Stop controls and Space/S shortcuts update status, confirm controls
-reappear on mouse or keyboard activity after auto-hide, resize down to the
-minimum size, and close cleanly.
+**Test gate:** launch with a URL; verify the EGL renderer, controls, keyboard
+shortcuts, resize behavior, and clean close on Ubuntu.
 
-### Phase 3 — Connect the player interface
+### Phase 3 — Interface-owned direct-URI playback — implemented; Ubuntu test pending
 
-- Call the public `InterfacePlayerRDK` API and feed a short local clear
-  H.264/AAC source.
-- Verify startup, sample timestamps, sink output, `SetVideoRectangle()`, EOS,
-  and teardown.
+- Initialize GStreamer through `InterfacePlayerRDK`.
+- Configure its own pipeline with the supplied URL in direct-URI mode.
+- Let the interface-owned `playbin` process HLS/DASH; do not add a separate
+  source or ingest pipeline.
+- Route pause, stop, status, and bus errors through the interface API.
 
-**Test gate:** successful local playback on the Ubuntu default SoC path; record
-whether video renders in the EGL surface or needs the agreed fallback.
+**Test gate:** play one clear HLS URL and one clear DASH URL on Ubuntu; verify
+video/audio output, pause/resume, stop, EOS/error reporting, and teardown.
 
-### Phase 4 — DASH/HLS input
+### Phase 4 — Video/UI composition and seeking — validate before expanding
 
-- Add a GStreamer adaptive-demux ingest path that sends supported compressed
-  samples to the interface through `SendHelper`.
-- Validate HLS first, then DASH. Reject unsupported/encrypted media clearly.
+- Record whether the default Ubuntu sink can be layered with the SDL/EGL window.
+- Do not use private player internals or alter player-interface production code
+  to force z-order.
+- The current public direct-URI API has no seek operation; the timeline is
+  display-only until a supported public seek path is available.
 
-**Test gate:** play one local clear fixture of each format on Ubuntu.
-
-### Phase 5 — Playback controls and finish
-
-- Connect controls/status to playback and handle pause, resume, stop, EOS,
-  errors, and URL replacement.
-- Add only small, redistributable test fixtures if needed.
-
-**Test gate:** repeatable playback/control/stop tests pass and shutdown leaves
-no queued samples or callbacks.
+**Test gate:** document actual native-window behavior and confirm no UI change
+breaks playback or shutdown.
 
 ## Progressive testing rule
 
-Every phase must be independently testable. Document its exact command and
-expected result in the README, run that phase's check before continuing, and
-stop to resolve failures before starting the next phase. Ubuntu/EGL results
-must come from the user's Ubuntu environment; do not infer them from this
-Windows workspace.
-
-## References
-
-- `InterfacePlayerRDK.cpp`, `InterfacePlayerRDK.h`, `GstUtils.cpp`
-- [`appsrc`](https://gstreamer.freedesktop.org/documentation/app/appsrc.html)
-- [`playbin`](https://gstreamer.freedesktop.org/documentation/playback/playbin.html)
-- [GStreamer DASH demuxer](https://gstreamer.freedesktop.org/documentation/adaptivedemux2/dashdemux2.html)
-- [GStreamer GL image sink](https://gstreamer.freedesktop.org/documentation/opengl/glimagesink.html)
+Every phase must have an exact command and expected result in
+`test/pi-cli/README.md`. Run each phase's checks before continuing. Ubuntu
+GStreamer/EGL rendering and z-order must be confirmed on Ubuntu; they cannot be
+inferred from the Windows development environment.

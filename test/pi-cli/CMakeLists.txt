@@ -5,6 +5,7 @@ project(pi-player-simulator LANGUAGES CXX)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(PLAYERGSTINTERFACE REQUIRED IMPORTED_TARGET libplayergstinterface)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
 pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
 pkg_check_modules(SDL2_TTF REQUIRED IMPORTED_TARGET SDL2_ttf)
 pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
@@ -12,11 +13,14 @@ pkg_check_modules(GLESV2 REQUIRED IMPORTED_TARGET glesv2)
 
 add_executable(pi-player-simulator
     src/main.cpp
+    src/backend/PlayerBackend.cpp
+    src/ui/PlayerUi.cpp
 )
 
 target_compile_features(pi-player-simulator PRIVATE cxx_std_17)
 target_link_libraries(pi-player-simulator PRIVATE
     PkgConfig::PLAYERGSTINTERFACE
+    PkgConfig::GLIB
     PkgConfig::SDL2
     PkgConfig::SDL2_TTF
     PkgConfig::EGL

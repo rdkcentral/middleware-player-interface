@@ -63,10 +63,11 @@ if ! pkg-config --exists libplayergstinterface; then
 fi
 
 missing_modules=()
-for module in sdl2 SDL2_ttf egl glesv2; do
+for module in glib-2.0 sdl2 SDL2_ttf egl glesv2; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
         case "${module}" in
+            glib-2.0) add_system_package libglib2.0-dev ;;
             sdl2) add_system_package libsdl2-dev ;;
             SDL2_ttf) add_system_package libsdl2-ttf-dev ;;
             egl) add_system_package libegl1-mesa-dev ;;
@@ -95,8 +96,43 @@ if ((${#missing_modules[@]} > 0)) || [[ "${font_found}" != true ]]; then
     install_system_packages
 fi
 
+runtime_factories=(
+    playbin
+    souphttpsrc
+    hlsdemux
+    dashdemux
+    autovideosink
+    avdec_h264
+    avdec_aac
+)
+runtime_packages=(
+    gstreamer1.0-tools
+    gstreamer1.0-plugins-base
+    gstreamer1.0-plugins-good
+    gstreamer1.0-plugins-bad
+    gstreamer1.0-libav
+)
+missing_factories=()
+if ! command -v gst-inspect-1.0 >/dev/null 2>&1; then
+    missing_factories=("${runtime_factories[@]}")
+else
+    for factory in "${runtime_factories[@]}"; do
+        if ! gst-inspect-1.0 "${factory}" >/dev/null 2>&1; then
+            missing_factories+=("${factory}")
+        fi
+    done
+fi
+if ((${#missing_factories[@]} > 0)); then
+    printf 'Installing GStreamer runtime packages for: %s\n' \
+        "${missing_factories[*]}"
+    for package in "${runtime_packages[@]}"; do
+        add_system_package "${package}"
+    done
+    install_system_packages
+fi
+
 still_missing=()
-for module in sdl2 SDL2_ttf egl glesv2; do
+for module in glib-2.0 sdl2 SDL2_ttf egl glesv2; do
     if ! pkg-config --exists "${module}"; then
         still_missing+=("${module}")
     fi
@@ -115,6 +151,21 @@ if ((${#still_missing[@]} > 0)); then
 fi
 if [[ "${font_found}" != true ]]; then
     printf 'Could not find a supported font after installing fonts-dejavu-core.\n' >&2
+    exit 1
+fi
+if ! command -v gst-inspect-1.0 >/dev/null 2>&1; then
+    printf 'gst-inspect-1.0 is still missing after installing GStreamer packages.\n' >&2
+    exit 1
+fi
+still_missing_factories=()
+for factory in "${runtime_factories[@]}"; do
+    if ! gst-inspect-1.0 "${factory}" >/dev/null 2>&1; then
+        still_missing_factories+=("${factory}")
+    fi
+done
+if ((${#still_missing_factories[@]} > 0)); then
+    printf 'GStreamer factories still unavailable: %s\n' \
+        "${still_missing_factories[*]}" >&2
     exit 1
 fi
 

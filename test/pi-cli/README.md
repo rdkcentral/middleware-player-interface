@@ -1,16 +1,17 @@
 # Player Interface Simulator
 
-`pi-cli` is a standalone test application. Build and install
-`playergstinterface` first; this directory then consumes its installed headers
-and library through `libplayergstinterface.pc`. It does not need the root
-project's `BUILD_PICLI` option or a root CMake change.
+`pi-player-simulator` is a standalone test application that consumes the
+installed `playergstinterface` package. Playback is configured and controlled
+through `InterfacePlayerRDK`; the simulator does not create its own GStreamer
+pipeline or inject media samples.
+
+The initial playback scope is clear HTTP(S) HLS and DASH. DRM and subtitles
+are disabled.
 
 ## Ubuntu build
 
-Install the player interface to a local prefix. If you use the repository's
-usual `.libs` install prefix, the simulator script detects it automatically.
-Otherwise, use any additional options required by your normal Ubuntu build.
-For example, to install under `.libs`:
+Build and install `playergstinterface` first. For the repository's usual
+`.libs` prefix:
 
 ```sh
 cd ~/Desktop/workspace/tuntime/middleware-player-interface
@@ -19,51 +20,50 @@ cmake --build build --parallel
 cmake --install build
 ```
 
-Then build `pi-cli` independently as your regular user (do not use `sudo`):
+Then build and run `pi-cli` as your regular user:
 
 ```sh
 cd test/pi-cli
 ./build.sh
-LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator
+LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  ./build/pi-player-simulator "https://example.com/clear-stream.m3u8"
 ```
 
-When the interface was installed to another prefix, set `PLAYER_INTERFACE_PREFIX`
-to that prefix when running `./build.sh`, and use its `lib` directory in
-`LD_LIBRARY_PATH` when launching the executable. The script sets
-`PKG_CONFIG_PATH` and `LD_LIBRARY_PATH`, checks the required pkg-config modules,
-then configures/builds the standalone app. You can pass extra CMake arguments
-to the script, for example
-`./build.sh -DCMAKE_BUILD_TYPE=Debug`.
+For DASH, pass a clear `.mpd` URL instead. The simulator starts playback
+immediately from the command-line URL. There is no URL editor in the UI.
 
-## Dependencies
+If `playergstinterface` is installed to another prefix, set
+`PLAYER_INTERFACE_PREFIX` before running `./build.sh` and point
+`LD_LIBRARY_PATH` at that prefix's `lib` directory when launching. The build
+script configures the pkg-config paths, checks the required modules, and
+installs missing Ubuntu build, UI, and GStreamer runtime packages through
+`sudo apt-get`. Run the script without `sudo`.
 
-The standalone CMake checks for:
+The script does not build or install `playergstinterface`; that remains a
+separate prerequisite. Extra CMake options can be passed to the script, for
+example `./build.sh -DCMAKE_BUILD_TYPE=Debug`.
 
-- `libplayergstinterface` via its installed pkg-config file (this supplies the
-  interface headers, library, and GStreamer compile/link requirements)
-- `sdl2`, `SDL2_ttf`, `egl`, and `glesv2` for the SDL window, readable text,
-  and OpenGL ES UI
+## Playback and controls
 
-Later playback phases also need runtime GStreamer factories for `playbin`,
-`appsrc`, `appsink`, HLS/DASH demux, H.264/AAC, and optionally `glimagesink`.
-Check them on Ubuntu with `gst-inspect-1.0 <factory>`. Their package installation
-will be handled after the Ubuntu environment confirms the needed packages.
+The backend sets `InterfacePlayerRDK` to its direct-URI playback mode and
+passes the URL to `ConfigurePipeline()`. The interface's own `playbin` handles
+HTTP source setup, HLS/DASH demuxing, decoding, and sink output. The simulator
+does not make a parallel `uridecodebin`, `appsink`, or other media pipeline.
 
-On Ubuntu, `build.sh` checks for the build tools, SDL2/EGL development modules,
-and a supported system font. If any are missing, it installs the corresponding
-APT packages using `sudo` (and may prompt for your password). The locally built
-`playergstinterface` package is still a prerequisite and must be installed
-separately. No player-interface source, root CMake, or install script changes
-are needed to build this standalone test app.
+Use the overlay's play/pause and stop buttons, or **Space** and **S**.
+Playback position and duration are displayed in the timeline. Seeking is not
+connected: the public direct-URI interface currently exposes no seek operation.
+The SDL/EGL controls and the interface-owned video sink may appear in separate
+native windows; their z-order must be confirmed on Ubuntu and is not guaranteed
+by this simulator.
 
-## Phase 2 UI test
+## Dependencies checked by `build.sh`
 
-Run the app using the commands in the Ubuntu build section. The video surface
-fills the window; use **Open stream** or **Ctrl+L** to edit or replace the URL.
-Play/Pause/Stop and status are in a translucent overlay at the bottom of the
-video. Long URLs are shortened to fit. While mock-playing, the controls hide
-after a short idle period; move the pointer or press a key to reveal them.
-**Space** toggles mock play/pause, **S** stops, **Enter** loads the edited URL,
-and **Esc** cancels URL editing (or closes the app when not editing). Resize to
-the minimum window size and close the app. Playback is not connected in this
-phase.
+- Installed `libplayergstinterface` pkg-config module
+- `glib-2.0`, SDL2, SDL2_ttf, EGL, and GLESv2 development modules
+- SDL2_ttf-compatible system font
+- GStreamer `playbin`, `souphttpsrc`, HLS/DASH demuxers, `autovideosink`,
+  and H.264/AAC decoders
+
+`build.sh` installs missing Ubuntu packages when possible and reports any
+runtime factories that remain unavailable.
