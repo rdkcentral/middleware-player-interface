@@ -987,6 +987,10 @@ bool FfmpegDemuxSource::Seek(double positionSeconds)
         track.condition.notify_all();
     }
 
+    if (dashResourceProxy_ != nullptr) {
+        dashResourceProxy_->PrefetchForSeek(positionSeconds);
+    }
+
     const int64_t target =
         static_cast<int64_t>(positionSeconds * AV_TIME_BASE);
     int result = 0;

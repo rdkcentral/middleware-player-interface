@@ -15,6 +15,7 @@ in memory to the lowest-bandwidth video representation and one non-commentary
 audio adaptation set before FFmpeg opens the stream. A loopback-only,
 memory-backed HTTP proxy prefetches the selected tracks' initialization and
 first media segments concurrently, then maintains a four-segment lookahead.
+It also prefetches a four-segment window for each selected track when seeking.
 It supports representation-level `SegmentTemplate` entries using `$Number$`
 or `$Time$`; unsupported DASH layouts fall back to FFmpeg's direct HTTP
 fetching. The cache is capped at 32 MiB and media is never written to disk.

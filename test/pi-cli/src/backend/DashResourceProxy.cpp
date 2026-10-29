@@ -14,8 +14,10 @@ extern "C" {
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <limits>
@@ -47,7 +49,12 @@ struct SegmentTemplateInfo {
     bool usesTime = false;
     int numberWidth = 0;
     int64_t startNumber = 1;
-    std::vector<int64_t> firstSegmentValues;
+    int64_t timescale = 1;
+    int64_t duration = 0;
+    int64_t presentationTimeOffset = 0;
+    double periodStartSeconds = 0.0;
+    bool hasSeekTiming = true;
+    std::vector<int64_t> segmentValues;
 };
 
 struct PlannedTrack {
@@ -221,10 +228,49 @@ std::string FormatSegmentValue(int64_t value, int width)
     return result.str();
 }
 
-bool BuildFirstSegmentValues(xmlNodePtr segmentTemplate,
-                             bool usesTime,
-                             int64_t startNumber,
-                             std::vector<int64_t>& values)
+bool ParsePeriodStart(xmlNodePtr period, double& startSeconds)
+{
+    const std::string value = XmlProperty(period, "start");
+    if (value.empty()) {
+        startSeconds = 0.0;
+        return true;
+    }
+    if (value.rfind("PT", 0) != 0) {
+        return false;
+    }
+
+    startSeconds = 0.0;
+    const char* cursor = value.c_str() + 2;
+    while (*cursor != '\0') {
+        char* end = nullptr;
+        const double amount = std::strtod(cursor, &end);
+        if (end == cursor || !std::isfinite(amount) || *end == '\0') {
+            return false;
+        }
+        double multiplier = 0.0;
+        switch (*end) {
+        case 'H':
+            multiplier = 3600.0;
+            break;
+        case 'M':
+            multiplier = 60.0;
+            break;
+        case 'S':
+            multiplier = 1.0;
+            break;
+        default:
+            return false;
+        }
+        startSeconds += amount * multiplier;
+        cursor = end + 1;
+    }
+    return std::isfinite(startSeconds);
+}
+
+bool BuildSegmentValues(xmlNodePtr segmentTemplate,
+                        bool usesTime,
+                        int64_t startNumber,
+                        std::vector<int64_t>& values)
 {
     if (!usesTime) {
         for (size_t index = 0; index < kPrefetchSegmentCount; ++index) {
@@ -290,7 +336,7 @@ bool BuildFirstSegmentValues(xmlNodePtr segmentTemplate,
             currentTime += durationValue;
         }
     }
-    return values.size() == kPrefetchSegmentCount;
+    return values.size() >= kPrefetchSegmentCount;
 }
 
 std::string ResolveDashBase(xmlNodePtr representation,
@@ -366,9 +412,15 @@ struct DashResourceProxy::Impl {
         std::string urlTemplate;
         std::string variableToken;
         std::string localSuffix;
-        std::vector<int64_t> timeValues;
+        std::vector<int64_t> segmentValues;
         bool usesTime = false;
         int numberWidth = 0;
+        int64_t startNumber = 1;
+        int64_t timescale = 1;
+        int64_t duration = 0;
+        int64_t presentationTimeOffset = 0;
+        double periodStartSeconds = 0.0;
+        bool hasSeekTiming = false;
     };
 
     struct DownloadJob {
@@ -488,6 +540,9 @@ struct DashResourceProxy::Impl {
                     PlannedTrack track;
                     track.segmentTemplate = segmentTemplate;
                     track.routeId = std::to_string(tracks.size());
+                    track.media.hasSeekTiming =
+                        ParsePeriodStart(period,
+                                         track.media.periodStartSeconds);
                     const std::string baseUrl =
                         ResolveDashBase(representation, manifestUrl);
                     if (baseUrl.empty()) {
@@ -539,13 +594,42 @@ struct DashResourceProxy::Impl {
                         xmlFreeDoc(document);
                         return false;
                     }
-                    if (!BuildFirstSegmentValues(
+                    const std::string timescale =
+                        XmlProperty(segmentTemplate, "timescale");
+                    if (!timescale.empty() &&
+                        (!ParseInteger(timescale, track.media.timescale) ||
+                         track.media.timescale <= 0)) {
+                        track.media.hasSeekTiming = false;
+                    }
+                    const std::string duration =
+                        XmlProperty(segmentTemplate, "duration");
+                    if (!duration.empty() &&
+                        (!ParseInteger(duration, track.media.duration) ||
+                         track.media.duration <= 0)) {
+                        track.media.hasSeekTiming = false;
+                    }
+                    const std::string presentationTimeOffset =
+                        XmlProperty(segmentTemplate,
+                                    "presentationTimeOffset");
+                    if (!presentationTimeOffset.empty() &&
+                        !ParseInteger(presentationTimeOffset,
+                                      track.media.presentationTimeOffset)) {
+                        track.media.hasSeekTiming = false;
+                    }
+                    if (!BuildSegmentValues(
                             segmentTemplate,
                             track.media.usesTime,
                             track.media.startNumber,
-                            track.media.firstSegmentValues)) {
+                            track.media.segmentValues)) {
                         xmlFreeDoc(document);
                         return false;
+                    }
+                    if (track.media.usesTime &&
+                        track.media.segmentValues.empty()) {
+                        track.media.hasSeekTiming = false;
+                    } else if (!track.media.usesTime &&
+                               track.media.duration <= 0) {
+                        track.media.hasSeekTiming = false;
                     }
                     tracks.push_back(std::move(track));
                 }
@@ -608,16 +692,21 @@ struct DashResourceProxy::Impl {
             const std::string mediaPath =
                 basePath + "m/" + track.routeId + "/";
             staticRoutes.emplace(initPath, track.initUrl);
-            mediaRoutes.emplace(
-                track.routeId,
-                MediaRoute{track.media.remoteUrlTemplate,
-                           track.media.variableToken,
-                           track.media.localSuffix,
-                           track.media.usesTime
-                               ? track.media.firstSegmentValues
-                               : std::vector<int64_t>{},
-                           track.media.usesTime,
-                           track.media.numberWidth});
+            MediaRoute route;
+            route.urlTemplate = track.media.remoteUrlTemplate;
+            route.variableToken = track.media.variableToken;
+            route.localSuffix = track.media.localSuffix;
+            route.segmentValues = track.media.segmentValues;
+            route.usesTime = track.media.usesTime;
+            route.numberWidth = track.media.numberWidth;
+            route.startNumber = track.media.startNumber;
+            route.timescale = track.media.timescale;
+            route.duration = track.media.duration;
+            route.presentationTimeOffset =
+                track.media.presentationTimeOffset;
+            route.periodStartSeconds = track.media.periodStartSeconds;
+            route.hasSeekTiming = track.media.hasSeekTiming;
+            mediaRoutes.emplace(track.routeId, std::move(route));
 
             const std::string localInitialization =
                 localBase + "i/" + track.routeId;
@@ -643,10 +732,13 @@ struct DashResourceProxy::Impl {
                              true);
             for (size_t index = 0;
                  index < std::min(kPrefetchSegmentCount,
-                                  track.media.firstSegmentValues.size());
+                                  track.media.segmentValues.size());
                  ++index) {
                 const int64_t value =
-                    track.media.firstSegmentValues[index];
+                    track.media.usesTime
+                        ? track.media.segmentValues[index]
+                        : track.media.startNumber +
+                              static_cast<int64_t>(index);
                 const std::string path =
                     mediaPath + std::to_string(value);
                 const std::string url = ReplaceToken(
@@ -960,6 +1052,126 @@ private:
         return lastFailure;
     }
 
+    void PrefetchForSeek(double positionSeconds)
+    {
+        if (!std::isfinite(positionSeconds) || positionSeconds < 0.0) {
+            return;
+        }
+
+        std::vector<std::pair<std::string, MediaRoute>> routes;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (stopping) {
+                return;
+            }
+            routes.reserve(mediaRoutes.size());
+            for (const auto& entry : mediaRoutes) {
+                routes.emplace_back(entry.first, entry.second);
+            }
+        }
+
+        for (const auto& entry : routes) {
+            const std::string& routeId = entry.first;
+            const MediaRoute& route = entry.second;
+            if (!route.hasSeekTiming) {
+                continue;
+            }
+
+            size_t segmentIndex = 0;
+            if (route.usesTime) {
+                if (route.segmentValues.empty()) {
+                    continue;
+                }
+                const long double ticks =
+                    (std::max(0.0, positionSeconds -
+                                      route.periodStartSeconds) *
+                         static_cast<long double>(route.timescale)) +
+                    route.presentationTimeOffset;
+                if (ticks > std::numeric_limits<int64_t>::max()) {
+                    continue;
+                }
+                const int64_t targetTime =
+                    static_cast<int64_t>(std::floor(ticks));
+                const auto next = std::upper_bound(
+                    route.segmentValues.begin(),
+                    route.segmentValues.end(),
+                    targetTime);
+                if (next != route.segmentValues.begin()) {
+                    segmentIndex = static_cast<size_t>(
+                        next - route.segmentValues.begin() - 1);
+                }
+            } else {
+                const long double index =
+                    (std::max(0.0, positionSeconds -
+                                      route.periodStartSeconds) *
+                     static_cast<long double>(route.timescale)) /
+                    route.duration +
+                    static_cast<long double>(
+                        route.presentationTimeOffset) /
+                        route.duration;
+                if (index > std::numeric_limits<int64_t>::max()) {
+                    continue;
+                }
+                segmentIndex =
+                    static_cast<size_t>(std::floor(index));
+            }
+
+            size_t scheduled = 0;
+            int64_t firstValue = -1;
+            int64_t lastValue = -1;
+            for (size_t offset = 0; offset < kPrefetchSegmentCount; ++offset) {
+                if (segmentIndex >
+                    std::numeric_limits<size_t>::max() - offset) {
+                    break;
+                }
+                const size_t index = segmentIndex + offset;
+                int64_t segmentValue = 0;
+                if (route.usesTime) {
+                    if (index >= route.segmentValues.size()) {
+                        break;
+                    }
+                    segmentValue = route.segmentValues[index];
+                } else {
+                    if (index > static_cast<size_t>(
+                                    std::numeric_limits<int64_t>::max()) ||
+                        route.startNumber >
+                            std::numeric_limits<int64_t>::max() -
+                                static_cast<int64_t>(index)) {
+                        break;
+                    }
+                    segmentValue =
+                        route.startNumber + static_cast<int64_t>(index);
+                }
+
+                const std::string path =
+                    basePath + "m/" + routeId + "/" +
+                    std::to_string(segmentValue);
+                const std::string url = ReplaceToken(
+                    route.urlTemplate,
+                    route.variableToken,
+                    FormatSegmentValue(segmentValue, route.numberWidth));
+                ScheduleResource(path,
+                                 url,
+                                 routeId,
+                                 segmentValue,
+                                 false);
+                if (scheduled == 0) {
+                    firstValue = segmentValue;
+                }
+                lastValue = segmentValue;
+                ++scheduled;
+            }
+
+            if (scheduled > 0) {
+                Report("ffmpeg-dash-seek-prefetch-scheduled: position=" +
+                       std::to_string(positionSeconds) +
+                       " route=" + routeId +
+                       " first-segment=" + std::to_string(firstValue) +
+                       " last-segment=" + std::to_string(lastValue));
+            }
+        }
+    }
+
     void PruneRoute(const std::string& routeId, int64_t keepFrom)
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -1045,15 +1257,15 @@ private:
                 int64_t nextValue = -1;
                 if (route->second.usesTime) {
                     const auto value = std::find(
-                        route->second.timeValues.begin(),
-                        route->second.timeValues.end(),
+                        route->second.segmentValues.begin(),
+                        route->second.segmentValues.end(),
                         segmentValue);
-                    if (value != route->second.timeValues.end()) {
+                    if (value != route->second.segmentValues.end()) {
                         const size_t index = static_cast<size_t>(
-                            value - route->second.timeValues.begin());
+                            value - route->second.segmentValues.begin());
                         if (index + kPrefetchSegmentCount <
-                            route->second.timeValues.size()) {
-                            nextValue = route->second.timeValues[
+                            route->second.segmentValues.size()) {
+                            nextValue = route->second.segmentValues[
                                 index + kPrefetchSegmentCount];
                         }
                     }
@@ -1281,6 +1493,11 @@ bool DashResourceProxy::Start(std::vector<uint8_t>& manifest,
                               ProgressCallback progress)
 {
     return impl_->Start(manifest, manifestUrl, std::move(progress));
+}
+
+void DashResourceProxy::PrefetchForSeek(double positionSeconds)
+{
+    impl_->PrefetchForSeek(positionSeconds);
 }
 
 void DashResourceProxy::Stop()

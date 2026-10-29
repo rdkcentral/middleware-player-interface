@@ -19,6 +19,7 @@ public:
     bool Start(std::vector<uint8_t>& manifest,
                const std::string& manifestUrl,
                ProgressCallback progress);
+    void PrefetchForSeek(double positionSeconds);
     void Stop();
 
 private:
