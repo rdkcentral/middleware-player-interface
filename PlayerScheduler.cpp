@@ -29,8 +29,8 @@
  * @brief PlayerScheduler Constructor
  */
 PlayerScheduler::PlayerScheduler() : mTaskQueue(), mQMutex(), mQCond(),
-	mSchedulerRunning(false), mSchedulerThread(), mExMutex(),
-	mExLock(mExMutex, std::defer_lock), mNextTaskId(PLAYER_SCHEDULER_ID_DEFAULT),
+	mSchedulerRunning(false), mSchedulerThread(), mExCond(),
+	mSuspended(false), mExecuting(false), mNextTaskId(PLAYER_SCHEDULER_ID_DEFAULT),
 	mCurrentTaskId(PLAYER_TASK_ID_INVALID), mLockOut(false) 
 {
 }
@@ -40,7 +40,7 @@ PlayerScheduler::PlayerScheduler() : mTaskQueue(), mQMutex(), mQCond(),
  */
 PlayerScheduler::~PlayerScheduler()
 {
-	if (mSchedulerRunning)
+	if (mSchedulerRunning || mSchedulerThread.joinable())
 	{
 		StopScheduler();
 	}
@@ -60,8 +60,8 @@ void PlayerScheduler::StartScheduler()
 {
 	//Turn on thread for processing async operations
 	std::lock_guard<std::mutex>lock(mQMutex);
-	mSchedulerThread = std::thread(std::bind(&PlayerScheduler::ExecuteAsyncTask, this));
 	mSchedulerRunning = true;
+	mSchedulerThread = std::thread(std::bind(&PlayerScheduler::ExecuteAsyncTask, this));
 	MW_LOG_INFO("Thread created Async Worker [%zx]", GetPlayerThreadID(mSchedulerThread));
 }
 
@@ -107,43 +107,34 @@ void PlayerScheduler::ExecuteAsyncTask()
 	std::unique_lock<std::mutex>queueLock(mQMutex);
 	while (mSchedulerRunning)
 	{
-		if (mTaskQueue.empty())
+		// Do not take a task while suspended, so SuspendScheduler() callers see an idle worker
+		if (mSuspended || mTaskQueue.empty())
 		{
 			mQCond.wait(queueLock);
 		}
 		else
 		{
-			/* 
-			Take the execution lock before taking a task from the queue
-			otherwise this function could hold a task, out of the queue,
-			that cannot be deleted by RemoveAllTasks()!
-			Allow the queue to be modified while waiting.*/
-			queueLock.unlock();
-			std::lock_guard<std::mutex>executionLock(mExMutex);
-			queueLock.lock();
-
-			//note: mTaskQueue could have been modified while waiting for execute permission
-			if (!mTaskQueue.empty())
+			PlayerAsyncTaskObj obj = mTaskQueue.front();
+			mTaskQueue.pop_front();
+			if (obj.mId != PLAYER_TASK_ID_INVALID)
 			{
-				PlayerAsyncTaskObj obj = mTaskQueue.front();
-				mTaskQueue.pop_front();
-				if (obj.mId != PLAYER_TASK_ID_INVALID)
-				{
-					mCurrentTaskId = obj.mId;
-					MW_LOG_INFO("Found entry in function queue!!, task:%s. CurrentTaskId:%d ",obj.mTaskName.c_str(),mCurrentTaskId);
-					//Unlock so that new entries can be added to queue while function executes
-					queueLock.unlock();
+				mCurrentTaskId = obj.mId;
+				mExecuting = true;
+				MW_LOG_INFO("Found entry in function queue!!, task:%s. CurrentTaskId:%d ",obj.mTaskName.c_str(),mCurrentTaskId);
+				//Unlock so that new entries can be added to queue while function executes
+				queueLock.unlock();
 
-					MW_LOG_WARN("SchedulerTask Execution:%s taskId:%d",obj.mTaskName.c_str(),obj.mId);
-					//Execute function
-					obj.mTask(obj.mData);
-					//May be used in a wait() in future loops, it needs to be locked
-					queueLock.lock();
-				}
-				else
-				{
-					MW_LOG_INFO("Scheduler found a task with invalid ID, skip task!");
-				}
+				MW_LOG_WARN("SchedulerTask Execution:%s taskId:%d",obj.mTaskName.c_str(),obj.mId);
+				//Execute function
+				obj.mTask(obj.mData);
+				//May be used in a wait() in future loops, it needs to be locked
+				queueLock.lock();
+				mExecuting = false;
+				mExCond.notify_all();
+			}
+			else
+			{
+				MW_LOG_INFO("Scheduler found a task with invalid ID, skip task!");
 			}
 		}
 	}
@@ -173,23 +164,32 @@ void PlayerScheduler::RemoveAllTasks()
 void PlayerScheduler::StopScheduler()
 {
 	MW_LOG_WARN("Stopping Async Worker Thread");
-	// Clean up things in queue
-	mSchedulerRunning = false;
-
-	//allow StopScheduler() to be called without warning from a nonsuspended state and
-	//not cause an error in ResumeScheduler() below due to trying to unlock an unlocked lock
-	if(!mLockOut)
 	{
-		SuspendScheduler();
+		std::lock_guard<std::mutex>lock(mQMutex);
+		mSchedulerRunning = false;
+		mLockOut = true;
+		mSuspended = false;
+		mTaskQueue.clear();
+		mQCond.notify_all();
+		mExCond.notify_all();
 	}
 
-	RemoveAllTasks();
+	if (mSchedulerThread.joinable())
+	{
+		if (mSchedulerThread.get_id() == std::this_thread::get_id())
+		{
+			// Called from a scheduled task: joining self would terminate; worker exits once the task returns
+			MW_LOG_WARN("StopScheduler called from scheduler thread, detaching instead of join");
+			mSchedulerThread.detach();
+		}
+		else
+		{
+			mSchedulerThread.join();
+		}
+	}
 
-	//prevent possible deadlock where mSchedulerThread is waiting for mExLock/mExMutex
-	ResumeScheduler();
-	mQCond.notify_one();
-    if (mSchedulerThread.joinable())
-        mSchedulerThread.join();
+	std::lock_guard<std::mutex>lock(mQMutex);
+	mLockOut = false;
 }
 
 /**
@@ -197,8 +197,16 @@ void PlayerScheduler::StopScheduler()
  */
 void PlayerScheduler::SuspendScheduler()
 {
-	mExLock.lock();
-	std::lock_guard<std::mutex>lock(mQMutex);
+	std::unique_lock<std::mutex>lock(mQMutex);
+	if (mSchedulerThread.get_id() == std::this_thread::get_id())
+	{
+		// Waiting for the running task (ourselves) to finish would deadlock
+		MW_LOG_ERR("SuspendScheduler called from scheduler thread, ignored");
+		return;
+	}
+	// Wait for the current task to finish and any previous suspend to be released
+	mExCond.wait(lock, [this]{ return !mExecuting && !mSuspended; });
+	mSuspended = true;
 	mLockOut = true;
 }
 
@@ -207,9 +215,11 @@ void PlayerScheduler::SuspendScheduler()
  */
 void PlayerScheduler::ResumeScheduler()
 {
-	mExLock.unlock();
 	std::lock_guard<std::mutex>lock(mQMutex);
+	mSuspended = false;
 	mLockOut = false;
+	mQCond.notify_all();
+	mExCond.notify_all();
 }
 
 /**
