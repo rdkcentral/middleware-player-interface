@@ -54,9 +54,10 @@ does not make a parallel `uridecodebin`, `appsink`, or other media pipeline.
 Use the overlay's play/pause and stop buttons, or **Space** and **S**.
 Playback position and duration are displayed in the timeline. Seeking is not
 connected: the public direct-URI interface currently exposes no seek operation.
-The SDL/EGL controls and the interface-owned video sink may appear in separate
-native windows; their z-order must be confirmed on Ubuntu and is not guaranteed
-by this simulator.
+The SDL/EGL controls use a transparent, always-on-top window so the
+interface-owned video sink can remain in its own native window underneath.
+This composition depends on the Ubuntu desktop compositor and must be verified
+on the target desktop.
 
 ## Dependencies checked by `build.sh`
 

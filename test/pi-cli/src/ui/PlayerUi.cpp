@@ -292,7 +292,8 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
         SDL_WINDOWPOS_CENTERED,
         960,
         600,
-        SDL_WINDOW_RESIZABLE);
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_TRANSPARENT |
+            SDL_WINDOW_ALWAYS_ON_TOP);
     if (window == nullptr) {
         std::cerr << "Could not create simulator window: "
                   << SDL_GetError() << '\n';
@@ -400,7 +401,7 @@ int PlayerUi::Run(PlayerBackend& backend, const std::string& url)
         SDL_GetWindowSize(window, &width, &height);
         const Layout layout = CreateLayout(width, height);
 
-        SDL_SetRenderDrawColor(renderer, 17, 20, 26, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         if (SDL_RenderClear(renderer) != 0) {
             std::cerr << "Could not draw simulator UI: "
                       << SDL_GetError() << '\n';
