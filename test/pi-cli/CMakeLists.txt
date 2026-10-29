@@ -1,57 +1,46 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Project name
-project(pi-cli VERSION 1.0 LANGUAGES CXX)
+project(pi-player-simulator LANGUAGES CXX)
 
-set(PI_ROOT "../..")
+if(NOT TARGET playergstinterface)
+    message(FATAL_ERROR
+        "pi-player-simulator must be configured from the middleware-player-interface root "
+        "with -DBUILD_PICLI=ON")
+endif()
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
-include_directories(${PI_ROOT})
-
-# Find GStreamer packages
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMERBASE REQUIRED gstreamer-app-1.0)
 
-include_directories(${GSTREAMER_INCLUDE_DIRS})
-include_directories(${GSTREAMERBASE_INCLUDE_DIRS})
+pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET
+    gstreamer-1.0
+    gstreamer-app-1.0
+    gstreamer-video-1.0
+)
+pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
+pkg_check_modules(GLESV2 REQUIRED IMPORTED_TARGET glesv2)
 
-# Add the executable (now includes commandProcessing.cpp)
-add_executable(pi-cli
-    main.cpp
-    commandProcessing.cpp
+add_executable(pi-player-simulator
+    src/main.cpp
 )
 
-# Use pkg-config to locate the readline library
-pkg_check_modules(READLINE REQUIRED readline)
+target_compile_features(pi-player-simulator PRIVATE cxx_std_17)
+target_link_libraries(pi-player-simulator PRIVATE
+    playergstinterface
+    PkgConfig::GSTREAMER
+    PkgConfig::SDL2
+    PkgConfig::EGL
+    PkgConfig::GLESV2
+)
 
-if (READLINE_FOUND)
-    include_directories(${READLINE_INCLUDE_DIRS})
-    link_directories(${READLINE_LIBRARY_DIRS})
-    target_link_libraries(pi-cli ${READLINE_LIBRARIES})
-else()
-    message(FATAL_ERROR "Readline library not found. Please install it.")
-endif()
-
-# Add OpenSSL requirement so we can link crypto/ssl symbols
-find_package(OpenSSL REQUIRED)
-
-target_link_libraries(pi-cli playergstinterface OpenSSL::Crypto OpenSSL::SSL)
 if(BUILD_WITH_COVERAGE)
-    target_compile_options(pi-cli PRIVATE --coverage)
+    target_compile_options(pi-player-simulator PRIVATE --coverage)
     if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13")
-        target_link_options(pi-cli PRIVATE --coverage)
+        target_link_options(pi-player-simulator PRIVATE --coverage)
     else()
-        # Fallback for older CMake versions that do not support target_link_options
-        set_target_properties(pi-cli PROPERTIES LINK_FLAGS "--coverage")
+        set_target_properties(pi-player-simulator PROPERTIES LINK_FLAGS "--coverage")
     endif()
-    message(STATUS "pi-cli: Building with coverage instrumentation")
 endif()
 
-# Additional warnings and flags for development
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(pi-cli PRIVATE -Wall -Wextra -pedantic)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(pi-player-simulator PRIVATE -Wall -Wextra -Wpedantic)
 endif()

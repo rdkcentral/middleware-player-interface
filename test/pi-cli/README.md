@@ -1,122 +1,74 @@
-# pi-cli
+# Player Interface Simulator
 
-`pi-cli` provides a command line interface to allow interactive execution of the InterfacePlayerRDK API.
+This directory is being rebuilt as an opt-in Linux test application for
+`InterfacePlayerRDK`. The current target is only a build scaffold; UI, media
+ingest, and playback are scheduled for later phases.
 
----
+## Phase 1 dependencies
 
-## Supported Commands
+### Build-time pkg-config modules
 
-Here are some of the commands supported by `pi-cli` (for a complete list, see the source code):
+| Module | Purpose |
+|---|---|
+| `gstreamer-1.0` | GStreamer core |
+| `gstreamer-app-1.0` | `appsrc`/`appsink` sample bridge |
+| `gstreamer-video-1.0` | Video sink and overlay-related APIs |
+| `sdl2` | Window creation and UI input/events |
+| `egl` | EGL surface/context |
+| `glesv2` | OpenGL ES rendering |
 
-- **`exit`**: Exit the program. Ensures that the worker thread is stopped cleanly before exiting.
-- **`help`**: Display a list of available commands and their descriptions.
-- **`echo [parameters...]`**: Echoes the provided parameters back to the console.
-- **`hello`**: Prints a hello world message.
-- **`createpipeline <pipelineName> [pipelinePriority]`**: Create a pipeline.
-- **`setplayername <name>`**: Set player name.
-- **`configurepipeline <int> <int> <int> <int> <bool> <bool> <bool> <bool> <int32> <gint> <pipelineName> <int> <bool> <url>`**: Configure pipeline.
-- **`setpauseonstart [true|false]`**: Enable/disable pause on start playback.
-- **`pause [pause(bool)] [forceStop(bool)]`**: Pause the pipeline.
-- **`resumeinjector`**: Resume injector.
-- **`stop`**: Stop playback.
-- **`flush`**: Flush pipeline.
-- **`flushtrack <mediaType> <pos> <audioDelta> <subDelta>`**: Flush track.
-- **`ispipelinepaused`**: Check if pipeline is paused.
-- **`enablependingplaystate <true|false>`**: Enable pending play state.
-- **`notifyfirstframe <mediaType>`**: Notify first frame.
-- **`endofstreamreached <mediaType> <shouldHaltBuffering>`**: End of stream reached.
-- **`sendhelper`**: Send helper event (not available in CLI).
-- **`waitforsourcesetup <mediaType>`**: Wait for source setup.
-- **`timeradd`**: Add timer (not available in CLI).
-- **`timerremove <taskId>`**: Remove timer.
-- **`initializeplayergstreamerplugins`**: Initialize Player GStreamer plugins.
-- **`teardownstream <mediaType>`**: Teardown stream.
-- **`destroypipeline`**: Destroy pipeline.
-- **`removeprobes`**: Remove probes.
-- **`clearprotectionevent`**: Clear protection event.
-- **`setvideorectangle <x> <y> <width> <height>`**: Set video rectangle.
-- **`injectfragment <mediaType:int> <filePath> [pts] [dts] [duration] [fragmentPTSoffset]`**: Inject fragment into player.
+The middleware library's existing build dependencies continue to come from the
+repository's normal build setup. No packages are added to
+`install-middleware.sh` in this phase.
 
----
+### Runtime GStreamer factories to verify on Ubuntu
 
-## Building the Application
+The application will need the following factories in later phases:
 
-Follow these steps to build `pi-cli` on macOS or Linux:
+- `playbin`, `appsrc`, and `appsink`
+- `hlsdemux`
+- `dashdemux` or `dashdemux2`, depending on the installed GStreamer version
+- `glimagesink` if EGL-backed video output is available
+- H.264 and AAC parsers/decoders compatible with the selected clear test media
 
-### Prerequisites
+The exact Ubuntu package names and minimum tested GStreamer version are not
+assumed here. Verify them in the target Ubuntu environment before adding
+packages to the installer.
 
-Make sure you have the following installed:
-- `CMake` (version 3.10 or higher)
-- A C++ compiler with support for C++17 (e.g., `clang` or `g++`)
-- `readline` development libraries
+## Configure and build on Ubuntu
 
-### Steps to Build
+From the repository root, add these options to the normal Ubuntu configure
+command:
 
-1. Open a terminal.
-
-2. Navigate to the root directory of the `middleware-player-interface` project:
-   ```bash
-   cd /path/to/middleware-player-interface
-   ```
-
-3. Create a build directory and navigate into it:
-   ```bash
-   mkdir build
-   cd build
-   ```
-
-4. Enable the `pi-cli` build and generate build files:
-   ```bash
-   cmake .. -DBUILD_PICLI=ON
-   ```
-
-5. Build the project:
-   ```bash
-   make
-   ```
-
-6. The compiled executable will be located in `test/pi-cli/bin` inside the `build` folder. You can run it as follows:
-   ```bash
-   ./test/pi-cli/bin/pi-cli
-   ```
-
----
-
-## Running the Application
-
-Once built, run the `pi-cli` executable. You will see a prompt where you can enter supported commands.
-
-### Example Usage
-
-```bash
-$ ./test/pi-cli/bin/pi-cli
-Please enter a command (type 'help' for available commands): help
-Available commands:
-- exit: Exit the program.
-- help: Display this help message.
-- echo: Echoes the provided parameters.
-...
+```sh
+cmake -S . -B build -DCMAKE_PLATFORM_UBUNTU=ON -DBUILD_PICLI=ON
+cmake --build build --target pi-player-simulator
 ```
 
-To exit the program, type:
-```bash
-exit
+If the repository's normal Ubuntu build needs additional `-D` options, retain
+them and add `-DBUILD_PICLI=ON`. The root `BUILD_PICLI` hook is used as-is;
+there is no root CMake or installer change in this phase.
+
+Useful environment checks:
+
+```sh
+pkg-config --modversion gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 sdl2 egl glesv2
+gst-inspect-1.0 playbin
+gst-inspect-1.0 appsrc
+gst-inspect-1.0 appsink
+gst-inspect-1.0 hlsdemux
+gst-inspect-1.0 glimagesink
 ```
 
----
+For DASH, check the installed factory name with `gst-inspect-1.0 dashdemux` and
+`gst-inspect-1.0 dashdemux2`; at least one must be available before DASH ingest
+is implemented.
 
-## Notes
+## Current phase status
 
-- For Linux builds, the `-pthread` flag is automatically applied to ensure multithreading compatibility.
-- If you encounter any issues, ensure that your development environment meets the prerequisites.
-
-```bash
-# To install CMake on macOS using Homebrew:
-brew install cmake
-```
-
----
-
-Enjoy using `pi-cli`!
-
-_For more details and updates, refer to the [pi-cli source and command implementation](https://github.com/rdkcentral/middleware-player-interface/tree/main/test/pi-cli/)._
+- Phase 1: independent test CMake, scaffold target, and dependency inventory.
+- Not yet implemented: EGL UI, URL ingest, DASH/HLS playback, and sink/video
+  rectangle integration.
+- Ubuntu configure/build and package verification must be performed in the
+  target Ubuntu environment; this Windows workspace is not used to claim Linux
+  or EGL validation.
