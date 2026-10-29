@@ -20,28 +20,101 @@ BUILD_DIR="${PI_CLI_BUILD_DIR:-${SCRIPT_DIR}/build}"
 export PKG_CONFIG_PATH="${PLAYER_INTERFACE_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 export LD_LIBRARY_PATH="${PLAYER_INTERFACE_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
+system_packages=()
+add_system_package() {
+    local package="$1"
+    local existing
+    for existing in "${system_packages[@]}"; do
+        if [[ "${existing}" == "${package}" ]]; then
+            return
+        fi
+    done
+    system_packages+=("${package}")
+}
+
+install_system_packages() {
+    if ((${#system_packages[@]} == 0)); then
+        return
+    fi
+    if ! command -v apt-get >/dev/null 2>&1 ||
+       ! command -v sudo >/dev/null 2>&1; then
+        printf 'Automatic dependency installation requires apt-get and sudo.\n' >&2
+        return 1
+    fi
+    printf 'Installing Ubuntu packages: %s\n' "${system_packages[*]}"
+    if ! sudo -v; then
+        printf 'Could not obtain sudo permission to install dependencies.\n' >&2
+        return 1
+    fi
+    sudo apt-get install -y --no-install-recommends "${system_packages[@]}"
+    system_packages=()
+}
+
+command -v pkg-config >/dev/null 2>&1 || add_system_package pkg-config
+command -v cmake >/dev/null 2>&1 || add_system_package cmake
+command -v c++ >/dev/null 2>&1 || add_system_package build-essential
+install_system_packages
+
+if ! pkg-config --exists libplayergstinterface; then
+    printf 'Missing pkg-config module: libplayergstinterface\n' >&2
+    printf 'Install playergstinterface to %s before building pi-cli.\n' \
+        "${PLAYER_INTERFACE_PREFIX}" >&2
+    exit 1
+fi
+
 missing_modules=()
-for module in libplayergstinterface sdl2 SDL2_ttf egl glesv2; do
+for module in sdl2 SDL2_ttf egl glesv2; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
+        case "${module}" in
+            sdl2) add_system_package libsdl2-dev ;;
+            SDL2_ttf) add_system_package libsdl2-ttf-dev ;;
+            egl) add_system_package libegl1-mesa-dev ;;
+            glesv2) add_system_package libgles2-mesa-dev ;;
+        esac
     fi
 done
 
-if ((${#missing_modules[@]} > 0)); then
-    printf 'Missing pkg-config modules: %s\n' "${missing_modules[*]}" >&2
-    if [[ " ${missing_modules[*]} " == *" libplayergstinterface "* ]]; then
-        printf 'Could not find libplayergstinterface in %s/lib/pkgconfig.\n' \
-            "${PLAYER_INTERFACE_PREFIX}" >&2
-        printf 'Install the player-interface package to that prefix, or set PLAYER_INTERFACE_PREFIX to its install prefix.\n' >&2
+font_paths=(
+    /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+    /usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf
+    /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
+)
+font_found=false
+for font_path in "${font_paths[@]}"; do
+    if [[ -f "${font_path}" ]]; then
+        font_found=true
+        break
     fi
-    if [[ " ${missing_modules[*]} " == *" sdl2 "* || \
-          " ${missing_modules[*]} " == *" egl "* || \
-          " ${missing_modules[*]} " == *" glesv2 "* ]]; then
-        printf 'Install the missing SDL2/EGL development packages.\n' >&2
+done
+if [[ "${font_found}" != true ]]; then
+    add_system_package fonts-dejavu-core
+fi
+
+if ((${#missing_modules[@]} > 0)) || [[ "${font_found}" != true ]]; then
+    install_system_packages
+fi
+
+still_missing=()
+for module in sdl2 SDL2_ttf egl glesv2; do
+    if ! pkg-config --exists "${module}"; then
+        still_missing+=("${module}")
     fi
-    if [[ " ${missing_modules[*]} " == *" SDL2_ttf "* ]]; then
-        printf 'Install the SDL2_ttf development package (Ubuntu: libsdl2-ttf-dev).\n' >&2
+done
+font_found=false
+for font_path in "${font_paths[@]}"; do
+    if [[ -f "${font_path}" ]]; then
+        font_found=true
+        break
     fi
+done
+if ((${#still_missing[@]} > 0)); then
+    printf 'Dependencies still missing after package installation: %s\n' \
+        "${still_missing[*]}" >&2
+    exit 1
+fi
+if [[ "${font_found}" != true ]]; then
+    printf 'Could not find a supported font after installing fonts-dejavu-core.\n' >&2
     exit 1
 fi
 

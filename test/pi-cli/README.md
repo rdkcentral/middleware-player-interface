@@ -44,23 +44,17 @@ The standalone CMake checks for:
 - `sdl2`, `SDL2_ttf`, `egl`, and `glesv2` for the SDL window, readable text,
   and OpenGL ES UI
 
-Install the extra text dependency and its Ubuntu font if they are not already
-present:
-
-```sh
-sudo apt install libsdl2-ttf-dev fonts-dejavu-core
-```
-
 Later playback phases also need runtime GStreamer factories for `playbin`,
 `appsrc`, `appsink`, HLS/DASH demux, H.264/AAC, and optionally `glimagesink`.
 Check them on Ubuntu with `gst-inspect-1.0 <factory>`. Their package installation
 will be handled after the Ubuntu environment confirms the needed packages.
 
-The script currently checks and reports missing development dependencies; it
-does not install OS packages. Automatic dependency installation can be added
-later after the Ubuntu package list is verified. No player-interface source,
-root CMake, or install script changes are needed to build this standalone test
-app.
+On Ubuntu, `build.sh` checks for the build tools, SDL2/EGL development modules,
+and a supported system font. If any are missing, it installs the corresponding
+APT packages using `sudo` (and may prompt for your password). The locally built
+`playergstinterface` package is still a prerequisite and must be installed
+separately. No player-interface source, root CMake, or install script changes
+are needed to build this standalone test app.
 
 ## Phase 2 UI test
 

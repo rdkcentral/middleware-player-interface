@@ -46,10 +46,13 @@ on a separate-window fallback or an API change before proceeding.
 - CMake configures directly from `test/pi-cli/`; it finds the installed
   `playergstinterface` package using pkg-config.
 - `test/pi-cli/build.sh` sets the local install-prefix paths, checks required
-  pkg-config modules, then configures and builds the minimal executable.
+  pkg-config modules, installs missing Ubuntu build/UI packages when needed,
+  then configures and builds the executable.
+- The interface package remains a local prerequisite; the script does not
+  replace building/installing `playergstinterface`.
 - List required build/runtime dependencies in the README. The script reports
-  missing dependencies now; automatic OS package installation can be added
-  after the Ubuntu package names are verified.
+  dependency failures explicitly if automatic installation is unavailable or
+  fails.
 - Do not require `BUILD_PICLI`, the root CMake project, or changes to the
   install script.
 
