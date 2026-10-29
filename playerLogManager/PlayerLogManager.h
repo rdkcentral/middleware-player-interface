@@ -51,10 +51,29 @@ enum MW_LogLevel
 class PlayerLogManager 
 {
 public :
+	static bool IsTuneProfilingEnabled();
 	static MW_LogLevel mwLoglevel;
 	static bool locked;
 	static bool disableLogRedirection;		/**<  disables log re-direction to journal or ethan log apis and uses vprintf - used by simulators */
 	static bool enableEthanLogRedirection;  /**<  Enables Ethan log redirection which uses Ethan lib for logging */
+
+	class PlayerTuneProfileScope
+	{
+	public:
+		PlayerTuneProfileScope(const char* api, const char* function, int line);
+		PlayerTuneProfileScope(const char* api, const char* function, int line, const std::string& context);
+		~PlayerTuneProfileScope();
+		PlayerTuneProfileScope(const PlayerTuneProfileScope&) = delete;
+		PlayerTuneProfileScope& operator=(const PlayerTuneProfileScope&) = delete;
+
+	private:
+		const char* mApi;
+		const char* mFunction;
+		int mLine;
+		std::string mContext;
+		long long mStartNs;
+		bool mEnabled;
+	};
 
 	/**
 	 * @brief Sets the externals logger information.
@@ -117,6 +136,12 @@ public :
         }
 
 };
+
+#define PLAYER_TUNE_PROFILE_SCOPE_JOIN_IMPL(A, B) A##B
+#define PLAYER_TUNE_PROFILE_SCOPE_JOIN(A, B) PLAYER_TUNE_PROFILE_SCOPE_JOIN_IMPL(A, B)
+#define PLAYER_TUNE_PROFILE_SCOPE(API) PlayerLogManager::PlayerTuneProfileScope PLAYER_TUNE_PROFILE_SCOPE_JOIN(playerTuneProfileScope_, __LINE__)(API, __FUNCTION__, __LINE__)
+#define PLAYER_TUNE_PROFILE_SCOPE_CONTEXT(API, CONTEXT) PlayerLogManager::PlayerTuneProfileScope PLAYER_TUNE_PROFILE_SCOPE_JOIN(playerTuneProfileScope_, __LINE__)(API, __FUNCTION__, __LINE__, PlayerLogManager::IsTuneProfilingEnabled() ? (CONTEXT) : std::string())
+
 /**
  * @fn DumpBinaryBlob
  *
