@@ -85,6 +85,15 @@ public:
 	// Expose drmSessionContexts for test setup
 	using DrmSessionManager::drmSessionContexts;
 
+	using DrmSessionManager::trackActiveKeyId;
+
+	// Snapshot of a cached slot entry for assertions
+	KeyIdEntries GetCachedEntries(int slot)
+	{
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		return cachedKeyIDs[slot];
+	}
+
 private:
 	int mMaxSessions;
 };
@@ -655,6 +664,150 @@ TEST_F(DrmSessionManagerComplexTests, CPIX_MultiKey_UHDFailsHDUsable_KeepsHD)
 
 	EXPECT_EQ(usableKeys.size(), 2); // HD and SD remain
 	EXPECT_FALSE(slot0.isFailedKeyEntries);
+}
+
+// ----------------------------------------------------------------------------
+// clearFailedSlots / clearDrmSession(false) - only the failed slot is reset
+// ----------------------------------------------------------------------------
+
+/**
+ * @brief clearFailedSlots resets the failed slot and leaves valid slots, including
+ *        their primary key marker, untouched.
+ */
+TEST_F(DrmSessionManagerComplexTests, ClearFailedSlots_ResetsOnlyFailedSlot)
+{
+	KeyIdEntries valid;
+	KeyIdEntry validKey;
+	validKey.keyId = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	valid.data.push_back(validKey);
+	valid.isPrimaryKeyId = true;
+	valid.creationTime = 1000;
+
+	KeyIdEntries failed;
+	KeyIdEntry failedKey;
+	failedKey.keyId = CreateAsciiHexKeyId("22222222222222222222222222222222");
+	failed.data.push_back(failedKey);
+	failed.isPrimaryKeyId = true;
+	failed.isFailedKeyEntries = true;
+	failed.creationTime = 2000;
+
+	mDrmSessionManager->AddKeyIdEntryToCache(0, valid);
+	mDrmSessionManager->AddKeyIdEntryToCache(1, failed);
+
+	mDrmSessionManager->clearFailedSlots();
+
+	KeyIdEntries slot0 = mDrmSessionManager->GetCachedEntries(0);
+	EXPECT_EQ(slot0.data.size(), 1u);
+	EXPECT_TRUE(slot0.isPrimaryKeyId);
+	EXPECT_FALSE(slot0.isFailedKeyEntries);
+	EXPECT_EQ(slot0.creationTime, 1000);
+
+	KeyIdEntries slot1 = mDrmSessionManager->GetCachedEntries(1);
+	EXPECT_TRUE(slot1.data.empty());
+	EXPECT_FALSE(slot1.isFailedKeyEntries);
+	EXPECT_FALSE(slot1.isPrimaryKeyId);
+	EXPECT_EQ(slot1.creationTime, 0);
+}
+
+/**
+ * @brief Regression: clearFailedKeyIds keeps its existing behaviour of resetting the
+ *        primary key marker on every slot.
+ */
+TEST_F(DrmSessionManagerComplexTests, ClearFailedKeyIds_StillResetsPrimaryOnAllSlots)
+{
+	KeyIdEntries valid;
+	valid.isPrimaryKeyId = true;
+	mDrmSessionManager->AddKeyIdEntryToCache(0, valid);
+
+	mDrmSessionManager->clearFailedKeyIds();
+
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(0).isPrimaryKeyId);
+}
+
+/**
+ * @brief clearDrmSession(false) deletes the session of the failed slot only.
+ */
+TEST_F(DrmSessionManagerComplexTests, ClearDrmSession_NoForce_EvictsOnlyFailedSlotSession)
+{
+	auto *validSession = new NiceMock<MockDrmSession>();
+	auto *failedSession = new NiceMock<MockDrmSession>();
+	mDrmSessionManager->drmSessionContexts[0].drmSession = validSession;
+	mDrmSessionManager->drmSessionContexts[1].drmSession = failedSession;
+
+	KeyIdEntries failed;
+	failed.isFailedKeyEntries = true;
+	mDrmSessionManager->AddKeyIdEntryToCache(1, failed);
+
+	mDrmSessionManager->clearDrmSession(false);
+
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, validSession);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[1].drmSession, nullptr);
+
+	// Released here because the fixture TearDown only detaches the pointers
+	delete validSession;
+	mDrmSessionManager->drmSessionContexts[0].drmSession = nullptr;
+}
+
+/**
+ * @brief markSessionFailed only flags the slot holding the key. The session object stays alive
+ *        (the pipeline may still use it) and is evicted later by clearDrmSession(false).
+ */
+TEST_F(DrmSessionManagerComplexTests, MarkSessionFailed_FlagsOnlyMatchingSlot_EvictedLater)
+{
+	const auto keyA = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	const auto keyB = CreateAsciiHexKeyId("22222222222222222222222222222222");
+
+	KeyIdEntries slot0;
+	KeyIdEntry entryA;
+	entryA.keyId = keyA;
+	slot0.data.push_back(entryA);
+	slot0.isPrimaryKeyId = true;
+	KeyIdEntries slot1;
+	KeyIdEntry entryB;
+	entryB.keyId = keyB;
+	slot1.data.push_back(entryB);
+	mDrmSessionManager->AddKeyIdEntryToCache(0, slot0);
+	mDrmSessionManager->AddKeyIdEntryToCache(1, slot1);
+
+	auto *sessionA = new NiceMock<MockDrmSession>();
+	auto *sessionB = new NiceMock<MockDrmSession>();
+	mDrmSessionManager->drmSessionContexts[0].drmSession = sessionA;
+	mDrmSessionManager->drmSessionContexts[1].drmSession = sessionB;
+
+	EXPECT_TRUE(mDrmSessionManager->markSessionFailed(keyB));
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(0).isFailedKeyEntries);
+	EXPECT_TRUE(mDrmSessionManager->GetCachedEntries(1).isFailedKeyEntries);
+	// Flagging must not delete the session that a running pipeline may still use
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[1].drmSession, sessionB);
+
+	// Tune start: evict flagged slots, then reset the failed entries
+	mDrmSessionManager->clearDrmSession(false);
+	mDrmSessionManager->clearFailedKeyIds();
+
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, sessionA);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[1].drmSession, nullptr);
+	EXPECT_EQ(mDrmSessionManager->GetCachedEntries(0).data.size(), 1u);
+	EXPECT_TRUE(mDrmSessionManager->GetCachedEntries(1).data.empty());
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(1).isFailedKeyEntries);
+
+	delete sessionA;
+	mDrmSessionManager->drmSessionContexts[0].drmSession = nullptr;
+}
+
+/**
+ * @brief markSessionFailed reports false and changes nothing for an unknown or empty key.
+ */
+TEST_F(DrmSessionManagerComplexTests, MarkSessionFailed_UnknownOrEmptyKey_ReturnsFalse)
+{
+	KeyIdEntries slot0;
+	KeyIdEntry entryA;
+	entryA.keyId = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	slot0.data.push_back(entryA);
+	mDrmSessionManager->AddKeyIdEntryToCache(0, slot0);
+
+	EXPECT_FALSE(mDrmSessionManager->markSessionFailed(CreateAsciiHexKeyId("99999999999999999999999999999999")));
+	EXPECT_FALSE(mDrmSessionManager->markSessionFailed({}));
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(0).isFailedKeyEntries);
 }
 
 // ----------------------------------------------------------------------------
@@ -1375,3 +1528,81 @@ TEST_F(DrmSessionManagerComplexTests, DrmSessionCreator_ReturnsNull_ReportsInitF
 	EXPECT_EQ(err, MW_DRM_INIT_FAILED);
 }
 
+
+/**
+ * @brief Sessions handed out by createDrmSession() are tracked per stream type, whichever caller created
+ *        them (e.g. the gst decryptor plugin); markActiveSessionsFailed flags exactly those slots and
+ *        keeps the session objects alive.
+ */
+TEST_F(DrmSessionManagerComplexTests, MarkActiveSessionsFailed_FlagsTrackedKeysOnly)
+{
+	const auto videoKey = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	const auto audioKey = CreateAsciiHexKeyId("22222222222222222222222222222222");
+	const auto otherKey = CreateAsciiHexKeyId("33333333333333333333333333333333");
+
+	for (int slot = 0; slot < 3; slot++)
+	{
+		KeyIdEntries entries;
+		KeyIdEntry entry;
+		entry.keyId = (slot == 0) ? videoKey : (slot == 1) ? audioKey : otherKey;
+		entries.data.push_back(entry);
+		mDrmSessionManager->AddKeyIdEntryToCache(slot, entries);
+	}
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, videoKey);
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, videoKey);
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_AUDIO, audioKey);
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_AUDIO, {});
+
+	size_t total = 0;
+	EXPECT_EQ(mDrmSessionManager->markActiveSessionsFailed(total), 2);
+	EXPECT_EQ(total, 2u);
+	EXPECT_TRUE(mDrmSessionManager->GetCachedEntries(0).isFailedKeyEntries);
+	EXPECT_TRUE(mDrmSessionManager->GetCachedEntries(1).isFailedKeyEntries);
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(2).isFailedKeyEntries);
+}
+
+/**
+ * @brief Tracking belongs to one playback: clearFailedKeyIds() (tune start) resets it, so a decrypt
+ *        failure never flags sessions of a previous playback. Nothing tracked -> 0 of 0.
+ */
+TEST_F(DrmSessionManagerComplexTests, MarkActiveSessionsFailed_ResetAtTuneStart)
+{
+	const auto key = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	KeyIdEntries entries;
+	KeyIdEntry entry;
+	entry.keyId = key;
+	entries.data.push_back(entry);
+	mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, key);
+	mDrmSessionManager->clearFailedKeyIds();
+
+	size_t total = 99;
+	EXPECT_EQ(mDrmSessionManager->markActiveSessionsFailed(total), 0);
+	EXPECT_EQ(total, 0u);
+	EXPECT_FALSE(mDrmSessionManager->GetCachedEntries(0).isFailedKeyEntries);
+}
+
+/**
+ * @brief A pre-fetched key of the same stream type does not replace the key of the playing session.
+ */
+TEST_F(DrmSessionManagerComplexTests, MarkActiveSessionsFailed_KeepsCurrentAndPrefetchedKeys)
+{
+	const auto currentKey = CreateAsciiHexKeyId("11111111111111111111111111111111");
+	const auto nextKey = CreateAsciiHexKeyId("22222222222222222222222222222222");
+	for (int slot = 0; slot < 2; slot++)
+	{
+		KeyIdEntries entries;
+		KeyIdEntry entry;
+		entry.keyId = (slot == 0) ? currentKey : nextKey;
+		entries.data.push_back(entry);
+		mDrmSessionManager->AddKeyIdEntryToCache(slot, entries);
+	}
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, currentKey);
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, nextKey);
+	mDrmSessionManager->trackActiveKeyId(eGST_MEDIATYPE_VIDEO, currentKey);
+
+	size_t total = 0;
+	EXPECT_EQ(mDrmSessionManager->markActiveSessionsFailed(total), 2);
+	EXPECT_EQ(total, 2u);
+}
