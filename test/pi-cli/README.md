@@ -29,7 +29,8 @@ cd test/pi-cli
 ```
 
 For DASH, pass a clear `.mpd` URL instead. The simulator starts playback
-immediately from the command-line URL. There is no URL editor in the UI.
+immediately from the command-line URL. Video appears in the GStreamer sink's
+own window; pi-cli does not create a second graphics window.
 The launcher sets the player-interface runtime library path before starting
 the simulator; running the binary directly does not inherit environment
 variables set by `build.sh`.
@@ -37,7 +38,7 @@ variables set by `build.sh`.
 If `playergstinterface` is installed to another prefix, set
 `PLAYER_INTERFACE_PREFIX` before running `./build.sh` and `./run.sh`. The build
 script configures the pkg-config paths, checks the required modules, and
-installs missing Ubuntu build, UI, and GStreamer runtime packages through
+installs missing Ubuntu build and GStreamer runtime packages through
 `sudo apt-get`. Run the scripts without `sudo`.
 
 The script does not build or install `playergstinterface`; that remains a
@@ -51,16 +52,30 @@ passes the URL to `ConfigurePipeline()`. The interface's own `playbin` handles
 HTTP source setup, HLS/DASH demuxing, decoding, and sink output. The simulator
 does not make a parallel `uridecodebin`, `appsink`, or other media pipeline.
 
-On Linux/X11, the UI locates the interface-owned `pi-player-simulator` video
-window and places an X11-shaped SDL controls window over it. Only the header and
-controls regions cover the video; the rest of the overlay window is clipped.
-This keeps the interface-owned pipeline and sink while composing the UI in the
-simulator. On desktops without X11/XWayland, controls remain in a separate
-window.
+## Console controls
 
-Use the play/pause and stop buttons, or **Space** and **S**. Playback position
-and duration are displayed in the timeline. Seeking is not connected: the
-public direct-URI interface currently exposes no seek operation.
+Type commands in the terminal while the GStreamer video window is playing:
+
+```text
+play
+pause
+seek 45
+trick 2x
+trick 4x
+trick 6x
+trick 12x
+trick 32x
+trick 1x
+stop
+status
+quit
+```
+
+`seek` takes a target position in seconds. `trick 1x` returns to normal speed.
+The console pumps the GLib main context while waiting for input so the
+interface-owned GStreamer bus callbacks continue to run. Seek and trick
+requests use `InterfacePlayerRDK::Flush()`; the stream/sink must support the
+requested operation, so check GStreamer logs if playback does not respond.
 
 Startup timing milestones are printed to stderr with elapsed monotonic time,
 for example `[PI-CLI] +1234ms configure-pipeline-returned`. They include
@@ -72,10 +87,9 @@ they do not accelerate stream loading.
 ## Dependencies checked by `build.sh`
 
 - Installed `libplayergstinterface` pkg-config module
-- `glib-2.0`, SDL2, SDL2_ttf, EGL, GLESv2, X11, and Xext development modules
-- SDL2_ttf-compatible system font
+- `glib-2.0` development module
 - GStreamer `playbin`, `souphttpsrc`, HLS/DASH demuxers, `autovideosink`,
-  and H.264/AAC decoders
+  `xvimagesink`, and H.264/AAC decoders
 
 `build.sh` installs missing Ubuntu packages when possible and reports any
 runtime factories that remain unavailable.

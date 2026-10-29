@@ -27,7 +27,10 @@ public:
 
     void Start();
     void PumpEvents();
-    void TogglePlayback();
+    bool Play();
+    bool Pause();
+    bool Seek(double positionSeconds);
+    bool SetTrickRate(int rate);
     void Stop();
     PlaybackStatus GetStatus() const;
 

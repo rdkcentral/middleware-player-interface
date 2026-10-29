@@ -113,21 +113,75 @@ void PlayerBackend::PumpEvents()
     }
 }
 
-void PlayerBackend::TogglePlayback()
+bool PlayerBackend::Play()
 {
     if (player_ == nullptr || stopped_) {
-        return;
+        statusMessage_ = "Playback has stopped; restart the simulator to play again";
+        return false;
     }
 
-    const bool pause = playing_;
-    if (!player_->Pause(pause, false)) {
-        statusMessage_ = pause ? "Could not pause playback"
-                               : "Could not resume playback";
-        return;
+    if (!player_->Pause(false, false)) {
+        statusMessage_ = "Could not resume playback";
+        return false;
     }
 
-    playing_ = !pause;
-    statusMessage_ = playing_ ? "Playing" : "Paused";
+    playing_ = true;
+    statusMessage_ = "Playing";
+    return true;
+}
+
+bool PlayerBackend::Pause()
+{
+    if (player_ == nullptr || stopped_) {
+        statusMessage_ = "Playback has stopped";
+        return false;
+    }
+
+    if (!player_->Pause(true, false)) {
+        statusMessage_ = "Could not pause playback";
+        return false;
+    }
+
+    playing_ = false;
+    statusMessage_ = "Paused";
+    return true;
+}
+
+bool PlayerBackend::Seek(double positionSeconds)
+{
+    if (player_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot seek: playback has stopped";
+        return false;
+    }
+
+    if (!player_->Flush(positionSeconds, 1, false, true)) {
+        statusMessage_ = "Seek request failed";
+        return false;
+    }
+
+    statusMessage_ = "Seek requested: " +
+                     std::to_string(positionSeconds) + " s";
+    return true;
+}
+
+bool PlayerBackend::SetTrickRate(int rate)
+{
+    if (player_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot change trick rate: playback has stopped";
+        return false;
+    }
+
+    const double currentPositionSeconds =
+        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+    if (!player_->Flush(currentPositionSeconds, rate, false, false)) {
+        statusMessage_ = "Trick-play request failed";
+        return false;
+    }
+
+    statusMessage_ = rate == 1
+        ? "Normal playback requested"
+        : "Trick rate requested: " + std::to_string(rate) + "x";
+    return true;
 }
 
 void PlayerBackend::Stop()

@@ -63,38 +63,16 @@ if ! pkg-config --exists libplayergstinterface; then
 fi
 
 missing_modules=()
-for module in glib-2.0 sdl2 SDL2_ttf egl glesv2 x11 xext; do
+for module in glib-2.0; do
     if ! pkg-config --exists "${module}"; then
         missing_modules+=("${module}")
         case "${module}" in
             glib-2.0) add_system_package libglib2.0-dev ;;
-            sdl2) add_system_package libsdl2-dev ;;
-            SDL2_ttf) add_system_package libsdl2-ttf-dev ;;
-            egl) add_system_package libegl1-mesa-dev ;;
-            glesv2) add_system_package libgles2-mesa-dev ;;
-            x11) add_system_package libx11-dev ;;
-            xext) add_system_package libxext-dev ;;
         esac
     fi
 done
 
-font_paths=(
-    /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
-    /usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf
-    /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
-)
-font_found=false
-for font_path in "${font_paths[@]}"; do
-    if [[ -f "${font_path}" ]]; then
-        font_found=true
-        break
-    fi
-done
-if [[ "${font_found}" != true ]]; then
-    add_system_package fonts-dejavu-core
-fi
-
-if ((${#missing_modules[@]} > 0)) || [[ "${font_found}" != true ]]; then
+if ((${#missing_modules[@]} > 0)); then
     install_system_packages
 fi
 
@@ -104,6 +82,7 @@ runtime_factories=(
     hlsdemux
     dashdemux
     autovideosink
+    xvimagesink
     avdec_h264
     avdec_aac
 )
@@ -112,6 +91,7 @@ runtime_packages=(
     gstreamer1.0-plugins-base
     gstreamer1.0-plugins-good
     gstreamer1.0-plugins-bad
+    gstreamer1.0-x
     gstreamer1.0-libav
 )
 missing_factories=()
@@ -134,25 +114,14 @@ if ((${#missing_factories[@]} > 0)); then
 fi
 
 still_missing=()
-for module in glib-2.0 sdl2 SDL2_ttf egl glesv2 x11 xext; do
+for module in glib-2.0; do
     if ! pkg-config --exists "${module}"; then
         still_missing+=("${module}")
-    fi
-done
-font_found=false
-for font_path in "${font_paths[@]}"; do
-    if [[ -f "${font_path}" ]]; then
-        font_found=true
-        break
     fi
 done
 if ((${#still_missing[@]} > 0)); then
     printf 'Dependencies still missing after package installation: %s\n' \
         "${still_missing[*]}" >&2
-    exit 1
-fi
-if [[ "${font_found}" != true ]]; then
-    printf 'Could not find a supported font after installing fonts-dejavu-core.\n' >&2
     exit 1
 fi
 if ! command -v gst-inspect-1.0 >/dev/null 2>&1; then

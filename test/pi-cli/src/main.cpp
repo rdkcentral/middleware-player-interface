@@ -1,5 +1,5 @@
 #include "backend/PlayerBackend.h"
-#include "ui/PlayerUi.h"
+#include "console/ConsolePlayer.h"
 
 #include <iostream>
 #include <string>
@@ -20,6 +20,6 @@ int main(int argc, char* argv[])
     PlayerBackend backend(url);
     backend.Start();
 
-    PlayerUi ui;
-    return ui.Run(backend, url);
+    ConsolePlayer console;
+    return console.Run(backend);
 }
