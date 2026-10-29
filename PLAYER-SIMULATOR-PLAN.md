@@ -45,13 +45,17 @@ on a separate-window fallback or an API change before proceeding.
 
 - CMake configures directly from `test/pi-cli/`; it finds the installed
   `playergstinterface` package using pkg-config.
-- Build a minimal executable and list required build/runtime dependencies in
-  the README.
+- `test/pi-cli/build.sh` sets the local install-prefix paths, checks required
+  pkg-config modules, then configures and builds the minimal executable.
+- List required build/runtime dependencies in the README. The script reports
+  missing dependencies now; automatic OS package installation can be added
+  after the Ubuntu package names are verified.
 - Do not require `BUILD_PICLI`, the root CMake project, or changes to the
   install script.
 
-**Test gate:** install the interface to a local prefix, configure/build/run
-`pi-cli` independently as documented in the README. Expected output:
+**Test gate:** install the interface to a local prefix, run
+`PLAYER_INTERFACE_PREFIX="$HOME/.local" bash ./build.sh` from `test/pi-cli`,
+then run the executable as documented in the README. Expected output:
 `pi-player-simulator scaffold`.
 
 ### Phase 2 — EGL UI

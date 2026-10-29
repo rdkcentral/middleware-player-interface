@@ -17,19 +17,18 @@ cmake --build build --parallel
 cmake --install build
 ```
 
-Then configure and build `pi-cli` independently:
+Then build `pi-cli` independently with its script:
 
 ```sh
 cd test/pi-cli
-export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-export LD_LIBRARY_PATH="$HOME/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-pkg-config --modversion libplayergstinterface
-cmake -S . -B build
-cmake --build build --parallel
-./build/pi-player-simulator
+PLAYER_INTERFACE_PREFIX="$HOME/.local" bash ./build.sh
+LD_LIBRARY_PATH="$HOME/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator
 ```
 
-The Phase 1 scaffold prints `pi-player-simulator scaffold`.
+The script sets `PKG_CONFIG_PATH` and `LD_LIBRARY_PATH`, checks the required
+pkg-config modules, then configures/builds the standalone app. The Phase 1
+scaffold prints `pi-player-simulator scaffold`. You can pass extra CMake
+arguments to the script, for example `bash ./build.sh -DCMAKE_BUILD_TYPE=Debug`.
 
 ## Dependencies
 
@@ -44,5 +43,8 @@ Later playback phases also need runtime GStreamer factories for `playbin`,
 Check them on Ubuntu with `gst-inspect-1.0 <factory>`. Their package installation
 will be handled after the Ubuntu environment confirms the needed packages.
 
-No player-interface source, root CMake, or install script changes are needed to
-build this standalone test app.
+The script currently checks and reports missing development dependencies; it
+does not install OS packages. Automatic dependency installation can be added
+later after the Ubuntu package list is verified. No player-interface source,
+root CMake, or install script changes are needed to build this standalone test
+app.
