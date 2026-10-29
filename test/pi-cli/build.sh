@@ -2,7 +2,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PLAYER_INTERFACE_PREFIX="${PLAYER_INTERFACE_PREFIX:-${HOME}/.local}"
+REPO_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+if ((EUID == 0)); then
+    printf 'Do not run this build script with sudo; run it as your regular user.\n' >&2
+    exit 1
+fi
+
+if [[ -n "${PLAYER_INTERFACE_PREFIX:-}" ]]; then
+    PLAYER_INTERFACE_PREFIX="${PLAYER_INTERFACE_PREFIX}"
+elif [[ -f "${REPO_DIR}/.libs/lib/pkgconfig/libplayergstinterface.pc" ]]; then
+    PLAYER_INTERFACE_PREFIX="${REPO_DIR}/.libs"
+else
+    PLAYER_INTERFACE_PREFIX="${HOME}/.local"
+fi
 BUILD_DIR="${PI_CLI_BUILD_DIR:-${SCRIPT_DIR}/build}"
 
 export PKG_CONFIG_PATH="${PLAYER_INTERFACE_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
@@ -17,8 +29,16 @@ done
 
 if ((${#missing_modules[@]} > 0)); then
     printf 'Missing pkg-config modules: %s\n' "${missing_modules[*]}" >&2
-    printf 'Install playergstinterface to %s and install the SDL2/EGL development packages.\n' \
-        "${PLAYER_INTERFACE_PREFIX}" >&2
+    if [[ " ${missing_modules[*]} " == *" libplayergstinterface "* ]]; then
+        printf 'Could not find libplayergstinterface in %s/lib/pkgconfig.\n' \
+            "${PLAYER_INTERFACE_PREFIX}" >&2
+        printf 'Install the player-interface package to that prefix, or set PLAYER_INTERFACE_PREFIX to its install prefix.\n' >&2
+    fi
+    if [[ " ${missing_modules[*]} " == *" sdl2 "* || \
+          " ${missing_modules[*]} " == *" egl "* || \
+          " ${missing_modules[*]} " == *" glesv2 "* ]]; then
+        printf 'Install the missing SDL2/EGL development packages.\n' >&2
+    fi
     exit 1
 fi
 

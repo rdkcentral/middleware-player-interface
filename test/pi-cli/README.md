@@ -7,28 +7,33 @@ project's `BUILD_PICLI` option or a root CMake change.
 
 ## Ubuntu build
 
-Install the player interface to a local prefix. Use any additional options
-required by your normal Ubuntu build:
+Install the player interface to a local prefix. If you use the repository's
+usual `.libs` install prefix, the simulator script detects it automatically.
+Otherwise, use any additional options required by your normal Ubuntu build.
+For example, to install under `.libs`:
 
 ```sh
 cd ~/Desktop/workspace/tuntime/middleware-player-interface
-cmake -S . -B build -DCMAKE_PLATFORM_UBUNTU=ON -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake -S . -B build -DCMAKE_PLATFORM_UBUNTU=ON -DCMAKE_INSTALL_PREFIX="$PWD/.libs"
 cmake --build build --parallel
 cmake --install build
 ```
 
-Then build `pi-cli` independently with its script:
+Then build `pi-cli` independently as your regular user (do not use `sudo`):
 
 ```sh
 cd test/pi-cli
-PLAYER_INTERFACE_PREFIX="$HOME/.local" bash ./build.sh
-LD_LIBRARY_PATH="$HOME/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator
+./build.sh
+LD_LIBRARY_PATH="../../.libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./build/pi-player-simulator
 ```
 
-The script sets `PKG_CONFIG_PATH` and `LD_LIBRARY_PATH`, checks the required
-pkg-config modules, then configures/builds the standalone app. The Phase 1
-scaffold prints `pi-player-simulator scaffold`. You can pass extra CMake
-arguments to the script, for example `bash ./build.sh -DCMAKE_BUILD_TYPE=Debug`.
+When the interface was installed to another prefix, set `PLAYER_INTERFACE_PREFIX`
+to that prefix when running `./build.sh`, and use its `lib` directory in
+`LD_LIBRARY_PATH` when launching the executable. The script sets `PKG_CONFIG_PATH` and
+`LD_LIBRARY_PATH`, checks the required pkg-config modules, then configures/builds
+the standalone app. The Phase 1 scaffold prints `pi-player-simulator scaffold`.
+You can pass extra CMake arguments to the script, for example
+`./build.sh -DCMAKE_BUILD_TYPE=Debug`.
 
 ## Dependencies
 
