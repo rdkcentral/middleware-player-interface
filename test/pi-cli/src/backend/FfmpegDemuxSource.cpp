@@ -1110,6 +1110,10 @@ void FfmpegDemuxSource::SetTrackEnabled(int mediaType, bool enabled)
             return !track->sending || stopping_;
         });
     }
+    ReportProgress(
+        std::string("ffmpeg-track-routing: track=") +
+        (mediaType == eGST_MEDIATYPE_VIDEO ? "video" : "audio") +
+        " enabled=" + (enabled ? "yes" : "no"));
 }
 
 void FfmpegDemuxSource::SetFeedingEnabled(bool enabled)
@@ -1967,13 +1971,24 @@ void FfmpegDemuxSource::ApplyTrackDiscard()
         return;
     }
     for (Track& track : tracks_) {
-        if (track.streamIndex < 0 ||
-            track.demuxEnabled == track.enabled.load()) {
+        if (track.streamIndex < 0) {
+            continue;
+        }
+        // Keep audio demux active while it is unrouted; DASH may not resume
+        // an adaptation reliably after its stream is marked AVDISCARD_ALL.
+        const bool demuxEnabled =
+            track.mediaType == eGST_MEDIATYPE_AUDIO || track.enabled.load();
+        if (track.demuxEnabled == demuxEnabled) {
             continue;
         }
         formatContext_->streams[track.streamIndex]->discard =
-            track.enabled ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
-        track.demuxEnabled = track.enabled;
+            demuxEnabled ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+        track.demuxEnabled = demuxEnabled;
+        ReportProgress(
+            std::string("ffmpeg-track-demux-selection: track=") +
+            (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video" : "audio") +
+            " enabled=" + (track.enabled ? "yes" : "no") +
+            " demux-enabled=" + (demuxEnabled ? "yes" : "no"));
     }
 }
 
