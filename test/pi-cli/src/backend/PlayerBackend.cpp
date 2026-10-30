@@ -1555,9 +1555,11 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
             }
         }
         if (candidate->PrepareSeek(positionSeconds) &&
-            candidate->Seek(positionSeconds)) {
+            candidate->Seek(positionSeconds, false, true)) {
             candidate->SetDiscardBeforePosition(
                 eGST_MEDIATYPE_AUDIO, positionSeconds);
+            candidate->SetDiscardBeforePosition(
+                eGST_MEDIATYPE_VIDEO, positionSeconds);
             const double latestPosition = resumeFeeding
                 ? static_cast<double>(GetPlaybackPositionMilliseconds()) /
                       1000.0

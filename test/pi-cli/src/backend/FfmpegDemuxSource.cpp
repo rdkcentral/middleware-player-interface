@@ -1158,7 +1158,9 @@ bool FfmpegDemuxSource::PrepareSeek(double positionSeconds)
     return true;
 }
 
-bool FfmpegDemuxSource::Seek(double positionSeconds, bool markDiscontinuity)
+bool FfmpegDemuxSource::Seek(double positionSeconds,
+                             bool markDiscontinuity,
+                             bool seekForward)
 {
     if (formatContext_ == nullptr || !std::isfinite(positionSeconds) ||
         positionSeconds < 0.0 || positionSeconds >
@@ -1182,15 +1184,21 @@ bool FfmpegDemuxSource::Seek(double positionSeconds, bool markDiscontinuity)
 
     const int64_t target =
         static_cast<int64_t>(positionSeconds * AV_TIME_BASE);
+    if (seekForward) {
+        ReportProgress("ffmpeg-seek-forward: target=" +
+                       std::to_string(positionSeconds));
+    }
     int result = 0;
     {
         const std::lock_guard<std::mutex> lock(demuxMutex_);
         result = avformat_seek_file(formatContext_,
                                     -1,
-                                    std::numeric_limits<int64_t>::min(),
+                                    seekForward
+                                        ? target
+                                        : std::numeric_limits<int64_t>::min(),
                                     target,
                                     std::numeric_limits<int64_t>::max(),
-                                    AVSEEK_FLAG_BACKWARD);
+                                    seekForward ? 0 : AVSEEK_FLAG_BACKWARD);
         if (result >= 0) {
             avformat_flush(formatContext_);
         }

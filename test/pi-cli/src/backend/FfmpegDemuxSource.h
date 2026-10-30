@@ -55,7 +55,9 @@ public:
     void SetTrackEnabled(int mediaType, bool enabled);
     void SetFeedingEnabled(bool enabled);
     bool PrepareSeek(double positionSeconds);
-    bool Seek(double positionSeconds, bool markDiscontinuity = true);
+    bool Seek(double positionSeconds,
+              bool markDiscontinuity = true,
+              bool seekForward = false);
     void SetDiscardBeforePosition(int mediaType, double positionSeconds);
     bool TakeError(std::string& error);
     void Stop();
