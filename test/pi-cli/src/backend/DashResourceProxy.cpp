@@ -486,7 +486,8 @@ struct DashResourceProxy::Impl {
 
     bool Start(std::vector<uint8_t>& manifest,
                const std::string& manifestUrl,
-               DashResourceProxy::ProgressCallback callback)
+               DashResourceProxy::ProgressCallback callback,
+               bool prefetchInitialSegments)
     {
         if (manifest.empty() ||
             manifest.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
@@ -787,22 +788,24 @@ struct DashResourceProxy::Impl {
                              track.routeId,
                              -1,
                              true);
-            for (size_t index = 0;
-                 index < std::min(kPrefetchSegmentCount,
-                                  track.media.segmentValues.size());
-                 ++index) {
-                const int64_t value =
-                    track.media.usesTime
-                        ? track.media.segmentValues[index]
-                        : track.media.startNumber +
-                              static_cast<int64_t>(index);
-                const std::string path =
-                    mediaPath + std::to_string(value);
-                const std::string url = ReplaceToken(
-                    track.media.remoteUrlTemplate,
-                    track.media.variableToken,
-                    FormatSegmentValue(value, track.media.numberWidth));
-                ScheduleResource(path, url, track.routeId, value, true);
+            if (prefetchInitialSegments) {
+                for (size_t index = 0;
+                     index < std::min(kPrefetchSegmentCount,
+                                      track.media.segmentValues.size());
+                     ++index) {
+                    const int64_t value =
+                        track.media.usesTime
+                            ? track.media.segmentValues[index]
+                            : track.media.startNumber +
+                                  static_cast<int64_t>(index);
+                    const std::string path =
+                        mediaPath + std::to_string(value);
+                    const std::string url = ReplaceToken(
+                        track.media.remoteUrlTemplate,
+                        track.media.variableToken,
+                        FormatSegmentValue(value, track.media.numberWidth));
+                    ScheduleResource(path, url, track.routeId, value, true);
+                }
             }
         }
 
@@ -1604,9 +1607,13 @@ DashResourceProxy::~DashResourceProxy() = default;
 
 bool DashResourceProxy::Start(std::vector<uint8_t>& manifest,
                               const std::string& manifestUrl,
-                              ProgressCallback progress)
+                              ProgressCallback progress,
+                              bool prefetchInitialSegments)
 {
-    return impl_->Start(manifest, manifestUrl, std::move(progress));
+    return impl_->Start(manifest,
+                        manifestUrl,
+                        std::move(progress),
+                        prefetchInitialSegments);
 }
 
 void DashResourceProxy::PrefetchForSeek(double positionSeconds)

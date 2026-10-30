@@ -50,6 +50,7 @@ struct DashManifestSelection {
     size_t removedVideoRepresentations = 0;
     bool keptVideo = false;
     bool keptAudio = false;
+    bool dynamic = false;
     std::string selectedVideoDescription;
 };
 
@@ -294,6 +295,7 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
         xmlFreeDoc(document);
         return false;
     }
+    selection.dynamic = XmlProperty(root, "type") == "dynamic";
 
     size_t periodIndex = 0;
     size_t audioOrdinal = 0;
@@ -499,7 +501,9 @@ FfmpegDemuxSource::~FfmpegDemuxSource()
 bool FfmpegDemuxSource::Open(const std::string& url,
                              ProgressCallback progress,
                              const MediaTrackSelection& requestedTracks,
-                             bool audioOnly)
+                             bool audioOnly,
+                             const std::vector<uint8_t>* manifestSnapshot,
+                             const std::string& manifestBaseUrl)
 {
     if (url.empty()) {
         SetError("A stream URL is required");
@@ -509,6 +513,8 @@ bool FfmpegDemuxSource::Open(const std::string& url,
     url_ = url;
     progress_ = std::move(progress);
     trackCatalog_.clear();
+    dashManifestSnapshot_.clear();
+    dashManifestBaseUrl_.clear();
     stopping_ = false;
     inputPaused_ = false;
     feedingEnabled_ = true;
@@ -536,83 +542,91 @@ bool FfmpegDemuxSource::Open(const std::string& url,
     DashManifestSelection dashManifest;
     AVIOContext* customManifestIo = nullptr;
     ManifestMemory manifestMemory;
-    std::string dashManifestUrl = url_;
+    std::string dashManifestUrl =
+        manifestBaseUrl.empty() ? url_ : manifestBaseUrl;
     if (IsDashUrl(url_)) {
         std::vector<uint8_t> manifestBytes;
-        AVIOContext* manifestInput = nullptr;
-        AVDictionary* manifestOptions = nullptr;
-        av_dict_set(&manifestOptions,
-                    "rw_timeout",
-                    std::to_string(kIoTimeoutSeconds * 1000000).c_str(),
-                    0);
+        if (manifestSnapshot != nullptr && !manifestSnapshot->empty()) {
+            manifestBytes = *manifestSnapshot;
+            ReportProgress("ffmpeg-dash-manifest-cache-reused: " +
+                           std::to_string(manifestBytes.size()) + " bytes");
+        } else {
+            AVIOContext* manifestInput = nullptr;
+            AVDictionary* manifestOptions = nullptr;
+            av_dict_set(&manifestOptions,
+                        "rw_timeout",
+                        std::to_string(kIoTimeoutSeconds * 1000000).c_str(),
+                        0);
 
-        ReportProgress("ffmpeg-dash-manifest-fetch-begin");
-        int fetchResult = 0;
-        BeginTimedIo();
-        {
-            ProgressWatchdog watchdog(progress_,
-                                      "ffmpeg-dash-manifest-fetch");
-            fetchResult = avio_open2(
-                &manifestInput,
-                url_.c_str(),
-                AVIO_FLAG_READ,
-                &formatContext_->interrupt_callback,
-                &manifestOptions);
-            if (fetchResult >= 0) {
-                uint8_t* resolvedUrl = nullptr;
-                if (av_opt_get(manifestInput,
-                               "location",
-                               AV_OPT_SEARCH_CHILDREN,
-                               &resolvedUrl) >= 0 &&
-                    resolvedUrl != nullptr &&
-                    resolvedUrl[0] != '\0') {
-                    dashManifestUrl =
-                        reinterpret_cast<const char*>(resolvedUrl);
-                }
-                av_free(resolvedUrl);
+            ReportProgress("ffmpeg-dash-manifest-fetch-begin");
+            int fetchResult = 0;
+            BeginTimedIo();
+            {
+                ProgressWatchdog watchdog(progress_,
+                                          "ffmpeg-dash-manifest-fetch");
+                fetchResult = avio_open2(
+                    &manifestInput,
+                    url_.c_str(),
+                    AVIO_FLAG_READ,
+                    &formatContext_->interrupt_callback,
+                    &manifestOptions);
+                if (fetchResult >= 0) {
+                    uint8_t* resolvedUrl = nullptr;
+                    if (av_opt_get(manifestInput,
+                                   "location",
+                                   AV_OPT_SEARCH_CHILDREN,
+                                   &resolvedUrl) >= 0 &&
+                        resolvedUrl != nullptr &&
+                        resolvedUrl[0] != '\0') {
+                        dashManifestUrl =
+                            reinterpret_cast<const char*>(resolvedUrl);
+                    }
+                    av_free(resolvedUrl);
 
-                std::array<uint8_t, 8192> buffer{};
-                while (true) {
-                    const int bytesRead = avio_read(
-                        manifestInput,
-                        buffer.data(),
-                        static_cast<int>(buffer.size()));
-                    if (bytesRead == AVERROR_EOF || bytesRead == 0) {
-                        break;
+                    std::array<uint8_t, 8192> buffer{};
+                    while (true) {
+                        const int bytesRead = avio_read(
+                            manifestInput,
+                            buffer.data(),
+                            static_cast<int>(buffer.size()));
+                        if (bytesRead == AVERROR_EOF || bytesRead == 0) {
+                            break;
+                        }
+                        if (bytesRead < 0) {
+                            fetchResult = bytesRead;
+                            break;
+                        }
+                        if (manifestBytes.size() +
+                                static_cast<size_t>(bytesRead) >
+                            kMaximumManifestBytes) {
+                            fetchResult = AVERROR(EMSGSIZE);
+                            break;
+                        }
+                        manifestBytes.insert(
+                            manifestBytes.end(),
+                            buffer.begin(),
+                            buffer.begin() + bytesRead);
                     }
-                    if (bytesRead < 0) {
-                        fetchResult = bytesRead;
-                        break;
-                    }
-                    if (manifestBytes.size() + static_cast<size_t>(bytesRead) >
-                        kMaximumManifestBytes) {
-                        fetchResult = AVERROR(EMSGSIZE);
-                        break;
-                    }
-                    manifestBytes.insert(
-                        manifestBytes.end(),
-                        buffer.begin(),
-                        buffer.begin() + bytesRead);
                 }
             }
-        }
-        if (manifestInput != nullptr) {
-            avio_closep(&manifestInput);
-        }
-        const bool manifestFetchTimedOut = EndTimedIo();
-        av_dict_free(&manifestOptions);
-        if (fetchResult < 0) {
-            if (manifestFetchTimedOut) {
-                SetError("DASH manifest fetch exceeded " +
-                         std::to_string(kIoTimeoutSeconds) + " seconds");
-            } else if (fetchResult == AVERROR(EMSGSIZE)) {
-                SetError("DASH manifest exceeds the 16 MiB in-memory limit");
-            } else {
-                SetError("Could not fetch DASH manifest: " +
-                         AvErrorString(fetchResult));
+            if (manifestInput != nullptr) {
+                avio_closep(&manifestInput);
             }
-            Stop();
-            return false;
+            const bool manifestFetchTimedOut = EndTimedIo();
+            av_dict_free(&manifestOptions);
+            if (fetchResult < 0) {
+                if (manifestFetchTimedOut) {
+                    SetError("DASH manifest fetch exceeded " +
+                             std::to_string(kIoTimeoutSeconds) + " seconds");
+                } else if (fetchResult == AVERROR(EMSGSIZE)) {
+                    SetError("DASH manifest exceeds the 16 MiB in-memory limit");
+                } else {
+                    SetError("Could not fetch DASH manifest: " +
+                             AvErrorString(fetchResult));
+                }
+                Stop();
+                return false;
+            }
         }
         ReportProgress("ffmpeg-dash-manifest-fetch-complete: " +
                        std::to_string(manifestBytes.size()) + " bytes");
@@ -635,6 +649,10 @@ bool FfmpegDemuxSource::Open(const std::string& url,
             Stop();
             return false;
         }
+        dashManifestSnapshot_ = dashManifest.dynamic
+            ? std::vector<uint8_t>{}
+            : manifestBytes;
+        dashManifestBaseUrl_ = dashManifestUrl;
         for (MediaTrackInfo& track : trackCatalog_) {
             if (track.type == MediaTrackType::Audio &&
                 !requestedTracks.audioTrackId.empty()) {
@@ -646,7 +664,10 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         }
         dashResourceProxy_ = std::make_unique<DashResourceProxy>();
         if (dashResourceProxy_->Start(
-                dashManifest.data, dashManifestUrl, progress_)) {
+                dashManifest.data,
+                dashManifestUrl,
+                progress_,
+                !audioOnly)) {
             ReportProgress("ffmpeg-dash-parallel-prefetch-enabled");
         } else {
             dashResourceProxy_.reset();
@@ -866,6 +887,10 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         Stop();
         return false;
     }
+    if (audioOnly && audioIndex >= 0 &&
+        !tracks_[1].codecData.empty()) {
+        tracks_[1].ready = true;
+    }
     ReportProgress("ffmpeg-track-codec-info-complete");
 
     if (formatContext_->duration != AV_NOPTS_VALUE &&
@@ -926,6 +951,16 @@ StreamCodecInfo FfmpegDemuxSource::GetCodecInfo() const
 std::vector<MediaTrackInfo> FfmpegDemuxSource::GetTrackCatalog() const
 {
     return trackCatalog_;
+}
+
+std::vector<uint8_t> FfmpegDemuxSource::GetDashManifestSnapshot() const
+{
+    return dashManifestSnapshot_;
+}
+
+std::string FfmpegDemuxSource::GetDashManifestBaseUrl() const
+{
+    return dashManifestBaseUrl_;
 }
 
 uint64_t FfmpegDemuxSource::GetEstimatedBandwidthBitsPerSecond() const

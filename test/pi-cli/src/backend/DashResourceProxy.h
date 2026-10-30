@@ -18,7 +18,8 @@ public:
 
     bool Start(std::vector<uint8_t>& manifest,
                const std::string& manifestUrl,
-               ProgressCallback progress);
+               ProgressCallback progress,
+               bool prefetchInitialSegments = true);
     void PrefetchForSeek(double positionSeconds);
     uint64_t GetEstimatedBandwidthBitsPerSecond() const;
     void Stop();

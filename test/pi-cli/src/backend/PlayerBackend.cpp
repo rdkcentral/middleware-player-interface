@@ -322,8 +322,6 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     StreamCodecInfo codecCaps = candidate->GetCodecInfo();
     player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
                            std::move(codecCaps.audio));
-    player_->FlushTrack(
-        eGST_MEDIATYPE_AUDIO, positionSeconds, 0.0, 0.0);
     if (!StartSource(*candidate)) {
         const std::string startError = statusMessage_;
         candidate->Stop();
@@ -348,6 +346,9 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
                      selection_.audioTrackId;
     LogStartupMilestone("audio-track-switch-complete: track=" +
                         selection_.audioTrackId +
+                        " audio-source-position-ms=" +
+                        std::to_string(static_cast<long long>(
+                            positionSeconds * 1000.0)) +
                         " video-position-ms=" +
                         std::to_string(positionMs_));
 }
@@ -359,6 +360,7 @@ void PlayerBackend::RestoreAudioAfterSwitchFailure(
     previousAudioSource_ = nullptr;
     audioSwitchInProgress_ = false;
     cancelAudioSwitch_ = false;
+    bool playbackResumed = true;
     if (previousAudioSource != nullptr && !stopped_) {
         previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, true);
         SetActiveAudioSource(previousAudioSource);
@@ -366,11 +368,17 @@ void PlayerBackend::RestoreAudioAfterSwitchFailure(
             static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
         player_->FlushTrack(
             eGST_MEDIATYPE_AUDIO, currentPositionSeconds, 0.0, 0.0);
+        if (playing_) {
+            playbackResumed = player_->Pause(false, false);
+        }
         previousAudioSource->NeedData(eGST_MEDIATYPE_AUDIO);
     } else {
         SetActiveAudioSource(nullptr);
     }
     statusMessage_ = "Audio track switch failed: " + error;
+    if (!playbackResumed) {
+        statusMessage_ += "; Player Interface did not resume after audio flush";
+    }
     LogStartupMilestone(statusMessage_);
 }
 
@@ -410,6 +418,7 @@ void PlayerBackend::PumpEvents()
     if (audioOnlySource_ != nullptr && !audioSwitchInProgress_) {
         std::string error;
         if (audioOnlySource_->TakeError(error)) {
+            bool playbackResumed = true;
             SetActiveAudioSource(nullptr);
             audioOnlySource_->Stop();
             audioOnlySource_.reset();
@@ -419,10 +428,17 @@ void PlayerBackend::PumpEvents()
                     static_cast<double>(positionMs_) / 1000.0,
                     0.0,
                     0.0);
+                if (playing_) {
+                    playbackResumed = player_->Pause(false, false);
+                }
             }
             statusMessage_ =
                 "Audio track source failed; video playback continues: " +
                 error;
+            if (!playbackResumed) {
+                statusMessage_ +=
+                    "; Player Interface did not resume after audio flush";
+            }
             LogStartupMilestone(statusMessage_);
         }
     }
@@ -680,10 +696,20 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
         player_->GetPositionMilliseconds();
     const double currentPositionSeconds =
         static_cast<double>(currentPositionMilliseconds) / 1000.0;
+    std::vector<uint8_t> manifestSnapshot =
+        source_->GetDashManifestSnapshot();
+    const std::string manifestBaseUrl =
+        source_->GetDashManifestBaseUrl();
+    previousAudioSource_ = previousAudioSource;
     SetActiveAudioSource(nullptr);
     previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, false);
     player_->FlushTrack(
         eGST_MEDIATYPE_AUDIO, currentPositionSeconds, 0.0, 0.0);
+    if (playing_ && !player_->Pause(false, false)) {
+        RestoreAudioAfterSwitchFailure(
+            "Player Interface could not resume after flushing audio");
+        return false;
+    }
 
     {
         const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
@@ -692,7 +718,6 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
         audioSwitchError_.clear();
         preparedAudioPositionSeconds_ = currentPositionSeconds;
     }
-    previousAudioSource_ = previousAudioSource;
     requestedAudioTrackId_ = trackId;
     cancelAudioSwitch_ = false;
     audioSwitchInProgress_ = true;
@@ -701,7 +726,10 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
 
     try {
         audioSwitchThread_ = std::thread(
-            [this, selection = std::move(nextSelection)]() mutable {
+            [this,
+             selection = std::move(nextSelection),
+             manifestSnapshot = std::move(manifestSnapshot),
+             manifestBaseUrl]() mutable {
                 auto candidate = std::make_unique<FfmpegDemuxSource>();
                 std::string error;
                 double preparedPositionSeconds = 0.0;
@@ -711,7 +739,9 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
                         LogStartupMilestone(milestone);
                     },
                     selection,
-                    true);
+                    true,
+                    manifestSnapshot.empty() ? nullptr : &manifestSnapshot,
+                    manifestBaseUrl);
                 if (!positioned) {
                     candidate->TakeError(error);
                 }
@@ -738,7 +768,7 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
                         const long long positionDelta =
                             std::llabs(latestMilliseconds -
                                        targetMilliseconds);
-                        if (positionDelta <= 1000) {
+                        if (positionDelta <= 3000) {
                             positioned = true;
                             break;
                         }

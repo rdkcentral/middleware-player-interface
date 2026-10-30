@@ -89,10 +89,12 @@ Player Interface platform implementation and stream support.
 `list audio` and `list video` report one-based track numbers and metadata
 discovered from the manifest or FFmpeg input context. For clear DASH streams,
 `setaudio <number>` immediately flushes the current audio branch and prepares
-the requested track independently; video playback and its position are left
-running. The new audio starts when its DASH adaptation is ready, so startup
-time depends on network and segment availability. `setresolution` accepts an
-exact size such as `1280x720`, or a height such as `720p` to select the
+the requested track independently; Player Interface is resumed after its
+track-local flush, without seeking or rebuilding the video pipeline. The new
+audio starts when its DASH adaptation is ready. Static MPDs are reused and the
+audio source prefetches from the current playback point, but startup still
+depends on network and segment availability. `setresolution` accepts an exact
+size such as `1280x720`, or a height such as `720p` to select the
 highest-bitrate representation at that height.
 `abr on` enables bandwidth-based video selection; `abr off` returns to the
 currently selected representation. A manual resolution selection disables

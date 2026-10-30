@@ -35,9 +35,13 @@ public:
     bool Open(const std::string& url,
               ProgressCallback progress,
               const MediaTrackSelection& selection = {},
-              bool audioOnly = false);
+              bool audioOnly = false,
+              const std::vector<uint8_t>* manifestSnapshot = nullptr,
+              const std::string& manifestBaseUrl = {});
     StreamCodecInfo GetCodecInfo() const;
     std::vector<MediaTrackInfo> GetTrackCatalog() const;
+    std::vector<uint8_t> GetDashManifestSnapshot() const;
+    std::string GetDashManifestBaseUrl() const;
     uint64_t GetEstimatedBandwidthBitsPerSecond() const;
     bool IsDashMedia() const;
     int GetMediaMode() const;
@@ -145,6 +149,8 @@ private:
     mutable std::mutex errorMutex_;
     std::string error_;
     std::string url_;
+    std::vector<uint8_t> dashManifestSnapshot_;
+    std::string dashManifestBaseUrl_;
     std::vector<MediaTrackInfo> trackCatalog_;
     int mediaMode_ = -1;
     long long durationMilliseconds_ = 0;
