@@ -485,7 +485,8 @@ void PlayerBackend::LogVideoDiagnostics(const std::string& stage)
     LogStartupMilestone(diagnostic);
 }
 
-void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
+void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source,
+                                             double positionSeconds)
 {
     LogStartupMilestone("player-interface-selection-reconfigure-begin");
     StreamCodecInfo codecInfo = source.GetCodecInfo();
@@ -511,6 +512,13 @@ void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
         player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
                                std::move(codecCaps.audio));
     }
+    // ConfigurePipeline rebuilds the pipeline with a zero-based segment, and
+    // Flush() already consumed the pending seek. Re-arm it so the first buffer
+    // starts the segment at the resume position instead of waiting for PTS.
+    player_->SetSeekPosition(positionSeconds);
+    LogStartupMilestone(
+        "player-interface-selection-segment-armed: position=" +
+        std::to_string(positionSeconds));
     LogStartupMilestone("player-interface-selection-reconfigure-complete");
 }
 
@@ -1594,7 +1602,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
                              ? source_.get()
                              : nullptr);
     source_->SetFeedingEnabled(false);
-    ConfigurePlayerForSource(*source_);
+    ConfigurePlayerForSource(*source_, positionSeconds);
     const bool sourceStarted = StartSource();
     const bool playbackStateRestored =
         sourceStarted && player_->Pause(!resumeFeeding, false);
@@ -1617,7 +1625,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
              previousAudioSource->Seek(positionSeconds)) &&
             player_->Flush(positionSeconds, 1, false, true);
         if (previousSourcePositioned) {
-            ConfigurePlayerForSource(*source_);
+            ConfigurePlayerForSource(*source_, positionSeconds);
         }
         const bool previousPlayerStateRestored =
             previousSourcePositioned &&

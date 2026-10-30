@@ -66,7 +66,8 @@ private:
     void LogStartupMilestone(const std::string& milestone);
     bool StartSource();
     bool StartSource(FfmpegDemuxSource& source);
-    void ConfigurePlayerForSource(FfmpegDemuxSource& source);
+    void ConfigurePlayerForSource(FfmpegDemuxSource& source,
+                                  double positionSeconds);
     void CompleteAudioSwitchIfReady();
     void QueueAudioSourceCleanup(
         std::unique_ptr<FfmpegDemuxSource> source);
