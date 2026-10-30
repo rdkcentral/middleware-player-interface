@@ -876,6 +876,9 @@ struct DashResourceProxy::Impl {
             condition.notify_all();
         }
         Report("ffmpeg-dash-proxy-stop-begin");
+        if (acceptCancellable != nullptr) {
+            g_cancellable_cancel(acceptCancellable);
+        }
         if (listener != nullptr) {
             g_socket_listener_close(listener);
         }
@@ -894,6 +897,10 @@ struct DashResourceProxy::Impl {
             acceptThread.join();
         }
         Report("ffmpeg-dash-proxy-stop-server-stopped");
+        if (acceptCancellable != nullptr) {
+            g_object_unref(acceptCancellable);
+            acceptCancellable = nullptr;
+        }
         for (std::thread& worker : workers) {
             if (worker.joinable()) {
                 worker.join();
@@ -933,6 +940,7 @@ private:
     bool OpenListener()
     {
         listener = g_socket_listener_new();
+        acceptCancellable = g_cancellable_new();
         GInetAddress* inetAddress =
             g_inet_address_new_loopback(G_SOCKET_FAMILY_IPV4);
         GSocketAddress* requestedAddress =
@@ -1506,7 +1514,7 @@ private:
         while (true) {
             GError* error = nullptr;
             GSocketConnection* connection = g_socket_listener_accept(
-                listener, nullptr, nullptr, &error);
+                listener, nullptr, acceptCancellable, &error);
             if (connection == nullptr) {
                 if (error != nullptr) {
                     g_error_free(error);
@@ -1647,6 +1655,7 @@ private:
     }
 
     GSocketListener* listener = nullptr;
+    GCancellable* acceptCancellable = nullptr;
     GSocketConnection* activeConnection = nullptr;
     guint16 port = 0;
     std::string basePath;
