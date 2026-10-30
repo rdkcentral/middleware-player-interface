@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <poll.h>
 #include <sstream>
@@ -22,8 +23,8 @@ void PrintHelp()
         << "  trick <rate>         Set trick rate: 1x, 2x, 4x, 6x, 12x, or 32x\n"
         << "  list audio           List available audio tracks\n"
         << "  list video           List available video tracks\n"
-        << "  audio <track-id>     Switch to an audio track\n"
-        << "  video <track-id>     Select a video representation\n"
+        << "  setaudio <number>    Switch to an audio track from list audio\n"
+        << "  setresolution <WxH|Hp> Select video quality (for example 1280x720)\n"
         << "  abr <on|off>         Enable or disable automatic bitrate selection\n"
         << "  stop                 Stop playback\n"
         << "  status               Show playback status and position\n"
@@ -53,12 +54,13 @@ void PrintTracks(const PlayerBackend& backend, MediaTrackType type)
 {
     const std::vector<MediaTrackInfo> tracks = backend.GetTrackCatalog();
     bool foundTrack = false;
+    std::size_t index = 0;
     for (const MediaTrackInfo& track : tracks) {
         if (track.type != type) {
             continue;
         }
         foundTrack = true;
-        std::cout << track.id << (track.selected ? " [selected]" : "")
+        std::cout << ++index << (track.selected ? " [selected]" : "")
                   << " codec="
                   << (track.codec.empty() ? "unknown" : track.codec);
         if (!track.language.empty()) {
@@ -110,6 +112,36 @@ bool ParseTrickRate(const std::string& value, int& rate)
     return true;
 }
 
+bool ParsePositiveInt(const std::string& value, int& result)
+{
+    std::istringstream input(value);
+    input >> result;
+    input >> std::ws;
+    return input.eof() && result > 0;
+}
+
+bool ParseResolution(const std::string& value, int& width, int& height)
+{
+    if (value.empty()) {
+        return false;
+    }
+
+    const char suffix = value.back();
+    if (suffix == 'p' || suffix == 'P') {
+        const std::string heightValue = value.substr(0, value.size() - 1);
+        width = 0;
+        return ParsePositiveInt(heightValue, height);
+    }
+
+    const std::size_t separator = value.find_first_of("xX");
+    if (separator == std::string::npos ||
+        value.find_first_of("xX", separator + 1) != std::string::npos) {
+        return false;
+    }
+    return ParsePositiveInt(value.substr(0, separator), width) &&
+           ParsePositiveInt(value.substr(separator + 1), height);
+}
+
 bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
 {
     std::istringstream input(line);
@@ -151,16 +183,26 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
                                 : MediaTrackType::Video);
         return true;
     }
-    if (command == "audio" || command == "video") {
-        if (!(input >> argument) || (input >> extra)) {
-            std::cout << "Usage: " << command << " <track-id>\n";
+    if (command == "setaudio") {
+        int index = 0;
+        if (!(input >> argument) || (input >> extra) ||
+            !ParsePositiveInt(argument, index)) {
+            std::cout << "Usage: setaudio <positive-track-number>\n";
             return true;
         }
-        if (command == "audio") {
-            backend.SelectAudioTrack(argument);
-        } else {
-            backend.SelectVideoTrack(argument);
+        backend.SelectAudioTrack(static_cast<std::size_t>(index));
+        PrintStatus(backend);
+        return true;
+    }
+    if (command == "setresolution") {
+        int width = 0;
+        int height = 0;
+        if (!(input >> argument) || (input >> extra) ||
+            !ParseResolution(argument, width, height)) {
+            std::cout << "Usage: setresolution <width>x<height>|<height>p\n";
+            return true;
         }
+        backend.SelectVideoResolution(width, height);
         PrintStatus(backend);
         return true;
     }

@@ -69,8 +69,8 @@ seek 45
 trick 2x
 list audio
 list video
-audio audio:0:5
-video video:0:2
+setaudio 2
+setresolution 1280x720
 abr on
 trick 4x
 trick 6x
@@ -86,15 +86,18 @@ quit
 Player Interface. Trick-rate commands flush Player Interface and reposition
 the source at the current playback time. Actual trick playback depends on the
 Player Interface platform implementation and stream support.
-`list audio` and `list video` report the track metadata discovered from the
-manifest or FFmpeg input context. For clear DASH streams, `audio <track-id>`
-switches audio and `video <track-id>` selects a representation at the current
-position. `abr on` enables bandwidth-based video selection; `abr off` returns
-to the currently selected representation. Selection rebuilds the FFmpeg
-demux source while preserving the Player Interface pipeline and playback
-position. Automatic adaptation uses completed DASH media-segment transfer
-rates, a 70% safety margin, and two consecutive decisions before switching.
-Manual audio/video selection and ABR currently require DASH.
+`list audio` and `list video` report one-based track numbers and metadata
+discovered from the manifest or FFmpeg input context. For clear DASH streams,
+`setaudio <number>` switches to the numbered audio track. `setresolution`
+accepts an exact size such as `1280x720`, or a height such as `720p` to select
+the highest-bitrate representation at that height.
+`abr on` enables bandwidth-based video selection; `abr off` returns to the
+currently selected representation. A manual resolution selection disables
+ABR. Selection rebuilds the FFmpeg demux source while preserving the Player
+Interface pipeline and playback position. Automatic adaptation uses completed
+DASH media-segment transfer rates, a 70% safety margin, and two consecutive
+decisions before switching. Manual audio/video selection and ABR currently
+require DASH.
 
 ## Startup diagnostics
 

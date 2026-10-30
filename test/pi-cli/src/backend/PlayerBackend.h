@@ -7,6 +7,7 @@
 #include <string>
 #include <chrono>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -39,8 +40,8 @@ public:
     bool Pause();
     bool Seek(double positionSeconds);
     bool SetTrickRate(int rate);
-    bool SelectAudioTrack(const std::string& trackId);
-    bool SelectVideoTrack(const std::string& trackId);
+    bool SelectAudioTrack(std::size_t oneBasedIndex);
+    bool SelectVideoResolution(int width, int height);
     bool SetAutoBitrate(bool enabled);
     std::vector<MediaTrackInfo> GetTrackCatalog() const;
     void Stop();
@@ -53,6 +54,8 @@ private:
     bool ApplySelection(const MediaTrackSelection& selection,
                         double positionSeconds,
                         const std::string& reason);
+    bool SelectAudioTrackId(const std::string& trackId);
+    bool SelectVideoTrackId(const std::string& trackId);
     void EvaluateAutoBitrate(
         std::chrono::steady_clock::time_point now);
 

@@ -888,6 +888,12 @@ struct DashResourceProxy::Impl {
         PrefetchForSeekImpl(positionSeconds);
     }
 
+    uint64_t GetEstimatedBandwidthBitsPerSecond() const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return static_cast<uint64_t>(estimatedBandwidthBitsPerSecond);
+    }
+
 private:
     std::string NewToken() const
     {
@@ -1143,12 +1149,6 @@ private:
     {
         std::lock_guard<std::mutex> lock(mutex);
         return failedResourceCount;
-    }
-
-    uint64_t EstimatedBandwidthBitsPerSecond() const
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        return static_cast<uint64_t>(estimatedBandwidthBitsPerSecond);
     }
 
     std::string LastFailure() const
@@ -1616,7 +1616,7 @@ void DashResourceProxy::PrefetchForSeek(double positionSeconds)
 
 uint64_t DashResourceProxy::GetEstimatedBandwidthBitsPerSecond() const
 {
-    return impl_->EstimatedBandwidthBitsPerSecond();
+    return impl_->GetEstimatedBandwidthBitsPerSecond();
 }
 
 void DashResourceProxy::Stop()

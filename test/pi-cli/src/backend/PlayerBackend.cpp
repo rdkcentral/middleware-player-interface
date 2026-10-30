@@ -397,24 +397,39 @@ bool PlayerBackend::SetTrickRate(int rate)
     return true;
 }
 
-bool PlayerBackend::SelectAudioTrack(const std::string& trackId)
+bool PlayerBackend::SelectAudioTrack(std::size_t oneBasedIndex)
+{
+    if (source_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot switch audio: playback has stopped";
+        return false;
+    }
+    if (oneBasedIndex == 0) {
+        statusMessage_ = "Audio track numbers start at 1; use list audio";
+        return false;
+    }
+
+    const std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
+    std::size_t audioIndex = 0;
+    for (const MediaTrackInfo& track : tracks) {
+        if (track.type != MediaTrackType::Audio) {
+            continue;
+        }
+        if (++audioIndex == oneBasedIndex) {
+            return SelectAudioTrackId(track.id);
+        }
+    }
+    statusMessage_ = "Audio track number is out of range; use list audio";
+    return false;
+}
+
+bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
 {
     if (source_ == nullptr || stopped_) {
         statusMessage_ = "Cannot switch audio: playback has stopped";
         return false;
     }
     if (!source_->IsDashMedia()) {
-        statusMessage_ = "Manual track switching currently requires DASH";
-        return false;
-    }
-    const std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
-    const auto selected = std::find_if(
-        tracks.begin(), tracks.end(), [&trackId](const MediaTrackInfo& track) {
-            return track.type == MediaTrackType::Audio &&
-                   track.id == trackId;
-        });
-    if (selected == tracks.end()) {
-        statusMessage_ = "Unknown audio track: " + trackId;
+        statusMessage_ = "Manual audio switching currently requires DASH";
         return false;
     }
     if (selection_.audioTrackId == trackId) {
@@ -430,7 +445,7 @@ bool PlayerBackend::SelectAudioTrack(const std::string& trackId)
         nextSelection, positionSeconds, "audio-track-switch");
 }
 
-bool PlayerBackend::SelectVideoTrack(const std::string& trackId)
+bool PlayerBackend::SelectVideoResolution(int width, int height)
 {
     if (source_ == nullptr || stopped_) {
         statusMessage_ = "Cannot switch video quality: playback has stopped";
@@ -440,14 +455,37 @@ bool PlayerBackend::SelectVideoTrack(const std::string& trackId)
         statusMessage_ = "Manual quality switching currently requires DASH";
         return false;
     }
+    if (width < 0 || height <= 0) {
+        statusMessage_ = "Invalid video resolution";
+        return false;
+    }
+
     const std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
-    const auto selected = std::find_if(
-        tracks.begin(), tracks.end(), [&trackId](const MediaTrackInfo& track) {
-            return track.type == MediaTrackType::Video &&
-                   track.id == trackId;
-        });
-    if (selected == tracks.end()) {
-        statusMessage_ = "Unknown video representation: " + trackId;
+    const MediaTrackInfo* match = nullptr;
+    for (const MediaTrackInfo& track : tracks) {
+        if (track.type != MediaTrackType::Video ||
+            track.height != height ||
+            (width > 0 && track.width != width)) {
+            continue;
+        }
+        if (match == nullptr || track.bitrate > match->bitrate) {
+            match = &track;
+        }
+    }
+    if (match == nullptr) {
+        statusMessage_ = "No video representation matches " +
+                         std::to_string(width == 0 ? height : width) +
+                         (width == 0 ? "p" : "x" + std::to_string(height));
+        return false;
+    }
+
+    return SelectVideoTrackId(match->id);
+}
+
+bool PlayerBackend::SelectVideoTrackId(const std::string& trackId)
+{
+    if (source_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot switch video quality: playback has stopped";
         return false;
     }
     autoBitrateEnabled_ = false;
