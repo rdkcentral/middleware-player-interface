@@ -203,32 +203,75 @@ void PlayerBackend::StartAudioTrackPrewarming()
         audioWarmupThread_.join();
     }
 
-    {
-        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
-        if (!preparedAudioSources_.empty()) {
-            return;
-        }
-    }
-
     const std::vector<uint8_t> manifestSnapshot =
         source_->GetDashManifestSnapshot();
     if (manifestSnapshot.empty()) {
         return;
     }
 
+    const std::vector<MediaTrackInfo> trackCatalog =
+        source_->GetTrackCatalog();
     std::vector<MediaTrackInfo> audioTracks;
-    for (const MediaTrackInfo& track : source_->GetTrackCatalog()) {
+    audioTracks.reserve(trackCatalog.size());
+    const MediaTrackInfo* preferredTrack = nullptr;
+    const MediaTrackInfo* fallbackTrack = nullptr;
+    for (const MediaTrackInfo& track : trackCatalog) {
         if (track.type == MediaTrackType::Audio &&
             track.id != selection_.audioTrackId &&
-            track.id != sourceAudioTrackId_ &&
-            track.id != audioTrackPrewarmAttemptedId_) {
+            track.id != sourceAudioTrackId_) {
             audioTracks.push_back(track);
+            if (track.id == preferredAudioPrewarmId_ &&
+                track.id != audioTrackPrewarmAttemptedId_) {
+                preferredTrack = &audioTracks.back();
+            } else if (track.id != audioTrackPrewarmAttemptedId_ &&
+                       fallbackTrack == nullptr) {
+                fallbackTrack = &audioTracks.back();
+            }
         }
     }
-    if (audioTracks.empty()) {
+    const MediaTrackInfo* selectedTrack =
+        preferredTrack != nullptr ? preferredTrack : fallbackTrack;
+    if (selectedTrack == nullptr) {
         return;
     }
-    const MediaTrackInfo nextTrack = audioTracks.front();
+    const MediaTrackInfo nextTrack = *selectedTrack;
+
+    std::vector<std::unique_ptr<FfmpegDemuxSource>> stalePreparedSources;
+    std::vector<std::string> stalePreparedTrackIds;
+    bool prepared = false;
+    bool cacheOccupied = false;
+    const bool replacingCache =
+        nextTrack.id == preferredAudioPrewarmId_;
+    {
+        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+        for (auto entry = preparedAudioSources_.begin();
+             entry != preparedAudioSources_.end();) {
+            if (entry->first == nextTrack.id) {
+                prepared = true;
+                ++entry;
+            } else if (replacingCache) {
+                stalePreparedTrackIds.push_back(entry->first);
+                stalePreparedSources.push_back(std::move(entry->second));
+                entry = preparedAudioSources_.erase(entry);
+            } else {
+                cacheOccupied = true;
+                ++entry;
+            }
+        }
+    }
+    for (size_t index = 0; index < stalePreparedSources.size(); ++index) {
+        LogStartupMilestone("audio-track-prewarm-evict: track=" +
+                            stalePreparedTrackIds[index] +
+                            " preferred=" + nextTrack.id);
+        QueueAudioSourceCleanup(std::move(stalePreparedSources[index]));
+    }
+    if (prepared || cacheOccupied) {
+        return;
+    }
+    if (replacingCache) {
+        LogStartupMilestone("audio-track-prewarm-priority: track=" +
+                            nextTrack.id);
+    }
 
     const std::string manifestBaseUrl =
         source_->GetDashManifestBaseUrl();
@@ -696,6 +739,7 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
 
     std::unique_ptr<FfmpegDemuxSource> previousAudioOnly =
         std::move(audioOnlySource_);
+    const std::string previousAudioTrackId = selection_.audioTrackId;
     if (useMainSource) {
         SetActiveAudioSource(source_.get());
     } else {
@@ -703,6 +747,21 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
         SetActiveAudioSource(audioOnlySource_.get());
     }
     selection_.audioTrackId = requestedAudioTrackId_;
+    if (previousAudioOnly != nullptr &&
+        previousAudioOnly.get() != activeAudioSource_) {
+        preferredAudioPrewarmId_ = previousAudioTrackId;
+        if (audioWarmupRunning_ &&
+            audioTrackPrewarmAttemptedId_ != preferredAudioPrewarmId_) {
+            cancelAudioWarmup_ = true;
+        } else if (!audioWarmupRunning_ &&
+                   audioTrackPrewarmAttemptedId_ ==
+                       preferredAudioPrewarmId_) {
+            audioTrackPrewarmAttemptedId_.clear();
+        }
+    }
+    if (selection_.audioTrackId == preferredAudioPrewarmId_) {
+        preferredAudioPrewarmId_.clear();
+    }
     previousAudioSource_ = nullptr;
     audioSwitchInProgress_ = false;
     cancelAudioSwitch_ = false;
