@@ -1250,6 +1250,7 @@ bool PlayerBackend::SetTrickRate(int rate)
     }
 
     audioSwitchPositionRebasePending_ = false;
+    positionOffsetMs_ = 0;
     positionMs_ = static_cast<long long>(currentPositionSeconds * 1000.0);
     trickPlayPositionBaselineMs_ = positionMs_;
     trickPlayPositionRebasePending_ = positionMs_ > 0;
