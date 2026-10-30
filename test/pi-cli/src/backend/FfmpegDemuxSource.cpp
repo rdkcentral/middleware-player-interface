@@ -1974,10 +1974,7 @@ void FfmpegDemuxSource::ApplyTrackDiscard()
         if (track.streamIndex < 0) {
             continue;
         }
-        // Keep audio demux active while it is unrouted; DASH may not resume
-        // an adaptation reliably after its stream is marked AVDISCARD_ALL.
-        const bool demuxEnabled =
-            track.mediaType == eGST_MEDIATYPE_AUDIO || track.enabled.load();
+        const bool demuxEnabled = track.enabled.load();
         if (track.demuxEnabled == demuxEnabled) {
             continue;
         }

@@ -78,17 +78,8 @@ bool PlayerBackend::Start()
         }
         if (track.type == MediaTrackType::Audio) {
             selection_.audioTrackId = track.id;
-            sourceAudioTrackId_ = track.id;
         } else {
             selection_.videoTrackId = track.id;
-        }
-    }
-    if (sourceAudioTrackId_.empty()) {
-        for (const MediaTrackInfo& track : source_->GetTrackCatalog()) {
-            if (track.type == MediaTrackType::Audio) {
-                sourceAudioTrackId_ = track.id;
-                break;
-            }
         }
     }
 
@@ -217,8 +208,7 @@ void PlayerBackend::StartAudioTrackPrewarming()
     const MediaTrackInfo* fallbackTrack = nullptr;
     for (const MediaTrackInfo& track : trackCatalog) {
         if (track.type == MediaTrackType::Audio &&
-            track.id != selection_.audioTrackId &&
-            track.id != sourceAudioTrackId_) {
+            track.id != selection_.audioTrackId) {
             audioTracks.push_back(track);
             if (track.id == preferredAudioPrewarmId_ &&
                 track.id != audioTrackPrewarmAttemptedId_) {
@@ -747,8 +737,8 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
         SetActiveAudioSource(audioOnlySource_.get());
     }
     selection_.audioTrackId = requestedAudioTrackId_;
-    if (previousAudioOnly != nullptr &&
-        previousAudioOnly.get() != activeAudioSource_) {
+    if (previousAudioSource_ != nullptr &&
+        previousAudioSource_ != activeAudioSource_) {
         preferredAudioPrewarmId_ = previousAudioTrackId;
         if (audioWarmupRunning_ &&
             audioTrackPrewarmAttemptedId_ != preferredAudioPrewarmId_) {
@@ -1297,18 +1287,6 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
     latestVideoTimestampMsForAudioSwitch_ = currentPositionMilliseconds;
     LogStartupMilestone("audio-track-switch-prepare-begin: track=" + trackId);
 
-    if (trackId == sourceAudioTrackId_) {
-        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
-        audioSwitchReady_ = true;
-        audioSwitchUseMainSource_ = true;
-        preparedAudioSource_.reset();
-        audioSwitchError_.clear();
-        preparedAudioPositionSeconds_ = currentPositionSeconds;
-        statusMessage_ = "Switching audio to track: " + trackId +
-                         " (reusing the active DASH demuxer)";
-        return true;
-    }
-
     std::unique_ptr<FfmpegDemuxSource> prewarmedSource;
     {
         const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
@@ -1654,7 +1632,6 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
                              : nullptr);
     previous->Stop();
     selection_ = selection;
-    sourceAudioTrackId_ = selection_.audioTrackId;
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
     positionOffsetMs_ = 0;
     audioSwitchPositionRebasePending_ = false;

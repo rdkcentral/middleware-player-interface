@@ -111,7 +111,6 @@ private:
     std::string requestedAudioTrackId_;
     std::string pendingAudioTrackId_;
     std::string preferredAudioPrewarmId_;
-    std::string sourceAudioTrackId_;
     std::string audioTrackPrewarmAttemptedId_;
     FfmpegDemuxSource* previousAudioSource_ = nullptr;
     double preparedAudioPositionSeconds_ = 0.0;
