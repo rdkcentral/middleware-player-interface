@@ -66,17 +66,17 @@ without `sudo`. The script does not build or install Player Interface itself.
 play
 pause
 seek 45
-trick 2x
+trick 2
 list audio
 list video
 setaudio 2
-setresolution 1280x720
+setres 720
 abr on
-trick 4x
-trick 6x
-trick 12x
-trick 32x
-trick 1x
+trick 4
+trick 6
+trick 12
+trick 32
+trick 1
 stop
 status
 quit
@@ -95,9 +95,9 @@ flushed only at handoff, and stale replacement packets are discarded so the
 video timeline is not reset. This prewarming adds audio-segment network traffic
 for alternate tracks. A track that is not ready yet falls back to on-demand
 preparation, so network or server delays can still exceed two seconds.
-`setresolution` accepts
-an exact size such as `1280x720`, or a height such as `720p` to select the
-highest-bitrate representation at that height.
+`setres` takes a height such as `360`, `720`, or `1080` and selects the
+highest-bitrate representation at that height. The legacy `setresolution`
+command remains available for exact sizes (`1280x720`) or heights (`720p`).
 `abr on` enables bandwidth-based video selection; `abr off` returns to the
 currently selected representation. A manual resolution selection disables
 ABR. Video selection rebuilds the FFmpeg demux source and reconfigures the

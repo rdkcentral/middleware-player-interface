@@ -20,11 +20,11 @@ void PrintHelp()
         << "  play                 Resume playback\n"
         << "  pause                Pause playback\n"
         << "  seek <seconds>       Seek to a position in seconds\n"
-        << "  trick <rate>         Set trick rate: 1x, 2x, 4x, 6x, 12x, or 32x\n"
+        << "  trick <rate>         Set trick rate: 1, 2, 4, 6, 12, or 32\n"
         << "  list audio           List available audio tracks\n"
         << "  list video           List available video tracks\n"
         << "  setaudio <number>    Switch to an audio track from list audio\n"
-        << "  setresolution <WxH|Hp> Select video quality (for example 1280x720)\n"
+        << "  setres <height>      Select video quality (for example 720)\n"
         << "  abr <on|off>         Enable or disable automatic bitrate selection\n"
         << "  stop                 Stop playback\n"
         << "  status               Show playback status and position\n"
@@ -92,32 +92,26 @@ bool ParseSeekSeconds(const std::string& value, double& seconds)
     return input.eof() && std::isfinite(seconds) && seconds >= 0.0;
 }
 
-bool ParseTrickRate(const std::string& value, int& rate)
-{
-    if (value == "1x") {
-        rate = 1;
-    } else if (value == "2x") {
-        rate = 2;
-    } else if (value == "4x") {
-        rate = 4;
-    } else if (value == "6x") {
-        rate = 6;
-    } else if (value == "12x") {
-        rate = 12;
-    } else if (value == "32x") {
-        rate = 32;
-    } else {
-        return false;
-    }
-    return true;
-}
-
 bool ParsePositiveInt(const std::string& value, int& result)
 {
     std::istringstream input(value);
     input >> result;
     input >> std::ws;
     return input.eof() && result > 0;
+}
+
+bool ParseTrickRate(const std::string& value, int& rate)
+{
+    std::string numericValue = value;
+    if (!numericValue.empty() &&
+        (numericValue.back() == 'x' || numericValue.back() == 'X')) {
+        numericValue.pop_back();
+    }
+    if (!ParsePositiveInt(numericValue, rate)) {
+        return false;
+    }
+    return rate == 1 || rate == 2 || rate == 4 || rate == 6 ||
+           rate == 12 || rate == 32;
 }
 
 bool ParseResolution(const std::string& value, int& width, int& height)
@@ -206,6 +200,17 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
         PrintStatus(backend);
         return true;
     }
+    if (command == "setres") {
+        int height = 0;
+        if (!(input >> argument) || (input >> extra) ||
+            !ParsePositiveInt(argument, height)) {
+            std::cout << "Usage: setres <height>\n";
+            return true;
+        }
+        backend.SelectVideoResolution(0, height);
+        PrintStatus(backend);
+        return true;
+    }
     if (command == "abr") {
         if (!(input >> argument) || (input >> extra) ||
             (argument != "on" && argument != "off")) {
@@ -246,7 +251,7 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
         int rate = 0;
         if (!(input >> argument) || (input >> extra) ||
             !ParseTrickRate(argument, rate)) {
-            std::cout << "Usage: trick <1x|2x|4x|6x|12x|32x>\n";
+            std::cout << "Usage: trick <1|2|4|6|12|32>\n";
             return true;
         }
         backend.SetTrickRate(rate);
