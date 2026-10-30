@@ -719,7 +719,7 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
 
     if (previousAudioOnly != nullptr &&
         previousAudioOnly.get() != activeAudioSource) {
-        previousAudioOnly->Stop();
+        QueueAudioSourceCleanup(std::move(previousAudioOnly));
     }
     statusMessage_ = "Audio track switch complete: " +
                      selection_.audioTrackId;
@@ -737,6 +737,46 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
                                 std::chrono::steady_clock::now() -
                                 audioSwitchStartedAt_)
                                 .count()));
+}
+
+void PlayerBackend::QueueAudioSourceCleanup(
+    std::unique_ptr<FfmpegDemuxSource> source)
+{
+    if (source == nullptr) {
+        return;
+    }
+
+    for (auto task = audioSourceCleanupTasks_.begin();
+         task != audioSourceCleanupTasks_.end();) {
+        if (!task->done->load()) {
+            ++task;
+            continue;
+        }
+        if (task->thread.joinable()) {
+            task->thread.join();
+        }
+        task = audioSourceCleanupTasks_.erase(task);
+    }
+
+    audioSourceCleanupTasks_.reserve(audioSourceCleanupTasks_.size() + 1);
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<FfmpegDemuxSource> retired(std::move(source));
+    AudioSourceCleanupTask task;
+    task.done = done;
+    try {
+        task.thread = std::thread([retired, done] {
+            retired->Stop();
+            done->store(true);
+        });
+    } catch (const std::system_error& error) {
+        LogStartupMilestone(
+            "audio-source-cleanup-thread-failed: " +
+            std::string(error.what()));
+        retired->Stop();
+        return;
+    }
+    audioSourceCleanupTasks_.push_back(std::move(task));
+    LogStartupMilestone("audio-source-cleanup-started");
 }
 
 void PlayerBackend::RestoreAudioAfterSwitchFailure(
@@ -1681,6 +1721,12 @@ void PlayerBackend::Stop()
         source_->SetFeedingEnabled(false);
         source_->Stop();
     }
+    for (AudioSourceCleanupTask& cleanup : audioSourceCleanupTasks_) {
+        if (cleanup.thread.joinable()) {
+            cleanup.thread.join();
+        }
+    }
+    audioSourceCleanupTasks_.clear();
     if (player_ != nullptr) {
         player_->Stop(true);
     }

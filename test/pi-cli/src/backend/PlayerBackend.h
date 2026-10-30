@@ -50,6 +50,11 @@ public:
     PlaybackStatus GetStatus() const;
 
 private:
+    struct AudioSourceCleanupTask {
+        std::thread thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+
     void HandleBusEvent(const BusEventData& event);
     long long GetVideoTimestampMilliseconds() const;
     long long GetPlaybackPositionMilliseconds() const;
@@ -63,6 +68,8 @@ private:
     bool StartSource(FfmpegDemuxSource& source);
     void ConfigurePlayerForSource(FfmpegDemuxSource& source);
     void CompleteAudioSwitchIfReady();
+    void QueueAudioSourceCleanup(
+        std::unique_ptr<FfmpegDemuxSource> source);
     void RestoreAudioAfterSwitchFailure(const std::string& error,
                                         bool playerFlushed = false);
     void SetAllSourcesFeedingEnabled(bool enabled);
@@ -96,6 +103,7 @@ private:
     std::mutex audioRoutingMutex_;
     std::thread audioSwitchThread_;
     std::thread audioWarmupThread_;
+    std::vector<AudioSourceCleanupTask> audioSourceCleanupTasks_;
     std::unique_ptr<FfmpegDemuxSource> preparedAudioSource_;
     std::unordered_map<std::string, std::unique_ptr<FfmpegDemuxSource>>
         preparedAudioSources_;
