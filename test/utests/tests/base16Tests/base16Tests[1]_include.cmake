@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/base16Tests/base16Tests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/base16Tests/base16Tests[1]_tests.cmake")
+else()
+  add_test(base16Tests_NOT_BUILT base16Tests_NOT_BUILT)
+endif()

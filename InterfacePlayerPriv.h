@@ -174,6 +174,7 @@ struct GstPlayerPriv
 	std::mutex TaskControlMutex; /**< For scheduling/de-scheduling or resetting async tasks/variables and timers */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
+	guint firstFrameTimeoutTimerId;
 	guint bufferingTimeoutTimerId;                    /**< ID of timer handler created for buffering timeout. */
 	GstElement *video_dec;                                    /**< Video decoder used by pipeline. */
 	GstElement *audio_dec;                                    /**< Audio decoder used by pipeline. */
@@ -202,6 +203,8 @@ struct GstPlayerPriv
 	bool usingRialtoSink;                                                            /**< true if rialto sink is used for video and audio sinks */
 	bool usingClosedCaptionsControl;                                                 /**< true if subtitle sink being used for CC control */
 	char videoRectangle[VIDEO_COORDINATES_SIZE];
+	int videoRectangleWidth;                                                             /**< Cached width parsed from videoRectangle; 0 when unset/invalid */
+	int videoRectangleHeight;                                                            /**< Cached height parsed from videoRectangle; 0 when unset/invalid */
 	bool pauseOnStartPlayback;                                                               /**< true if should start playback paused */
 	std::atomic<bool> eosSignalled;                                                  /**< Indicates if EOS has signaled */
 	gboolean buffering_enabled;                                                              /**< enable buffering based on multiqueue */
@@ -252,6 +255,13 @@ struct GstPlayerPriv
 	GstHandlerControl syncControl;
 	GstHandlerControl callbackControl;
 
+	
+	/* Guards ConfigurePipeline()/CreatePipeline() against running on this shared pipeline
+	 * object while a TearDownStream() from a prior tune is still releasing resources. */
+	std::mutex mTeardownMutex;
+	std::condition_variable mTeardownCV;
+	bool mTeardownInProgress = false;
+	
 	bool filterAudioDemuxBuffers; /**< flag to filter audio demux buffers */
 	double seekPosition;              /**< the position to seek the pipeline to in seconds */
 	GstPlayerPriv();

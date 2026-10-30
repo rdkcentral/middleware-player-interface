@@ -43,6 +43,8 @@ IFirebolt folder to be deleted, as IARM is no longer available as an alternative
 #include <mutex>
 #include <chrono>
 #include <condition_variable>
+#include <thread>
+#include <atomic>
 
 std::shared_ptr<DeviceFireboltInterface> s_pDeviceFireboltInterface = nullptr;
 
@@ -108,7 +110,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 
 	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnHdcpChanged(
 					[](const auto& hdcpProtocol) {
-						MW_LOG_ERR("[Event] HDCP changed");
+						MW_LOG_MIL("[Event] HDCP changed");
 						HDCPEventHandlerFirebolt(hdcpProtocol);
 					});
 
@@ -157,7 +159,7 @@ void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 
 	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnNetworkChanged(
 					[](const auto& network) {
-						MW_LOG_ERR("[Event] network changed");
+						MW_LOG_MIL("[Event] network changed");
 					    getActiveInterfaceEventHandlerFirebolt(network);
 					});
 	
@@ -310,8 +312,26 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 		MW_LOG_ERR("Unknown HDCP protocol");
 	}
 
-	pInstance->SetHDMIStatus();
-            
+	// Coalesce HDCP event storms: a burst of hdcpChanged events must not
+	// trigger back-to-back Device.hdcp + Device.videoResolution Firebolt RPCs.
+	// Defer the refresh briefly so consecutive events collapse into one query,
+	// which also guarantees the final state is queried after the storm ends.
+	static std::atomic<bool> hdmiRefreshScheduled{false};
+	bool expected = false;
+	if (hdmiRefreshScheduled.compare_exchange_strong(expected, true))
+	{
+		std::thread([]()
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(200));
+			hdmiRefreshScheduled = false;
+			auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
+			if (pInstance)
+			{
+				pInstance->SetHDMIStatus();
+			}
+		}).detach();
+	}
+
 }
 
 /**

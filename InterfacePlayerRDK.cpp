@@ -18,11 +18,14 @@
  */
 
 #include <iostream>
+#include <atomic>
+#include <fstream>
 #include "InterfacePlayerRDK.h"
 #include "InterfacePlayerPriv.h"
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <thread>
 #include "PlayerLogManager.h"
 #include "GstUtils.h"
 #include <sys/time.h>
@@ -31,14 +34,75 @@
 #include "TextStyleAttributes.h"
 #include <memory>
 #include <gst/gst.h>
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry2.hpp"
+#endif //PLAYER_TELEMETRY_SUPPORT
 #ifdef USE_EXTERNAL_STATS
 #include "player-xternal-stats.h"
 #endif
 #include "PlayerUtils.h"
 
+
+namespace
+{
+std::atomic_uint32_t gTuneErrorInjectionCount{0};
+std::atomic_uint32_t gTearDownStreamInjectionCount{0};
+constexpr const char* kTearDownStreamInjectionFile = "/tmp/teardownstream-inject-count";
+constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
+
+// Add near existing injection constants in anonymous namespace
+constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
+constexpr int kDefaultFirstFrameTimeoutMs = 3000;
+constexpr int kMinFirstFrameTimeoutMs = 50; // optional lower guard
+
+static int GetFirstFrameTimeoutMs()
+{
+    std::ifstream injectionFile(kFirstFrameTimeoutInjectionFile);
+    int timeoutMs = 0;
+
+    // Missing/unreadable/invalid/too-small => default
+    if (!(injectionFile >> timeoutMs) || timeoutMs < kMinFirstFrameTimeoutMs)
+    {
+        MW_LOG_MIL("Using default first-frame timeout: %u ms", kDefaultFirstFrameTimeoutMs);
+        return kDefaultFirstFrameTimeoutMs;
+    }
+
+    MW_LOG_WARN("Using injected first-frame timeout: %d ms", timeoutMs);
+    return timeoutMs;
+}
+
+bool ShouldInjectTuneError(uint32_t tuneCount)
+{
+    std::ifstream injectionFile(kTuneErrorInjectionFile);
+    uint32_t injectAtCount = 0;
+
+    // Missing, unreadable, empty, or non-numeric file means injection is off.
+    if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+    {
+        return false;
+    }
+
+    return tuneCount == injectAtCount;
+}
+
+bool ShouldInjectTearDownStreamError(uint32_t tearDownCount)
+{
+    std::ifstream injectionFile(kTearDownStreamInjectionFile);
+    uint32_t injectAtCount = 0;
+
+    // Missing, unreadable, empty, or non-numeric file disables injection.
+    if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+    {
+        return false;
+    }
+
+    return tearDownCount == injectAtCount;
+}
+} // namespace
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
+
 #define NORMAL_PLAY_RATE 1
 #define DEFAULT_TIMEOUT_FOR_SOURCE_SETUP (1000)          /**< Default timeout value in milliseconds */
 #define DEFAULT_AVSYNC_FREERUN_THRESHOLD_SECS 12         /**< Currently MAX FRAG DURATION + 2*/
@@ -132,7 +196,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(), mEncrypt(NULL), mDRMSessionManager(NULL),
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
@@ -145,16 +209,29 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
 	// start Scheduler Worker for task handling
 	mScheduler.StartScheduler();
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	PlayerTelemetry2 telemetry;
+	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
+#endif
+	
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> intMetrics;
+	std::map<std::string, std::string> stringMetrics;
+	std::map<std::string, float> floatMetrics;
+
+	intMetrics["isRialto"] = isRialto ? 1 : 0;
+	stringMetrics["component"] = "InterfacePlayerRDK";
+	stringMetrics["action"] = "constructor";
+
+	
+	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
+#endif
 }
 
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
 	DestroyPipeline();
-	if (mDrmSystem)
-	{
-		delete[] mDrmSystem;
-	}
 	/* safe delete configuration parameter */
 	MW_SAFE_DELETE(m_gstConfigParam);
 	mScheduler.StopScheduler();
@@ -184,6 +261,7 @@ GstPlayerPriv::GstPlayerPriv() : monitorAVstate(), pipeline(NULL), bus(NULL),
 total_bytes(0), n_audio(0), current_audio(0),
 periodicProgressCallbackIdleTaskId(GST_TASK_ID_INVALID),
 bufferingTimeoutTimerId(GST_TASK_ID_INVALID), video_dec(NULL), audio_dec(NULL), TaskControlMutex(), firstProgressCallbackIdleTask("FirstProgressCallback"),
+firstFrameTimeoutTimerId(GST_TASK_ID_INVALID),
 video_sink(NULL), audio_sink(NULL), subtitle_sink(NULL), task_pool(NULL),
 rate(GST_NORMAL_PLAY_RATE), zoom(GST_VIDEO_ZOOM_NONE), videoMuted(false), audioMuted(false), volumeMuteMutex(), subtitleMuted(true), setSubtitlePending(false),
 audioVolume(1.0), eosCallbackIdleTaskId(GST_TASK_ID_INVALID), eosCallbackIdleTaskPending(false),
@@ -213,6 +291,8 @@ aSyncControl(), syncControl(), callbackControl(), seekPosition(0)
 	 * using the westerossink connected using westeros compositor.
 	 */
 	strcpy(videoRectangle, "");
+	videoRectangleWidth = 0;
+	videoRectangleHeight = 0;
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		protectionEvent[i] = NULL;
@@ -315,6 +395,8 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
  */
 static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMetadata &drmMetadata);
 
+static gboolean FirstFrameTimeoutCallback(gpointer user_data);
+
 /**
  * @brief Configures the GStreamer pipeline.
  * @param format Video format.
@@ -336,6 +418,16 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
+	{
+		/* Don't let a new tune start reconfiguring this shared pipeline object while a prior
+		 * tune's TearDownStream() (on another thread) is still confirming resource release. */
+		std::unique_lock<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		if (!interfacePlayerPriv->gstPrivateContext->mTeardownCV.wait_for(teardownLock, std::chrono::milliseconds(3000),
+			[this]{ return !interfacePlayerPriv->gstPrivateContext->mTeardownInProgress; }))
+		{
+			MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: timed out waiting for prior TearDownStream to complete");
+		}
+	}
 	StreamCodecInfo streamInfo;
 	streamInfo.video.mCodecFormat = static_cast<GstStreamOutputFormat>(format);
 	streamInfo.audio.mCodecFormat = static_cast<GstStreamOutputFormat>(audioFormat);
@@ -364,6 +456,28 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
 	mFirstFrameRequired = FirstFrameFlag;
+
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !m_gstConfigParam)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
+		return;
+	}
+	/* First-frame watchdog: tune not completed if callback never arrives */
+		/* reset for new tune attempt */
+		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
+		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
+		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false;
+
+		/* one-shot timer; only add if not already running */
+		if (interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId == GST_TASK_ID_INVALID)
+		{
+			// In ConfigurePipeline(), replace timeout argument:
+                        const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+                        TimerAdd(FirstFrameTimeoutCallback, firstFrameTimeoutMs, interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, this, "firstFrameTimeoutTimerId");
+
+		}
+	
+	
 	MediaCodecInfo* codecInfoByTrack[GST_TRACK_COUNT] = {
 		&codecInfo.video,
 		&codecInfo.audio,
@@ -387,6 +501,11 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		newFormat[eGST_MEDIATYPE_SUBTITLE] = GST_FORMAT_INVALID;
 	}
 
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !interfacePlayerPriv->socInterface)
+	{
+		MW_LOG_ERR("interfacePlayerPriv or its members are null, cannot configure pipeline");
+		return;
+	}
 	if(!(m_gstConfigParam->useWesterosSink))
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
@@ -435,7 +554,13 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 
 	if (interfacePlayerPriv->gstPrivateContext->pipeline == NULL || interfacePlayerPriv->gstPrivateContext->bus == NULL)
 	{
-		MW_LOG_MIL("Create pipeline %s (pipeline %p bus %p)", pipelineName, interfacePlayerPriv->gstPrivateContext->pipeline, interfacePlayerPriv->gstPrivateContext->bus);
+            
+#ifdef PLAYER_TELEMETRY_SUPPORT /** verifying telemetry support*/
+    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is enabled at compile time");
+#else
+    MW_LOG_MIL("PLAYER_TELEMETRY_SUPPORT is NOT enabled at compile time");
+#endif
+		MW_LOG_MIL("Nitz : Create pipeline %s (pipeline %p bus %p)", pipelineName, interfacePlayerPriv->gstPrivateContext->pipeline, interfacePlayerPriv->gstPrivateContext->bus);
 		CreatePipeline(pipelineName, PipelinePriority); 		/*Create a new pipeline if pipeline or the message bus does not exist*/
 	}
 
@@ -601,6 +726,25 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_PAUSED failed");
+		}
+		else
+		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			{
+				std::map<std::string, int> intMetrics;
+				std::map<std::string, std::string> stringMetrics;
+				std::map<std::string, float> floatMetrics;
+
+				intMetrics["mediaFormat"] = (int)m_gstConfigParam->media;
+				intMetrics["maxBufferingTimeoutMs"] = DEFAULT_BUFFERING_MAX_MS;
+				intMetrics["framesToQueue"] = (int)m_gstConfigParam->framesToQueue;
+				intMetrics["isRialto"] = interfacePlayerPriv->gstPrivateContext->usingRialtoSink ? 1 : 0;
+				stringMetrics["state"] = "started";
+
+				PlayerTelemetry2 telemetry;
+				telemetry.send(TELEMETRY_EVENT_BUFFERING_STARTED, intMetrics, stringMetrics, floatMetrics);
+			}
+#endif
 		}
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
 		interfacePlayerPriv->gstPrivateContext->paused = false;
@@ -937,19 +1081,7 @@ void InterfacePlayerRDK::SetPreferredDRM(const char *drmID)
 {
 	if (drmID != NULL)
 	{
-		if (mDrmSystem != NULL)
-		{
-			delete[] mDrmSystem;
-		}
-		mDrmSystem = new char[strlen(drmID) + 1];
-		if (mDrmSystem != NULL)
-		{
-			strcpy(mDrmSystem, drmID);
-		}
-		else
-		{
-			MW_LOG_ERR("Memory allocation failed for mDrmSystem\n");
-		}
+		mDrmSystem = drmID;
 	}
 }
 
@@ -1373,9 +1505,29 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		switch(stateChangeReturn)
 		{
 			case GST_STATE_CHANGE_FAILURE:
+				{
+
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				std::map<std::string, int> i;
+				std::map<std::string, std::string> s;
+				std::map<std::string, float> f;
+
+				s["elem"] = SafeName(element);
+				s["cur"]  = gst_element_state_get_name(current);
+				s["pen"]  = gst_element_state_get_name(pending);
+
+				/** GstState is an enum; transmit numeric value (stable for decoding on the backend)  */
+				i["tgt"]  = static_cast<int>(targetState);
+
+				 PlayerTelemetry2 telemetry;
+				 telemetry.send("MW_PIPELINE_STATE_CHANGE_FAILURE", i, s, f);
+
+#endif
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in FAILURE state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				LogStatus(element);
 				break;
+				}
 			case GST_STATE_CHANGE_SUCCESS:
 				MW_LOG_DEBUG("InterfacePlayerRDK: %s is in success state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				break;
@@ -1387,7 +1539,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				}
 				break;
 			default:
-				MW_LOG_ERR("InterfacePlayerRDK: %s is in an unknown state", SafeName(element).c_str());
+				MW_LOG_ERR("InterfacePlayerRDK: %s get_state returned unexpected rc=%d : current %s pending %s", SafeName(element).c_str(), (int)stateChangeReturn, gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				break;
 		}
 
@@ -1400,6 +1552,11 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
 		rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		if (GST_STATE_CHANGE_FAILURE == rc)
+		{
+			MW_LOG_ERR("InterfacePlayerRDK: set_state FAILED on %s : target %s, was current %s pending %s", SafeName(element).c_str(), gst_element_state_get_name(targetState), gst_element_state_get_name(current), gst_element_state_get_name(pending));
+			LogStatus(element);
+		}
 		if(syncOnlyTransition)
 		{
 			MW_LOG_MIL("InterfacePlayerRDK: %s state set to %s",  SafeName(element).c_str(), gst_element_state_get_name(targetState));
@@ -1419,6 +1576,61 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
+	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
+	// (see InterfacePlayerRDK.h) and is used directly below to index
+	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
+	// with no range check (0 <= type < GST_TRACK_COUNT). Any caller passing an
+	// out-of-range value (bad enum cast, corrupted state, future track-type addition)
+	// causes an out-of-bounds read/write on `stream` and on `interfacePlayerPriv->
+	// gstPrivateContext->stream[type].bufferUnderrun`/`.eosReached` a few lines below.
+	// Condition that actually triggers the bug: (type < 0 || type >= GST_TRACK_COUNT).
+	//
+	
+        const int originalType = type;
+        const uint32_t tearDownCount = ++gTearDownStreamInjectionCount;
+        bool injectedInvalidType = false;
+
+        MW_LOG_MIL("TearDownStream count incremented %u", tearDownCount);
+	 // /tmp/teardownstream-inject-count specifies the TearDownStream
+        // invocation on which to inject the invalid stream type.
+	if (ShouldInjectTearDownStreamError(tearDownCount))
+        {
+                type = 4;
+                injectedInvalidType = true;
+                MW_LOG_WARN("TearDownStream: injecting invalid type=%d "
+                            "at count=%u; original type=%d",
+		  type, tearDownCount, originalType);
+        }
+
+
+	if (type < 0 || type >= GST_TRACK_COUNT)
+	{
+
+		  MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: invalid type %d, "
+                           "out of range [0,%d), injected=%d",
+                           type, GST_TRACK_COUNT, injectedInvalidType);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		std::map<std::string, int> intMetrics;
+                std::map<std::string, std::string> stringMetrics;
+                std::map<std::string, float> floatMetrics;
+                
+                intMetrics["type"] = type;
+                intMetrics["gstTrackCount"] = GST_TRACK_COUNT;
+		intMetrics["injected"] = injectedInvalidType ? 1 : 0;
+                intMetrics["tearDownCount"] = static_cast<int>(tearDownCount);
+                stringMetrics["api"] = "TearDownStream";
+                stringMetrics["error"] = "out_of_bounds_array_access";
+                
+                PlayerTelemetry2 telemetry;
+                telemetry.send("MW_INVALID_TRACK_TYPE", intMetrics, stringMetrics, floatMetrics);
+#endif
+
+		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
+	}
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = true;
+	}
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
@@ -1441,6 +1653,27 @@ void InterfacePlayerRDK::TearDownStream(int type)
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
 				}
+				else
+				{
+					/* A SUCCESS/ASYNC return here only reflects local GStreamer bookkeeping; for
+					 * server-backed sinks (e.g. Rialto) the decoder/session release happens over IPC
+					 * and is not guaranteed to be complete when this call returns. Always confirm
+					 * NULL is actually reached (bounded) before a new decoder tries to acquire the
+					 * same resource, instead of only doing so when the return is ASYNC. */
+					GstState current, pending;
+					gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+					do
+					{
+						(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+					}
+					while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+					if (current != GST_STATE_NULL)
+					{
+						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: sinkbin stopped abruptly, did not reach NULL (current=%s) - forcing synchronous reset before next decoder configuration", gst_element_state_get_name(current));
+						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+					}
+				}
+				
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream:  Unable to remove sinkbin from pipeline");
@@ -1462,7 +1695,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 		{
 			interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl = false;
-			MW_LOG_ERR("Set false for usingClosedCaptionsControl flag");
+			MW_LOG_INFO("Set false for usingClosedCaptionsControl flag");
 		}
 		g_clear_object(&stream->sinkbin);
 		g_clear_object(&stream->source);
@@ -1485,7 +1718,37 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_lock(&stream->sourceLock);
 		if (stream->sinkbin)
 		{
-			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, clearing");
+			/* This sinkbin was skipped by the main teardown block above (format was already
+			 * INVALID, or usingClosedCaptionsControl was already cleared by another media
+			 * type's teardown in this same call sequence) - clearing the reference without
+			 * first requesting GST_STATE_NULL never runs the Rialto sink's teardown handler,
+			 * so the underlying RialtoServer session for it is leaked. Tear it down properly
+			 * before dropping the reference. */
+			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, tearing down before clearing");
+			
+			if (interfacePlayerPriv->gstPrivateContext->pipeline)
+			{
+				GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+				if (GST_STATE_CHANGE_FAILURE != nullRc)
+				{
+					GstState current, pending;
+					gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+					do
+					{
+						gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+					}
+					while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+				if (current != GST_STATE_NULL)
+					{
+						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: CC sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+					}
+				}
+				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+				{
+					MW_LOG_INFO("InterfacePlayerRDK::TearDownStream: Unable to remove CC sinkbin from pipeline");
+				}
+			}
 			g_clear_object(&stream->sinkbin);
 		}
 		if (stream->source)
@@ -1496,6 +1759,12 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_unlock(&stream->sourceLock);
 	}
 	tearDownCb(false, mediaType);
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = false;
+	}
+	interfacePlayerPriv->gstPrivateContext->mTeardownCV.notify_all();
+
 	MW_LOG_MIL("InterfacePlayerRDK::TearDownStream: exit mediaType = %d", mediaType);
 }
 
@@ -1802,10 +2071,13 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	if (!gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
 						  position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 	{
-		MW_LOG_ERR("Seek failed");
+		MW_LOG_ERR("gst_element_seek failed: pos=%f rate=%f pipelineState=%s, will retry as pending seek", position, playRate, gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState));
 		SetPendingSeek(true);
 		//Save the updated seek position
 		SetSeekPosition(position);
+	}
+	else
+	{
 	}
 
 	if ((interfacePlayerPriv->gstPrivateContext->usingRialtoSink) &&
@@ -1873,7 +2145,7 @@ static GstMediaType gstGetMediaTypeForSource(const void  *source, const void *_t
 	}
 	else
 	{
-		MW_LOG_ERR("Null check failed.");
+		MW_LOG_ERR("gstGetMediaTypeForSource: invalid args source=%p instance=%p", source, _this);
 	}
 
 	return eGST_MEDIATYPE_DEFAULT;
@@ -1900,7 +2172,7 @@ static void gst_need_data(void *source, guint size, void *_this)
 		}
 		else
 		{
-			MW_LOG_ERR( "Null check failed." );
+			MW_LOG_ERR( "need-data: stream pointer is null for %s", gstGetMediaTypeName(mediaType));
 		}
 	}
 }
@@ -1929,14 +2201,14 @@ static void gst_enough_data(GstElement *source, void *_this)
 				}
 				else
 				{
-					MW_LOG_ERR( "%s Null check failed.", gstGetMediaTypeName(mediaType));
+					MW_LOG_ERR( "enough-data: stream pointer is null for %s", gstGetMediaTypeName(mediaType));
 				}
 			}
 		}
 	}
 	else
 	{
-		MW_LOG_ERR( "Null check failed." );
+		MW_LOG_ERR( "enough-data: null InterfacePlayerRDK instance, source=%p", (void*)source);
 	}
 }
 void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * source, int type)
@@ -1994,7 +2266,7 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
 		{
 			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
 		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
@@ -2296,7 +2568,37 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 	// Check elements are not already assigned
 	if (stream->sinkbin)
 	{
-		MW_LOG_ERR("Sinkbin already assigned");
+		/* A stale sinkbin here means a previous TearDownStream()/teardown path left this
+		 * element attached to the pipeline without requesting GST_STATE_NULL first - clearing
+		 * the reference alone would leak the underlying RialtoServer session and leave a
+		 * dangling child element in the pipeline bin. Tear it down properly before clearing. */
+		MW_LOG_WARN("Sinkbin already assigned, tearing down before clearing");
+		if (privatePlayer->gstPrivateContext->pipeline)
+		{
+			GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+			
+			if (GST_STATE_CHANGE_FAILURE != nullRc)
+			{
+				GstState current, pending;
+				gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+				do
+				{
+					gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+				}
+				while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+
+				if (current != GST_STATE_NULL)
+				{
+					MW_LOG_ERR("Sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+					gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+				}
+			}
+			if (!gst_bin_remove(GST_BIN(privatePlayer->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+			{
+				MW_LOG_INFO("Unable to remove stale sinkbin from pipeline");
+			}
+		}
+
 		g_clear_object(&stream->sinkbin);
 	}
 	if (privatePlayer->gstPrivateContext->subtitle_sink)
@@ -2393,7 +2695,10 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				auto subtitlebin = gst_bin_new("subtitlebin");
 				auto vipertransform = gst_element_factory_make("vipertransform", NULL);
 				gst_bin_add_many(GST_BIN(subtitlebin),vipertransform,textsink,NULL);
-				gst_element_link(vipertransform, textsink);
+				if (!gst_element_link(vipertransform, textsink))
+				{
+					MW_LOG_ERR("Failed to link vipertransform to rialtomsesubtitlesink; subtitles will not render");
+				}
 				gst_element_add_pad(subtitlebin, gst_ghost_pad_new("sink", gst_element_get_static_pad(vipertransform, "sink")));
 
 				g_object_set(stream->sinkbin, "text-sink", subtitlebin, NULL);
@@ -2604,7 +2909,7 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
 				mediaType, GST_TIME_ARGS(pts), GST_TIME_ARGS(gstPrivateContext->seekPosition * GST_SECOND));
 			if(!gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, (gstPrivateContext->seekPosition * GST_SECOND)))
 			{
-				MW_LOG_ERR("Seek failed");
+				MW_LOG_ERR("gst_element_seek_simple failed: mediaType:%d seekPosition:%f source:%s", mediaType, (double)gstPrivateContext->seekPosition, SafeName(GST_ELEMENT(stream->source)).c_str());
 			}
 
 		}
@@ -2832,12 +3137,12 @@ long long InterfacePlayerRDK::GetPositionMilliseconds(void)
 	long long rc = 0;
 	if (interfacePlayerPriv->gstPrivateContext->pipeline == NULL)
 	{
-		MW_LOG_ERR("Pipeline is NULL");
+		MW_LOG_WARN("GetPositionMilliseconds: pipeline is NULL, returning 0");
 		return rc;
 	}
 	if (interfacePlayerPriv->gstPrivateContext->positionQuery == NULL)
 	{
-		MW_LOG_ERR("Position query is NULL");
+		MW_LOG_WARN("GetPositionMilliseconds: position query is NULL, returning 0");
 		return rc;
 	}
 	// Perform gstreamer query and related operation only when pipeline is playing or if deliberately put in paused
@@ -2866,7 +3171,7 @@ long long InterfacePlayerRDK::GetPositionMilliseconds(void)
 		}
 		else
 		{
-			MW_LOG_ERR("InterfacePlayerRDK: segment query failed");
+			MW_LOG_WARN("InterfacePlayerRDK: segment query failed on video source %p, segmentStart stays unset", video->source);
 		}
 		gst_query_unref(segmentQuery);
 	}
@@ -2920,7 +3225,7 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
 				}
 				else
 				{
-					MW_LOG_ERR("Duration query failed");
+					MW_LOG_WARN("Duration query failed, pipelineState=%s", gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState));
 				}
 				gst_query_unref(durationQuery);		/* Decreases the refcount of the durationQuery. In this case the count will be zero, so it will be freed*/
 				durationQuery = NULL;
@@ -2946,14 +3251,13 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
  */
 void InterfacePlayerRDK::GetVideoSize(int &width, int &height)
 {
-	int x;
-	int y;
-	int w = 0;
-	int h = 0;
-	if ((4 == sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle, "%d,%d,%d,%d", &x, &y, &w, &h)) && (w > 0) && (h > 0))
+	// Use the dimensions cached by SetVideoRectangle() instead of re-parsing
+	// the "x,y,w,h" string on every call.
+	if (interfacePlayerPriv->gstPrivateContext->videoRectangleWidth > 0 &&
+	    interfacePlayerPriv->gstPrivateContext->videoRectangleHeight > 0)
 	{
-		width = w;
-		height = h;
+		width  = interfacePlayerPriv->gstPrivateContext->videoRectangleWidth;
+		height = interfacePlayerPriv->gstPrivateContext->videoRectangleHeight;
 	}
 }
 
@@ -2992,6 +3296,8 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 		return;
 	}
 	snprintf(interfacePlayerPriv->gstPrivateContext->videoRectangle, sizeof(interfacePlayerPriv->gstPrivateContext->videoRectangle), "%d,%d,%d,%d", x,y,w,h);
+	interfacePlayerPriv->gstPrivateContext->videoRectangleWidth  = w;
+	interfacePlayerPriv->gstPrivateContext->videoRectangleHeight = h;
 	MW_LOG_MIL("Rect %s, video_sink =%p",
 			   interfacePlayerPriv->gstPrivateContext->videoRectangle, interfacePlayerPriv->gstPrivateContext->video_sink);
 	if (m_gstConfigParam->enableRectPropertyCfg)
@@ -3054,6 +3360,21 @@ bool InterfacePlayerRDK::StopBuffering(bool forceStop, bool &isPlaying)
 				if (current == GST_STATE_PLAYING)
 				{
 					sendEndEvent = true;
+#ifdef PLAYER_TELEMETRY_SUPPORT
+					{
+						std::map<std::string, int> intMetrics;
+						std::map<std::string, std::string> stringMetrics;
+						std::map<std::string, float> floatMetrics;
+
+						intMetrics["frames"] = frames;
+						intMetrics["forceStop"] = forceStop ? 1 : 0;
+						stringMetrics["state"] = "ended";
+						stringMetrics["source"] = "stopBuffering";
+
+						PlayerTelemetry2 telemetry;
+						telemetry.send(TELEMETRY_EVENT_BUFFERING_ENDED, intMetrics, stringMetrics, floatMetrics);
+					}
+#endif
 				}
 			}
 		}
@@ -3415,7 +3736,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 					MW_LOG_INFO("Pushing sample with segment for mediaType[%d]. start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT" rate %f applied_rate %f", mediaType, segment.start, segment.stop, segment.rate, segment.applied_rate);
 					if (GST_FLOW_OK != gst_app_src_push_sample(GST_APP_SRC(stream->source), sample))
 					{
-						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d]", mediaType);
+						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d], start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, segment.start, segment.stop);
 					}
 					if(sample)
 					{
@@ -3444,7 +3765,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 			GstEvent* event = gst_event_new_segment (&segment);
 			if (!gst_pad_push_event(sourceEleSrcPad, event))
 			{
-				MW_LOG_ERR("Failed to push segment event for mediaType[%d]", mediaType);
+				MW_LOG_ERR("Failed to push segment event for mediaType[%d], srcPad=%p start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, sourceEleSrcPad, segment.start, segment.stop);
 			}
 			gst_object_unref(sourceEleSrcPad);
 
@@ -3460,10 +3781,63 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	/* There is a possibility that only single protection event is queued for multiple type since they are encrypted using same id.
 	 * Don't worry if you see only one protection event queued here.
 	 */
-	GstMediaType type = static_cast<GstMediaType>(mediaType);
+
+	const int originalMediaType = mediaType;
+        const uint32_t tuneCount = ++gTuneErrorInjectionCount;
+        bool injectInvalidMediaType = false;
+
+        // /tmp/readvariable contains the QueueProtectionEvent call count.
+        // Example: "15" injects the telemetry error at call 15.
+        if (ShouldInjectTuneError(tuneCount))
+	{
+                injectInvalidMediaType = true;
+                mediaType = 255; // Used only for the validation/telemetry block below.
+                MW_LOG_WARN("QueueProtectionEvent: injecting invalid media type: "
+                            "count=%u, injected=%d, original=%d",
+                            tuneCount, mediaType, originalMediaType);
+        }
+
+	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `mediaType` is a raw int on this public API
+ 	// (see InterfacePlayerRDK.h) and `type` is used below to index
+ 	// gstPrivateContext->protectionEvent[GST_TRACK_COUNT] (fixed size 3,
+ 	// InterfacePlayerPriv.h) with no range check. Condition that triggers the bug:
+ 	// (mediaType < 0 || mediaType >= GST_TRACK_COUNT).
+ 	if (mediaType < 0 || mediaType >= GST_TRACK_COUNT)
+ 	{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		// ISSUE [TELEMETRY FORMAT]: emits invalid-media-type telemetry when the
+		// public QueueProtectionEvent() API is called with an out-of-range
+		// `mediaType`. Integer metrics capture the supplied mediaType and valid
+		// upper bound GST_TRACK_COUNT; string metrics identify the API and error
+		// class; float metrics are intentionally empty.
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> stringMetrics;
+		std::map<std::string, float> floatMetrics;
+		intMetrics["mediaType"] = mediaType;
+		intMetrics["gstTrackCount"] = GST_TRACK_COUNT;
+		stringMetrics["api"] = "QueueProtectionEvent";
+		stringMetrics["error"] = "out_of_bounds_array_access";
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_INVALID_MEDIA_TYPE", intMetrics, stringMetrics, floatMetrics);
+		// ISSUE MARKER: telemetry sent here for invalid QueueProtectionEvent() mediaType
+#endif
+		MW_LOG_ERR("InterfacePlayerRDK::QueueProtectionEvent: invalid mediaType %d, out of range [0,%d)", mediaType, GST_TRACK_COUNT);
+                
+		if (!injectInvalidMediaType)
+                {
+                        return; // Actual caller error: do not access the array.
+                }
+
+                // Test injection: telemetry is complete; resume valid player flow.
+                mediaType = originalMediaType;
+        }
+
+        GstMediaType type = static_cast<GstMediaType>(mediaType);
+
 	pthread_mutex_lock(&mProtectionLock);
 	if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
 	{
+
 		MW_LOG_MIL("Previously cached protection event is present for type(%d), clearing!", type);
 		gst_event_unref(interfacePlayerPriv->gstPrivateContext->protectionEvent[type]);
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = NULL;
@@ -3479,10 +3853,41 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 
 		pssi = gst_buffer_new_wrapped(PLAYER_G_MEMDUP (initData, initDataSize), (gsize)initDataSize);
 		pthread_mutex_lock(&mProtectionLock);
+		if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
+		{
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			// ISSUE [TELEMETRY FORMAT]: emits race/leak telemetry when the
+			// protectionEvent[type] slot is observed as repopulated before the
+			// new assignment, indicating a concurrent QueueProtectionEvent()
+			// interleaving on the same media type. Integer metrics capture the
+			// media type and init-data size; string metrics identify the API and
+			// error class; float metrics are intentionally empty.
+			std::map<std::string, int> intMetrics;
+			std::map<std::string, std::string> stringMetrics;
+			std::map<std::string, float> floatMetrics;
+
+			intMetrics["mediaType"] = static_cast<int>(type);
+			intMetrics["initDataSize"] = static_cast<int>(initDataSize);
+			stringMetrics["api"] = "QueueProtectionEvent";
+			stringMetrics["error"] = "race_condition_leak";
+
+			PlayerTelemetry2 telemetry;
+			telemetry.send("MW_QUEUE_PROTECTION_EVENT_RACE", intMetrics, stringMetrics, floatMetrics);
+			// ISSUE MARKER: telemetry sent here for concurrent protectionEvent[type] overwrite risk
+#endif
+			// ISSUE MARKER: race condition window from above manifests here -- a
+			// concurrent caller's event for the same `type` would be leaked by this
+			// unconditional overwrite (no gst_event_unref of the prior value).
+			MW_LOG_WARN("InterfacePlayerRDK::QueueProtectionEvent: protectionEvent[%d] was repopulated by a concurrent call; overwriting will leak it", type);
+		}
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = gst_event_new_protection (protSystemId, pssi, formatType.c_str());
 		pthread_mutex_unlock(&mProtectionLock);
 
 		gst_buffer_unref (pssi);
+	}
+	else
+	{
+		// No protection event is queued when initData is invalid or empty.
 	}
 }
 
@@ -3533,8 +3938,25 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 	}
 	while ((gst_current != stateToValidate) && (gstGetStateCnt-- != 0));
 
-	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
-			   gst_current, gst_pending);
+	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : wanted = %s, State = %s, Pending = %s",
+			   gst_element_state_get_name(stateToValidate), gst_element_state_get_name(gst_current), gst_element_state_get_name(gst_pending));
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	if ((gst_current == GST_STATE_PAUSED) && (gst_pending == GST_STATE_PLAYING))
+	{
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> stringMetrics;
+		std::map<std::string, float> floatMetrics;
+
+		intMetrics["currentState"] = static_cast<int>(gst_current);
+		intMetrics["pendingState"] = static_cast<int>(gst_pending);
+		intMetrics["targetState"] = static_cast<int>(stateToValidate);
+		stringMetrics["api"] = "validateStateWithMsTimeout";
+		stringMetrics["error"] = "paused_to_playing_timeout";
+
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_VALIDATE_STATE_TIMEOUT", intMetrics, stringMetrics, floatMetrics);
+	}
+#endif
 	return gst_current;
 }
 
@@ -3568,12 +3990,15 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			/* wait a bit longer for the state change to conclude */
 			if (nextState != validateStateWithMsTimeout(this,nextState, 100))
 			{
-				MW_LOG_ERR("InterfacePlayerRDK_Pause - validateStateWithMsTimeout - FAILED GstState %d", nextState);
+				MW_LOG_ERR("InterfacePlayerRDK_Pause - state change to %s did not complete within timeout", gst_element_state_get_name(nextState));
 			}
 		}
 		else if (GST_STATE_CHANGE_SUCCESS != rc)
 		{
-			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state - FAILED rc %d", rc);
+			MW_LOG_ERR("InterfacePlayerRDK_Pause - gst_element_set_state to %s FAILED rc %d", gst_element_state_get_name(nextState), (int)rc);
+		}
+		else
+		{
 		}
 
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = nextState;
@@ -3944,6 +4369,17 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 {
 	bool notifyFirstBuffer = false;
 	bool audioOnly = false;
+
+	/* first frame arrived; cancel watchdog */
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::NotifyFirstFrame: private context not initialized, aborting notification");
+		return;
+	}
+
+	/* first frame arrived; cancel watchdog */
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+
 	bool requireFirstVideoFrameDisplay = false;
 	if (!interfacePlayerPriv->gstPrivateContext->firstFrameReceived && (interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived
 												   || (1 == interfacePlayerPriv->gstPrivateContext->NumberOfTracks && (interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived || interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived))))
@@ -4015,7 +4451,7 @@ void InterfacePlayerRDK::TriggerEvent(InterfaceCB event)
 	}
 	else
 	{
-		MW_LOG_ERR("Unknown event - No callback registered!");
+		MW_LOG_ERR("TriggerEvent: no callback registered for event %d", (int)event);
 	}
 }
 void InterfacePlayerRDK::TriggerEvent(InterfaceCB event, int data)
@@ -4027,7 +4463,7 @@ void InterfacePlayerRDK::TriggerEvent(InterfaceCB event, int data)
 	}
 	else
 	{
-		MW_LOG_ERR("Unknown event - No callback registered!");
+		MW_LOG_ERR("TriggerEvent: no callback registered for event %d (data=%d)", (int)event, data);
 	}
 }
 /* @brief Check if string start with a prefix
@@ -4276,6 +4712,13 @@ static gboolean VideoDecoderPtsCheckerForEOS(gpointer user_data)
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gint64 currentPTS = pInterfacePlayerRDK->GetVideoPTS();                       /* Gets the currentPTS from the 'video-pts' property of the element */
 
+	if (currentPTS <= 0)
+	{
+		MW_LOG_WARN("VideoDecoderPtsCheckerForEOS: invalid decoder PTS %" G_GINT64_FORMAT ", skipping EOS inference", currentPTS);
+		privatePlayer->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = GST_TASK_ID_INVALID;
+		return G_SOURCE_REMOVE;
+	}
+
 	if (currentPTS == privatePlayer->gstPrivateContext->lastKnownPTS)
 	{
 		MW_LOG_MIL("PTS not changed");
@@ -4347,8 +4790,25 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 			return;
 		}
 
-		MW_LOG_WARN("## Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
+		MW_LOG_WARN("## GstPlayer_OnGstBufferUnderflowCb: Got Underflow message from %s type %d ##", GST_ELEMENT_NAME(object), type);
 		privatePlayer->gstPrivateContext->stream[type].bufferUnderrun = true;
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		std::map<std::string, int> i;
+		std::map<std::string, std::string> s;
+		std::map<std::string, float> f;
+
+		s["elem"] = GST_ELEMENT_NAME(object);
+
+		i["typ"] = static_cast<int>(type);
+		i["eos"] = privatePlayer->gstPrivateContext->stream[type].eosReached ? 1 : 0;
+		i["und"] = privatePlayer->gstPrivateContext->stream[type].bufferUnderrun ? 1 : 0;
+
+		f["rate"] = privatePlayer->gstPrivateContext->rate;
+
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_BUFFER_UNDERFLOW", i, s, f);
+#endif
+		
 
 		if ((privatePlayer->gstPrivateContext->stream[type].eosReached) && (privatePlayer->gstPrivateContext->rate == GST_NORMAL_PLAY_RATE))
 		{
@@ -4374,7 +4834,7 @@ static void GstPlayer_OnGstBufferUnderflowCb(GstElement* object, guint arg0, gpo
 		}
 		else
 		{
-			MW_LOG_ERR("underflow callback not registered");
+			MW_LOG_ERR("underflow callback not registered, mediaType %d underflow not reported to player", (int)type);
 		}
 #ifdef USE_EXTERNAL_STATS
 		INC_RETUNE_COUNT(type); // Increment the retune count for low level AV metric
@@ -4394,9 +4854,29 @@ static void GstPlayer_OnGstPtsErrorCb(GstElement *object, guint arg0, gpointer a
 {
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
-	MW_LOG_ERR("Got PTS error message from %s", GST_ELEMENT_NAME(object));
+	MW_LOG_ERR("GstPlayer_OnGstPtsErrorCb: Got PTS error message from %s", GST_ELEMENT_NAME(object));
 	bool isVideo = false;
 	bool isAudioSink = false;
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> i;
+	std::map<std::string, std::string> s;
+	std::map<std::string, float> f;
+
+	/** String values */
+	s["elem"] = GST_ELEMENT_NAME(object);
+
+	/** Integer values */
+	i["vid"] = isVideo ? 1 : 0;
+	i["aud"] = isAudioSink ? 1 : 0;
+
+	/** Float values */
+	f["pts"] = static_cast<float>(privatePlayer->gstPrivateContext->lastKnownPTS);
+	f["ptsUpd"] = static_cast<float>(privatePlayer->gstPrivateContext->ptsUpdatedTimeMS);
+
+	PlayerTelemetry2 telemetry;
+	telemetry.send("MW_PTS_ERROR", i, s, f);
+#endif
+
 	if (privatePlayer->socInterface->IsVideoSinkHandleErrors())
 	{
 		isVideo = GstPlayer_isVideoSink(GST_ELEMENT_NAME(object), pInterfacePlayerRDK);
@@ -4426,6 +4906,25 @@ static void GstPlayer_OnGstDecodeErrorCb(GstElement* object, guint arg0, gpointe
 	HANDLER_CONTROL_HELPER_CALLBACK_VOID();
 	long long deltaMS = NOW_STEADY_TS_MS - privatePlayer->gstPrivateContext->decodeErrorMsgTimeMS;
 	privatePlayer->gstPrivateContext->decodeErrorCBCount += 1;
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> i;
+	std::map<std::string, std::string> s;
+	std::map<std::string, float> f;
+
+	/** String values */
+	s["elem"] = GST_ELEMENT_NAME(object);
+
+	/** Integer values */
+	i["cnt"] = privatePlayer->gstPrivateContext->decodeErrorCBCount;
+
+	/** Float values */
+	f["delta"] = static_cast<float>(deltaMS);
+	f["rate"]  = privatePlayer->gstPrivateContext->rate;
+
+	PlayerTelemetry2 telemetry;
+	telemetry.send("MW_DECODE_ERROR", i, s, f);
+#endif
 	if (deltaMS >= GST_MIN_DECODE_ERROR_INTERVAL)
 	{
 		pInterfacePlayerRDK->OnGstDecodeErrorCb(privatePlayer->gstPrivateContext->decodeErrorCBCount);
@@ -4461,27 +4960,43 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 	switch (GST_MESSAGE_TYPE(msg))
 	{
 		case GST_MESSAGE_ERROR:
-			gst_message_parse_error(msg, &error, &dbg_info);
-			MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
-			busEvent.msgType = MESSAGE_ERROR;
-			busEvent.msg = error->message;
-			if(dbg_info)
 			{
-				busEvent.dbg_info = dbg_info;
-			}
-			else
-			{
-				busEvent.dbg_info[0] = '\0';
-			}
-			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
-			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
-			g_clear_error(&error);
-			g_free(dbg_info);
-			break;
+				gst_message_parse_error(msg, &error, &dbg_info);
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				std::map<std::string, int> i;
+				std::map<std::string, std::string> s;
+				std::map<std::string, float> f;
 
+				/** String values */
+				s["elem"] = GST_OBJECT_NAME(msg->src);
+				s["err"]  = error->message ? error->message : "";
+				s["dbg"]  = dbg_info ? dbg_info : "";
+
+				/** Float values */
+				f["rate"] = privatePlayer->gstPrivateContext->rate;
+
+				PlayerTelemetry2 telemetry;
+				telemetry.send("MW_GST_ERROR", i, s, f);
+#endif
+				MW_LOG_ERR("GST_MESSAGE_ERROR %s: %s | domain=%s code=%d | Debug Info: %s", GST_OBJECT_NAME(msg->src), error->message, g_quark_to_string(error->domain), error->code, (dbg_info) ? dbg_info : "none");
+				busEvent.msgType = MESSAGE_ERROR;
+				busEvent.msg = error->message;
+				if(dbg_info)
+				{
+					busEvent.dbg_info = dbg_info;
+				}
+				else
+				{
+					busEvent.dbg_info[0] = '\0';
+				}
+				pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
+				g_clear_error(&error);
+				g_free(dbg_info);
+				break;
+			}
 		case GST_MESSAGE_WARNING:
 			gst_message_parse_warning(msg, &error, &dbg_info);
-			MW_LOG_ERR("GST_MESSAGE_WARNING %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
+			MW_LOG_WARN("GST_MESSAGE_WARNING %s: %s | domain=%s code=%d | Debug Info: %s", GST_OBJECT_NAME(msg->src), error->message, g_quark_to_string(error->domain), error->code, (dbg_info) ? dbg_info : "none");
 			busEvent.msgType = MESSAGE_WARNING;
 			busEvent.msg = error->message;
 			if(dbg_info)
@@ -4493,7 +5008,6 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 				busEvent.dbg_info[0] = '\0';
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
-			MW_LOG_ERR("Debug Info: %s\n", (dbg_info) ? dbg_info : "none");
 			g_clear_error(&error);
 			g_free(dbg_info);
 			break;
@@ -4854,6 +5368,61 @@ void type_check_instance(const char * str, GstElement * elem)
 	MW_LOG_MIL("%s %p type_check %d", str, elem, G_TYPE_CHECK_INSTANCE (elem));
 }
 
+/**
+ * @brief First-frame watchdog timeout callback
+ *        Raises tune-not-completed / first-frame-not-rendered failure.
+ */
+static gboolean FirstFrameTimeoutCallback(gpointer user_data)
+{
+	InterfacePlayerRDK *p = static_cast<InterfacePlayerRDK*>(user_data);
+	if (!p)
+	{
+		return G_SOURCE_REMOVE;
+	}
+
+	InterfacePlayerPriv* privatePlayer = p->GetPrivatePlayer();
+	if (!privatePlayer || !privatePlayer->gstPrivateContext)
+	{
+		return G_SOURCE_REMOVE;
+	}
+
+	/* one-shot timer bookkeeping */
+	privatePlayer->gstPrivateContext->firstFrameTimeoutTimerId = GST_TASK_ID_INVALID;
+
+	/* avoid false positive if intentionally paused before first frame */
+	if (privatePlayer->gstPrivateContext->pauseOnStartPlayback)
+	{
+		MW_LOG_WARN("FirstFrameTimeoutCallback ignored: pauseOnStartPlayback enabled");
+		return G_SOURCE_REMOVE;
+	}
+
+	/* audio-only tune can complete with first audio frame */
+	const bool audioOnlySatisfied =
+		(p->m_gstConfigParam->audioOnlyMode &&
+		 privatePlayer->gstPrivateContext->firstAudioFrameReceived);
+
+	if (!privatePlayer->gstPrivateContext->firstFrameReceived && !audioOnlySatisfied)
+	{
+
+		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
+		const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
+		MW_LOG_ERR("Tune not completed: first frame not rendered within %d ms", firstFrameTimeoutMs);
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+		std::map<std::string, int> intMetrics;
+		std::map<std::string, std::string> sMetrics;
+		std::map<std::string, float> fMetrics;
+		intMetrics["timeoutMs"] = firstFrameTimeoutMs;
+		intMetrics["audioOnlyMode"] = p->m_gstConfigParam->audioOnlyMode ? 1 : 0;
+		sMetrics["api"] = "FirstFrameTimeoutCallback";
+		sMetrics["error"] = "first_frame_not_rendered";
+		PlayerTelemetry2 telemetry;
+		telemetry.send("MW_VIDEO_START_FAILURE", intMetrics, sMetrics, fMetrics);
+#endif
+	}
+
+	return G_SOURCE_REMOVE;
+}
 static gboolean buffering_timeout (gpointer data)
 {
 	InterfacePlayerRDK * pInterfacePlayerRDK = (InterfacePlayerRDK *) data;
@@ -4901,6 +5470,21 @@ static gboolean buffering_timeout (gpointer data)
 
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				isPlayerReady = true;
+#ifdef PLAYER_TELEMETRY_SUPPORT
+				{
+					std::map<std::string, int> intMetrics;
+					std::map<std::string, std::string> stringMetrics;
+					std::map<std::string, float> floatMetrics;
+
+					intMetrics["frames"] = frames;
+					intMetrics["bufferingTimeoutCnt"] = (int)original_buffering_timeout_cnt;
+					stringMetrics["state"] = "ended";
+					stringMetrics["source"] = "timeout";
+
+					PlayerTelemetry2 telemetry;
+					telemetry.send(TELEMETRY_EVENT_BUFFERING_ENDED, intMetrics, stringMetrics, floatMetrics);
+				}
+#endif
 			}
 		}
 		if (!privatePlayer->gstPrivateContext->buffering_in_progress)
@@ -4914,6 +5498,15 @@ static gboolean buffering_timeout (gpointer data)
 			pInterfacePlayerRDK->OnBuffering_timeoutCb(isBufferingTimeoutConditionMet, isRateCorrectionDefaultOnPlaying, isPlayerReady);
 		}
 		return privatePlayer->gstPrivateContext->buffering_in_progress;
+#if 0
+    	         PlayerTelemetry2::send("MW_BUFFERING_TIMEOUT",
+                 privatePlayer->gstPrivateContext->numberOfVideoBuffersSent,
+                 privatePlayer->gstPrivateContext->buffering_timeout_cnt,
+                 privatePlayer->gstPrivateContext->rate,
+                 isBufferingTimeoutConditionMet,
+                 isRateCorrectionDefaultOnPlaying,
+                 isPlayerReady);
+#endif
 	}
 	else
 	{
@@ -5193,10 +5786,10 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 			gst_message_parse_context_type(msg, &contextType);
 			if (!g_strcmp0(contextType, "drm-preferred-decryption-system-id"))
 			{
-				MW_LOG_MIL("Setting %s as preferred drm",pInterfacePlayerRDK->mDrmSystem);
+				MW_LOG_MIL("Setting %s as preferred drm", pInterfacePlayerRDK->mDrmSystem.c_str());
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
-				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem,  NULL);
+				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem.empty() ? NULL : pInterfacePlayerRDK->mDrmSystem.c_str(),  NULL);
 				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
 			}
 
@@ -5683,7 +6276,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);

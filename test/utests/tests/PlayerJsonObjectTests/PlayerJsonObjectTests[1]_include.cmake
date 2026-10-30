@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerJsonObjectTests/PlayerJsonObjectTests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerJsonObjectTests/PlayerJsonObjectTests[1]_tests.cmake")
+else()
+  add_test(PlayerJsonObjectTests_NOT_BUILT PlayerJsonObjectTests_NOT_BUILT)
+endif()

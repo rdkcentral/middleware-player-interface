@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/Mp4DemuxTests/Mp4DemuxL1Tests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/Mp4DemuxTests/Mp4DemuxL1Tests[1]_tests.cmake")
+else()
+  add_test(Mp4DemuxL1Tests_NOT_BUILT Mp4DemuxL1Tests_NOT_BUILT)
+endif()

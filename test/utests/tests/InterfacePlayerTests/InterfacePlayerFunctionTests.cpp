@@ -250,11 +250,11 @@ TEST_F(InterfacePlayerTests, SetPreferredDRM)
 {
 	const char* testDrmID1 = "Widevine";
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID1);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 	//null check
 	const char* testDrmID2 = NULL;
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID2);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 }
 
 TEST_F(InterfacePlayerTests, GstSetSeekPosition)
@@ -370,9 +370,17 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _,_,0))
-		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_NULL),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_sinkbin, GST_STATE_NULL))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _, _, 100 * GST_MSECOND))
+		.WillOnce(DoAll(
+			SetArgPointee<1>(GST_STATE_NULL),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
@@ -1735,8 +1743,7 @@ TEST_F(InterfacePlayerTests, GstGetVideoSize_ValidRectangle)
 {
 	int width = 0;
 	int height = 0;
-	std::string videoRectangle = "10,20,1920,1080";
-	strncpy(mPlayerContext->videoRectangle, videoRectangle.c_str(), sizeof(mPlayerContext->videoRectangle) - 1);
+	mInterfaceGstPlayer->SetVideoRectangle(10, 20, 1920, 1080);
 
 	mInterfaceGstPlayer->GetVideoSize(width, height);
 
