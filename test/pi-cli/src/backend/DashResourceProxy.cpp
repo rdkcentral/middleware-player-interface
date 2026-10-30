@@ -861,6 +861,7 @@ struct DashResourceProxy::Impl {
 
     void Stop()
     {
+        GSocketConnection* connectionToClose = nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex);
             if (stopping) {
@@ -868,20 +869,38 @@ struct DashResourceProxy::Impl {
             }
             stopping = true;
             jobs.clear();
+            if (activeConnection != nullptr) {
+                connectionToClose = G_SOCKET_CONNECTION(
+                    g_object_ref(activeConnection));
+            }
             condition.notify_all();
         }
+        Report("ffmpeg-dash-proxy-stop-begin");
         if (listener != nullptr) {
             g_socket_listener_close(listener);
         }
+        if (connectionToClose != nullptr) {
+            GError* error = nullptr;
+            GSocket* socket =
+                g_socket_connection_get_socket(connectionToClose);
+            g_socket_close(socket, &error);
+            if (error != nullptr) {
+                g_error_free(error);
+            }
+            g_object_unref(connectionToClose);
+        }
+        Report("ffmpeg-dash-proxy-stop-connection-closed");
         if (acceptThread.joinable()) {
             acceptThread.join();
         }
+        Report("ffmpeg-dash-proxy-stop-server-stopped");
         for (std::thread& worker : workers) {
             if (worker.joinable()) {
                 worker.join();
             }
         }
         workers.clear();
+        Report("ffmpeg-dash-proxy-stop-complete");
         if (listener != nullptr) {
             g_object_unref(listener);
             listener = nullptr;
@@ -1498,9 +1517,21 @@ private:
                 }
                 continue;
             }
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (stopping) {
+                    g_object_unref(connection);
+                    return;
+                }
+                activeConnection = connection;
+            }
             GSocket* socket = g_socket_connection_get_socket(connection);
             g_socket_set_timeout(socket, kHttpReadTimeoutSeconds);
             HandleConnection(connection);
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                activeConnection = nullptr;
+            }
             g_object_unref(connection);
         }
     }
@@ -1616,6 +1647,7 @@ private:
     }
 
     GSocketListener* listener = nullptr;
+    GSocketConnection* activeConnection = nullptr;
     guint16 port = 0;
     std::string basePath;
     DashResourceProxy::ProgressCallback progress;
