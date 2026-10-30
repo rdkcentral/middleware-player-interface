@@ -1557,7 +1557,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
 
     // Prepare ahead of playback, then wait for it to reach the switch point so
     // the old stream keeps playing and the new one does not rewind.
-    double leadSeconds = 4.0;
+    double leadSeconds = 2.0;
     for (unsigned int attempt = 0; attempt < 3; ++attempt) {
         if (resumeFeeding) {
             const double latestPosition =
