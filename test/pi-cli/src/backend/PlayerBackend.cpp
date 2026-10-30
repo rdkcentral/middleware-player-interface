@@ -421,6 +421,9 @@ long long PlayerBackend::GetVideoTimestampMilliseconds() const
     if (player_ == nullptr) {
         return 0;
     }
+    if (trickRate_ > 1) {
+        return GetPlaybackPositionMilliseconds();
+    }
     if (trickPlayPositionRebasePending_) {
         return positionMs_;
     }
@@ -439,7 +442,10 @@ long long PlayerBackend::GetPlaybackPositionMilliseconds() const
         return positionMs_;
     }
 
-    const long long position = player_->GetPositionMilliseconds();
+    long long position = player_->GetPositionMilliseconds();
+    if (trickRate_ > 1) {
+        position /= trickRate_;
+    }
     return position > 0 ? position + positionOffsetMs_ : positionMs_;
 }
 
@@ -449,8 +455,11 @@ void PlayerBackend::LogVideoDiagnostics(const std::string& stage)
         return;
     }
 
-    const long long interfacePositionMilliseconds =
+    long long interfacePositionMilliseconds =
         player_->GetPositionMilliseconds();
+    if (trickRate_ > 1) {
+        interfacePositionMilliseconds /= trickRate_;
+    }
     const long long videoSinkPositionMilliseconds =
         player_->GetVideoPosition();
     const long long videoPts90k = player_->GetVideoPTS();
@@ -1210,7 +1219,7 @@ bool PlayerBackend::Seek(double positionSeconds)
 
 bool PlayerBackend::SetTrickRate(int rate)
 {
-    if (player_ == nullptr || stopped_) {
+    if (player_ == nullptr || source_ == nullptr || stopped_) {
         statusMessage_ = "Cannot change trick rate: playback has stopped";
         return false;
     }
@@ -1223,10 +1232,16 @@ bool PlayerBackend::SetTrickRate(int rate)
         statusMessage_ = "Unsupported trick rate";
         return false;
     }
+    if (rate > 1 && !source_->CanSynthesizeTrickPlay()) {
+        statusMessage_ =
+            "Trick play requires a finite static DASH VOD with H.264 video";
+        return false;
+    }
 
     const double currentPositionSeconds =
         static_cast<double>(GetPlaybackPositionMilliseconds()) / 1000.0;
     const bool resumeFeeding = playing_;
+    const int previousTrickRate = trickRate_;
     FfmpegDemuxSource* audioSource =
         activeAudioSource_ != source_.get() ? activeAudioSource_ : nullptr;
     if (!source_->PrepareSeek(currentPositionSeconds) ||
@@ -1236,14 +1251,40 @@ bool PlayerBackend::SetTrickRate(int rate)
         return false;
     }
     SetAllSourcesFeedingEnabled(false);
-    if (!source_->Seek(currentPositionSeconds) ||
+    if (!source_->SetTrickPlaybackRate(rate, currentPositionSeconds) ||
         (audioSource != nullptr &&
-         !audioSource->Seek(currentPositionSeconds))) {
+         !audioSource->SetTrickPlaybackRate(
+             rate, currentPositionSeconds))) {
+        source_->SetTrickPlaybackRate(
+            previousTrickRate, currentPositionSeconds);
+        if (audioSource != nullptr) {
+            audioSource->SetTrickPlaybackRate(
+                previousTrickRate, currentPositionSeconds);
+        }
+        SetAllSourcesFeedingEnabled(resumeFeeding);
+        statusMessage_ = "FFmpeg could not configure trick-play samples";
+        return false;
+    }
+    if (!source_->Seek(currentPositionSeconds, true, rate > 1) ||
+        (audioSource != nullptr &&
+         !audioSource->Seek(currentPositionSeconds, true, rate > 1))) {
+        source_->SetTrickPlaybackRate(
+            previousTrickRate, currentPositionSeconds);
+        if (audioSource != nullptr) {
+            audioSource->SetTrickPlaybackRate(
+                previousTrickRate, currentPositionSeconds);
+        }
         SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "FFmpeg could not reposition for trick play";
         return false;
     }
     if (!player_->Flush(currentPositionSeconds, rate, false, false)) {
+        source_->SetTrickPlaybackRate(
+            previousTrickRate, currentPositionSeconds);
+        if (audioSource != nullptr) {
+            audioSource->SetTrickPlaybackRate(
+                previousTrickRate, currentPositionSeconds);
+        }
         SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "Player Interface trick-play request failed";
         return false;
@@ -1254,6 +1295,9 @@ bool PlayerBackend::SetTrickRate(int rate)
     positionMs_ = static_cast<long long>(currentPositionSeconds * 1000.0);
     trickPlayPositionBaselineMs_ = positionMs_;
     trickPlayPositionRebasePending_ = positionMs_ > 0;
+    trickRate_ = rate;
+    player_->SetAudioVolume(rate == 1 ? 100 : 0);
+    player_->SetVolumeOrMuteUnMute();
     if (!player_->Pause(!resumeFeeding, false)) {
         SetAllSourcesFeedingEnabled(false);
         playing_ = false;

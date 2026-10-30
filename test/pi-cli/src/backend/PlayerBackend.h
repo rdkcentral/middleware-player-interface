@@ -132,6 +132,7 @@ private:
     long long positionMs_ = 0;
     long durationMs_ = 0;
     uint64_t lastBandwidthEstimateBitsPerSecond_ = 0;
+    int trickRate_ = 1;
     AbrController abrController_;
     std::atomic<bool> pipelinePlayingNotified_{false};
     std::atomic<bool> firstVideoFrameReported_{false};

@@ -651,6 +651,7 @@ bool FfmpegDemuxSource::Open(const std::string& url,
             Stop();
             return false;
         }
+        dashManifestDynamic_ = dashManifest.dynamic;
         dashManifestSnapshot_ = dashManifest.dynamic
             ? std::vector<uint8_t>{}
             : manifestBytes;
@@ -984,6 +985,12 @@ bool FfmpegDemuxSource::IsDashMedia() const
     return mediaMode_ == kPlayerInterfaceDashMediaMode;
 }
 
+bool FfmpegDemuxSource::CanSynthesizeTrickPlay() const
+{
+    return IsDashMedia() && !dashManifestDynamic_ &&
+           durationMilliseconds_ > 0 && HasTrack(eGST_MEDIATYPE_VIDEO);
+}
+
 int FfmpegDemuxSource::GetMediaMode() const
 {
     return mediaMode_;
@@ -1142,6 +1149,21 @@ void FfmpegDemuxSource::SetFeedingEnabled(bool enabled)
             return !track.sending || stopping_;
         });
     }
+}
+
+bool FfmpegDemuxSource::SetTrickPlaybackRate(
+    int rate,
+    double anchorPositionSeconds)
+{
+    if (rate < 1 || !std::isfinite(anchorPositionSeconds) ||
+        anchorPositionSeconds < 0.0) {
+        return false;
+    }
+
+    trickPlaybackAnchorSeconds_ = anchorPositionSeconds;
+    trickPlaybackPacketsLogged_ = 0;
+    trickPlaybackRate_ = rate;
+    return true;
 }
 
 bool FfmpegDemuxSource::PrepareSeek(double positionSeconds)
@@ -1552,6 +1574,18 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
 
     bool queued = true;
     if (track != nullptr && track->enabled) {
+        const int trickRate = trickPlaybackRate_.load();
+        const bool trickPlay = trickRate > 1;
+        const bool isTrickAudio =
+            trickPlay && track->mediaType == eGST_MEDIATYPE_AUDIO;
+        const bool isNonKeyTrickVideo =
+            trickPlay && track->mediaType == eGST_MEDIATYPE_VIDEO &&
+            (packet->flags & AV_PKT_FLAG_KEY) == 0;
+        if (isTrickAudio || isNonKeyTrickVideo) {
+            av_packet_free(&packet);
+            return true;
+        }
+
         QueuedPacket prepared;
         if (!PreparePacket(*track, packet, prepared)) {
             queued = false;
@@ -1560,8 +1594,40 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
                          "packet");
                 MarkInputEos();
             }
-        } else if (!QueuePacket(*track, std::move(prepared))) {
-            queued = !stopping_ && inputPaused_;
+        } else {
+            if (trickPlay &&
+                track->mediaType == eGST_MEDIATYPE_VIDEO) {
+                const double anchorPositionSeconds =
+                    trickPlaybackAnchorSeconds_.load();
+                if (prepared.pts < anchorPositionSeconds) {
+                    av_packet_free(&packet);
+                    return true;
+                }
+
+                const double mediaPositionSeconds = prepared.pts;
+                prepared.pts = anchorPositionSeconds +
+                    (mediaPositionSeconds - anchorPositionSeconds) /
+                        trickRate;
+                prepared.dts = std::max(
+                    anchorPositionSeconds,
+                    anchorPositionSeconds +
+                        (prepared.dts - anchorPositionSeconds) / trickRate);
+                prepared.duration /= trickRate;
+
+                const uint64_t loggedPacket =
+                    ++trickPlaybackPacketsLogged_;
+                if (loggedPacket <= 3) {
+                    ReportProgress(
+                        "ffmpeg-trickplay-keyframe: rate=" +
+                        std::to_string(trickRate) +
+                        " media-pts=" +
+                        std::to_string(mediaPositionSeconds) +
+                        " output-pts=" + std::to_string(prepared.pts));
+                }
+            }
+            if (!QueuePacket(*track, std::move(prepared))) {
+                queued = !stopping_ && inputPaused_;
+            }
         }
     }
     av_packet_free(&packet);

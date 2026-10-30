@@ -83,9 +83,12 @@ quit
 ```
 
 `seek` takes a target in seconds. The command repositions FFmpeg and flushes
-Player Interface. Trick-rate commands flush Player Interface and reposition
-the source at the current playback time. Actual trick playback depends on the
-Player Interface platform implementation and stream support.
+Player Interface. For finite, static DASH VOD with H.264 video, trick-rate
+commands synthesize AAMP-style I-frame playback from FFmpeg key packets,
+compress their timestamps to the selected rate, and mute audio. `trick 1`
+restores normal packets and audio. Dynamic/live DASH and streams without
+keyframes are not supported for synthesized trick play; the command reports
+that limitation instead of claiming the rate was applied.
 `list audio` and `list video` report one-based track numbers and metadata
 discovered from the manifest or FFmpeg input context. For clear static DASH
 streams, `pi-cli` prepares alternate audio-only sources in the background and
