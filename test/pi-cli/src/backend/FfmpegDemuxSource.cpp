@@ -665,12 +665,18 @@ bool FfmpegDemuxSource::Open(const std::string& url,
             }
         }
         dashResourceProxy_ = std::make_unique<DashResourceProxy>();
+        const bool prefetchInitialSegments =
+            !audioOnly &&
+            (manifestSnapshot == nullptr || manifestSnapshot->empty());
         if (dashResourceProxy_->Start(
                 dashManifest.data,
                 dashManifestUrl,
                 progress_,
-                !audioOnly)) {
-            ReportProgress("ffmpeg-dash-parallel-prefetch-enabled");
+                prefetchInitialSegments)) {
+            ReportProgress(
+                prefetchInitialSegments
+                    ? "ffmpeg-dash-parallel-prefetch-enabled"
+                    : "ffmpeg-dash-parallel-prefetch-on-demand");
         } else {
             dashResourceProxy_.reset();
             ReportProgress(

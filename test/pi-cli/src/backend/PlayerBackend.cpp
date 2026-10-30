@@ -1520,6 +1520,10 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
 
     const bool resumeFeeding = playing_;
     auto candidate = std::make_unique<FfmpegDemuxSource>();
+    const std::vector<uint8_t> manifestSnapshot =
+        source_->GetDashManifestSnapshot();
+    const std::string manifestBaseUrl =
+        source_->GetDashManifestBaseUrl();
     LogStartupMilestone(
         reason + "-prepare-begin: audio-track=" + selection.audioTrackId +
         " video-track=" + selection.videoTrackId);
@@ -1528,7 +1532,10 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
             [this](const std::string& milestone) {
                 LogStartupMilestone(milestone);
             },
-            selection)) {
+            selection,
+            false,
+            manifestSnapshot.empty() ? nullptr : &manifestSnapshot,
+            manifestBaseUrl)) {
         std::string error;
         candidate->TakeError(error);
         statusMessage_ = error.empty()
@@ -1549,6 +1556,8 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         }
         if (candidate->PrepareSeek(positionSeconds) &&
             candidate->Seek(positionSeconds)) {
+            candidate->SetDiscardBeforePosition(
+                eGST_MEDIATYPE_AUDIO, positionSeconds);
             const double latestPosition = resumeFeeding
                 ? static_cast<double>(GetPlaybackPositionMilliseconds()) /
                       1000.0
@@ -1586,8 +1595,11 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     ConfigurePlayerForSource(*source_);
     const bool sourceStarted = StartSource();
     const bool playbackStateRestored =
-        sourceStarted &&
-        (resumeFeeding || player_->Pause(true, false));
+        sourceStarted && player_->Pause(!resumeFeeding, false);
+    LogStartupMilestone(
+        reason + "-player-state-restored: target=" +
+        (resumeFeeding ? "playing" : "paused") +
+        " success=" + (playbackStateRestored ? "yes" : "no"));
     if (!playbackStateRestored) {
         const std::string switchError = sourceStarted
             ? "Could not restore Player Interface state after " + reason
@@ -1651,7 +1663,8 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
                      std::to_string(positionSeconds) + " s";
     LogStartupMilestone(
         reason + "-complete: audio-track=" + selection_.audioTrackId +
-        " video-track=" + selection_.videoTrackId);
+        " video-track=" + selection_.videoTrackId +
+        " position-seconds=" + std::to_string(positionSeconds));
     return true;
 }
 
