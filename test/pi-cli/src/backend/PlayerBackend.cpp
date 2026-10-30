@@ -1254,6 +1254,18 @@ bool PlayerBackend::SetTrickRate(int rate)
     positionMs_ = static_cast<long long>(currentPositionSeconds * 1000.0);
     trickPlayPositionBaselineMs_ = positionMs_;
     trickPlayPositionRebasePending_ = positionMs_ > 0;
+    if (!player_->Pause(!resumeFeeding, false)) {
+        SetAllSourcesFeedingEnabled(false);
+        playing_ = false;
+        statusMessage_ =
+            "Player Interface could not restore playback state after "
+            "trick-play request";
+        LogStartupMilestone(statusMessage_);
+        return false;
+    }
+    LogStartupMilestone(
+        std::string("trick-play-player-state-restored: target=") +
+        (resumeFeeding ? "playing" : "paused") + " success=yes");
     SetAllSourcesFeedingEnabled(resumeFeeding);
     statusMessage_ = rate == 1
         ? "Normal playback requested"
