@@ -1537,6 +1537,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     LogStartupMilestone(
         reason + "-prepare-begin: audio-track=" + selection.audioTrackId +
         " video-track=" + selection.videoTrackId);
+    const auto candidateOpenStarted = std::chrono::steady_clock::now();
     if (!candidate->Open(
             url_,
             [this](const std::string& milestone) {
@@ -1554,10 +1555,19 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         LogStartupMilestone(statusMessage_);
         return false;
     }
+    const double candidateOpenSeconds =
+        std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - candidateOpenStarted)
+            .count();
 
     // Prepare ahead of playback, then wait for it to reach the switch point so
     // the old stream keeps playing and the new one does not rewind.
-    double leadSeconds = 2.0;
+    double leadSeconds =
+        std::min(10.0, std::max(2.0, candidateOpenSeconds + 2.0));
+    LogStartupMilestone(
+        reason + "-switch-lookahead: candidate-open-ms=" +
+        std::to_string(static_cast<long long>(candidateOpenSeconds * 1000.0)) +
+        " lead-seconds=" + std::to_string(leadSeconds));
     for (unsigned int attempt = 0; attempt < 3; ++attempt) {
         if (resumeFeeding) {
             const double latestPosition =
