@@ -264,6 +264,9 @@ int ConsolePlayer::Run(PlayerBackend& backend)
 {
     std::cout << "Video output is provided by Player Interface.\n";
     PrintHelp();
+    if (!backend.Start()) {
+        return 1;
+    }
     std::cout << "pi-cli> " << std::flush;
 
     bool running = true;
