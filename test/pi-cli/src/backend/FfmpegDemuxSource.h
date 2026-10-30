@@ -37,7 +37,8 @@ public:
               const MediaTrackSelection& selection = {},
               bool audioOnly = false,
               const std::vector<uint8_t>* manifestSnapshot = nullptr,
-              const std::string& manifestBaseUrl = {});
+              const std::string& manifestBaseUrl = {},
+              const std::atomic<bool>* cancellation = nullptr);
     StreamCodecInfo GetCodecInfo() const;
     std::vector<MediaTrackInfo> GetTrackCatalog() const;
     std::vector<uint8_t> GetDashManifestSnapshot() const;
@@ -54,7 +55,8 @@ public:
     void SetTrackEnabled(int mediaType, bool enabled);
     void SetFeedingEnabled(bool enabled);
     bool PrepareSeek(double positionSeconds);
-    bool Seek(double positionSeconds);
+    bool Seek(double positionSeconds, bool markDiscontinuity = true);
+    void SetDiscardBeforePosition(int mediaType, double positionSeconds);
     bool TakeError(std::string& error);
     void Stop();
 
@@ -86,6 +88,7 @@ private:
         bool inputEos = false;
         bool eosNotified = false;
         bool sending = false;
+        double discardBeforeSeconds = -1.0;
         std::atomic<bool> enabled{true};
         bool demuxEnabled = true;
         bool discontinuityNext = true;
@@ -155,6 +158,7 @@ private:
     int mediaMode_ = -1;
     long long durationMilliseconds_ = 0;
     std::atomic<bool> stopping_{false};
+    const std::atomic<bool>* cancellation_ = nullptr;
     std::atomic<bool> inputPaused_{false};
     std::atomic<bool> feedingEnabled_{true};
     std::atomic<uint64_t> seekGeneration_{0};

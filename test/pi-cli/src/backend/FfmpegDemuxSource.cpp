@@ -503,7 +503,8 @@ bool FfmpegDemuxSource::Open(const std::string& url,
                              const MediaTrackSelection& requestedTracks,
                              bool audioOnly,
                              const std::vector<uint8_t>* manifestSnapshot,
-                             const std::string& manifestBaseUrl)
+                             const std::string& manifestBaseUrl,
+                             const std::atomic<bool>* cancellation)
 {
     if (url.empty()) {
         SetError("A stream URL is required");
@@ -516,6 +517,7 @@ bool FfmpegDemuxSource::Open(const std::string& url,
     dashManifestSnapshot_.clear();
     dashManifestBaseUrl_.clear();
     stopping_ = false;
+    cancellation_ = cancellation;
     inputPaused_ = false;
     feedingEnabled_ = true;
 
@@ -1146,7 +1148,7 @@ bool FfmpegDemuxSource::PrepareSeek(double positionSeconds)
     return true;
 }
 
-bool FfmpegDemuxSource::Seek(double positionSeconds)
+bool FfmpegDemuxSource::Seek(double positionSeconds, bool markDiscontinuity)
 {
     if (formatContext_ == nullptr || !std::isfinite(positionSeconds) ||
         positionSeconds < 0.0 || positionSeconds >
@@ -1163,7 +1165,7 @@ bool FfmpegDemuxSource::Seek(double positionSeconds)
         track.queuedBytes = 0;
         track.inputEos = false;
         track.eosNotified = false;
-        track.discontinuityNext = true;
+        track.discontinuityNext = markDiscontinuity;
         track.hasTimestamp = false;
         track.condition.notify_all();
     }
@@ -1197,7 +1199,7 @@ bool FfmpegDemuxSource::Seek(double positionSeconds)
         track.queuedBytes = 0;
         track.inputEos = false;
         track.eosNotified = false;
-        track.discontinuityNext = true;
+        track.discontinuityNext = markDiscontinuity;
         track.hasTimestamp = false;
         track.condition.notify_all();
     }
@@ -1205,6 +1207,28 @@ bool FfmpegDemuxSource::Seek(double positionSeconds)
     ++seekGeneration_;
     inputPauseCondition_.notify_all();
     return true;
+}
+
+void FfmpegDemuxSource::SetDiscardBeforePosition(int mediaType,
+                                                  double positionSeconds)
+{
+    Track* track = FindTrack(mediaType);
+    if (track == nullptr || !std::isfinite(positionSeconds) ||
+        positionSeconds < 0.0) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(track->mutex);
+    track->discardBeforeSeconds = positionSeconds;
+    for (auto packet = track->packets.begin();
+         packet != track->packets.end();) {
+        if (packet->pts < positionSeconds) {
+            track->queuedBytes -= packet->data.size();
+            packet = track->packets.erase(packet);
+        } else {
+            ++packet;
+        }
+    }
 }
 
 bool FfmpegDemuxSource::TakeError(std::string& error)
@@ -1252,7 +1276,8 @@ void FfmpegDemuxSource::Stop()
 int FfmpegDemuxSource::InterruptCallback(void* opaque)
 {
     auto* source = static_cast<FfmpegDemuxSource*>(opaque);
-    if (source->stopping_) {
+    if (source->stopping_ ||
+        (source->cancellation_ != nullptr && *source->cancellation_)) {
         return 1;
     }
 
@@ -1791,6 +1816,12 @@ bool FfmpegDemuxSource::CollectH264Configuration(
 bool FfmpegDemuxSource::QueuePacket(Track& track, QueuedPacket&& packet)
 {
     std::unique_lock<std::mutex> lock(track.mutex);
+    if (track.discardBeforeSeconds >= 0.0) {
+        if (packet.pts < track.discardBeforeSeconds) {
+            return true;
+        }
+        track.discardBeforeSeconds = -1.0;
+    }
     track.condition.wait(lock, [&] {
         return stopping_ || inputPaused_ || !track.enabled ||
                (track.packets.size() < kMaximumQueuedPackets &&

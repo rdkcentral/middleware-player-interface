@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 class InterfacePlayerRDK;
@@ -50,6 +51,7 @@ public:
 
 private:
     void HandleBusEvent(const BusEventData& event);
+    void StartAudioTrackPrewarming();
     void RouteNeedData(int mediaType);
     void RouteEnoughData(int mediaType);
     void SetActiveAudioSource(FfmpegDemuxSource* source);
@@ -58,7 +60,8 @@ private:
     bool StartSource(FfmpegDemuxSource& source);
     void ConfigurePlayerForSource(FfmpegDemuxSource& source);
     void CompleteAudioSwitchIfReady();
-    void RestoreAudioAfterSwitchFailure(const std::string& error);
+    void RestoreAudioAfterSwitchFailure(const std::string& error,
+                                        bool playerFlushed = false);
     void SetAllSourcesFeedingEnabled(bool enabled);
     bool ApplySelection(const MediaTrackSelection& selection,
                         double positionSeconds,
@@ -80,18 +83,28 @@ private:
     std::chrono::steady_clock::time_point nextDurationQuery_{};
     std::chrono::steady_clock::time_point nextProgressLog_{};
     std::chrono::steady_clock::time_point nextAbrEvaluation_{};
+    std::chrono::steady_clock::time_point nextAudioPrefetch_{};
+    std::chrono::steady_clock::time_point audioSwitchStartedAt_{};
     std::mutex startupLogMutex_;
     std::mutex audioSwitchMutex_;
     std::mutex audioRoutingMutex_;
     std::thread audioSwitchThread_;
+    std::thread audioWarmupThread_;
     std::unique_ptr<FfmpegDemuxSource> preparedAudioSource_;
+    std::unordered_map<std::string, std::unique_ptr<FfmpegDemuxSource>>
+        preparedAudioSources_;
     std::string audioSwitchError_;
     std::string requestedAudioTrackId_;
+    std::string sourceAudioTrackId_;
+    std::string audioTrackPrewarmAttemptedId_;
     FfmpegDemuxSource* previousAudioSource_ = nullptr;
     double preparedAudioPositionSeconds_ = 0.0;
     bool audioSwitchReady_ = false;
+    bool audioSwitchUseMainSource_ = false;
     std::atomic<bool> audioSwitchInProgress_{false};
     std::atomic<bool> cancelAudioSwitch_{false};
+    std::atomic<bool> cancelAudioWarmup_{false};
+    std::atomic<bool> audioWarmupRunning_{false};
     std::atomic<long long> latestPositionMsForAudioSwitch_{0};
     long long positionMs_ = 0;
     long durationMs_ = 0;

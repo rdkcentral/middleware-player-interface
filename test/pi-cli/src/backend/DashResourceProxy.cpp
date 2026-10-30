@@ -809,7 +809,9 @@ struct DashResourceProxy::Impl {
             }
         }
 
-        if (!StartWorkers()) {
+        if (!StartWorkers(prefetchInitialSegments
+                              ? kPrefetchWorkerCount
+                              : 1)) {
             xmlFreeDoc(document);
             Stop();
             return false;
@@ -940,10 +942,10 @@ private:
         return port != 0;
     }
 
-    bool StartWorkers()
+    bool StartWorkers(size_t workerCount)
     {
         try {
-            for (size_t index = 0; index < kPrefetchWorkerCount; ++index) {
+            for (size_t index = 0; index < workerCount; ++index) {
                 workers.emplace_back(&Impl::WorkerLoop, this);
             }
         } catch (const std::system_error&) {
