@@ -51,6 +51,7 @@ public:
 
 private:
     void HandleBusEvent(const BusEventData& event);
+    long long GetVideoTimestampMilliseconds() const;
     void StartAudioTrackPrewarming();
     void RouteNeedData(int mediaType);
     void RouteEnoughData(int mediaType);
@@ -105,7 +106,7 @@ private:
     std::atomic<bool> cancelAudioSwitch_{false};
     std::atomic<bool> cancelAudioWarmup_{false};
     std::atomic<bool> audioWarmupRunning_{false};
-    std::atomic<long long> latestPositionMsForAudioSwitch_{0};
+    std::atomic<long long> latestVideoTimestampMsForAudioSwitch_{0};
     long long positionMs_ = 0;
     long durationMs_ = 0;
     uint64_t lastBandwidthEstimateBitsPerSecond_ = 0;
