@@ -88,6 +88,7 @@ private:
     std::chrono::steady_clock::time_point nextAbrEvaluation_{};
     std::chrono::steady_clock::time_point nextAudioPrefetch_{};
     std::chrono::steady_clock::time_point audioSwitchStartedAt_{};
+    std::chrono::steady_clock::time_point audioSwitchDrainLastUpdate_{};
     std::chrono::steady_clock::time_point nextAudioSwitchDiagnostic_{};
     std::chrono::steady_clock::time_point audioSwitchDiagnosticsUntil_{};
     std::mutex startupLogMutex_;
@@ -106,11 +107,13 @@ private:
     double preparedAudioPositionSeconds_ = 0.0;
     bool audioSwitchReady_ = false;
     bool audioSwitchUseMainSource_ = false;
+    bool audioSwitchDrainStarted_ = false;
     std::atomic<bool> audioSwitchInProgress_{false};
     std::atomic<bool> cancelAudioSwitch_{false};
     std::atomic<bool> cancelAudioWarmup_{false};
     std::atomic<bool> audioWarmupRunning_{false};
     std::atomic<long long> latestVideoTimestampMsForAudioSwitch_{0};
+    std::chrono::milliseconds audioSwitchDrainRemaining_{0};
     long long positionOffsetMs_ = 0;
     long long audioSwitchPositionBaselineMs_ = 0;
     bool audioSwitchPositionRebasePending_ = false;

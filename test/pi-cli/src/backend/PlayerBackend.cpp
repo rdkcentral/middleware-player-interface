@@ -14,7 +14,21 @@
 namespace {
 
 constexpr int kVideoAppSrcQueueBytes = 15 * 1024 * 1024;
-constexpr int kAudioAppSrcQueueBytes = 1536 * 1024;
+constexpr int kAudioAppSrcQueueBytes = 8 * 1024;
+
+std::chrono::milliseconds AudioQueueDrainAllowance(uint64_t bitrate)
+{
+    if (bitrate == 0) {
+        return std::chrono::milliseconds(1500);
+    }
+
+    const uint64_t queueDurationMilliseconds =
+        (static_cast<uint64_t>(kAudioAppSrcQueueBytes) * 8 * 1000 +
+         bitrate - 1) /
+        bitrate;
+    return std::chrono::milliseconds(
+        std::min<uint64_t>(queueDurationMilliseconds + 250, 1500));
+}
 
 bool IsSupportedTrickRate(int rate)
 {
@@ -473,20 +487,150 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     std::string error;
     double positionSeconds = 0.0;
     bool useMainSource = false;
+    bool beginDrain = false;
+    const auto now = std::chrono::steady_clock::now();
     {
         const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
         if (!audioSwitchReady_) {
             return;
         }
-        candidate = std::move(preparedAudioSource_);
-        error = std::move(audioSwitchError_);
-        positionSeconds = preparedAudioPositionSeconds_;
-        useMainSource = audioSwitchUseMainSource_;
-        audioSwitchReady_ = false;
-        audioSwitchUseMainSource_ = false;
+        if (!audioSwitchError_.empty()) {
+            candidate = std::move(preparedAudioSource_);
+            error = std::move(audioSwitchError_);
+            useMainSource = audioSwitchUseMainSource_;
+            audioSwitchReady_ = false;
+            audioSwitchUseMainSource_ = false;
+            audioSwitchDrainStarted_ = false;
+        } else if (!audioSwitchDrainStarted_) {
+            if (!playing_ || source_ == nullptr) {
+                return;
+            }
+            uint64_t currentAudioBitrate = 0;
+            for (const MediaTrackInfo& track : source_->GetTrackCatalog()) {
+                if (track.type == MediaTrackType::Audio &&
+                    track.id == selection_.audioTrackId) {
+                    currentAudioBitrate = track.bitrate;
+                    break;
+                }
+            }
+            audioSwitchDrainStarted_ = true;
+            audioSwitchDrainRemaining_ =
+                AudioQueueDrainAllowance(currentAudioBitrate);
+            audioSwitchDrainLastUpdate_ = now;
+            useMainSource = audioSwitchUseMainSource_;
+            beginDrain = true;
+        } else {
+            if (playing_) {
+                const auto elapsed =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - audioSwitchDrainLastUpdate_);
+                audioSwitchDrainRemaining_ =
+                    elapsed >= audioSwitchDrainRemaining_
+                        ? std::chrono::milliseconds::zero()
+                        : audioSwitchDrainRemaining_ - elapsed;
+            }
+            audioSwitchDrainLastUpdate_ = now;
+            if (audioSwitchDrainRemaining_ > std::chrono::milliseconds::zero()) {
+                return;
+            }
+            candidate = std::move(preparedAudioSource_);
+            error = std::move(audioSwitchError_);
+            positionSeconds = preparedAudioPositionSeconds_;
+            useMainSource = audioSwitchUseMainSource_;
+            audioSwitchReady_ = false;
+            audioSwitchUseMainSource_ = false;
+            audioSwitchDrainStarted_ = false;
+        }
     }
     if (audioSwitchThread_.joinable()) {
         audioSwitchThread_.join();
+    }
+
+    if (beginDrain) {
+        if (stopped_ || player_ == nullptr) {
+            audioSwitchInProgress_ = false;
+            previousAudioSource_ = nullptr;
+            return;
+        }
+
+        if (!useMainSource &&
+            (preparedAudioSource_ == nullptr ||
+             !preparedAudioSource_->HasTrack(eGST_MEDIATYPE_AUDIO))) {
+            std::unique_ptr<FfmpegDemuxSource> failedCandidate;
+            {
+                const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+                failedCandidate = std::move(preparedAudioSource_);
+                audioSwitchReady_ = false;
+                audioSwitchUseMainSource_ = false;
+                audioSwitchDrainStarted_ = false;
+            }
+            if (failedCandidate != nullptr) {
+                failedCandidate->Stop();
+            }
+            RestoreAudioAfterSwitchFailure(
+                "The requested DASH adaptation has no audio stream");
+            return;
+        }
+
+        const long long currentVideoTimestampMilliseconds =
+            GetVideoTimestampMilliseconds();
+        if (currentVideoTimestampMilliseconds > 0) {
+            positionSeconds =
+                static_cast<double>(currentVideoTimestampMilliseconds) / 1000.0;
+            latestVideoTimestampMsForAudioSwitch_ =
+                currentVideoTimestampMilliseconds;
+        }
+        LogVideoDiagnostics("before-audio-drain");
+        SetActiveAudioSource(nullptr);
+        FfmpegDemuxSource* previousAudioSource = previousAudioSource_;
+        if (previousAudioSource != nullptr) {
+            previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, false);
+        }
+        if (useMainSource) {
+            if (source_ == nullptr ||
+                !source_->HasTrack(eGST_MEDIATYPE_AUDIO)) {
+                {
+                    const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+                    audioSwitchReady_ = false;
+                    audioSwitchUseMainSource_ = false;
+                    audioSwitchDrainStarted_ = false;
+                    audioSwitchDrainRemaining_ =
+                        std::chrono::milliseconds::zero();
+                }
+                RestoreAudioAfterSwitchFailure(
+                    "The original audio source is no longer available");
+                return;
+            }
+            source_->SetDiscardBeforePosition(eGST_MEDIATYPE_AUDIO,
+                                              positionSeconds);
+        } else {
+            preparedAudioSource_->SetDiscardBeforePosition(
+                eGST_MEDIATYPE_AUDIO, positionSeconds);
+            if (!StartSource(*preparedAudioSource_)) {
+                const std::string startError = statusMessage_;
+                std::unique_ptr<FfmpegDemuxSource> failedCandidate;
+                {
+                    const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+                    failedCandidate = std::move(preparedAudioSource_);
+                    audioSwitchReady_ = false;
+                    audioSwitchUseMainSource_ = false;
+                    audioSwitchDrainStarted_ = false;
+                }
+                if (failedCandidate != nullptr) {
+                    failedCandidate->Stop();
+                }
+                RestoreAudioAfterSwitchFailure(startError);
+                return;
+            }
+        }
+
+        LogStartupMilestone(
+            "audio-track-switch-draining-old-audio: appsrc-bytes=" +
+            std::to_string(kAudioAppSrcQueueBytes) +
+            " drain-ms=" +
+            std::to_string(audioSwitchDrainRemaining_.count()));
+        statusMessage_ = "Switching audio; draining queued audio";
+        return;
     }
 
     if (stopped_ || player_ == nullptr) {
@@ -538,31 +682,17 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
                                            positionSeconds);
     }
 
-    LogVideoDiagnostics("before-audio-flush");
-    SetActiveAudioSource(nullptr);
-    FfmpegDemuxSource* previousAudioSource = previousAudioSource_;
-    if (previousAudioSource != nullptr) {
-        previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, false);
-    }
-    player_->FlushTrack(
-        eGST_MEDIATYPE_AUDIO, positionSeconds, 0.0, 0.0);
-    audioSwitchPositionRebasePending_ = true;
-    LogVideoDiagnostics("after-audio-flush");
+    LogVideoDiagnostics("before-audio-handoff");
 
     StreamCodecInfo codecCaps = useMainSource
         ? source_->GetCodecInfo()
         : candidate->GetCodecInfo();
     player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
                            std::move(codecCaps.audio));
-    LogVideoDiagnostics("after-audio-caps");
     if (useMainSource) {
         source_->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, true);
-    } else if (!StartSource(*candidate)) {
-        const std::string startError = statusMessage_;
-        candidate->Stop();
-        RestoreAudioAfterSwitchFailure(startError, true);
-        return;
     }
+    LogVideoDiagnostics("after-audio-caps");
 
     std::unique_ptr<FfmpegDemuxSource> previousAudioOnly =
         std::move(audioOnlySource_);
@@ -576,6 +706,7 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     previousAudioSource_ = nullptr;
     audioSwitchInProgress_ = false;
     cancelAudioSwitch_ = false;
+    audioSwitchDrainRemaining_ = std::chrono::milliseconds::zero();
     FfmpegDemuxSource* activeAudioSource = activeAudioSource_;
     if (activeAudioSource != nullptr) {
         activeAudioSource->NeedData(eGST_MEDIATYPE_AUDIO);
@@ -645,6 +776,8 @@ void PlayerBackend::RestoreAudioAfterSwitchFailure(
     if (!playbackResumed) {
         statusMessage_ += "; Player Interface did not resume after audio flush";
     }
+    audioSwitchDrainStarted_ = false;
+    audioSwitchDrainRemaining_ = std::chrono::milliseconds::zero();
     LogStartupMilestone(statusMessage_);
 }
 
@@ -1042,6 +1175,8 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
     requestedAudioTrackId_ = trackId;
     cancelAudioSwitch_ = false;
     audioSwitchInProgress_ = true;
+    audioSwitchDrainStarted_ = false;
+    audioSwitchDrainRemaining_ = std::chrono::milliseconds::zero();
     audioSwitchStartedAt_ = std::chrono::steady_clock::now();
     latestVideoTimestampMsForAudioSwitch_ = currentPositionMilliseconds;
     LogStartupMilestone("audio-track-switch-prepare-begin: track=" + trackId);
@@ -1512,6 +1647,8 @@ void PlayerBackend::Stop()
         preparedAudioSources_.clear();
         audioSwitchReady_ = false;
         audioSwitchUseMainSource_ = false;
+        audioSwitchDrainStarted_ = false;
+        audioSwitchDrainRemaining_ = std::chrono::milliseconds::zero();
     }
     audioSwitchInProgress_ = false;
     previousAudioSource_ = nullptr;
