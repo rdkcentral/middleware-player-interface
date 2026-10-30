@@ -926,6 +926,19 @@ void PlayerBackend::PumpEvents()
         nextAudioPrefetch_ = now + std::chrono::seconds(1);
     }
     CompleteAudioSwitchIfReady();
+    if (!audioSwitchInProgress_ && !pendingAudioTrackId_.empty()) {
+        std::string pendingTrackId = std::move(pendingAudioTrackId_);
+        pendingAudioTrackId_.clear();
+        if (pendingTrackId == selection_.audioTrackId) {
+            LogStartupMilestone(
+                "audio-track-switch-queued-target-already-selected: track=" +
+                pendingTrackId);
+        } else {
+            LogStartupMilestone(
+                "audio-track-switch-dequeued: track=" + pendingTrackId);
+            SelectAudioTrackId(pendingTrackId);
+        }
+    }
     if (player_ != nullptr &&
         now >= nextAudioSwitchDiagnostic_ &&
         now < audioSwitchDiagnosticsUntil_) {
@@ -1147,13 +1160,17 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
         statusMessage_ = "Manual audio switching currently requires DASH";
         return false;
     }
+    if (audioSwitchInProgress_) {
+        pendingAudioTrackId_ = trackId;
+        statusMessage_ = "Audio switch queued (latest request wins): " + trackId;
+        LogStartupMilestone(
+            "audio-track-switch-queued: track=" + trackId +
+            " latest-request-wins");
+        return true;
+    }
     if (selection_.audioTrackId == trackId) {
         statusMessage_ = "Audio track is already selected: " + trackId;
         return true;
-    }
-    if (audioSwitchInProgress_) {
-        statusMessage_ = "An audio track switch is already in progress";
-        return false;
     }
 
     MediaTrackSelection nextSelection = selection_;
@@ -1652,6 +1669,7 @@ void PlayerBackend::Stop()
     }
     audioSwitchInProgress_ = false;
     previousAudioSource_ = nullptr;
+    pendingAudioTrackId_.clear();
     SetActiveAudioSource(nullptr);
 
     if (audioOnlySource_ != nullptr) {
