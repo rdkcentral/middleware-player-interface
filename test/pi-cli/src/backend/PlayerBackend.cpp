@@ -371,7 +371,17 @@ long long PlayerBackend::GetVideoTimestampMilliseconds() const
 
     const long long videoPts = player_->GetVideoPTS();
     return videoPts > 0 ? videoPts / 90
-                        : player_->GetPositionMilliseconds();
+                        : GetPlaybackPositionMilliseconds();
+}
+
+long long PlayerBackend::GetPlaybackPositionMilliseconds() const
+{
+    if (player_ == nullptr) {
+        return positionMs_;
+    }
+
+    const long long position = player_->GetPositionMilliseconds();
+    return position > 0 ? position + positionOffsetMs_ : positionMs_;
 }
 
 void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
@@ -461,10 +471,11 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
             currentVideoTimestampMilliseconds;
     }
     const long long currentPositionMilliseconds =
-        player_->GetPositionMilliseconds();
+        GetPlaybackPositionMilliseconds();
     if (currentPositionMilliseconds > 0) {
         positionMs_ = currentPositionMilliseconds;
     }
+    audioSwitchPositionBaselineMs_ = positionMs_;
     if (useMainSource) {
         source_->SetDiscardBeforePosition(eGST_MEDIATYPE_AUDIO,
                                           positionSeconds);
@@ -480,6 +491,7 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     }
     player_->FlushTrack(
         eGST_MEDIATYPE_AUDIO, positionSeconds, 0.0, 0.0);
+    audioSwitchPositionRebasePending_ = true;
 
     StreamCodecInfo codecCaps = useMainSource
         ? source_->GetCodecInfo()
@@ -510,10 +522,6 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     FfmpegDemuxSource* activeAudioSource = activeAudioSource_;
     if (activeAudioSource != nullptr) {
         activeAudioSource->NeedData(eGST_MEDIATYPE_AUDIO);
-    }
-    if (playing_ && !player_->Pause(false, false)) {
-        LogStartupMilestone(
-            "audio-track-switch-resume-failed-after-source-start");
     }
 
     if (previousAudioOnly != nullptr &&
@@ -642,7 +650,30 @@ void PlayerBackend::PumpEvents()
     }
     if (player_ != nullptr && !stopped_ && playing_ &&
         now >= nextPositionQuery_) {
-        positionMs_ = player_->GetPositionMilliseconds();
+        const long long interfacePositionMilliseconds =
+            player_->GetPositionMilliseconds();
+        if (interfacePositionMilliseconds > 0) {
+            if (audioSwitchPositionRebasePending_) {
+                const long long adjustedPositionMilliseconds =
+                    interfacePositionMilliseconds + positionOffsetMs_;
+                if (adjustedPositionMilliseconds <
+                    audioSwitchPositionBaselineMs_) {
+                    positionOffsetMs_ +=
+                        audioSwitchPositionBaselineMs_ -
+                        adjustedPositionMilliseconds;
+                    LogStartupMilestone(
+                        "audio-switch-position-rebased: interface-position-ms=" +
+                        std::to_string(interfacePositionMilliseconds) +
+                        " playback-position-ms=" +
+                        std::to_string(audioSwitchPositionBaselineMs_) +
+                        " offset-ms=" +
+                        std::to_string(positionOffsetMs_));
+                }
+                audioSwitchPositionRebasePending_ = false;
+            }
+            positionMs_ =
+                interfacePositionMilliseconds + positionOffsetMs_;
+        }
         const long long videoTimestampMilliseconds =
             GetVideoTimestampMilliseconds();
         if (videoTimestampMilliseconds > 0) {
@@ -669,6 +700,10 @@ void PlayerBackend::PumpEvents()
                 "playback-progress: position-ms=" +
                 std::to_string(positionMs_) +
                 " duration-ms=" + std::to_string(durationMs_);
+            if (videoTimestampMilliseconds > 0) {
+                progress += " video-pts-ms=" +
+                            std::to_string(videoTimestampMilliseconds);
+            }
             const GstPlaybackQualityStruct* quality =
                 player_->GetVideoPlaybackQuality();
             if (quality != nullptr) {
@@ -753,7 +788,7 @@ bool PlayerBackend::Seek(double positionSeconds)
     FfmpegDemuxSource* audioSource =
         activeAudioSource_ != source_.get() ? activeAudioSource_ : nullptr;
     const long long previousPositionMilliseconds =
-        player_->GetPositionMilliseconds();
+        GetPlaybackPositionMilliseconds();
     const double previousPositionSeconds =
         previousPositionMilliseconds > 0
             ? static_cast<double>(previousPositionMilliseconds) / 1000.0
@@ -772,6 +807,8 @@ bool PlayerBackend::Seek(double positionSeconds)
         return false;
     }
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    positionOffsetMs_ = 0;
+    audioSwitchPositionRebasePending_ = false;
     const long long videoTimestampMilliseconds =
         GetVideoTimestampMilliseconds();
     latestVideoTimestampMsForAudioSwitch_ =
@@ -796,6 +833,8 @@ bool PlayerBackend::Seek(double positionSeconds)
             SetAllSourcesFeedingEnabled(resumeFeeding);
             positionMs_ = static_cast<long long>(
                 previousPositionSeconds * 1000.0);
+            positionOffsetMs_ = 0;
+            audioSwitchPositionRebasePending_ = false;
             const long long videoTimestampMilliseconds =
                 GetVideoTimestampMilliseconds();
             latestVideoTimestampMsForAudioSwitch_ =
@@ -838,7 +877,7 @@ bool PlayerBackend::SetTrickRate(int rate)
     }
 
     const double currentPositionSeconds =
-        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+        static_cast<double>(GetPlaybackPositionMilliseconds()) / 1000.0;
     const bool resumeFeeding = playing_;
     FfmpegDemuxSource* audioSource =
         activeAudioSource_ != source_.get() ? activeAudioSource_ : nullptr;
@@ -862,6 +901,9 @@ bool PlayerBackend::SetTrickRate(int rate)
         return false;
     }
 
+    positionOffsetMs_ = 0;
+    audioSwitchPositionRebasePending_ = false;
+    positionMs_ = static_cast<long long>(currentPositionSeconds * 1000.0);
     SetAllSourcesFeedingEnabled(resumeFeeding);
     statusMessage_ = rate == 1
         ? "Normal playback requested"
@@ -1124,7 +1166,7 @@ bool PlayerBackend::SelectVideoTrackId(const std::string& trackId)
     MediaTrackSelection nextSelection = selection_;
     nextSelection.videoTrackId = trackId;
     const double positionSeconds =
-        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+        static_cast<double>(GetPlaybackPositionMilliseconds()) / 1000.0;
     return ApplySelection(
         nextSelection, positionSeconds, "manual-video-quality-switch");
 }
@@ -1202,7 +1244,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     for (unsigned int attempt = 0; attempt < 2; ++attempt) {
         if (resumeFeeding) {
             const double latestPosition =
-                static_cast<double>(player_->GetPositionMilliseconds()) /
+                static_cast<double>(GetPlaybackPositionMilliseconds()) /
                 1000.0;
             if (latestPosition > positionSeconds + 1.0) {
                 positionSeconds = latestPosition;
@@ -1211,7 +1253,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         if (candidate->PrepareSeek(positionSeconds) &&
             candidate->Seek(positionSeconds)) {
             const double latestPosition = resumeFeeding
-                ? static_cast<double>(player_->GetPositionMilliseconds()) /
+                ? static_cast<double>(GetPlaybackPositionMilliseconds()) /
                       1000.0
                 : positionSeconds;
             if (attempt == 0 && latestPosition > positionSeconds + 1.0) {
@@ -1295,6 +1337,8 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     selection_ = selection;
     sourceAudioTrackId_ = selection_.audioTrackId;
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    positionOffsetMs_ = 0;
+    audioSwitchPositionRebasePending_ = false;
     const long long videoTimestampMilliseconds =
         GetVideoTimestampMilliseconds();
     latestVideoTimestampMsForAudioSwitch_ =
@@ -1358,7 +1402,7 @@ void PlayerBackend::EvaluateAutoBitrate(
     MediaTrackSelection nextSelection = selection_;
     nextSelection.videoTrackId = decision.targetTrackId;
     const double positionSeconds =
-        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+        static_cast<double>(GetPlaybackPositionMilliseconds()) / 1000.0;
     ApplySelection(nextSelection, positionSeconds, "abr-video-switch");
     abrController_.Reset();
 }
