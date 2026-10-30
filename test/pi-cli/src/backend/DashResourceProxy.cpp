@@ -488,7 +488,7 @@ struct DashResourceProxy::Impl {
     bool Start(std::vector<uint8_t>& manifest,
                const std::string& manifestUrl,
                DashResourceProxy::ProgressCallback callback,
-               bool prefetchInitialSegments)
+               std::size_t initialSegmentCount)
     {
         if (manifest.empty() ||
             manifest.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
@@ -789,9 +789,9 @@ struct DashResourceProxy::Impl {
                              track.routeId,
                              -1,
                              true);
-            if (prefetchInitialSegments) {
+            if (initialSegmentCount > 0) {
                 for (size_t index = 0;
-                     index < std::min(kPrefetchSegmentCount,
+                     index < std::min(initialSegmentCount,
                                       track.media.segmentValues.size());
                      ++index) {
                     const int64_t value =
@@ -810,7 +810,7 @@ struct DashResourceProxy::Impl {
             }
         }
 
-        if (!StartWorkers(prefetchInitialSegments
+        if (!StartWorkers(initialSegmentCount > 0
                               ? kPrefetchWorkerCount
                               : kAudioOnlyPrefetchWorkerCount)) {
             xmlFreeDoc(document);
@@ -1634,12 +1634,12 @@ DashResourceProxy::~DashResourceProxy() = default;
 bool DashResourceProxy::Start(std::vector<uint8_t>& manifest,
                               const std::string& manifestUrl,
                               ProgressCallback progress,
-                              bool prefetchInitialSegments)
+                              std::size_t initialSegmentCount)
 {
     return impl_->Start(manifest,
                         manifestUrl,
                         std::move(progress),
-                        prefetchInitialSegments);
+                        initialSegmentCount);
 }
 
 void DashResourceProxy::PrefetchForSeek(double positionSeconds)

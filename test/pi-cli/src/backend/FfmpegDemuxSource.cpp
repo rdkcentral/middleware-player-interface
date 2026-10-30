@@ -665,16 +665,17 @@ bool FfmpegDemuxSource::Open(const std::string& url,
             }
         }
         dashResourceProxy_ = std::make_unique<DashResourceProxy>();
-        const bool prefetchInitialSegments =
-            !audioOnly &&
-            (manifestSnapshot == nullptr || manifestSnapshot->empty());
+        const bool hasManifestSnapshot =
+            manifestSnapshot != nullptr && !manifestSnapshot->empty();
+        const std::size_t initialSegmentCount =
+            audioOnly ? 0 : (hasManifestSnapshot ? 1 : 4);
         if (dashResourceProxy_->Start(
                 dashManifest.data,
                 dashManifestUrl,
                 progress_,
-                prefetchInitialSegments)) {
+                initialSegmentCount)) {
             ReportProgress(
-                prefetchInitialSegments
+                initialSegmentCount > 0
                     ? "ffmpeg-dash-parallel-prefetch-enabled"
                     : "ffmpeg-dash-parallel-prefetch-on-demand");
         } else {

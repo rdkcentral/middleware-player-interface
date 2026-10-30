@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -19,7 +20,7 @@ public:
     bool Start(std::vector<uint8_t>& manifest,
                const std::string& manifestUrl,
                ProgressCallback progress,
-               bool prefetchInitialSegments = true);
+               std::size_t initialSegmentCount = 4);
     void PrefetchForSeek(double positionSeconds);
     uint64_t GetEstimatedBandwidthBitsPerSecond() const;
     void Stop();
