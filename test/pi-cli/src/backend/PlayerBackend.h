@@ -53,6 +53,7 @@ private:
     void HandleBusEvent(const BusEventData& event);
     long long GetVideoTimestampMilliseconds() const;
     long long GetPlaybackPositionMilliseconds() const;
+    void LogVideoDiagnostics(const std::string& stage);
     void StartAudioTrackPrewarming();
     void RouteNeedData(int mediaType);
     void RouteEnoughData(int mediaType);
@@ -87,6 +88,8 @@ private:
     std::chrono::steady_clock::time_point nextAbrEvaluation_{};
     std::chrono::steady_clock::time_point nextAudioPrefetch_{};
     std::chrono::steady_clock::time_point audioSwitchStartedAt_{};
+    std::chrono::steady_clock::time_point nextAudioSwitchDiagnostic_{};
+    std::chrono::steady_clock::time_point audioSwitchDiagnosticsUntil_{};
     std::mutex startupLogMutex_;
     std::mutex audioSwitchMutex_;
     std::mutex audioRoutingMutex_;

@@ -89,6 +89,10 @@ bool PlayerBackend::Start()
     config->useWesterosSink = false;
     config->useRialtoSink = false;
     config->gstreamerBufferingBeforePlay = false;
+    config->monitorAV = true;
+    config->monitorAvsyncThresholdPositiveMs = 500;
+    config->monitorAvsyncThresholdNegativeMs = -500;
+    config->monitorAvJumpThresholdMs = 5000;
     config->videoBufBytes = kVideoAppSrcQueueBytes;
     config->audioBufBytes = kAudioAppSrcQueueBytes;
     LogStartupMilestone(
@@ -384,6 +388,56 @@ long long PlayerBackend::GetPlaybackPositionMilliseconds() const
     return position > 0 ? position + positionOffsetMs_ : positionMs_;
 }
 
+void PlayerBackend::LogVideoDiagnostics(const std::string& stage)
+{
+    if (player_ == nullptr) {
+        return;
+    }
+
+    const long long interfacePositionMilliseconds =
+        player_->GetPositionMilliseconds();
+    const long long videoSinkPositionMilliseconds =
+        player_->GetVideoPosition();
+    const long long videoPts90k = player_->GetVideoPTS();
+    const MonitorAVState& monitorState = player_->GetMonitorAVState();
+    const GstPlaybackQualityStruct* quality =
+        player_->GetVideoPlaybackQuality();
+
+    std::string diagnostic =
+        "audio-switch-video-diagnostic: stage=" + stage +
+        " playing=" + (playing_ ? "yes" : "no") +
+        " pipeline-playing-notified=" +
+        (pipelinePlayingNotified_.load() ? "yes" : "no") +
+        " interface-position-ms=" +
+        std::to_string(interfacePositionMilliseconds) +
+        " adjusted-position-ms=" + std::to_string(positionMs_) +
+        " video-sink-position-ms=" +
+        std::to_string(videoSinkPositionMilliseconds) +
+        " video-pts-90khz=" + std::to_string(videoPts90k);
+    if (videoPts90k > 0) {
+        diagnostic += " video-pts-ms=" + std::to_string(videoPts90k / 90);
+    }
+    diagnostic +=
+        " monitor-av-state=" +
+        std::string(monitorState.description == nullptr
+                        ? "unavailable"
+                        : monitorState.description) +
+        " monitor-video-ms=" +
+        std::to_string(monitorState.av_position[eGST_MEDIATYPE_VIDEO]) +
+        " monitor-audio-ms=" +
+        std::to_string(monitorState.av_position[eGST_MEDIATYPE_AUDIO]) +
+        " monitor-happy=" + (monitorState.happy ? "yes" : "no");
+    if (quality != nullptr) {
+        diagnostic += " frames-rendered=" +
+                      std::to_string(quality->rendered) +
+                      " frames-dropped=" +
+                      std::to_string(quality->dropped);
+    } else {
+        diagnostic += " frame-stats=unavailable";
+    }
+    LogStartupMilestone(diagnostic);
+}
+
 void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
 {
     LogStartupMilestone("player-interface-selection-reconfigure-begin");
@@ -484,6 +538,7 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
                                            positionSeconds);
     }
 
+    LogVideoDiagnostics("before-audio-flush");
     SetActiveAudioSource(nullptr);
     FfmpegDemuxSource* previousAudioSource = previousAudioSource_;
     if (previousAudioSource != nullptr) {
@@ -492,12 +547,14 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     player_->FlushTrack(
         eGST_MEDIATYPE_AUDIO, positionSeconds, 0.0, 0.0);
     audioSwitchPositionRebasePending_ = true;
+    LogVideoDiagnostics("after-audio-flush");
 
     StreamCodecInfo codecCaps = useMainSource
         ? source_->GetCodecInfo()
         : candidate->GetCodecInfo();
     player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
                            std::move(codecCaps.audio));
+    LogVideoDiagnostics("after-audio-caps");
     if (useMainSource) {
         source_->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, true);
     } else if (!StartSource(*candidate)) {
@@ -523,6 +580,11 @@ void PlayerBackend::CompleteAudioSwitchIfReady()
     if (activeAudioSource != nullptr) {
         activeAudioSource->NeedData(eGST_MEDIATYPE_AUDIO);
     }
+    LogVideoDiagnostics("after-audio-source-start");
+    const auto diagnosticsStartedAt = std::chrono::steady_clock::now();
+    nextAudioSwitchDiagnostic_ = diagnosticsStartedAt;
+    audioSwitchDiagnosticsUntil_ =
+        diagnosticsStartedAt + std::chrono::seconds(5);
 
     if (previousAudioOnly != nullptr &&
         previousAudioOnly.get() != activeAudioSource) {
@@ -731,6 +793,12 @@ void PlayerBackend::PumpEvents()
         nextAudioPrefetch_ = now + std::chrono::seconds(1);
     }
     CompleteAudioSwitchIfReady();
+    if (player_ != nullptr &&
+        now >= nextAudioSwitchDiagnostic_ &&
+        now < audioSwitchDiagnosticsUntil_) {
+        LogVideoDiagnostics("post-switch");
+        nextAudioSwitchDiagnostic_ = now + std::chrono::milliseconds(500);
+    }
     if (!audioWarmupRunning_) {
         StartAudioTrackPrewarming();
     }
