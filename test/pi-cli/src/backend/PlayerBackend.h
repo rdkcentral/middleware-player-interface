@@ -127,6 +127,8 @@ private:
     long long positionOffsetMs_ = 0;
     long long audioSwitchPositionBaselineMs_ = 0;
     bool audioSwitchPositionRebasePending_ = false;
+    long long trickPlayPositionBaselineMs_ = 0;
+    bool trickPlayPositionRebasePending_ = false;
     long long positionMs_ = 0;
     long durationMs_ = 0;
     uint64_t lastBandwidthEstimateBitsPerSecond_ = 0;

@@ -421,15 +421,21 @@ long long PlayerBackend::GetVideoTimestampMilliseconds() const
     if (player_ == nullptr) {
         return 0;
     }
+    if (trickPlayPositionRebasePending_) {
+        return positionMs_;
+    }
 
     const long long videoPts = player_->GetVideoPTS();
-    return videoPts > 0 ? videoPts / 90
+    return videoPts > 0 ? videoPts / 90 + positionOffsetMs_
                         : GetPlaybackPositionMilliseconds();
 }
 
 long long PlayerBackend::GetPlaybackPositionMilliseconds() const
 {
     if (player_ == nullptr) {
+        return positionMs_;
+    }
+    if (trickPlayPositionRebasePending_) {
         return positionMs_;
     }
 
@@ -965,8 +971,35 @@ void PlayerBackend::PumpEvents()
                 }
                 audioSwitchPositionRebasePending_ = false;
             }
-            positionMs_ =
-                interfacePositionMilliseconds + positionOffsetMs_;
+            if (trickPlayPositionRebasePending_) {
+                // FFmpeg may seek back to an earlier keyframe before the
+                // pipeline reports its new, relative position.
+                constexpr long long kTrickPlayRebaseToleranceMs = 2000;
+                const long long adjustedPositionMilliseconds =
+                    interfacePositionMilliseconds + positionOffsetMs_;
+                if (adjustedPositionMilliseconds <
+                    trickPlayPositionBaselineMs_ -
+                        kTrickPlayRebaseToleranceMs) {
+                    positionOffsetMs_ = trickPlayPositionBaselineMs_;
+                    trickPlayPositionRebasePending_ = false;
+                    LogStartupMilestone(
+                        "trick-play-position-rebased: interface-position-ms=" +
+                        std::to_string(interfacePositionMilliseconds) +
+                        " playback-position-ms=" +
+                        std::to_string(trickPlayPositionBaselineMs_) +
+                        " offset-ms=" +
+                        std::to_string(positionOffsetMs_));
+                } else if (
+                    adjustedPositionMilliseconds >
+                    trickPlayPositionBaselineMs_ +
+                        kTrickPlayRebaseToleranceMs) {
+                    trickPlayPositionRebasePending_ = false;
+                }
+            }
+            if (!trickPlayPositionRebasePending_) {
+                positionMs_ =
+                    interfacePositionMilliseconds + positionOffsetMs_;
+            }
         }
         const long long videoTimestampMilliseconds =
             GetVideoTimestampMilliseconds();
@@ -1122,6 +1155,7 @@ bool PlayerBackend::Seek(double positionSeconds)
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
     positionOffsetMs_ = 0;
     audioSwitchPositionRebasePending_ = false;
+    trickPlayPositionRebasePending_ = false;
     const long long videoTimestampMilliseconds =
         GetVideoTimestampMilliseconds();
     latestVideoTimestampMsForAudioSwitch_ =
@@ -1148,6 +1182,7 @@ bool PlayerBackend::Seek(double positionSeconds)
                 previousPositionSeconds * 1000.0);
             positionOffsetMs_ = 0;
             audioSwitchPositionRebasePending_ = false;
+            trickPlayPositionRebasePending_ = false;
             const long long videoTimestampMilliseconds =
                 GetVideoTimestampMilliseconds();
             latestVideoTimestampMsForAudioSwitch_ =
@@ -1214,9 +1249,10 @@ bool PlayerBackend::SetTrickRate(int rate)
         return false;
     }
 
-    positionOffsetMs_ = 0;
     audioSwitchPositionRebasePending_ = false;
     positionMs_ = static_cast<long long>(currentPositionSeconds * 1000.0);
+    trickPlayPositionBaselineMs_ = positionMs_;
+    trickPlayPositionRebasePending_ = positionMs_ > 0;
     SetAllSourcesFeedingEnabled(resumeFeeding);
     statusMessage_ = rate == 1
         ? "Normal playback requested"
@@ -1696,6 +1732,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
     positionOffsetMs_ = 0;
     audioSwitchPositionRebasePending_ = false;
+    trickPlayPositionRebasePending_ = false;
     const long long videoTimestampMilliseconds =
         GetVideoTimestampMilliseconds();
     latestVideoTimestampMsForAudioSwitch_ =
