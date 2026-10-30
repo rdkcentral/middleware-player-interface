@@ -615,8 +615,14 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     std::unique_ptr<FfmpegDemuxSource> previous = std::move(source_);
     source_ = std::move(candidate);
     source_->SetFeedingEnabled(resumeFeeding);
-    if (!StartSource()) {
-        const std::string switchError = statusMessage_;
+    const bool sourceStarted = StartSource();
+    const bool playbackResumed =
+        sourceStarted &&
+        (!resumeFeeding || player_->Pause(false, false));
+    if (!playbackResumed) {
+        const std::string switchError = sourceStarted
+            ? "Could not resume Player Interface after " + reason
+            : statusMessage_;
         source_->Stop();
         source_.reset();
         source_ = std::move(previous);
@@ -630,7 +636,8 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         }
         const bool restored =
             source_->Seek(positionSeconds) &&
-            player_->Flush(positionSeconds, 1, false, true);
+            player_->Flush(positionSeconds, 1, false, true) &&
+            (!resumeFeeding || player_->Pause(false, false));
         if (restored) {
             source_->SetFeedingEnabled(resumeFeeding);
             statusMessage_ = "Selection failed; previous playback restored: " +
