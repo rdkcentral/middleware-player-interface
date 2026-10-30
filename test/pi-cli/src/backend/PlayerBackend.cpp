@@ -6,9 +6,11 @@
 #include <glib.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 namespace {
@@ -1553,29 +1555,54 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         return false;
     }
 
-    for (unsigned int attempt = 0; attempt < 2; ++attempt) {
+    // Prepare ahead of playback, then wait for it to reach the switch point so
+    // the old stream keeps playing and the new one does not rewind.
+    double leadSeconds = 4.0;
+    for (unsigned int attempt = 0; attempt < 3; ++attempt) {
         if (resumeFeeding) {
             const double latestPosition =
                 static_cast<double>(GetPlaybackPositionMilliseconds()) /
                 1000.0;
-            if (latestPosition > positionSeconds + 1.0) {
-                positionSeconds = latestPosition;
-            }
+            positionSeconds =
+                std::max(positionSeconds, latestPosition + leadSeconds);
         }
+        const auto prepareStart = std::chrono::steady_clock::now();
         if (candidate->PrepareSeek(positionSeconds) &&
             candidate->Seek(positionSeconds, false, true)) {
             candidate->SetDiscardBeforePosition(
                 eGST_MEDIATYPE_AUDIO, positionSeconds);
             candidate->SetDiscardBeforePosition(
                 eGST_MEDIATYPE_VIDEO, positionSeconds);
-            const double latestPosition = resumeFeeding
-                ? static_cast<double>(GetPlaybackPositionMilliseconds()) /
-                      1000.0
-                : positionSeconds;
-            if (attempt == 0 && latestPosition > positionSeconds + 1.0) {
-                positionSeconds = latestPosition;
+            if (!resumeFeeding) {
+                break;
+            }
+            const double prepareSeconds =
+                std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - prepareStart).count();
+            leadSeconds = std::max(2.0, prepareSeconds * 1.5 + 1.0);
+            double latestPosition =
+                static_cast<double>(GetPlaybackPositionMilliseconds()) /
+                1000.0;
+            if (attempt < 2 && latestPosition >= positionSeconds - 0.05) {
                 continue;
             }
+            const auto deadline =
+                std::chrono::steady_clock::now() +
+                std::chrono::duration<double>(
+                    std::min(12.0, std::max(0.0, positionSeconds -
+                                                     latestPosition) + 2.0));
+            while (latestPosition < positionSeconds - 0.05 &&
+                   std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                latestPosition =
+                    static_cast<double>(GetPlaybackPositionMilliseconds()) /
+                    1000.0;
+            }
+            LogStartupMilestone(
+                reason + "-switch-point-reached: target=" +
+                std::to_string(positionSeconds) + " playback=" +
+                std::to_string(latestPosition) + " attempts=" +
+                std::to_string(attempt + 1));
             break;
         }
 
