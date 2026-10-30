@@ -19,10 +19,10 @@ extern "C" {
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <iomanip>
 #include <limits>
 #include <mutex>
-#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -36,6 +36,7 @@ namespace {
 
 constexpr size_t kPrefetchSegmentCount = 4;
 constexpr size_t kPrefetchWorkerCount = 6;
+constexpr size_t kAudioOnlyPrefetchWorkerCount = 4;
 constexpr size_t kMaximumResourceBytes = 8 * 1024 * 1024;
 constexpr size_t kMaximumCacheBytes = 32 * 1024 * 1024;
 constexpr int kResourceIoTimeoutSeconds = 8;
@@ -811,7 +812,7 @@ struct DashResourceProxy::Impl {
 
         if (!StartWorkers(prefetchInitialSegments
                               ? kPrefetchWorkerCount
-                              : 1)) {
+                              : kAudioOnlyPrefetchWorkerCount)) {
             xmlFreeDoc(document);
             Stop();
             return false;
@@ -866,8 +867,7 @@ struct DashResourceProxy::Impl {
                 return;
             }
             stopping = true;
-            std::queue<DownloadJob> emptyJobs;
-            jobs.swap(emptyJobs);
+            jobs.clear();
             condition.notify_all();
         }
         if (listener != nullptr) {
@@ -959,11 +959,26 @@ private:
         const std::string& url,
         const std::string& routeId,
         int64_t segmentValue,
-        bool initial)
+        bool initial,
+        bool prioritize = false)
     {
         std::lock_guard<std::mutex> lock(mutex);
         auto existing = resources.find(path);
         if (existing != resources.end() && !existing->second->failed) {
+            if (prioritize && !existing->second->complete) {
+                const auto queued = std::find_if(
+                    jobs.begin(),
+                    jobs.end(),
+                    [&path](const DownloadJob& job) {
+                        return job.path == path;
+                    });
+                if (queued != jobs.end()) {
+                    DownloadJob job = std::move(*queued);
+                    jobs.erase(queued);
+                    jobs.push_front(std::move(job));
+                    condition.notify_all();
+                }
+            }
             return existing->second;
         }
 
@@ -972,7 +987,12 @@ private:
         state->segmentValue = segmentValue;
         state->initial = initial;
         resources[path] = state;
-        jobs.push(DownloadJob{path, url, routeId, segmentValue, state});
+        DownloadJob job{path, url, routeId, segmentValue, state};
+        if (prioritize) {
+            jobs.push_front(std::move(job));
+        } else {
+            jobs.push_back(std::move(job));
+        }
         if (initial) {
             ++initialPending;
             ++initialResourceCount;
@@ -994,7 +1014,7 @@ private:
                     return;
                 }
                 job = std::move(jobs.front());
-                jobs.pop();
+                jobs.pop_front();
             }
 
             std::vector<uint8_t> bytes;
@@ -1237,7 +1257,10 @@ private:
             size_t scheduled = 0;
             int64_t firstValue = -1;
             int64_t lastValue = -1;
-            for (size_t offset = 0; offset < kPrefetchSegmentCount; ++offset) {
+            for (size_t remaining = kPrefetchSegmentCount;
+                 remaining > 0;
+                 --remaining) {
+                const size_t offset = remaining - 1;
                 if (segmentIndex >
                     std::numeric_limits<size_t>::max() - offset) {
                     break;
@@ -1272,7 +1295,8 @@ private:
                                  url,
                                  routeId,
                                  segmentValue,
-                                 false);
+                                 false,
+                                 true);
                 if (scheduled == 0) {
                     firstValue = segmentValue;
                 }
@@ -1368,7 +1392,7 @@ private:
             : basePath + "m/" + routeId + "/" +
                   std::to_string(segmentValue);
         state = ScheduleResource(
-            cachePath, url, routeId, segmentValue, false);
+            cachePath, url, routeId, segmentValue, false, true);
         if (!routeId.empty()) {
             const auto route = mediaRoutes.find(routeId);
             if (route != mediaRoutes.end()) {
@@ -1594,7 +1618,7 @@ private:
     size_t failedResourceCount = 0;
     double estimatedBandwidthBitsPerSecond = 0.0;
     std::string lastFailure;
-    std::queue<DownloadJob> jobs;
+    std::deque<DownloadJob> jobs;
     std::unordered_map<std::string, std::shared_ptr<ResourceState>> resources;
     std::unordered_map<std::string, std::string> staticRoutes;
     std::unordered_map<std::string, MediaRoute> mediaRoutes;
