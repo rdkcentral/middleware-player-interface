@@ -214,36 +214,22 @@ std::string DashTrackId(const char* type,
            (manifestId.empty() ? std::to_string(ordinal) : manifestId);
 }
 
-void KeepLowestBandwidthRepresentation(
+void KeepFirstVideoRepresentation(
     xmlNodePtr adaptationSet,
     DashManifestSelection& selection,
     xmlNodePtr requestedRepresentation = nullptr)
 {
     xmlNodePtr selectedRepresentation = requestedRepresentation;
-    uint64_t lowestBandwidth = std::numeric_limits<uint64_t>::max();
-    for (xmlNodePtr child = adaptationSet->children;
-         selectedRepresentation == nullptr && child != nullptr;) {
-        if (child->type == XML_ELEMENT_NODE &&
-            xmlStrEqual(child->name, BAD_CAST "Representation")) {
-            if (selectedRepresentation == nullptr) {
+    if (selectedRepresentation == nullptr) {
+        for (xmlNodePtr child = adaptationSet->children;
+             child != nullptr;
+             child = child->next) {
+            if (child->type == XML_ELEMENT_NODE &&
+                xmlStrEqual(child->name, BAD_CAST "Representation")) {
                 selectedRepresentation = child;
-            }
-
-            const std::string bandwidthText = XmlProperty(child, "bandwidth");
-            if (!bandwidthText.empty()) {
-                char* parseEnd = nullptr;
-                errno = 0;
-                const unsigned long long bandwidth =
-                    std::strtoull(bandwidthText.c_str(), &parseEnd, 10);
-                if (errno == 0 && parseEnd != bandwidthText.c_str() &&
-                    parseEnd != nullptr && *parseEnd == '\0' &&
-                    bandwidth < lowestBandwidth) {
-                    lowestBandwidth = bandwidth;
-                    selectedRepresentation = child;
-                }
+                break;
             }
         }
-        child = child->next;
     }
 
     if (selectedRepresentation == nullptr) {
@@ -399,9 +385,9 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
                     ++selection.removedAdaptationSets;
                 } else if (mediaType == "video") {
                     selection.keptVideo = true;
-                    KeepLowestBandwidthRepresentation(adaptationSet,
-                                                      selection,
-                                                      requestedVideoRepresentation);
+                    KeepFirstVideoRepresentation(adaptationSet,
+                                                 selection,
+                                                 requestedVideoRepresentation);
                 } else {
                     selection.keptAudio = true;
                 }

@@ -51,6 +51,7 @@ private:
     void HandleBusEvent(const BusEventData& event);
     void LogStartupMilestone(const std::string& milestone);
     bool StartSource();
+    void ConfigurePlayerForSource(FfmpegDemuxSource& source);
     bool ApplySelection(const MediaTrackSelection& selection,
                         double positionSeconds,
                         const std::string& reason);

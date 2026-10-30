@@ -190,8 +190,6 @@ bool BuildDashTrackCatalog(const std::vector<uint8_t>& manifest,
         xmlNodePtr defaultAudioSet = nullptr;
         size_t selectedVideoTrackIndex =
             std::numeric_limits<size_t>::max();
-        uint64_t defaultVideoBandwidth =
-            std::numeric_limits<uint64_t>::max();
         for (xmlNodePtr adaptationSet = period->children;
              adaptationSet != nullptr;
              adaptationSet = adaptationSet->next) {
@@ -275,15 +273,10 @@ bool BuildDashTrackCatalog(const std::vector<uint8_t>& manifest,
                     const size_t trackIndex = tracks.size();
                     track.selected = false;
                     tracks.push_back(std::move(track));
-                    const uint64_t bitrate = tracks.back().bitrate;
                     if (adaptationSet == defaultVideoSet &&
-                        (selectedVideoTrackIndex ==
-                             std::numeric_limits<size_t>::max() ||
-                         (bitrate != 0 &&
-                          (defaultVideoBandwidth == 0 ||
-                           bitrate < defaultVideoBandwidth)))) {
+                        selectedVideoTrackIndex ==
+                            std::numeric_limits<size_t>::max()) {
                         selectedVideoTrackIndex = trackIndex;
-                        defaultVideoBandwidth = bitrate;
                     }
                 }
             }

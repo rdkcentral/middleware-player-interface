@@ -205,6 +205,35 @@ bool PlayerBackend::StartSource()
     return true;
 }
 
+void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
+{
+    LogStartupMilestone("player-interface-selection-reconfigure-begin");
+    StreamCodecInfo codecInfo = source.GetCodecInfo();
+    // Flush EOS-signals the audio appsrc, so rebuild that stream before reuse.
+    player_->ConfigurePipeline(
+        std::move(codecInfo),
+        true,
+        true,
+        false,
+        0,
+        1,
+        "pi-player-simulator",
+        -1,
+        true,
+        url_);
+
+    StreamCodecInfo codecCaps = source.GetCodecInfo();
+    if (source.HasTrack(eGST_MEDIATYPE_VIDEO)) {
+        player_->SetStreamCaps(eGST_MEDIATYPE_VIDEO,
+                               std::move(codecCaps.video));
+    }
+    if (source.HasTrack(eGST_MEDIATYPE_AUDIO)) {
+        player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
+                               std::move(codecCaps.audio));
+    }
+    LogStartupMilestone("player-interface-selection-reconfigure-complete");
+}
+
 void PlayerBackend::PumpEvents()
 {
     g_main_context_iteration(nullptr, FALSE);
@@ -601,44 +630,31 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         return false;
     }
 
-    StreamCodecInfo previousCodecInfo = source_->GetCodecInfo();
-    StreamCodecInfo nextCodecInfo = candidate->GetCodecInfo();
-    if (candidate->HasTrack(eGST_MEDIATYPE_VIDEO)) {
-        player_->SetStreamCaps(eGST_MEDIATYPE_VIDEO,
-                               std::move(nextCodecInfo.video));
-    }
-    if (candidate->HasTrack(eGST_MEDIATYPE_AUDIO)) {
-        player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
-                               std::move(nextCodecInfo.audio));
-    }
-
     std::unique_ptr<FfmpegDemuxSource> previous = std::move(source_);
     source_ = std::move(candidate);
-    source_->SetFeedingEnabled(resumeFeeding);
+    source_->SetFeedingEnabled(false);
+    ConfigurePlayerForSource(*source_);
     const bool sourceStarted = StartSource();
-    const bool playbackResumed =
+    const bool playbackStateRestored =
         sourceStarted &&
-        (!resumeFeeding || player_->Pause(false, false));
-    if (!playbackResumed) {
+        (resumeFeeding || player_->Pause(true, false));
+    if (!playbackStateRestored) {
         const std::string switchError = sourceStarted
-            ? "Could not resume Player Interface after " + reason
+            ? "Could not restore Player Interface state after " + reason
             : statusMessage_;
         source_->Stop();
         source_.reset();
         source_ = std::move(previous);
-        if (source_->HasTrack(eGST_MEDIATYPE_VIDEO)) {
-            player_->SetStreamCaps(eGST_MEDIATYPE_VIDEO,
-                                   std::move(previousCodecInfo.video));
-        }
-        if (source_->HasTrack(eGST_MEDIATYPE_AUDIO)) {
-            player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
-                                   std::move(previousCodecInfo.audio));
-        }
-        const bool restored =
+        const bool previousSourcePositioned =
             source_->Seek(positionSeconds) &&
-            player_->Flush(positionSeconds, 1, false, true) &&
-            (!resumeFeeding || player_->Pause(false, false));
-        if (restored) {
+            player_->Flush(positionSeconds, 1, false, true);
+        if (previousSourcePositioned) {
+            ConfigurePlayerForSource(*source_);
+        }
+        const bool previousPlayerStateRestored =
+            previousSourcePositioned &&
+            (resumeFeeding || player_->Pause(true, false));
+        if (previousPlayerStateRestored) {
             source_->SetFeedingEnabled(resumeFeeding);
             statusMessage_ = "Selection failed; previous playback restored: " +
                              switchError;
@@ -652,6 +668,7 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         return false;
     }
 
+    source_->SetFeedingEnabled(resumeFeeding);
     previous->Stop();
     selection_ = selection;
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);

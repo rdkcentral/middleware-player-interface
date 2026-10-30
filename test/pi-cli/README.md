@@ -11,7 +11,7 @@ segments, or samples to local files. FFmpeg packet queues are heap-backed and
 bounded. Player Interface `NeedData` and `EnoughData` callbacks control sample
 injection; its appsrc queues use AAMP's default limits of 15 MiB for video and
 1.5 MiB for audio. For DASH, pi-cli filters the MPD
-in memory to the lowest-bandwidth video representation and one non-commentary
+in memory to the first video representation and one non-commentary
 audio adaptation set before FFmpeg opens the stream. A loopback-only,
 memory-backed HTTP proxy prefetches the selected tracks' initialization and
 first media segments concurrently, then maintains a four-segment lookahead.
