@@ -988,7 +988,11 @@ private:
 
             std::vector<uint8_t> bytes;
             std::string error;
+            const auto fetchStarted = std::chrono::steady_clock::now();
             const bool success = Fetch(job.url, bytes, error);
+            const auto fetchElapsed = std::chrono::steady_clock::now() -
+                                      fetchStarted;
+            const size_t fetchedBytes = bytes.size();
             std::string failureMessage;
             {
                 std::lock_guard<std::mutex> lock(mutex);
@@ -1013,6 +1017,9 @@ private:
                 }
                 condition.notify_all();
             }
+            if (success && job.segmentValue >= 0) {
+                RecordBandwidthSample(fetchedBytes, fetchElapsed);
+            }
             if (!failureMessage.empty() && !job.state->initial) {
                 Report("ffmpeg-dash-prefetch-resource-error: route=" +
                        (job.routeId.empty() ? std::string("init")
@@ -1021,6 +1028,36 @@ private:
                        " reason=" + failureMessage);
             }
         }
+    }
+
+    void RecordBandwidthSample(
+        size_t bytes,
+        std::chrono::steady_clock::duration elapsed)
+    {
+        const auto elapsedNanoseconds =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                elapsed).count();
+        if (bytes == 0 || elapsedNanoseconds <= 0) {
+            return;
+        }
+
+        const double sample =
+            static_cast<double>(bytes) * 8.0e9 /
+            static_cast<double>(elapsedNanoseconds);
+        uint64_t estimate = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            estimatedBandwidthBitsPerSecond =
+                estimatedBandwidthBitsPerSecond == 0
+                    ? sample
+                    : estimatedBandwidthBitsPerSecond * 0.75 + sample * 0.25;
+            estimate = static_cast<uint64_t>(
+                estimatedBandwidthBitsPerSecond);
+        }
+        Report("ffmpeg-dash-bandwidth-sample: bits-per-second=" +
+               std::to_string(static_cast<uint64_t>(sample)) +
+               " estimate-bps=" + std::to_string(estimate) +
+               " bytes=" + std::to_string(bytes));
     }
 
     bool Fetch(const std::string& url,
@@ -1106,6 +1143,12 @@ private:
     {
         std::lock_guard<std::mutex> lock(mutex);
         return failedResourceCount;
+    }
+
+    uint64_t EstimatedBandwidthBitsPerSecond() const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return static_cast<uint64_t>(estimatedBandwidthBitsPerSecond);
     }
 
     std::string LastFailure() const
@@ -1544,6 +1587,7 @@ private:
     size_t initialPending = 0;
     size_t initialResourceCount = 0;
     size_t failedResourceCount = 0;
+    double estimatedBandwidthBitsPerSecond = 0.0;
     std::string lastFailure;
     std::queue<DownloadJob> jobs;
     std::unordered_map<std::string, std::shared_ptr<ResourceState>> resources;
@@ -1568,6 +1612,11 @@ bool DashResourceProxy::Start(std::vector<uint8_t>& manifest,
 void DashResourceProxy::PrefetchForSeek(double positionSeconds)
 {
     impl_->PrefetchForSeek(positionSeconds);
+}
+
+uint64_t DashResourceProxy::GetEstimatedBandwidthBitsPerSecond() const
+{
+    return impl_->EstimatedBandwidthBitsPerSecond();
 }
 
 void DashResourceProxy::Stop()

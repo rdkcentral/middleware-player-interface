@@ -22,6 +22,9 @@ void PrintHelp()
         << "  trick <rate>         Set trick rate: 1x, 2x, 4x, 6x, 12x, or 32x\n"
         << "  list audio           List available audio tracks\n"
         << "  list video           List available video tracks\n"
+        << "  audio <track-id>     Switch to an audio track\n"
+        << "  video <track-id>     Select a video representation\n"
+        << "  abr <on|off>         Enable or disable automatic bitrate selection\n"
         << "  stop                 Stop playback\n"
         << "  status               Show playback status and position\n"
         << "  help                 Show this help\n"
@@ -39,6 +42,10 @@ void PrintStatus(const PlayerBackend& backend)
                   << static_cast<double>(status.durationMs) / 1000.0
                   << " s";
     }
+    std::cout << " | ABR "
+              << (status.autoBitrateEnabled ? "on" : "off")
+              << " bandwidth="
+              << status.estimatedBandwidthBitsPerSecond << "bps";
     std::cout << '\n';
 }
 
@@ -142,6 +149,29 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
             backend,
             argument == "audio" ? MediaTrackType::Audio
                                 : MediaTrackType::Video);
+        return true;
+    }
+    if (command == "audio" || command == "video") {
+        if (!(input >> argument) || (input >> extra)) {
+            std::cout << "Usage: " << command << " <track-id>\n";
+            return true;
+        }
+        if (command == "audio") {
+            backend.SelectAudioTrack(argument);
+        } else {
+            backend.SelectVideoTrack(argument);
+        }
+        PrintStatus(backend);
+        return true;
+    }
+    if (command == "abr") {
+        if (!(input >> argument) || (input >> extra) ||
+            (argument != "on" && argument != "off")) {
+            std::cout << "Usage: abr <on|off>\n";
+            return true;
+        }
+        backend.SetAutoBitrate(argument == "on");
+        PrintStatus(backend);
         return true;
     }
     if (command == "play" || command == "pause" || command == "stop") {

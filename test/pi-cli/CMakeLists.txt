@@ -15,6 +15,7 @@ pkg_check_modules(LIBXML2 REQUIRED IMPORTED_TARGET libxml-2.0)
 
 add_executable(pi-player-simulator
     src/main.cpp
+    src/backend/AbrController.cpp
     src/backend/DashResourceProxy.cpp
     src/backend/FfmpegDemuxSource.cpp
     src/backend/MediaTrackCatalog.cpp

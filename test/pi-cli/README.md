@@ -69,6 +69,9 @@ seek 45
 trick 2x
 list audio
 list video
+audio audio:0:5
+video video:0:2
+abr on
 trick 4x
 trick 6x
 trick 12x
@@ -84,8 +87,14 @@ Player Interface. Trick-rate commands flush Player Interface and reposition
 the source at the current playback time. Actual trick playback depends on the
 Player Interface platform implementation and stream support.
 `list audio` and `list video` report the track metadata discovered from the
-manifest or FFmpeg input context. They are read-only; track switching and
-quality selection are being added separately.
+manifest or FFmpeg input context. For clear DASH streams, `audio <track-id>`
+switches audio and `video <track-id>` selects a representation at the current
+position. `abr on` enables bandwidth-based video selection; `abr off` returns
+to the currently selected representation. Selection rebuilds the FFmpeg
+demux source while preserving the Player Interface pipeline and playback
+position. Automatic adaptation uses completed DASH media-segment transfer
+rates, a 70% safety margin, and two consecutive decisions before switching.
+Manual audio/video selection and ABR currently require DASH.
 
 ## Startup diagnostics
 

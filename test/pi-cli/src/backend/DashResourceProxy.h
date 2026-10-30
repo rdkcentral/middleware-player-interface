@@ -20,6 +20,7 @@ public:
                const std::string& manifestUrl,
                ProgressCallback progress);
     void PrefetchForSeek(double positionSeconds);
+    uint64_t GetEstimatedBandwidthBitsPerSecond() const;
     void Stop();
 
 private:

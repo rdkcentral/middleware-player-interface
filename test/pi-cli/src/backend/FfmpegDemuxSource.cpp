@@ -205,13 +205,24 @@ std::string AdaptationSetMediaType(xmlNodePtr adaptationSet)
     return {};
 }
 
+std::string DashTrackId(const char* type,
+                        size_t periodIndex,
+                        size_t ordinal,
+                        const std::string& manifestId)
+{
+    return std::string(type) + ":" + std::to_string(periodIndex) + ":" +
+           (manifestId.empty() ? std::to_string(ordinal) : manifestId);
+}
+
 void KeepLowestBandwidthRepresentation(
     xmlNodePtr adaptationSet,
-    DashManifestSelection& selection)
+    DashManifestSelection& selection,
+    xmlNodePtr requestedRepresentation = nullptr)
 {
-    xmlNodePtr selectedRepresentation = nullptr;
+    xmlNodePtr selectedRepresentation = requestedRepresentation;
     uint64_t lowestBandwidth = std::numeric_limits<uint64_t>::max();
-    for (xmlNodePtr child = adaptationSet->children; child != nullptr;) {
+    for (xmlNodePtr child = adaptationSet->children;
+         selectedRepresentation == nullptr && child != nullptr;) {
         if (child->type == XML_ELEMENT_NODE &&
             xmlStrEqual(child->name, BAD_CAST "Representation")) {
             if (selectedRepresentation == nullptr) {
@@ -264,6 +275,7 @@ void KeepLowestBandwidthRepresentation(
 }
 
 bool FilterDashManifest(const std::vector<uint8_t>& input,
+                        const MediaTrackSelection& requestedTracks,
                         DashManifestSelection& selection,
                         std::string& error)
 {
@@ -296,6 +308,11 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
         return false;
     }
 
+    size_t periodIndex = 0;
+    size_t audioOrdinal = 0;
+    size_t videoOrdinal = 0;
+    bool foundRequestedAudio = requestedTracks.audioTrackId.empty();
+    bool foundRequestedVideo = requestedTracks.videoTrackId.empty();
     for (xmlNodePtr period = root->children;
          period != nullptr;
          period = period->next) {
@@ -306,6 +323,8 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
 
         xmlNodePtr selectedVideo = nullptr;
         xmlNodePtr selectedAudio = nullptr;
+        xmlNodePtr requestedVideoRepresentation = nullptr;
+        xmlNodePtr requestedAudioSet = nullptr;
         for (xmlNodePtr adaptationSet = period->children;
              adaptationSet != nullptr;
              adaptationSet = adaptationSet->next) {
@@ -316,14 +335,50 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
 
             const std::string mediaType =
                 AdaptationSetMediaType(adaptationSet);
-            if (mediaType == "video" && selectedVideo == nullptr &&
-                !IsTrickMode(adaptationSet)) {
-                selectedVideo = adaptationSet;
-            } else if (mediaType == "audio" && selectedAudio == nullptr &&
+            if (mediaType == "video" && !IsTrickMode(adaptationSet)) {
+                if (selectedVideo == nullptr) {
+                    selectedVideo = adaptationSet;
+                }
+                for (xmlNodePtr representation = adaptationSet->children;
+                     representation != nullptr;
+                     representation = representation->next) {
+                    if (representation->type != XML_ELEMENT_NODE ||
+                        !xmlStrEqual(representation->name,
+                                     BAD_CAST "Representation")) {
+                        continue;
+                    }
+                    const std::string trackId = DashTrackId(
+                        "video",
+                        periodIndex,
+                        videoOrdinal++,
+                        XmlProperty(representation, "id"));
+                    if (!requestedTracks.videoTrackId.empty() &&
+                        trackId == requestedTracks.videoTrackId) {
+                        selectedVideo = adaptationSet;
+                        requestedVideoRepresentation = representation;
+                        foundRequestedVideo = true;
+                    }
+                }
+            } else if (mediaType == "audio" &&
                        !HasRole(adaptationSet, "commentary") &&
                        !HasRole(adaptationSet, "description")) {
-                selectedAudio = adaptationSet;
+                const std::string trackId = DashTrackId(
+                    "audio",
+                    periodIndex,
+                    audioOrdinal++,
+                    XmlProperty(adaptationSet, "id"));
+                if (selectedAudio == nullptr) {
+                    selectedAudio = adaptationSet;
+                }
+                if (!requestedTracks.audioTrackId.empty() &&
+                    trackId == requestedTracks.audioTrackId) {
+                    requestedAudioSet = adaptationSet;
+                    foundRequestedAudio = true;
+                }
             }
+        }
+        if (requestedAudioSet != nullptr) {
+            selectedAudio = requestedAudioSet;
         }
 
         for (xmlNodePtr adaptationSet = period->children;
@@ -345,13 +400,25 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
                 } else if (mediaType == "video") {
                     selection.keptVideo = true;
                     KeepLowestBandwidthRepresentation(adaptationSet,
-                                                      selection);
+                                                      selection,
+                                                      requestedVideoRepresentation);
                 } else {
                     selection.keptAudio = true;
                 }
             }
             adaptationSet = next;
         }
+        ++periodIndex;
+    }
+
+    if (!foundRequestedAudio || !foundRequestedVideo) {
+        error = !foundRequestedAudio
+            ? "The requested DASH audio track was not found: " +
+                  requestedTracks.audioTrackId
+            : "The requested DASH video representation was not found: " +
+                  requestedTracks.videoTrackId;
+        xmlFreeDoc(document);
+        return false;
     }
 
     if (!selection.keptVideo && !selection.keptAudio) {
@@ -442,7 +509,8 @@ FfmpegDemuxSource::~FfmpegDemuxSource()
 }
 
 bool FfmpegDemuxSource::Open(const std::string& url,
-                             ProgressCallback progress)
+                             ProgressCallback progress,
+                             const MediaTrackSelection& requestedTracks)
 {
     if (url.empty()) {
         SetError("A stream URL is required");
@@ -568,10 +636,20 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         }
 
         std::string filterError;
-        if (!FilterDashManifest(manifestBytes, dashManifest, filterError)) {
+        if (!FilterDashManifest(
+                manifestBytes, requestedTracks, dashManifest, filterError)) {
             SetError(std::move(filterError));
             Stop();
             return false;
+        }
+        for (MediaTrackInfo& track : trackCatalog_) {
+            if (track.type == MediaTrackType::Audio &&
+                !requestedTracks.audioTrackId.empty()) {
+                track.selected = track.id == requestedTracks.audioTrackId;
+            } else if (track.type == MediaTrackType::Video &&
+                       !requestedTracks.videoTrackId.empty()) {
+                track.selected = track.id == requestedTracks.videoTrackId;
+            }
         }
         dashResourceProxy_ = std::make_unique<DashResourceProxy>();
         if (dashResourceProxy_->Start(
@@ -853,6 +931,18 @@ StreamCodecInfo FfmpegDemuxSource::GetCodecInfo() const
 std::vector<MediaTrackInfo> FfmpegDemuxSource::GetTrackCatalog() const
 {
     return trackCatalog_;
+}
+
+uint64_t FfmpegDemuxSource::GetEstimatedBandwidthBitsPerSecond() const
+{
+    return dashResourceProxy_ == nullptr
+        ? 0
+        : dashResourceProxy_->GetEstimatedBandwidthBitsPerSecond();
+}
+
+bool FfmpegDemuxSource::IsDashMedia() const
+{
+    return mediaMode_ == kPlayerInterfaceDashMediaMode;
 }
 
 int FfmpegDemuxSource::GetMediaMode() const

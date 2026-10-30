@@ -32,9 +32,13 @@ public:
     FfmpegDemuxSource(const FfmpegDemuxSource&) = delete;
     FfmpegDemuxSource& operator=(const FfmpegDemuxSource&) = delete;
 
-    bool Open(const std::string& url, ProgressCallback progress);
+    bool Open(const std::string& url,
+              ProgressCallback progress,
+              const MediaTrackSelection& selection = {});
     StreamCodecInfo GetCodecInfo() const;
     std::vector<MediaTrackInfo> GetTrackCatalog() const;
+    uint64_t GetEstimatedBandwidthBitsPerSecond() const;
+    bool IsDashMedia() const;
     int GetMediaMode() const;
     long long GetDurationMilliseconds() const;
     bool HasTrack(int mediaType) const;

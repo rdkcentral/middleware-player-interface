@@ -5,6 +5,7 @@
 
 #include <glib.h>
 
+#include <algorithm>
 #include <iostream>
 #include <utility>
 
@@ -52,6 +53,16 @@ bool PlayerBackend::Start()
         return false;
     }
     LogStartupMilestone("ffmpeg-manifest-and-stream-info-ready");
+    for (const MediaTrackInfo& track : source_->GetTrackCatalog()) {
+        if (!track.selected) {
+            continue;
+        }
+        if (track.type == MediaTrackType::Audio) {
+            selection_.audioTrackId = track.id;
+        } else {
+            selection_.videoTrackId = track.id;
+        }
+    }
 
     player_ = std::make_unique<InterfacePlayerRDK>();
     player_->SetPlayerName("pi-player-simulator");
@@ -132,6 +143,22 @@ bool PlayerBackend::Start()
     }
     LogStartupMilestone("player-interface-stream-caps-set");
 
+    if (!StartSource()) {
+        Stop();
+        return false;
+    }
+
+    playing_ = true;
+    statusMessage_ = "Opening stream";
+    nextPositionQuery_ = std::chrono::steady_clock::now();
+    nextDurationQuery_ = nextPositionQuery_;
+    nextProgressLog_ = nextPositionQuery_;
+    nextAbrEvaluation_ = nextPositionQuery_ + std::chrono::seconds(3);
+    return true;
+}
+
+bool PlayerBackend::StartSource()
+{
     if (!source_->Start(
             [this](int mediaType, MediaSample&& sample,
                    bool& discontinuity) {
@@ -173,15 +200,8 @@ bool PlayerBackend::Start()
         statusMessage_ = error.empty() ? "Could not start FFmpeg ingest"
                                        : "FFmpeg ingest failed: " + error;
         LogStartupMilestone(statusMessage_);
-        Stop();
         return false;
     }
-
-    playing_ = true;
-    statusMessage_ = "Opening stream";
-    nextPositionQuery_ = std::chrono::steady_clock::now();
-    nextDurationQuery_ = nextPositionQuery_;
-    nextProgressLog_ = nextPositionQuery_;
     return true;
 }
 
@@ -206,6 +226,7 @@ void PlayerBackend::PumpEvents()
     }
 
     const auto now = std::chrono::steady_clock::now();
+    EvaluateAutoBitrate(now);
     if (player_ != nullptr && !stopped_ && playing_ &&
         now >= nextPositionQuery_) {
         positionMs_ = player_->GetPositionMilliseconds();
@@ -376,6 +397,280 @@ bool PlayerBackend::SetTrickRate(int rate)
     return true;
 }
 
+bool PlayerBackend::SelectAudioTrack(const std::string& trackId)
+{
+    if (source_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot switch audio: playback has stopped";
+        return false;
+    }
+    if (!source_->IsDashMedia()) {
+        statusMessage_ = "Manual track switching currently requires DASH";
+        return false;
+    }
+    const std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
+    const auto selected = std::find_if(
+        tracks.begin(), tracks.end(), [&trackId](const MediaTrackInfo& track) {
+            return track.type == MediaTrackType::Audio &&
+                   track.id == trackId;
+        });
+    if (selected == tracks.end()) {
+        statusMessage_ = "Unknown audio track: " + trackId;
+        return false;
+    }
+    if (selection_.audioTrackId == trackId) {
+        statusMessage_ = "Audio track is already selected: " + trackId;
+        return true;
+    }
+
+    MediaTrackSelection nextSelection = selection_;
+    nextSelection.audioTrackId = trackId;
+    const double positionSeconds =
+        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+    return ApplySelection(
+        nextSelection, positionSeconds, "audio-track-switch");
+}
+
+bool PlayerBackend::SelectVideoTrack(const std::string& trackId)
+{
+    if (source_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot switch video quality: playback has stopped";
+        return false;
+    }
+    if (!source_->IsDashMedia()) {
+        statusMessage_ = "Manual quality switching currently requires DASH";
+        return false;
+    }
+    const std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
+    const auto selected = std::find_if(
+        tracks.begin(), tracks.end(), [&trackId](const MediaTrackInfo& track) {
+            return track.type == MediaTrackType::Video &&
+                   track.id == trackId;
+        });
+    if (selected == tracks.end()) {
+        statusMessage_ = "Unknown video representation: " + trackId;
+        return false;
+    }
+    autoBitrateEnabled_ = false;
+    abrController_.Reset();
+    if (selection_.videoTrackId == trackId) {
+        statusMessage_ = "Video representation is already selected: " +
+                         trackId + "; automatic bitrate disabled";
+        return true;
+    }
+
+    MediaTrackSelection nextSelection = selection_;
+    nextSelection.videoTrackId = trackId;
+    const double positionSeconds =
+        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+    return ApplySelection(
+        nextSelection, positionSeconds, "manual-video-quality-switch");
+}
+
+bool PlayerBackend::SetAutoBitrate(bool enabled)
+{
+    if (source_ == nullptr || stopped_) {
+        statusMessage_ = "Cannot change ABR mode: playback has stopped";
+        return false;
+    }
+    if (!enabled) {
+        autoBitrateEnabled_ = false;
+        abrController_.Reset();
+        statusMessage_ = "Automatic bitrate disabled";
+        LogStartupMilestone("abr-disabled");
+        return true;
+    }
+    if (!source_->IsDashMedia()) {
+        statusMessage_ = "Automatic bitrate selection currently requires DASH";
+        return false;
+    }
+
+    const size_t selectableRepresentations =
+        abrController_.CountVideoRepresentations(
+            source_->GetTrackCatalog(), selection_.videoTrackId);
+    if (selectableRepresentations < 2) {
+        statusMessage_ =
+            "Automatic bitrate requires at least two DASH video representations";
+        return false;
+    }
+
+    autoBitrateEnabled_ = true;
+    abrController_.Reset();
+    nextAbrEvaluation_ = std::chrono::steady_clock::now();
+    statusMessage_ = "Automatic bitrate enabled";
+    LogStartupMilestone("abr-enabled: safety-factor=0.70");
+    return true;
+}
+
+bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
+                                   double positionSeconds,
+                                   const std::string& reason)
+{
+    const bool resumeFeeding = playing_;
+    auto candidate = std::make_unique<FfmpegDemuxSource>();
+    LogStartupMilestone(
+        reason + "-prepare-begin: audio-track=" + selection.audioTrackId +
+        " video-track=" + selection.videoTrackId);
+    if (!candidate->Open(
+            url_,
+            [this](const std::string& milestone) {
+                LogStartupMilestone(milestone);
+            },
+            selection)) {
+        std::string error;
+        candidate->TakeError(error);
+        statusMessage_ = error.empty()
+            ? "Could not open the requested DASH selection"
+            : "Could not prepare DASH selection: " + error;
+        LogStartupMilestone(statusMessage_);
+        return false;
+    }
+
+    for (unsigned int attempt = 0; attempt < 2; ++attempt) {
+        if (resumeFeeding) {
+            const double latestPosition =
+                static_cast<double>(player_->GetPositionMilliseconds()) /
+                1000.0;
+            if (latestPosition > positionSeconds + 1.0) {
+                positionSeconds = latestPosition;
+            }
+        }
+        if (candidate->PrepareSeek(positionSeconds) &&
+            candidate->Seek(positionSeconds)) {
+            const double latestPosition = resumeFeeding
+                ? static_cast<double>(player_->GetPositionMilliseconds()) /
+                      1000.0
+                : positionSeconds;
+            if (attempt == 0 && latestPosition > positionSeconds + 1.0) {
+                positionSeconds = latestPosition;
+                continue;
+            }
+            break;
+        }
+
+        std::string error;
+        candidate->TakeError(error);
+        statusMessage_ = error.empty()
+            ? "Could not position the requested DASH selection"
+            : "Could not position DASH selection: " + error;
+        LogStartupMilestone(statusMessage_);
+        return false;
+    }
+
+    source_->SetFeedingEnabled(false);
+    if (!player_->Flush(positionSeconds, 1, false, true)) {
+        source_->SetFeedingEnabled(resumeFeeding);
+        statusMessage_ = "Player Interface flush failed during " + reason;
+        return false;
+    }
+
+    StreamCodecInfo previousCodecInfo = source_->GetCodecInfo();
+    StreamCodecInfo nextCodecInfo = candidate->GetCodecInfo();
+    if (candidate->HasTrack(eGST_MEDIATYPE_VIDEO)) {
+        player_->SetStreamCaps(eGST_MEDIATYPE_VIDEO,
+                               std::move(nextCodecInfo.video));
+    }
+    if (candidate->HasTrack(eGST_MEDIATYPE_AUDIO)) {
+        player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
+                               std::move(nextCodecInfo.audio));
+    }
+
+    std::unique_ptr<FfmpegDemuxSource> previous = std::move(source_);
+    source_ = std::move(candidate);
+    source_->SetFeedingEnabled(resumeFeeding);
+    if (!StartSource()) {
+        const std::string switchError = statusMessage_;
+        source_->Stop();
+        source_.reset();
+        source_ = std::move(previous);
+        if (source_->HasTrack(eGST_MEDIATYPE_VIDEO)) {
+            player_->SetStreamCaps(eGST_MEDIATYPE_VIDEO,
+                                   std::move(previousCodecInfo.video));
+        }
+        if (source_->HasTrack(eGST_MEDIATYPE_AUDIO)) {
+            player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
+                                   std::move(previousCodecInfo.audio));
+        }
+        const bool restored =
+            source_->Seek(positionSeconds) &&
+            player_->Flush(positionSeconds, 1, false, true);
+        if (restored) {
+            source_->SetFeedingEnabled(resumeFeeding);
+            statusMessage_ = "Selection failed; previous playback restored: " +
+                             switchError;
+        } else {
+            source_->SetFeedingEnabled(false);
+            playing_ = false;
+            statusMessage_ = "Selection failed and previous playback recovery failed: " +
+                             switchError;
+        }
+        LogStartupMilestone(statusMessage_);
+        return false;
+    }
+
+    previous->Stop();
+    selection_ = selection;
+    positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    const long long newDuration = source_->GetDurationMilliseconds();
+    if (newDuration > 0) {
+        durationMs_ = newDuration;
+    }
+    statusMessage_ = reason + " complete: audio=" +
+                     selection_.audioTrackId + " video=" +
+                     selection_.videoTrackId + " at " +
+                     std::to_string(positionSeconds) + " s";
+    LogStartupMilestone(
+        reason + "-complete: audio-track=" + selection_.audioTrackId +
+        " video-track=" + selection_.videoTrackId);
+    return true;
+}
+
+void PlayerBackend::EvaluateAutoBitrate(
+    std::chrono::steady_clock::time_point now)
+{
+    if (!autoBitrateEnabled_ || !playing_ || source_ == nullptr ||
+        now < nextAbrEvaluation_) {
+        return;
+    }
+    nextAbrEvaluation_ = now + std::chrono::seconds(3);
+
+    const uint64_t measured =
+        source_->GetEstimatedBandwidthBitsPerSecond();
+    if (measured > 0) {
+        lastBandwidthEstimateBitsPerSecond_ = measured;
+    }
+    const uint64_t bandwidth = lastBandwidthEstimateBitsPerSecond_;
+    const AbrDecision decision = abrController_.Evaluate(
+        source_->GetTrackCatalog(), selection_, bandwidth);
+    if (!decision.valid) {
+        if (bandwidth == 0) {
+            return;
+        }
+        LogStartupMilestone(
+            "abr-decision-skipped: current-or-alternate-representation-unavailable");
+        return;
+    }
+    LogStartupMilestone(
+        "abr-decision: bandwidth-bps=" +
+        std::to_string(decision.measuredBandwidthBitsPerSecond) +
+        " safe-video-bps=" +
+        std::to_string(decision.safeVideoBandwidthBitsPerSecond) +
+        " audio-reserved-bps=" +
+        std::to_string(decision.reservedAudioBandwidthBitsPerSecond) +
+        " current=" + decision.currentTrackId +
+        " target=" + decision.targetTrackId +
+        " confirmation=" + std::to_string(decision.confirmationCount));
+    if (!decision.shouldSwitch) {
+        return;
+    }
+
+    MediaTrackSelection nextSelection = selection_;
+    nextSelection.videoTrackId = decision.targetTrackId;
+    const double positionSeconds =
+        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+    ApplySelection(nextSelection, positionSeconds, "abr-video-switch");
+    abrController_.Reset();
+}
+
 std::vector<MediaTrackInfo> PlayerBackend::GetTrackCatalog() const
 {
     return source_ == nullptr
@@ -407,8 +702,16 @@ PlaybackStatus PlayerBackend::GetStatus() const
     status.message = statusMessage_;
     status.playing = playing_;
     status.stopped = stopped_;
+    status.autoBitrateEnabled = autoBitrateEnabled_;
     status.positionMs = positionMs_;
     status.durationMs = durationMs_;
+    const uint64_t measuredBandwidth =
+        source_ == nullptr
+            ? 0
+            : source_->GetEstimatedBandwidthBitsPerSecond();
+    status.estimatedBandwidthBitsPerSecond = measuredBandwidth > 0
+        ? measuredBandwidth
+        : lastBandwidthEstimateBitsPerSecond_;
     return status;
 }
 

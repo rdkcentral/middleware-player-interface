@@ -23,6 +23,11 @@ struct MediaTrackInfo {
     bool selected = false;
 };
 
+struct MediaTrackSelection {
+    std::string audioTrackId;
+    std::string videoTrackId;
+};
+
 bool BuildDashTrackCatalog(const std::vector<uint8_t>& manifest,
                            std::vector<MediaTrackInfo>& tracks,
                            std::string& error);
