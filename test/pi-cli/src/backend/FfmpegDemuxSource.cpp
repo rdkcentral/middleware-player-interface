@@ -451,6 +451,7 @@ bool FfmpegDemuxSource::Open(const std::string& url,
 
     url_ = url;
     progress_ = std::move(progress);
+    trackCatalog_.clear();
     stopping_ = false;
     inputPaused_ = false;
     feedingEnabled_ = true;
@@ -558,6 +559,13 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         }
         ReportProgress("ffmpeg-dash-manifest-fetch-complete: " +
                        std::to_string(manifestBytes.size()) + " bytes");
+
+        std::string catalogError;
+        if (!BuildDashTrackCatalog(
+                manifestBytes, trackCatalog_, catalogError)) {
+            ReportProgress("ffmpeg-track-catalog-unavailable: " +
+                           catalogError);
+        }
 
         std::string filterError;
         if (!FilterDashManifest(manifestBytes, dashManifest, filterError)) {
@@ -684,6 +692,14 @@ bool FfmpegDemuxSource::Open(const std::string& url,
                                          videoIndex >= 0 ? videoIndex : -1,
                                          nullptr,
                                          0);
+    if (!IsDashUrl(url_)) {
+        trackCatalog_ = BuildAvFormatTrackCatalog(
+            *formatContext_, videoIndex, audioIndex);
+    }
+    if (trackCatalog_.empty()) {
+        trackCatalog_ = BuildAvFormatTrackCatalog(
+            *formatContext_, videoIndex, audioIndex);
+    }
     const bool selectedBeforeProbe = videoIndex >= 0 || audioIndex >= 0;
     if (selectedBeforeProbe) {
         for (unsigned int index = 0;
@@ -832,6 +848,11 @@ StreamCodecInfo FfmpegDemuxSource::GetCodecInfo() const
         }
     }
     return info;
+}
+
+std::vector<MediaTrackInfo> FfmpegDemuxSource::GetTrackCatalog() const
+{
+    return trackCatalog_;
 }
 
 int FfmpegDemuxSource::GetMediaMode() const

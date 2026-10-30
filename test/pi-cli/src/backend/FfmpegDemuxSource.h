@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MediaTrackCatalog.h"
 #include "MediaSample.h"
 
 #include <array>
@@ -33,6 +34,7 @@ public:
 
     bool Open(const std::string& url, ProgressCallback progress);
     StreamCodecInfo GetCodecInfo() const;
+    std::vector<MediaTrackInfo> GetTrackCatalog() const;
     int GetMediaMode() const;
     long long GetDurationMilliseconds() const;
     bool HasTrack(int mediaType) const;
@@ -134,6 +136,7 @@ private:
     mutable std::mutex errorMutex_;
     std::string error_;
     std::string url_;
+    std::vector<MediaTrackInfo> trackCatalog_;
     int mediaMode_ = -1;
     long long durationMilliseconds_ = 0;
     std::atomic<bool> stopping_{false};

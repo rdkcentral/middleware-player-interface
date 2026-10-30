@@ -20,6 +20,8 @@ void PrintHelp()
         << "  pause                Pause playback\n"
         << "  seek <seconds>       Seek to a position in seconds\n"
         << "  trick <rate>         Set trick rate: 1x, 2x, 4x, 6x, 12x, or 32x\n"
+        << "  list audio           List available audio tracks\n"
+        << "  list video           List available video tracks\n"
         << "  stop                 Stop playback\n"
         << "  status               Show playback status and position\n"
         << "  help                 Show this help\n"
@@ -38,6 +40,39 @@ void PrintStatus(const PlayerBackend& backend)
                   << " s";
     }
     std::cout << '\n';
+}
+
+void PrintTracks(const PlayerBackend& backend, MediaTrackType type)
+{
+    const std::vector<MediaTrackInfo> tracks = backend.GetTrackCatalog();
+    bool foundTrack = false;
+    for (const MediaTrackInfo& track : tracks) {
+        if (track.type != type) {
+            continue;
+        }
+        foundTrack = true;
+        std::cout << track.id << (track.selected ? " [selected]" : "")
+                  << " codec="
+                  << (track.codec.empty() ? "unknown" : track.codec);
+        if (!track.language.empty()) {
+            std::cout << " language=" << track.language;
+        }
+        if (!track.role.empty()) {
+            std::cout << " role=" << track.role;
+        }
+        if (track.bitrate > 0) {
+            std::cout << " bitrate=" << track.bitrate;
+        }
+        if (track.width > 0 && track.height > 0) {
+            std::cout << " resolution=" << track.width << 'x' << track.height;
+        }
+        std::cout << '\n';
+    }
+    if (!foundTrack) {
+        std::cout << "No " << (type == MediaTrackType::Audio ? "audio"
+                                                               : "video")
+                  << " track metadata is available.\n";
+    }
 }
 
 bool ParseSeekSeconds(const std::string& value, double& seconds)
@@ -95,6 +130,18 @@ bool ExecuteCommand(const std::string& line, PlayerBackend& backend)
         } else {
             PrintStatus(backend);
         }
+        return true;
+    }
+    if (command == "list") {
+        if (!(input >> argument) || (input >> extra) ||
+            (argument != "audio" && argument != "video")) {
+            std::cout << "Usage: list <audio|video>\n";
+            return true;
+        }
+        PrintTracks(
+            backend,
+            argument == "audio" ? MediaTrackType::Audio
+                                : MediaTrackType::Video);
         return true;
     }
     if (command == "play" || command == "pause" || command == "stop") {

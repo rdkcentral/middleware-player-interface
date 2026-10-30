@@ -1,10 +1,13 @@
 #pragma once
 
+#include "MediaTrackCatalog.h"
+
 #include <memory>
 #include <string>
 #include <chrono>
 #include <atomic>
 #include <mutex>
+#include <vector>
 
 class InterfacePlayerRDK;
 class FfmpegDemuxSource;
@@ -32,6 +35,7 @@ public:
     bool Pause();
     bool Seek(double positionSeconds);
     bool SetTrickRate(int rate);
+    std::vector<MediaTrackInfo> GetTrackCatalog() const;
     void Stop();
     PlaybackStatus GetStatus() const;
 

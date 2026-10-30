@@ -67,6 +67,8 @@ play
 pause
 seek 45
 trick 2x
+list audio
+list video
 trick 4x
 trick 6x
 trick 12x
@@ -81,6 +83,9 @@ quit
 Player Interface. Trick-rate commands flush Player Interface and reposition
 the source at the current playback time. Actual trick playback depends on the
 Player Interface platform implementation and stream support.
+`list audio` and `list video` report the track metadata discovered from the
+manifest or FFmpeg input context. They are read-only; track switching and
+quality selection are being added separately.
 
 ## Startup diagnostics
 

@@ -376,6 +376,13 @@ bool PlayerBackend::SetTrickRate(int rate)
     return true;
 }
 
+std::vector<MediaTrackInfo> PlayerBackend::GetTrackCatalog() const
+{
+    return source_ == nullptr
+        ? std::vector<MediaTrackInfo>()
+        : source_->GetTrackCatalog();
+}
+
 void PlayerBackend::Stop()
 {
     if (stopped_) {
