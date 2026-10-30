@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 class InterfacePlayerRDK;
@@ -49,9 +50,16 @@ public:
 
 private:
     void HandleBusEvent(const BusEventData& event);
+    void RouteNeedData(int mediaType);
+    void RouteEnoughData(int mediaType);
+    void SetActiveAudioSource(FfmpegDemuxSource* source);
     void LogStartupMilestone(const std::string& milestone);
     bool StartSource();
+    bool StartSource(FfmpegDemuxSource& source);
     void ConfigurePlayerForSource(FfmpegDemuxSource& source);
+    void CompleteAudioSwitchIfReady();
+    void RestoreAudioAfterSwitchFailure(const std::string& error);
+    void SetAllSourcesFeedingEnabled(bool enabled);
     bool ApplySelection(const MediaTrackSelection& selection,
                         double positionSeconds,
                         const std::string& reason);
@@ -64,6 +72,8 @@ private:
     MediaTrackSelection selection_;
     std::string statusMessage_ = "Starting playback";
     std::unique_ptr<FfmpegDemuxSource> source_;
+    std::unique_ptr<FfmpegDemuxSource> audioOnlySource_;
+    FfmpegDemuxSource* activeAudioSource_ = nullptr;
     std::unique_ptr<InterfacePlayerRDK> player_;
     std::chrono::steady_clock::time_point startupAt_{};
     std::chrono::steady_clock::time_point nextPositionQuery_{};
@@ -71,6 +81,18 @@ private:
     std::chrono::steady_clock::time_point nextProgressLog_{};
     std::chrono::steady_clock::time_point nextAbrEvaluation_{};
     std::mutex startupLogMutex_;
+    std::mutex audioSwitchMutex_;
+    std::mutex audioRoutingMutex_;
+    std::thread audioSwitchThread_;
+    std::unique_ptr<FfmpegDemuxSource> preparedAudioSource_;
+    std::string audioSwitchError_;
+    std::string requestedAudioTrackId_;
+    FfmpegDemuxSource* previousAudioSource_ = nullptr;
+    double preparedAudioPositionSeconds_ = 0.0;
+    bool audioSwitchReady_ = false;
+    std::atomic<bool> audioSwitchInProgress_{false};
+    std::atomic<bool> cancelAudioSwitch_{false};
+    std::atomic<long long> latestPositionMsForAudioSwitch_{0};
     long long positionMs_ = 0;
     long durationMs_ = 0;
     uint64_t lastBandwidthEstimateBitsPerSecond_ = 0;

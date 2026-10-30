@@ -262,6 +262,7 @@ void KeepFirstVideoRepresentation(
 
 bool FilterDashManifest(const std::vector<uint8_t>& input,
                         const MediaTrackSelection& requestedTracks,
+                        bool audioOnly,
                         DashManifestSelection& selection,
                         std::string& error)
 {
@@ -298,7 +299,8 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
     size_t audioOrdinal = 0;
     size_t videoOrdinal = 0;
     bool foundRequestedAudio = requestedTracks.audioTrackId.empty();
-    bool foundRequestedVideo = requestedTracks.videoTrackId.empty();
+    bool foundRequestedVideo =
+        audioOnly || requestedTracks.videoTrackId.empty();
     for (xmlNodePtr period = root->children;
          period != nullptr;
          period = period->next) {
@@ -375,7 +377,7 @@ bool FilterDashManifest(const std::vector<uint8_t>& input,
                 const std::string mediaType =
                     AdaptationSetMediaType(adaptationSet);
                 const bool keep =
-                    (mediaType == "video" &&
+                    (!audioOnly && mediaType == "video" &&
                      adaptationSet == selectedVideo) ||
                     (mediaType == "audio" &&
                      adaptationSet == selectedAudio);
@@ -496,7 +498,8 @@ FfmpegDemuxSource::~FfmpegDemuxSource()
 
 bool FfmpegDemuxSource::Open(const std::string& url,
                              ProgressCallback progress,
-                             const MediaTrackSelection& requestedTracks)
+                             const MediaTrackSelection& requestedTracks,
+                             bool audioOnly)
 {
     if (url.empty()) {
         SetError("A stream URL is required");
@@ -623,7 +626,11 @@ bool FfmpegDemuxSource::Open(const std::string& url,
 
         std::string filterError;
         if (!FilterDashManifest(
-                manifestBytes, requestedTracks, dashManifest, filterError)) {
+                manifestBytes,
+                requestedTracks,
+                audioOnly,
+                dashManifest,
+                filterError)) {
             SetError(std::move(filterError));
             Stop();
             return false;
@@ -744,12 +751,14 @@ bool FfmpegDemuxSource::Open(const std::string& url,
                    (inputFormat.empty() ? std::string("unknown")
                                         : inputFormat));
 
-    int videoIndex = av_find_best_stream(formatContext_,
-                                         AVMEDIA_TYPE_VIDEO,
-                                         -1,
-                                         -1,
-                                         nullptr,
-                                         0);
+    int videoIndex = audioOnly
+        ? -1
+        : av_find_best_stream(formatContext_,
+                              AVMEDIA_TYPE_VIDEO,
+                              -1,
+                              -1,
+                              nullptr,
+                              0);
     int audioIndex = av_find_best_stream(formatContext_,
                                          AVMEDIA_TYPE_AUDIO,
                                          -1,
@@ -771,7 +780,7 @@ bool FfmpegDemuxSource::Open(const std::string& url,
              ++index) {
             AVStream* stream = formatContext_->streams[index];
             const bool unselectedVideo =
-                videoIndex >= 0 &&
+                (audioOnly || videoIndex >= 0) &&
                 stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
                 static_cast<int>(index) != videoIndex;
             const bool unselectedAudio =
@@ -824,7 +833,7 @@ bool FfmpegDemuxSource::Open(const std::string& url,
         return false;
     }
 
-    if (videoIndex < 0) {
+    if (videoIndex < 0 && !audioOnly) {
         videoIndex = av_find_best_stream(formatContext_,
                                          AVMEDIA_TYPE_VIDEO,
                                          -1,
@@ -1038,6 +1047,31 @@ void FfmpegDemuxSource::EnoughData(int mediaType)
             " event=" + std::to_string(transitionNumber) +
             " queued-packets=" + std::to_string(queuedPackets) +
             " queued-bytes=" + std::to_string(queuedBytes));
+    }
+}
+
+void FfmpegDemuxSource::SetTrackEnabled(int mediaType, bool enabled)
+{
+    Track* track = FindTrack(mediaType);
+    if (track == nullptr) {
+        return;
+    }
+
+    track->enabled = enabled;
+    {
+        std::lock_guard<std::mutex> lock(track->mutex);
+        if (!enabled) {
+            track->packets.clear();
+            track->queuedBytes = 0;
+            track->discontinuityNext = true;
+        }
+    }
+    track->condition.notify_all();
+    if (!enabled) {
+        std::unique_lock<std::mutex> lock(track->mutex);
+        track->condition.wait(lock, [track, this] {
+            return !track->sending || stopping_;
+        });
     }
 }
 
@@ -1438,7 +1472,7 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
     }
 
     bool queued = true;
-    if (track != nullptr) {
+    if (track != nullptr && track->enabled) {
         QueuedPacket prepared;
         if (!PreparePacket(*track, packet, prepared)) {
             queued = false;
@@ -1723,7 +1757,7 @@ bool FfmpegDemuxSource::QueuePacket(Track& track, QueuedPacket&& packet)
 {
     std::unique_lock<std::mutex> lock(track.mutex);
     track.condition.wait(lock, [&] {
-        return stopping_ || inputPaused_ ||
+        return stopping_ || inputPaused_ || !track.enabled ||
                (track.packets.size() < kMaximumQueuedPackets &&
                 (track.queuedBytes == 0 ||
                  packet.data.size() <=
@@ -1732,6 +1766,9 @@ bool FfmpegDemuxSource::QueuePacket(Track& track, QueuedPacket&& packet)
     });
     if (stopping_ || inputPaused_) {
         return false;
+    }
+    if (!track.enabled) {
+        return true;
     }
 
     packet.discontinuity = track.discontinuityNext;
@@ -1755,6 +1792,7 @@ void FfmpegDemuxSource::DemuxLoop()
         if (stopping_) {
             break;
         }
+        ApplyTrackDiscard();
         const uint64_t generation = seekGeneration_;
         if (!ReadAndQueuePacket(false)) {
             if (stopping_) {
@@ -1777,19 +1815,20 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
             std::unique_lock<std::mutex> lock(track.mutex);
             track.condition.wait(lock, [&] {
                 return stopping_ ||
-                       (feedingEnabled_ && track.needData &&
+                       (track.enabled && feedingEnabled_ && track.needData &&
                         !track.packets.empty()) ||
-                       (track.inputEos && track.packets.empty() &&
+                       (track.enabled && track.inputEos &&
+                        track.packets.empty() &&
                         !track.eosNotified);
             });
             if (stopping_) {
                 return;
             }
-            if (track.inputEos && track.packets.empty() &&
+            if (track.enabled && track.inputEos && track.packets.empty() &&
                 !track.eosNotified) {
                 track.eosNotified = true;
                 signalEos = true;
-            } else if (feedingEnabled_ && track.needData &&
+            } else if (track.enabled && feedingEnabled_ && track.needData &&
                        !track.packets.empty()) {
                 packet = std::move(track.packets.front());
                 track.packets.pop_front();
@@ -1852,6 +1891,23 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
             }
             return;
         }
+    }
+}
+
+void FfmpegDemuxSource::ApplyTrackDiscard()
+{
+    const std::lock_guard<std::mutex> lock(demuxMutex_);
+    if (formatContext_ == nullptr) {
+        return;
+    }
+    for (Track& track : tracks_) {
+        if (track.streamIndex < 0 ||
+            track.demuxEnabled == track.enabled.load()) {
+            continue;
+        }
+        formatContext_->streams[track.streamIndex]->discard =
+            track.enabled ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+        track.demuxEnabled = track.enabled;
     }
 }
 

@@ -34,7 +34,8 @@ public:
 
     bool Open(const std::string& url,
               ProgressCallback progress,
-              const MediaTrackSelection& selection = {});
+              const MediaTrackSelection& selection = {},
+              bool audioOnly = false);
     StreamCodecInfo GetCodecInfo() const;
     std::vector<MediaTrackInfo> GetTrackCatalog() const;
     uint64_t GetEstimatedBandwidthBitsPerSecond() const;
@@ -46,6 +47,7 @@ public:
                EndOfStreamCallback endOfStream);
     void NeedData(int mediaType);
     void EnoughData(int mediaType);
+    void SetTrackEnabled(int mediaType, bool enabled);
     void SetFeedingEnabled(bool enabled);
     bool PrepareSeek(double positionSeconds);
     bool Seek(double positionSeconds);
@@ -80,6 +82,8 @@ private:
         bool inputEos = false;
         bool eosNotified = false;
         bool sending = false;
+        std::atomic<bool> enabled{true};
+        bool demuxEnabled = true;
         bool discontinuityNext = true;
         uint64_t packetsPrepared = 0;
         uint64_t samplesSubmitted = 0;
@@ -124,6 +128,7 @@ private:
                                   size_t size,
                                   bool annexB);
     bool QueuePacket(Track& track, QueuedPacket&& packet);
+    void ApplyTrackDiscard();
     void BeginTimedIo();
     bool EndTimedIo();
     void DemuxLoop();

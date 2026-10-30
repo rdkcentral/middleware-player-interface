@@ -6,7 +6,9 @@
 #include <glib.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
+#include <system_error>
 #include <utility>
 
 namespace {
@@ -52,6 +54,9 @@ bool PlayerBackend::Start()
         LogStartupMilestone(statusMessage_);
         return false;
     }
+    activeAudioSource_ = source_->HasTrack(eGST_MEDIATYPE_AUDIO)
+        ? source_.get()
+        : nullptr;
     LogStartupMilestone("ffmpeg-manifest-and-stream-info-ready");
     for (const MediaTrackInfo& track : source_->GetTrackCatalog()) {
         if (!track.selected) {
@@ -97,10 +102,10 @@ bool PlayerBackend::Start()
         }
     };
     player_->RegisterNeedDataCb([this](int mediaType) {
-        source_->NeedData(mediaType);
+        RouteNeedData(mediaType);
     });
     player_->RegisterEnoughDataCb([this](int mediaType) {
-        source_->EnoughData(mediaType);
+        RouteEnoughData(mediaType);
     });
     player_->FirstFrameCallback(
         [this](int mediaType,
@@ -150,6 +155,7 @@ bool PlayerBackend::Start()
 
     playing_ = true;
     statusMessage_ = "Opening stream";
+    latestPositionMsForAudioSwitch_ = positionMs_;
     nextPositionQuery_ = std::chrono::steady_clock::now();
     nextDurationQuery_ = nextPositionQuery_;
     nextProgressLog_ = nextPositionQuery_;
@@ -159,7 +165,12 @@ bool PlayerBackend::Start()
 
 bool PlayerBackend::StartSource()
 {
-    if (!source_->Start(
+    return source_ != nullptr && StartSource(*source_);
+}
+
+bool PlayerBackend::StartSource(FfmpegDemuxSource& source)
+{
+    if (!source.Start(
             [this](int mediaType, MediaSample&& sample,
                    bool& discontinuity) {
                 bool notifyFirstBufferProcessed = false;
@@ -196,13 +207,47 @@ bool PlayerBackend::StartSource()
                 player_->EndOfStreamReached(mediaType, shouldHaltBuffering);
             })) {
         std::string error;
-        source_->TakeError(error);
+        source.TakeError(error);
         statusMessage_ = error.empty() ? "Could not start FFmpeg ingest"
                                        : "FFmpeg ingest failed: " + error;
         LogStartupMilestone(statusMessage_);
         return false;
     }
     return true;
+}
+
+void PlayerBackend::RouteNeedData(int mediaType)
+{
+    if (mediaType == eGST_MEDIATYPE_AUDIO) {
+        const std::lock_guard<std::mutex> lock(audioRoutingMutex_);
+        if (!audioSwitchInProgress_ && activeAudioSource_ != nullptr) {
+            activeAudioSource_->NeedData(mediaType);
+        }
+        return;
+    }
+    if (source_ != nullptr) {
+        source_->NeedData(mediaType);
+    }
+}
+
+void PlayerBackend::RouteEnoughData(int mediaType)
+{
+    if (mediaType == eGST_MEDIATYPE_AUDIO) {
+        const std::lock_guard<std::mutex> lock(audioRoutingMutex_);
+        if (!audioSwitchInProgress_ && activeAudioSource_ != nullptr) {
+            activeAudioSource_->EnoughData(mediaType);
+        }
+        return;
+    }
+    if (source_ != nullptr) {
+        source_->EnoughData(mediaType);
+    }
+}
+
+void PlayerBackend::SetActiveAudioSource(FfmpegDemuxSource* source)
+{
+    const std::lock_guard<std::mutex> lock(audioRoutingMutex_);
+    activeAudioSource_ = source;
 }
 
 void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
@@ -234,6 +279,112 @@ void PlayerBackend::ConfigurePlayerForSource(FfmpegDemuxSource& source)
     LogStartupMilestone("player-interface-selection-reconfigure-complete");
 }
 
+void PlayerBackend::CompleteAudioSwitchIfReady()
+{
+    std::unique_ptr<FfmpegDemuxSource> candidate;
+    std::string error;
+    double positionSeconds = 0.0;
+    {
+        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+        if (!audioSwitchReady_) {
+            return;
+        }
+        candidate = std::move(preparedAudioSource_);
+        error = std::move(audioSwitchError_);
+        positionSeconds = preparedAudioPositionSeconds_;
+        audioSwitchReady_ = false;
+    }
+    if (audioSwitchThread_.joinable()) {
+        audioSwitchThread_.join();
+    }
+
+    if (stopped_ || player_ == nullptr) {
+        if (candidate != nullptr) {
+            candidate->Stop();
+        }
+        audioSwitchInProgress_ = false;
+        previousAudioSource_ = nullptr;
+        return;
+    }
+    if (candidate == nullptr) {
+        RestoreAudioAfterSwitchFailure(
+            error.empty() ? "Could not prepare the requested audio track"
+                          : error);
+        return;
+    }
+    if (!candidate->HasTrack(eGST_MEDIATYPE_AUDIO)) {
+        candidate->Stop();
+        RestoreAudioAfterSwitchFailure(
+            "The requested DASH adaptation has no audio stream");
+        return;
+    }
+
+    StreamCodecInfo codecCaps = candidate->GetCodecInfo();
+    player_->SetStreamCaps(eGST_MEDIATYPE_AUDIO,
+                           std::move(codecCaps.audio));
+    player_->FlushTrack(
+        eGST_MEDIATYPE_AUDIO, positionSeconds, 0.0, 0.0);
+    if (!StartSource(*candidate)) {
+        const std::string startError = statusMessage_;
+        candidate->Stop();
+        RestoreAudioAfterSwitchFailure(startError);
+        return;
+    }
+
+    std::unique_ptr<FfmpegDemuxSource> previousAudioOnly =
+        std::move(audioOnlySource_);
+    audioOnlySource_ = std::move(candidate);
+    SetActiveAudioSource(audioOnlySource_.get());
+    selection_.audioTrackId = requestedAudioTrackId_;
+    previousAudioSource_ = nullptr;
+    audioSwitchInProgress_ = false;
+    cancelAudioSwitch_ = false;
+    audioOnlySource_->NeedData(eGST_MEDIATYPE_AUDIO);
+
+    if (previousAudioOnly != nullptr) {
+        previousAudioOnly->Stop();
+    }
+    statusMessage_ = "Audio track switch complete: " +
+                     selection_.audioTrackId;
+    LogStartupMilestone("audio-track-switch-complete: track=" +
+                        selection_.audioTrackId +
+                        " video-position-ms=" +
+                        std::to_string(positionMs_));
+}
+
+void PlayerBackend::RestoreAudioAfterSwitchFailure(
+    const std::string& error)
+{
+    FfmpegDemuxSource* previousAudioSource = previousAudioSource_;
+    previousAudioSource_ = nullptr;
+    audioSwitchInProgress_ = false;
+    cancelAudioSwitch_ = false;
+    if (previousAudioSource != nullptr && !stopped_) {
+        previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, true);
+        SetActiveAudioSource(previousAudioSource);
+        const double currentPositionSeconds =
+            static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
+        player_->FlushTrack(
+            eGST_MEDIATYPE_AUDIO, currentPositionSeconds, 0.0, 0.0);
+        previousAudioSource->NeedData(eGST_MEDIATYPE_AUDIO);
+    } else {
+        SetActiveAudioSource(nullptr);
+    }
+    statusMessage_ = "Audio track switch failed: " + error;
+    LogStartupMilestone(statusMessage_);
+}
+
+void PlayerBackend::SetAllSourcesFeedingEnabled(bool enabled)
+{
+    if (source_ != nullptr) {
+        source_->SetFeedingEnabled(enabled);
+    }
+    if (audioOnlySource_ != nullptr &&
+        audioOnlySource_.get() != source_.get()) {
+        audioOnlySource_->SetFeedingEnabled(enabled);
+    }
+}
+
 void PlayerBackend::PumpEvents()
 {
     g_main_context_iteration(nullptr, FALSE);
@@ -256,9 +407,29 @@ void PlayerBackend::PumpEvents()
 
     const auto now = std::chrono::steady_clock::now();
     EvaluateAutoBitrate(now);
+    if (audioOnlySource_ != nullptr && !audioSwitchInProgress_) {
+        std::string error;
+        if (audioOnlySource_->TakeError(error)) {
+            SetActiveAudioSource(nullptr);
+            audioOnlySource_->Stop();
+            audioOnlySource_.reset();
+            if (player_ != nullptr && !stopped_) {
+                player_->FlushTrack(
+                    eGST_MEDIATYPE_AUDIO,
+                    static_cast<double>(positionMs_) / 1000.0,
+                    0.0,
+                    0.0);
+            }
+            statusMessage_ =
+                "Audio track source failed; video playback continues: " +
+                error;
+            LogStartupMilestone(statusMessage_);
+        }
+    }
     if (player_ != nullptr && !stopped_ && playing_ &&
         now >= nextPositionQuery_) {
         positionMs_ = player_->GetPositionMilliseconds();
+        latestPositionMsForAudioSwitch_ = positionMs_;
         if (positionMs_ > 0 && !firstPositionReported_) {
             firstPositionReported_ = true;
             LogStartupMilestone("playback-position-advanced");
@@ -293,6 +464,7 @@ void PlayerBackend::PumpEvents()
             nextProgressLog_ = now + std::chrono::seconds(5);
         }
     }
+    CompleteAudioSwitchIfReady();
 }
 
 bool PlayerBackend::Play()
@@ -307,7 +479,7 @@ bool PlayerBackend::Play()
         return false;
     }
 
-    source_->SetFeedingEnabled(true);
+    SetAllSourcesFeedingEnabled(true);
     playing_ = true;
     statusMessage_ = "Playing";
     return true;
@@ -320,9 +492,9 @@ bool PlayerBackend::Pause()
         return false;
     }
 
-    source_->SetFeedingEnabled(false);
+    SetAllSourcesFeedingEnabled(false);
     if (!player_->Pause(true, false)) {
-        source_->SetFeedingEnabled(true);
+        SetAllSourcesFeedingEnabled(true);
         statusMessage_ = "Could not pause playback";
         return false;
     }
@@ -338,43 +510,58 @@ bool PlayerBackend::Seek(double positionSeconds)
         statusMessage_ = "Cannot seek: playback has stopped";
         return false;
     }
+    if (audioSwitchInProgress_) {
+        statusMessage_ = "Cannot seek while an audio track switch is preparing";
+        return false;
+    }
 
     const bool resumeFeeding = playing_;
+    FfmpegDemuxSource* audioSource =
+        activeAudioSource_ != source_.get() ? activeAudioSource_ : nullptr;
     const long long previousPositionMilliseconds =
         player_->GetPositionMilliseconds();
     const double previousPositionSeconds =
         previousPositionMilliseconds > 0
             ? static_cast<double>(previousPositionMilliseconds) / 1000.0
             : 0.0;
-    if (!source_->PrepareSeek(positionSeconds)) {
+    if (!source_->PrepareSeek(positionSeconds) ||
+        (audioSource != nullptr &&
+         !audioSource->PrepareSeek(positionSeconds))) {
         statusMessage_ = "FFmpeg cannot seek to the requested position";
         return false;
     }
-    source_->SetFeedingEnabled(false);
+    SetAllSourcesFeedingEnabled(false);
     LogStartupMilestone("player-interface-seek-flush-begin");
     if (!player_->Flush(positionSeconds, 1, false, true)) {
-        source_->SetFeedingEnabled(resumeFeeding);
+        SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "Player Interface seek request failed";
         return false;
     }
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    latestPositionMsForAudioSwitch_ = positionMs_;
     LogStartupMilestone("player-interface-seek-flush-complete");
 
     LogStartupMilestone("ffmpeg-seek-begin");
-    if (!source_->Seek(positionSeconds)) {
-        const bool sourceRestored =
-            source_->Seek(previousPositionSeconds);
+    const bool sourceSeeked = source_->Seek(positionSeconds);
+    const bool audioSeeked =
+        audioSource == nullptr || audioSource->Seek(positionSeconds);
+    if (!sourceSeeked || !audioSeeked) {
+        const bool sourceRestored = source_->Seek(previousPositionSeconds);
+        const bool audioRestored =
+            audioSource == nullptr ||
+            audioSource->Seek(previousPositionSeconds);
         const bool pipelineRestored =
-            sourceRestored &&
+            sourceRestored && audioRestored &&
             player_->Flush(previousPositionSeconds, 1, false, true);
         if (pipelineRestored) {
-            source_->SetFeedingEnabled(resumeFeeding);
+            SetAllSourcesFeedingEnabled(resumeFeeding);
             positionMs_ = static_cast<long long>(
                 previousPositionSeconds * 1000.0);
+            latestPositionMsForAudioSwitch_ = positionMs_;
             statusMessage_ =
                 "FFmpeg could not seek; playback restored to its prior position";
         } else {
-            source_->SetFeedingEnabled(false);
+            SetAllSourcesFeedingEnabled(false);
             playing_ = false;
             statusMessage_ =
                 "FFmpeg could not seek and playback recovery failed";
@@ -383,7 +570,7 @@ bool PlayerBackend::Seek(double positionSeconds)
     }
     LogStartupMilestone("ffmpeg-seek-complete");
 
-    source_->SetFeedingEnabled(resumeFeeding);
+    SetAllSourcesFeedingEnabled(resumeFeeding);
     statusMessage_ = "Seek requested: " +
                      std::to_string(positionSeconds) + " s";
     return true;
@@ -395,6 +582,11 @@ bool PlayerBackend::SetTrickRate(int rate)
         statusMessage_ = "Cannot change trick rate: playback has stopped";
         return false;
     }
+    if (audioSwitchInProgress_) {
+        statusMessage_ =
+            "Cannot change trick rate while an audio switch is preparing";
+        return false;
+    }
     if (!IsSupportedTrickRate(rate)) {
         statusMessage_ = "Unsupported trick rate";
         return false;
@@ -403,23 +595,29 @@ bool PlayerBackend::SetTrickRate(int rate)
     const double currentPositionSeconds =
         static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
     const bool resumeFeeding = playing_;
-    if (!source_->PrepareSeek(currentPositionSeconds)) {
+    FfmpegDemuxSource* audioSource =
+        activeAudioSource_ != source_.get() ? activeAudioSource_ : nullptr;
+    if (!source_->PrepareSeek(currentPositionSeconds) ||
+        (audioSource != nullptr &&
+         !audioSource->PrepareSeek(currentPositionSeconds))) {
         statusMessage_ = "FFmpeg cannot reposition for trick play";
         return false;
     }
-    source_->SetFeedingEnabled(false);
-    if (!source_->Seek(currentPositionSeconds)) {
-        source_->SetFeedingEnabled(resumeFeeding);
+    SetAllSourcesFeedingEnabled(false);
+    if (!source_->Seek(currentPositionSeconds) ||
+        (audioSource != nullptr &&
+         !audioSource->Seek(currentPositionSeconds))) {
+        SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "FFmpeg could not reposition for trick play";
         return false;
     }
     if (!player_->Flush(currentPositionSeconds, rate, false, false)) {
-        source_->SetFeedingEnabled(resumeFeeding);
+        SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "Player Interface trick-play request failed";
         return false;
     }
 
-    source_->SetFeedingEnabled(resumeFeeding);
+    SetAllSourcesFeedingEnabled(resumeFeeding);
     statusMessage_ = rate == 1
         ? "Normal playback requested"
         : "Trick rate requested: " + std::to_string(rate) + "x";
@@ -465,13 +663,126 @@ bool PlayerBackend::SelectAudioTrackId(const std::string& trackId)
         statusMessage_ = "Audio track is already selected: " + trackId;
         return true;
     }
+    if (audioSwitchInProgress_) {
+        statusMessage_ = "An audio track switch is already in progress";
+        return false;
+    }
 
     MediaTrackSelection nextSelection = selection_;
     nextSelection.audioTrackId = trackId;
-    const double positionSeconds =
-        static_cast<double>(player_->GetPositionMilliseconds()) / 1000.0;
-    return ApplySelection(
-        nextSelection, positionSeconds, "audio-track-switch");
+    FfmpegDemuxSource* previousAudioSource = activeAudioSource_;
+    if (previousAudioSource == nullptr) {
+        statusMessage_ = "No active audio source is available to switch";
+        return false;
+    }
+
+    const long long currentPositionMilliseconds =
+        player_->GetPositionMilliseconds();
+    const double currentPositionSeconds =
+        static_cast<double>(currentPositionMilliseconds) / 1000.0;
+    SetActiveAudioSource(nullptr);
+    previousAudioSource->SetTrackEnabled(eGST_MEDIATYPE_AUDIO, false);
+    player_->FlushTrack(
+        eGST_MEDIATYPE_AUDIO, currentPositionSeconds, 0.0, 0.0);
+
+    {
+        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+        audioSwitchReady_ = false;
+        preparedAudioSource_.reset();
+        audioSwitchError_.clear();
+        preparedAudioPositionSeconds_ = currentPositionSeconds;
+    }
+    previousAudioSource_ = previousAudioSource;
+    requestedAudioTrackId_ = trackId;
+    cancelAudioSwitch_ = false;
+    audioSwitchInProgress_ = true;
+    latestPositionMsForAudioSwitch_ = currentPositionMilliseconds;
+    LogStartupMilestone("audio-track-switch-prepare-begin: track=" + trackId);
+
+    try {
+        audioSwitchThread_ = std::thread(
+            [this, selection = std::move(nextSelection)]() mutable {
+                auto candidate = std::make_unique<FfmpegDemuxSource>();
+                std::string error;
+                double preparedPositionSeconds = 0.0;
+                bool positioned = candidate->Open(
+                    url_,
+                    [this](const std::string& milestone) {
+                        LogStartupMilestone(milestone);
+                    },
+                    selection,
+                    true);
+                if (!positioned) {
+                    candidate->TakeError(error);
+                }
+
+                if (positioned) {
+                    positioned = false;
+                    for (unsigned int attempt = 0; attempt < 4; ++attempt) {
+                        if (cancelAudioSwitch_) {
+                            break;
+                        }
+                        const long long targetMilliseconds =
+                            latestPositionMsForAudioSwitch_.load();
+                        const double targetSeconds =
+                            static_cast<double>(targetMilliseconds) / 1000.0;
+                        if (!candidate->PrepareSeek(targetSeconds) ||
+                            !candidate->Seek(targetSeconds)) {
+                            candidate->TakeError(error);
+                            break;
+                        }
+
+                        preparedPositionSeconds = targetSeconds;
+                        const long long latestMilliseconds =
+                            latestPositionMsForAudioSwitch_.load();
+                        const long long positionDelta =
+                            std::llabs(latestMilliseconds -
+                                       targetMilliseconds);
+                        if (positionDelta <= 1000) {
+                            positioned = true;
+                            break;
+                        }
+                    }
+                    if (!positioned && error.empty() &&
+                        !cancelAudioSwitch_) {
+                        error =
+                            "Playback position kept advancing while the "
+                            "audio track was being prepared";
+                    }
+                }
+
+                if (cancelAudioSwitch_) {
+                    candidate->Stop();
+                    return;
+                }
+
+                if (!positioned && error.empty()) {
+                    error = "Could not position the requested audio track";
+                }
+                {
+                    const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+                    if (positioned) {
+                        preparedAudioSource_ = std::move(candidate);
+                    } else {
+                        candidate->Stop();
+                    }
+                    audioSwitchError_ = std::move(error);
+                    preparedAudioPositionSeconds_ = preparedPositionSeconds;
+                    audioSwitchReady_ = true;
+                }
+            });
+    } catch (const std::system_error& error) {
+        cancelAudioSwitch_ = true;
+        audioSwitchInProgress_ = false;
+        RestoreAudioAfterSwitchFailure(
+            "Could not start audio-track preparation: " +
+            std::string(error.what()));
+        return false;
+    }
+
+    statusMessage_ = "Switching audio to track: " + trackId +
+                     " (video playback continues)";
+    return true;
 }
 
 bool PlayerBackend::SelectVideoResolution(int width, int height)
@@ -539,6 +850,11 @@ bool PlayerBackend::SetAutoBitrate(bool enabled)
         statusMessage_ = "Cannot change ABR mode: playback has stopped";
         return false;
     }
+    if (enabled && audioSwitchInProgress_) {
+        statusMessage_ =
+            "Cannot enable ABR while an audio track switch is preparing";
+        return false;
+    }
     if (!enabled) {
         autoBitrateEnabled_ = false;
         abrController_.Reset();
@@ -572,6 +888,12 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
                                    double positionSeconds,
                                    const std::string& reason)
 {
+    if (audioSwitchInProgress_) {
+        statusMessage_ =
+            "Cannot change video selection while an audio switch is preparing";
+        return false;
+    }
+
     const bool resumeFeeding = playing_;
     auto candidate = std::make_unique<FfmpegDemuxSource>();
     LogStartupMilestone(
@@ -623,15 +945,19 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         return false;
     }
 
-    source_->SetFeedingEnabled(false);
+    FfmpegDemuxSource* previousAudioSource = activeAudioSource_;
+    SetAllSourcesFeedingEnabled(false);
     if (!player_->Flush(positionSeconds, 1, false, true)) {
-        source_->SetFeedingEnabled(resumeFeeding);
+        SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ = "Player Interface flush failed during " + reason;
         return false;
     }
 
     std::unique_ptr<FfmpegDemuxSource> previous = std::move(source_);
     source_ = std::move(candidate);
+    SetActiveAudioSource(source_->HasTrack(eGST_MEDIATYPE_AUDIO)
+                             ? source_.get()
+                             : nullptr);
     source_->SetFeedingEnabled(false);
     ConfigurePlayerForSource(*source_);
     const bool sourceStarted = StartSource();
@@ -645,8 +971,12 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
         source_->Stop();
         source_.reset();
         source_ = std::move(previous);
+        SetActiveAudioSource(previousAudioSource);
         const bool previousSourcePositioned =
             source_->Seek(positionSeconds) &&
+            (previousAudioSource == nullptr ||
+             previousAudioSource == source_.get() ||
+             previousAudioSource->Seek(positionSeconds)) &&
             player_->Flush(positionSeconds, 1, false, true);
         if (previousSourcePositioned) {
             ConfigurePlayerForSource(*source_);
@@ -655,11 +985,11 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
             previousSourcePositioned &&
             (resumeFeeding || player_->Pause(true, false));
         if (previousPlayerStateRestored) {
-            source_->SetFeedingEnabled(resumeFeeding);
+            SetAllSourcesFeedingEnabled(resumeFeeding);
             statusMessage_ = "Selection failed; previous playback restored: " +
                              switchError;
         } else {
-            source_->SetFeedingEnabled(false);
+            SetAllSourcesFeedingEnabled(false);
             playing_ = false;
             statusMessage_ = "Selection failed and previous playback recovery failed: " +
                              switchError;
@@ -669,9 +999,17 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     }
 
     source_->SetFeedingEnabled(resumeFeeding);
+    if (audioOnlySource_ != nullptr) {
+        audioOnlySource_->Stop();
+        audioOnlySource_.reset();
+    }
+    SetActiveAudioSource(source_->HasTrack(eGST_MEDIATYPE_AUDIO)
+                             ? source_.get()
+                             : nullptr);
     previous->Stop();
     selection_ = selection;
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
+    latestPositionMsForAudioSwitch_ = positionMs_;
     const long long newDuration = source_->GetDurationMilliseconds();
     if (newDuration > 0) {
         durationMs_ = newDuration;
@@ -690,6 +1028,7 @@ void PlayerBackend::EvaluateAutoBitrate(
     std::chrono::steady_clock::time_point now)
 {
     if (!autoBitrateEnabled_ || !playing_ || source_ == nullptr ||
+        audioSwitchInProgress_ ||
         now < nextAbrEvaluation_) {
         return;
     }
@@ -735,9 +1074,19 @@ void PlayerBackend::EvaluateAutoBitrate(
 
 std::vector<MediaTrackInfo> PlayerBackend::GetTrackCatalog() const
 {
-    return source_ == nullptr
-        ? std::vector<MediaTrackInfo>()
-        : source_->GetTrackCatalog();
+    if (source_ == nullptr) {
+        return {};
+    }
+
+    std::vector<MediaTrackInfo> tracks = source_->GetTrackCatalog();
+    for (MediaTrackInfo& track : tracks) {
+        if (track.type == MediaTrackType::Audio) {
+            track.selected = track.id == selection_.audioTrackId;
+        } else if (track.type == MediaTrackType::Video) {
+            track.selected = track.id == selection_.videoTrackId;
+        }
+    }
+    return tracks;
 }
 
 void PlayerBackend::Stop()
@@ -746,6 +1095,24 @@ void PlayerBackend::Stop()
         return;
     }
 
+    cancelAudioSwitch_ = true;
+    if (audioSwitchThread_.joinable()) {
+        audioSwitchThread_.join();
+    }
+    {
+        const std::lock_guard<std::mutex> lock(audioSwitchMutex_);
+        preparedAudioSource_.reset();
+        audioSwitchReady_ = false;
+    }
+    audioSwitchInProgress_ = false;
+    previousAudioSource_ = nullptr;
+    SetActiveAudioSource(nullptr);
+
+    if (audioOnlySource_ != nullptr) {
+        audioOnlySource_->SetFeedingEnabled(false);
+        audioOnlySource_->Stop();
+        audioOnlySource_.reset();
+    }
     if (source_ != nullptr) {
         source_->SetFeedingEnabled(false);
         source_->Stop();

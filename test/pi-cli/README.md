@@ -88,16 +88,19 @@ the source at the current playback time. Actual trick playback depends on the
 Player Interface platform implementation and stream support.
 `list audio` and `list video` report one-based track numbers and metadata
 discovered from the manifest or FFmpeg input context. For clear DASH streams,
-`setaudio <number>` switches to the numbered audio track. `setresolution`
-accepts an exact size such as `1280x720`, or a height such as `720p` to select
-the highest-bitrate representation at that height.
+`setaudio <number>` immediately flushes the current audio branch and prepares
+the requested track independently; video playback and its position are left
+running. The new audio starts when its DASH adaptation is ready, so startup
+time depends on network and segment availability. `setresolution` accepts an
+exact size such as `1280x720`, or a height such as `720p` to select the
+highest-bitrate representation at that height.
 `abr on` enables bandwidth-based video selection; `abr off` returns to the
 currently selected representation. A manual resolution selection disables
-ABR. Selection rebuilds the FFmpeg demux source while preserving the Player
-Interface pipeline and playback position. Automatic adaptation uses completed
-DASH media-segment transfer rates, a 70% safety margin, and two consecutive
-decisions before switching. Manual audio/video selection and ABR currently
-require DASH.
+ABR. Video selection rebuilds the FFmpeg demux source and reconfigures the
+Player Interface pipeline at the current position. Automatic adaptation uses
+completed DASH media-segment transfer rates, a 70% safety margin, and two
+consecutive decisions before switching. Manual audio/video selection and ABR
+currently require DASH.
 
 ## Startup diagnostics
 
