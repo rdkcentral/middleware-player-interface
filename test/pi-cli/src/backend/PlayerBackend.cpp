@@ -1689,7 +1689,9 @@ bool PlayerBackend::ApplySelection(const MediaTrackSelection& selection,
     SetActiveAudioSource(source_->HasTrack(eGST_MEDIATYPE_AUDIO)
                              ? source_.get()
                              : nullptr);
+    LogStartupMilestone(reason + "-previous-source-stop-begin");
     previous->Stop();
+    LogStartupMilestone(reason + "-previous-source-stop-complete");
     selection_ = selection;
     positionMs_ = static_cast<long long>(positionSeconds * 1000.0);
     positionOffsetMs_ = 0;

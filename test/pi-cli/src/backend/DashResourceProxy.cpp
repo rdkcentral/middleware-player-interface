@@ -1097,13 +1097,19 @@ private:
     {
         AVIOContext* input = nullptr;
         AVDictionary* options = nullptr;
+        AVIOInterruptCB interruptCallback{
+            &Impl::InterruptFetch, this};
         av_dict_set(&options,
                     "rw_timeout",
                     std::to_string(
                         kResourceIoTimeoutSeconds * 1000000).c_str(),
                     0);
         int result = avio_open2(
-            &input, url.c_str(), AVIO_FLAG_READ, nullptr, &options);
+            &input,
+            url.c_str(),
+            AVIO_FLAG_READ,
+            &interruptCallback,
+            &options);
         av_dict_free(&options);
         if (result < 0) {
             error = ErrorText(result);
@@ -1140,6 +1146,13 @@ private:
             return false;
         }
         return true;
+    }
+
+    static int InterruptFetch(void* opaque)
+    {
+        auto* proxy = static_cast<Impl*>(opaque);
+        const std::lock_guard<std::mutex> lock(proxy->mutex);
+        return proxy->stopping ? 1 : 0;
     }
 
     bool WaitForInitialPrefetch()
