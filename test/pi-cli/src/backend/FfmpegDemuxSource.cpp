@@ -2023,7 +2023,11 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
         track.condition.notify_all();
         const uint64_t sampleLogInterval =
             track.mediaType == eGST_MEDIATYPE_VIDEO ? 25 : 50;
-        if (sampleNumber <= 5 || sampleNumber % sampleLogInterval == 0) {
+        const bool trickVideoSample =
+            track.mediaType == eGST_MEDIATYPE_VIDEO &&
+            trickPlaybackRate_.load() > 1;
+        if (sampleNumber <= 5 || sampleNumber % sampleLogInterval == 0 ||
+            trickVideoSample) {
             std::ostringstream sampleLog;
             sampleLog << "player-interface-sample-result: track="
                       << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"
