@@ -147,18 +147,18 @@ typedef enum{
 }DrmRequestType;
 
 struct configs{
-    bool mUseSecManager;
-    int mLicenseRetryWaitTime;
-    int mDrmNetworkTimeout;
-    int mDrmStallTimeout;
-    int mCurlConnectTimeout;
-    bool mCurlLicenseLogging;
-    bool mRuntimeDRMConfig;
-    int mContentProtectionDataUpdateTimeout;
-    bool mEnablePROutputProtection;
-    bool  mPropagateURIParam;
-    bool mIsFakeTune;
-    bool mIsWVKIDWorkaround;
+    bool mUseSecManager = false;
+    int mLicenseRetryWaitTime = 0;
+    int mDrmNetworkTimeout = 0;
+    int mDrmStallTimeout = 0;
+    int mCurlConnectTimeout = 0;
+    bool mCurlLicenseLogging = false;
+    bool mRuntimeDRMConfig = false;
+    int mContentProtectionDataUpdateTimeout = 0;
+    bool mEnablePROutputProtection = false;
+    bool  mPropagateURIParam = false;
+    bool mIsFakeTune = false;
+    bool mIsWVKIDWorkaround = false;
 };
 /**
  *  @class	DrmSessionManager
