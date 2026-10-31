@@ -94,49 +94,49 @@ enum MsgType
 
 struct BusEventData
 {
-	MsgType msgType;
+	MsgType msgType = MESSAGE_APPLICATION;
 	std::string msg;
 	std::string dbg_info;
-	bool setPlaybackRate;
-	bool firstBufferProcessed;
-	bool receivedFirstFrame;
+	bool setPlaybackRate = false;
+	bool firstBufferProcessed = false;
+	bool receivedFirstFrame = false;
 };
 
 struct Configs
 {
 	std::string networkProxyValue;
-	bool gstreamerSubsEnabled;
-	bool tcpServerSink;
-	int tcpPort;
-	bool appSrcForProgressivePlayback;
-	bool seamlessAudioSwitch;
-	bool enablePTSReStamp;
+	bool gstreamerSubsEnabled = false;
+	bool tcpServerSink = false;
+	int tcpPort = 0;
+	bool appSrcForProgressivePlayback = false;
+	bool seamlessAudioSwitch = false;
+	bool enablePTSReStamp = false;
 	std::string manifestUrl;
-	int media;
-	int videoBufBytes;
-	bool enableDisconnectSignals;
-	int eosInjectionMode;
-	bool enablePtsSync;
-	int framesToQueue;
-	int vodTrickModeFPS;
-	int enableGstPosQuery;
-	int audioBufBytes;
+	int media = 0;
+	int videoBufBytes = 0;
+	bool enableDisconnectSignals = false;
+	int eosInjectionMode = 0;
+	bool enablePtsSync = false;
+	int framesToQueue = 0;
+	int vodTrickModeFPS = 0;
+	int enableGstPosQuery = 0;
+	int audioBufBytes = 0;
 	std::string networkProxy;
-	float progressTimer;
-	bool audioOnlyMode;
-	bool enableRectPropertyCfg;
-	bool audioDecoderStreamSync;
-	bool gstreamerBufferingBeforePlay;
-	bool seiTimeCode;
-	bool useWesterosSink;
-	bool useRialtoSink;
-	bool gstLogging;
-	bool progressLogging;
-	bool monitorAV;
-	bool disableUnderflow;
-	int monitorAvsyncThresholdPositiveMs;
-	int monitorAvsyncThresholdNegativeMs;
-	int monitorAvJumpThresholdMs;
+	float progressTimer = 0.0f;
+	bool audioOnlyMode = false;
+	bool enableRectPropertyCfg = false;
+	bool audioDecoderStreamSync = false;
+	bool gstreamerBufferingBeforePlay = false;
+	bool seiTimeCode = false;
+	bool useWesterosSink = false;
+	bool useRialtoSink = false;
+	bool gstLogging = false;
+	bool progressLogging = false;
+	bool monitorAV = false;
+	bool disableUnderflow = false;
+	int monitorAvsyncThresholdPositiveMs = 0;
+	int monitorAvsyncThresholdNegativeMs = 0;
+	int monitorAvJumpThresholdMs = 0;
 };
 
 
