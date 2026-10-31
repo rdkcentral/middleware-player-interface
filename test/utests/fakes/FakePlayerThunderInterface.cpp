@@ -84,7 +84,7 @@ void PlayerThunderInterface::StopOta()
 {
 }
 
-std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData> audData)
+std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData> &audData)
 {
     std::string ret = "";
     return ret;
@@ -96,7 +96,7 @@ std::string PlayerThunderInterface::SetAudioTrackOta(int index, int primaryKey)
     return ret;
 }
 
-bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData> txtData)
+bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData> &txtData)
 {
     return false;
 }
@@ -114,7 +114,7 @@ bool PlayerThunderInterface::InitRmf()
     return false;
 }
 
-bool PlayerThunderInterface::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
+bool PlayerThunderInterface::StartRmf(const std::string &url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
     return false;
 }

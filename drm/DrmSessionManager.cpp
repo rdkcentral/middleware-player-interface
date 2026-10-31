@@ -349,7 +349,7 @@ string _extractSubstring(string parentStr, string startStr, string endStr)
  *  @return		bool - true if keyId is already marked as failed or cached,
  * 				false if key is not cached
  */
-bool DrmSessionManager::IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &status)
+bool DrmSessionManager::IsKeyIdProcessed(const std::vector<uint8_t> &keyIdArray, bool &status)
 {
 	bool ret = false;
 	std::lock_guard<std::mutex> guard(cachedKeyMutex);
@@ -950,7 +950,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 /**
  * @brief Initialize the Drm System with InitData(PSSH)
  */
-KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmHelper, int sessionSlot, int &err )
+KeyState DrmSessionManager::initializeDrmSession(const std::shared_ptr<DrmHelper> &drmHelper, int sessionSlot, int &err )
 {
 	KeyState code = KEY_ERROR;
 

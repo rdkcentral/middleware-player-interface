@@ -206,7 +206,7 @@ void ClearKeyHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo, 
 	}
 }
 
-void ClearKeyHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
+void ClearKeyHelper::transformLicenseResponse(const std::shared_ptr<DrmData> &licenseResponse) const
 {
 	// HLS requires the returned key to be transformed into a JWK.
 	// For DASH it will already be in JWK format

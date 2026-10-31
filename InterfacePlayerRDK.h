@@ -230,7 +230,7 @@ class InterfacePlayerRDK
         	 */
         	static gboolean IdleCallbackFirstVideoFrameDisplayed(gpointer user_data);
         	/*Callback function types for various GStreamer events*/
-        	using BusMessageCallback = std::function<void(const BusEventData)>;
+        	using BusMessageCallback = std::function<void(const BusEventData &)>;
         	using HandleOnGstBufferUnderflowCb = std::function<void(int mediaType)>;
         	using HandleOnGstDecodeErrorCb = std::function<void(int CbCount)>;
         	using HandleOnGstPtsErrorCb = std::function<void(bool isVideo, bool isAudioSink)>;

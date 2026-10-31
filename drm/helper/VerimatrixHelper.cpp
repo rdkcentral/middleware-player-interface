@@ -120,7 +120,7 @@ void VerimatrixHelper::generateLicenseRequest(const ChallengeInfo& challengeInfo
 	licenseRequest.payload = "";
 }
 
-void VerimatrixHelper::transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const
+void VerimatrixHelper::transformLicenseResponse(const std::shared_ptr<DrmData> &licenseResponse) const
 {
 	if(!licenseResponse)
 	{
