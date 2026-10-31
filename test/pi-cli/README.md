@@ -85,8 +85,11 @@ quit
 `seek` takes a target in seconds. The command repositions FFmpeg and flushes
 Player Interface. For finite, static DASH VOD with H.264 video, trick-rate
 commands synthesize AAMP-style I-frame playback from FFmpeg key packets,
-compress their timestamps to the selected rate, and mute audio. `trick 1`
-restores normal packets and audio. Dynamic/live DASH and streams without
+compress their timestamps to the selected rate, and send audio on the same
+compressed timeline to keep the pipeline's audio branch participating in
+preroll. `trick 1` restores normal packets and audio. The player interface's
+platform sink may not expose volume/mute controls on desktop Linux, so audio
+may be audible at the selected rate. Dynamic/live DASH and streams without
 keyframes are not supported for synthesized trick play; the command reports
 that limitation instead of claiming the rate was applied.
 `list audio` and `list video` report one-based track numbers and metadata

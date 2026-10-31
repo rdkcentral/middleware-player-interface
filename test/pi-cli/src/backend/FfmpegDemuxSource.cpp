@@ -1576,12 +1576,10 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
     if (track != nullptr && track->enabled) {
         const int trickRate = trickPlaybackRate_.load();
         const bool trickPlay = trickRate > 1;
-        const bool isTrickAudio =
-            trickPlay && track->mediaType == eGST_MEDIATYPE_AUDIO;
         const bool isNonKeyTrickVideo =
             trickPlay && track->mediaType == eGST_MEDIATYPE_VIDEO &&
             (packet->flags & AV_PKT_FLAG_KEY) == 0;
-        if (isTrickAudio || isNonKeyTrickVideo) {
+        if (isNonKeyTrickVideo) {
             av_packet_free(&packet);
             return true;
         }
@@ -1595,8 +1593,7 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
                 MarkInputEos();
             }
         } else {
-            if (trickPlay &&
-                track->mediaType == eGST_MEDIATYPE_VIDEO) {
+            if (trickPlay) {
                 const double anchorPositionSeconds =
                     trickPlaybackAnchorSeconds_.load();
                 if (prepared.pts < anchorPositionSeconds) {
@@ -1618,7 +1615,11 @@ bool FfmpegDemuxSource::ReadAndQueuePacket(bool priming)
                     ++trickPlaybackPacketsLogged_;
                 if (loggedPacket <= 3) {
                     ReportProgress(
-                        "ffmpeg-trickplay-keyframe: rate=" +
+                        std::string("ffmpeg-trickplay-sample: track=") +
+                        (track->mediaType == eGST_MEDIATYPE_VIDEO
+                             ? "video"
+                             : "audio") +
+                        " rate=" +
                         std::to_string(trickRate) +
                         " media-pts=" +
                         std::to_string(mediaPositionSeconds) +
@@ -2023,11 +2024,10 @@ void FfmpegDemuxSource::FeedLoop(Track& track)
         track.condition.notify_all();
         const uint64_t sampleLogInterval =
             track.mediaType == eGST_MEDIATYPE_VIDEO ? 25 : 50;
-        const bool trickVideoSample =
-            track.mediaType == eGST_MEDIATYPE_VIDEO &&
-            trickPlaybackRate_.load() > 1;
+        const bool trickPlaySample = trickPlaybackRate_.load() > 1;
         if (sampleNumber <= 5 || sampleNumber % sampleLogInterval == 0 ||
-            trickVideoSample) {
+            (trickPlaySample &&
+             track.mediaType == eGST_MEDIATYPE_VIDEO)) {
             std::ostringstream sampleLog;
             sampleLog << "player-interface-sample-result: track="
                       << (track.mediaType == eGST_MEDIATYPE_VIDEO ? "video"

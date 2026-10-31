@@ -1295,11 +1295,11 @@ bool PlayerBackend::SetTrickRate(int rate)
     SetAllSourcesFeedingEnabled(resumeFeeding);
     if (resumeFeeding) {
         source_->NeedData(eGST_MEDIATYPE_VIDEO);
-        if (rate == 1 && activeAudioSource_ != nullptr) {
+        if (activeAudioSource_ != nullptr) {
             activeAudioSource_->NeedData(eGST_MEDIATYPE_AUDIO);
         }
         LogStartupMilestone(
-            rate == 1
+            activeAudioSource_ != nullptr
                 ? "trick-play-injection-rearmed: video-and-audio"
                 : "trick-play-injection-rearmed: video-only");
     }
@@ -1314,8 +1314,8 @@ bool PlayerBackend::SetTrickRate(int rate)
     }
     playing_ = resumeFeeding;
     LogStartupMilestone(
-        std::string("trick-play-player-state-restored: target=") +
-        (resumeFeeding ? "playing" : "paused") + " success=yes");
+        std::string("trick-play-player-state-requested: target=") +
+        (resumeFeeding ? "playing" : "paused"));
     statusMessage_ = rate == 1
         ? "Normal playback requested"
         : "Trick rate requested: " + std::to_string(rate) + "x";
