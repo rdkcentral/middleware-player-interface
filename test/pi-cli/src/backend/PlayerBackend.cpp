@@ -442,10 +442,7 @@ long long PlayerBackend::GetPlaybackPositionMilliseconds() const
         return positionMs_;
     }
 
-    long long position = player_->GetPositionMilliseconds();
-    if (trickRate_ > 1) {
-        position /= trickRate_;
-    }
+    const long long position = player_->GetPositionMilliseconds();
     return position > 0 ? position + positionOffsetMs_ : positionMs_;
 }
 
@@ -455,11 +452,8 @@ void PlayerBackend::LogVideoDiagnostics(const std::string& stage)
         return;
     }
 
-    long long interfacePositionMilliseconds =
+    const long long interfacePositionMilliseconds =
         player_->GetPositionMilliseconds();
-    if (trickRate_ > 1) {
-        interfacePositionMilliseconds /= trickRate_;
-    }
     const long long videoSinkPositionMilliseconds =
         player_->GetVideoPosition();
     const long long videoPts90k = player_->GetVideoPTS();
@@ -1299,13 +1293,13 @@ bool PlayerBackend::SetTrickRate(int rate)
     player_->SetAudioVolume(rate == 1 ? 100 : 0);
     player_->SetVolumeOrMuteUnMute();
     if (!player_->Pause(!resumeFeeding, false)) {
-        SetAllSourcesFeedingEnabled(false);
-        playing_ = false;
+        playing_ = resumeFeeding;
+        SetAllSourcesFeedingEnabled(resumeFeeding);
         statusMessage_ =
-            "Player Interface could not restore playback state after "
-            "trick-play request";
+            "Player Interface is still transitioning after trick play; "
+            "sample feeding continued";
         LogStartupMilestone(statusMessage_);
-        return false;
+        return true;
     }
     LogStartupMilestone(
         std::string("trick-play-player-state-restored: target=") +
