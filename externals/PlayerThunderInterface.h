@@ -168,7 +168,7 @@ public:
      * @param audData vector to be filled with audio data
      * @return string of current track pk
      */
-    std::string GetAudioTracksOta(std::vector<PlayerAudioData> audData);
+    std::string GetAudioTracksOta(std::vector<PlayerAudioData> &audData);
 
     /**
      * @fn SetAudioTrackOta
@@ -183,7 +183,7 @@ public:
      * @param txtData vector to be filled with text data
      * @return true if successful, false if failed
      */
-    bool GetTextTracksOta(std::vector<PlayerTextData> txtData);
+    bool GetTextTracksOta(std::vector<PlayerTextData> &txtData);
 
     /**
      * @fn DisableContentRestrictionsOta
@@ -217,7 +217,7 @@ public:
      * @param onPlayerErrorHandlerCb player error handler callback
      * @return true if successful, false if failed
      */
-    bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb);
+    bool StartRmf(const std::string &url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb);
 
     /**
      * @fn StopRmf

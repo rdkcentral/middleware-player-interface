@@ -714,7 +714,7 @@ int PlayerThunderAccess::GetAudioTrackInternal_OTA()
 /**
  *  @brief GetAudioTracks get the available audio tracks for the selected service / media
  */
-std::string PlayerThunderAccess::GetAudioTracksOta(std::vector<PlayerAudioData> audData)
+std::string PlayerThunderAccess::GetAudioTracksOta(std::vector<PlayerAudioData> &audData)
 {
 	JsonObject param;
     JsonObject result;
@@ -789,7 +789,7 @@ std::string PlayerThunderAccess::SetAudioTrackOta(int trackId, int primaryKey)
 /**
  * @brief GetTextTracks get the available text tracks for the selected service / media
  */
-bool PlayerThunderAccess::GetTextTracksOta(std::vector<PlayerTextData> txtData)
+bool PlayerThunderAccess::GetTextTracksOta(std::vector<PlayerTextData> &txtData)
 {
 	MW_LOG_TRACE("[OTA_SHIM]");
 	JsonObject param;
@@ -930,7 +930,7 @@ void PlayerThunderAccess::onPlayerErrorHandler_RMF(const JsonObject& parameters)
 	mOnPlayerErrorHandlerCb(std::move(error_message));
 }
 
-bool PlayerThunderAccess::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
+bool PlayerThunderAccess::StartRmf(const std::string &url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
     bool bRet = true;
     mOnPlayerStatusHandlerCb = std::move(onPlayerStatusHandlerCb);

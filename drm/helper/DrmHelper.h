@@ -218,7 +218,7 @@ public:
 	 * @brief Transform the license response from the server into the necessary format for OCDM
 	 * @param licenseResponse license response from the server to transform
 	 */
-	virtual void transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const {}
+	virtual void transformLicenseResponse(const std::shared_ptr<DrmData> &licenseResponse) const {}
 
 	/**
 	 * @brief Get the memory system used to transform data for transmission
