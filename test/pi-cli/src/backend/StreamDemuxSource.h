@@ -1,0 +1,203 @@
+/*
+ * If not stated otherwise in this file or this component's license file the
+ * following copyright and licenses apply:
+ *
+ * Copyright 2026 RDK Management
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include "MediaTrackCatalog.h"
+#include "MediaSample.h"
+
+#include <array>
+#include <atomic>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+struct AVFormatContext;
+class SegmentResourceProxy;
+
+class StreamDemuxSource {
+public:
+    using ProgressCallback = std::function<void(const std::string&)>;
+    using SendSampleCallback =
+        std::function<bool(int, MediaSample&&, bool&)>;
+    using EndOfStreamCallback = std::function<void(int, uint64_t)>;
+
+    StreamDemuxSource();
+    ~StreamDemuxSource();
+
+    StreamDemuxSource(const StreamDemuxSource&) = delete;
+    StreamDemuxSource& operator=(const StreamDemuxSource&) = delete;
+
+    bool Open(const std::string& url,
+              ProgressCallback progress,
+              const MediaTrackSelection& selection = {},
+              bool audioOnly = false,
+              const std::vector<uint8_t>* manifestSnapshot = nullptr,
+              const std::string& manifestBaseUrl = {},
+              const std::atomic<bool>* cancellation = nullptr,
+              bool trickModeVideoOnly = false);
+    StreamCodecInfo GetCodecInfo() const;
+    std::vector<MediaTrackInfo> GetTrackCatalog() const;
+    std::vector<uint8_t> GetDashManifestSnapshot() const;
+    std::string GetDashManifestBaseUrl() const;
+    uint64_t GetEstimatedBandwidthBitsPerSecond() const;
+    bool IsDashMedia() const;
+    bool CanUseTrickMode() const;
+    int GetMediaMode() const;
+    long long GetDurationMilliseconds() const;
+    bool HasTrack(int mediaType) const;
+    uint64_t GetSeekGeneration() const;
+    bool Start(SendSampleCallback sendSample,
+               EndOfStreamCallback endOfStream);
+    void NeedData(int mediaType);
+    void EnoughData(int mediaType);
+    void SetTrackEnabled(int mediaType, bool enabled);
+    void SetFeedingEnabled(bool enabled);
+    bool SetTrickPlaybackRate(int rate, double anchorPositionSeconds);
+    bool PrepareSeek(double positionSeconds);
+    bool Seek(double positionSeconds,
+              bool markDiscontinuity = true,
+              bool seekForward = false);
+    void SetDiscardBeforePosition(int mediaType, double positionSeconds);
+    bool TakeError(std::string& error);
+    void Stop();
+
+private:
+    struct QueuedPacket {
+        std::vector<uint8_t> data;
+        double pts = 0.0;
+        double dts = 0.0;
+        double duration = 0.0;
+        bool discontinuity = false;
+    };
+
+    struct Track {
+        int mediaType = -1;
+        int streamIndex = -1;
+        GstStreamOutputFormat format = GST_FORMAT_INVALID;
+        int width = 0;
+        int height = 0;
+        int sampleRate = 0;
+        int channels = 0;
+        double timeBaseSeconds = 0.0;
+        double fallbackDuration = 0.0;
+        double lastTimestamp = 0.0;
+        int nalLengthSize = 4;
+        bool inputAnnexB = false;
+        bool ready = false;
+        bool hasTimestamp = false;
+        bool needData = false;
+        bool inputEos = false;
+        bool eosNotified = false;
+        bool sending = false;
+        double discardBeforeSeconds = -1.0;
+        std::atomic<bool> enabled{true};
+        bool demuxEnabled = true;
+        bool discontinuityNext = true;
+        uint64_t packetsPrepared = 0;
+        uint64_t samplesSubmitted = 0;
+        uint32_t needDataLogCount = 0;
+        uint32_t enoughDataLogCount = 0;
+        std::vector<uint8_t> codecData;
+        std::vector<std::vector<uint8_t>> sequenceParameterSets;
+        std::vector<std::vector<uint8_t>> pictureParameterSets;
+        std::deque<QueuedPacket> packets;
+        size_t queuedBytes = 0;
+        std::mutex mutex;
+        std::condition_variable condition;
+        std::thread feederThread;
+    };
+
+    static int InterruptCallback(void* opaque);
+    static bool IsAdts(const uint8_t* data, size_t size);
+    static bool FindStartCode(const uint8_t* data,
+                              size_t size,
+                              size_t from,
+                              size_t& position,
+                              size_t& length);
+    static bool BuildAvcConfiguration(
+        const std::vector<std::vector<uint8_t>>& sequenceParameterSets,
+        const std::vector<std::vector<uint8_t>>& pictureParameterSets,
+        std::vector<uint8_t>& configuration);
+
+    Track* FindTrack(int mediaType);
+    const Track* FindTrack(int mediaType) const;
+    bool InitializeTrack(Track& track);
+    bool PrimeTracks();
+    bool ReadAndQueuePacket(bool priming);
+    bool PreparePacket(Track& track,
+                       const struct AVPacket* packet,
+                       QueuedPacket& output);
+    bool NormalizeH264(Track& track,
+                       const uint8_t* data,
+                       size_t size,
+                       std::vector<uint8_t>& output);
+    bool CollectH264Configuration(Track& track,
+                                  const uint8_t* data,
+                                  size_t size,
+                                  bool annexB);
+    bool QueuePacket(Track& track, QueuedPacket&& packet);
+    void ApplyTrackDiscard();
+    void BeginTimedIo();
+    bool EndTimedIo();
+    void DemuxLoop();
+    void FeedLoop(Track& track);
+    void MarkInputEos();
+    void ReportProgress(const std::string& milestone) const;
+    void SetError(std::string error);
+    bool InputReady() const;
+
+    AVFormatContext* formatContext_ = nullptr;
+    std::unique_ptr<SegmentResourceProxy> dashResourceProxy_;
+    std::array<Track, 2> tracks_{};
+    mutable std::mutex demuxMutex_;
+    mutable std::mutex errorMutex_;
+    std::string error_;
+    std::string url_;
+    std::vector<uint8_t> dashManifestSnapshot_;
+    std::string dashManifestBaseUrl_;
+    std::vector<MediaTrackInfo> trackCatalog_;
+    int mediaMode_ = -1;
+    bool dashManifestDynamic_ = false;
+    bool trickModeVideoOnly_ = false;
+    long long durationMilliseconds_ = 0;
+    std::atomic<bool> stopping_{false};
+    const std::atomic<bool>* cancellation_ = nullptr;
+    std::atomic<bool> inputPaused_{false};
+    std::atomic<bool> feedingEnabled_{true};
+    std::atomic<int> trickPlaybackRate_{1};
+    std::atomic<double> trickPlaybackAnchorSeconds_{0.0};
+    std::atomic<uint64_t> trickPlaybackPacketsLogged_{0};
+    std::atomic<uint64_t> seekGeneration_{0};
+    std::atomic<int64_t> ioDeadlineNanoseconds_{0};
+    std::atomic<bool> ioTimedOut_{false};
+    std::mutex inputPauseMutex_;
+    std::condition_variable inputPauseCondition_;
+    std::thread demuxThread_;
+    ProgressCallback progress_;
+    SendSampleCallback sendSample_;
+    EndOfStreamCallback endOfStream_;
+};

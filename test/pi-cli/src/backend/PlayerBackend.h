@@ -1,0 +1,193 @@
+/*
+ * If not stated otherwise in this file or this component's license file the
+ * following copyright and licenses apply:
+ *
+ * Copyright 2026 RDK Management
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include "AbrController.h"
+#include "MediaTrackCatalog.h"
+
+#include <memory>
+#include <string>
+#include <chrono>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+class InterfacePlayerRDK;
+class StreamDemuxSource;
+struct BusEventData;
+
+struct PlaybackStatus {
+    std::string message;
+    bool playing = false;
+    bool stopped = false;
+    bool autoBitrateEnabled = false;
+    long long positionMs = 0;
+    long durationMs = 0;
+    uint64_t estimatedBandwidthBitsPerSecond = 0;
+};
+
+class PlayerBackend {
+public:
+    explicit PlayerBackend(std::string url);
+    ~PlayerBackend();
+
+    PlayerBackend(const PlayerBackend&) = delete;
+    PlayerBackend& operator=(const PlayerBackend&) = delete;
+
+    bool Start();
+    void PumpEvents();
+    bool Play();
+    bool Pause();
+    bool Seek(double positionSeconds);
+    bool SetTrickRate(int rate);
+    bool SelectAudioTrack(std::size_t oneBasedIndex);
+    bool SelectVideoResolution(int width, int height);
+    bool SetAutoBitrate(bool enabled);
+    std::vector<MediaTrackInfo> GetTrackCatalog() const;
+    void Stop();
+    PlaybackStatus GetStatus() const;
+
+private:
+    struct AudioSourceCleanupTask {
+        std::thread thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+
+    void HandleBusEvent(const BusEventData& event);
+    long long GetVideoTimestampMilliseconds() const;
+    long long GetPlaybackPositionMilliseconds() const;
+    void LogVideoDiagnostics(const std::string& stage);
+    void LogTrickPlayPipelineState(const std::string& stage);
+    void StartAudioTrackPrewarming();
+    void StartTrickModePrewarming();
+    void StopTrickModePrewarming();
+    void RouteNeedData(int mediaType);
+    void RouteEnoughData(int mediaType);
+    void SetActiveAudioSource(StreamDemuxSource* source);
+    void SetActiveVideoSource(StreamDemuxSource* source);
+    bool EnterTrickMode(int rate,
+                        double positionSeconds,
+                        bool resumeFeeding,
+                        std::unique_ptr<StreamDemuxSource> candidate);
+    bool RestoreNormalPlayback(double positionSeconds,
+                               bool resumeFeeding);
+    void LogStartupMilestone(const std::string& milestone);
+    bool StartSource();
+    bool StartSource(StreamDemuxSource& source);
+    void ConfigurePlayerForSource(StreamDemuxSource& source,
+                                  double positionSeconds);
+    void CompleteAudioSwitchIfReady();
+    void QueueAudioSourceCleanup(
+        std::unique_ptr<StreamDemuxSource> source);
+    void RestoreAudioAfterSwitchFailure(const std::string& error,
+                                        bool playerFlushed = false);
+    void SetAllSourcesFeedingEnabled(bool enabled);
+    bool ApplySelection(const MediaTrackSelection& selection,
+                        double positionSeconds,
+                        const std::string& reason);
+    bool SelectAudioTrackId(const std::string& trackId,
+                            bool allowCurrentSelection = false);
+    bool SelectVideoTrackId(const std::string& trackId);
+    void EvaluateAutoBitrate(
+        std::chrono::steady_clock::time_point now);
+
+    std::string url_;
+    MediaTrackSelection selection_;
+    std::string statusMessage_ = "Starting playback";
+    std::unique_ptr<StreamDemuxSource> source_;
+    std::unique_ptr<StreamDemuxSource> audioOnlySource_;
+    std::unique_ptr<StreamDemuxSource> trickModeSource_;
+    StreamDemuxSource* activeAudioSource_ = nullptr;
+    StreamDemuxSource* activeVideoSource_ = nullptr;
+    StreamDemuxSource* normalAudioSourceDuringTrick_ = nullptr;
+    std::unique_ptr<InterfacePlayerRDK> player_;
+    std::chrono::steady_clock::time_point startupAt_{};
+    std::chrono::steady_clock::time_point nextPositionQuery_{};
+    std::chrono::steady_clock::time_point nextDurationQuery_{};
+    std::chrono::steady_clock::time_point nextProgressLog_{};
+    std::chrono::steady_clock::time_point nextAbrEvaluation_{};
+    std::chrono::steady_clock::time_point nextAudioPrefetch_{};
+    std::chrono::steady_clock::time_point nextTrickPipelineStateLog_{};
+    std::chrono::steady_clock::time_point audioSwitchStartedAt_{};
+    std::chrono::steady_clock::time_point audioSwitchDrainLastUpdate_{};
+    std::chrono::steady_clock::time_point nextAudioSwitchDiagnostic_{};
+    std::chrono::steady_clock::time_point audioSwitchDiagnosticsUntil_{};
+    std::mutex startupLogMutex_;
+    std::mutex audioSwitchMutex_;
+    std::mutex audioRoutingMutex_;
+    std::mutex videoRoutingMutex_;
+    std::mutex trickWarmupMutex_;
+    std::thread audioSwitchThread_;
+    std::thread audioWarmupThread_;
+    std::thread trickWarmupThread_;
+    std::vector<AudioSourceCleanupTask> audioSourceCleanupTasks_;
+    std::unique_ptr<StreamDemuxSource> preparedAudioSource_;
+    std::unique_ptr<StreamDemuxSource> preparedTrickModeSource_;
+    std::unordered_map<std::string, std::unique_ptr<StreamDemuxSource>>
+        preparedAudioSources_;
+    std::string audioSwitchError_;
+    std::string requestedAudioTrackId_;
+    std::string pendingAudioTrackId_;
+    std::string preferredAudioPrewarmId_;
+    std::string audioTrackPrewarmAttemptedId_;
+    std::string audioTrackRecoveryAttemptedId_;
+    std::string trickWarmupError_;
+    StreamDemuxSource* previousAudioSource_ = nullptr;
+    double preparedAudioPositionSeconds_ = 0.0;
+    bool audioSwitchReady_ = false;
+    bool audioSwitchUseMainSource_ = false;
+    bool audioSwitchDrainStarted_ = false;
+    std::atomic<bool> audioSwitchInProgress_{false};
+    std::atomic<bool> cancelAudioSwitch_{false};
+    std::atomic<bool> cancelAudioWarmup_{false};
+    std::atomic<bool> audioWarmupRunning_{false};
+    std::atomic<bool> cancelTrickWarmup_{false};
+    std::atomic<bool> trickWarmupRunning_{false};
+    std::atomic<long long> latestVideoTimestampMsForAudioSwitch_{0};
+    std::chrono::milliseconds audioSwitchDrainRemaining_{0};
+    std::chrono::steady_clock::time_point nextTrickPrefetch_{};
+    long long positionOffsetMs_ = 0;
+    long long audioSwitchPositionBaselineMs_ = 0;
+    bool audioSwitchPositionRebasePending_ = false;
+    long long trickPlayPositionBaselineMs_ = 0;
+    bool trickPlayPositionRebasePending_ = false;
+    long long positionMs_ = 0;
+    long durationMs_ = 0;
+    uint64_t lastBandwidthEstimateBitsPerSecond_ = 0;
+    int trickRate_ = 1;
+    int pendingTrickRate_ = 0;
+    AbrController abrController_;
+    std::atomic<bool> pipelinePlayingNotified_{false};
+    std::atomic<bool> pendingPlayerEos_{false};
+    std::atomic<bool> firstVideoFrameReported_{false};
+    std::atomic<bool> firstVideoFrameDisplayedReported_{false};
+    std::atomic<bool> firstVideoBufferReported_{false};
+    std::atomic<bool> firstAudioBufferReported_{false};
+    bool firstPositionReported_ = false;
+    bool autoBitrateEnabled_ = false;
+    bool trickWarmupAttempted_ = false;
+    bool endOfStream_ = false;
+    bool playing_ = false;
+    bool stopped_ = false;
+};
