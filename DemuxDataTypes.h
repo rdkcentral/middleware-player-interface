@@ -121,7 +121,7 @@ struct MediaCodecInfo
 	 *       Uniform initialization is preferred for C++ types as it's type-safe, clearer in intent,
 	 *       and works correctly with all C++ types including those with constructors.
 	 */
-	MediaCodecInfo() : mCodecFormat(GST_FORMAT_INVALID), mIsEncrypted(false), mNaluLengthPrefixed(false), mCodecData(), mInfo{0}
+	MediaCodecInfo() : mCodecFormat(GST_FORMAT_INVALID), mCodecData(), mIsEncrypted(false), mNaluLengthPrefixed(false), mInfo{}
 	{
 	}
 
@@ -133,7 +133,7 @@ struct MediaCodecInfo
 	 *       Uniform initialization is preferred for C++ types as it's type-safe, clearer in intent,
 	 *       and works correctly with all C++ types including those with constructors.
 	 */
-	MediaCodecInfo(GstStreamOutputFormat format) : mCodecFormat(format), mIsEncrypted(false), mNaluLengthPrefixed(false), mCodecData(), mInfo{0}
+	MediaCodecInfo(GstStreamOutputFormat format) : mCodecFormat(format), mCodecData(), mIsEncrypted(false), mNaluLengthPrefixed(false), mInfo{}
 	{
 	}
 
