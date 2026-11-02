@@ -4,26 +4,31 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 
 int main()
 {
     ht_test_use_stdout_sink();
 
     void *outside = malloc(64); /* allocated with no active scope */
+    ht_test_touch(outside, 64);
 
     {
         HEAPTRACK_SCOPE_CPP("realloc_api");
 
         void *a = realloc(NULL, 128); /* behaves as malloc */
-        memset(a, 0xAA, 128);
+        ht_test_touch(a, 128);
 
         a = realloc(a, 4096); /* grow, probably moves */
-        a = realloc(a, 64);   /* shrink */
+        ht_test_touch(a, 4096);
+
+        a = realloc(a, 64); /* shrink */
+        ht_test_touch(a, 64);
 
         void *b = realloc(outside, 256); /* untracked p -> registered as new */
+        ht_test_touch(b, 256);
 
         void *c = malloc(512);
+        ht_test_touch(c, 512);
         c = realloc(c, 0); /* glibc frees and returns NULL */
         if (c != NULL)
             printf("[test_realloc] unexpected non-NULL from realloc(p,0)\n");
@@ -31,9 +36,8 @@ int main()
         free(a);
         free(b);
 
-        /* left live on purpose */
-        void *leak = realloc(NULL, 777);
-        (void)leak;
+        void *leak = realloc(NULL, 777); /* left live on purpose */
+        ht_test_touch(leak, 777);
     }
 
     printf("[test_realloc] done, reporting\n");
