@@ -11,6 +11,9 @@
 #include <cstring>
 #include <pthread.h>
 
+/* Keep the frames out of main so the captured call tree is meaningful. */
+#define DEMO_API __attribute__((noinline))
+
 struct Sample
 {
     char payload[128];
@@ -20,7 +23,7 @@ static void *g_handed_to_worker; /* 32 KB, allocated in initialize, freed by wor
 static char *g_config;           /* re-assigned without free -> OVERWRITTEN */
 
 /* ---- Player::initialize > Manifest::parse ---------------------------- */
-static void manifest_parse()
+static DEMO_API void manifest_parse()
 {
     HEAPTRACK_SCOPE_CPP("Manifest::parse");
 
@@ -40,7 +43,7 @@ static void manifest_parse()
 }
 
 /* ---- Player::initialize ---------------------------------------------- */
-static void player_initialize()
+static DEMO_API void player_initialize()
 {
     HEAPTRACK_SCOPE_CPP("Player::initialize");
 
@@ -62,7 +65,7 @@ static void player_initialize()
 }
 
 /* ---- Player::tune > Decoder::allocBuffers ---------------------------- */
-static void decoder_alloc_buffers()
+static DEMO_API void decoder_alloc_buffers()
 {
     HEAPTRACK_SCOPE_CPP("Decoder::allocBuffers");
 
@@ -78,7 +81,7 @@ static void decoder_alloc_buffers()
 }
 
 /* ---- Player::tune > Subtitle::init ----------------------------------- */
-static void subtitle_init()
+static DEMO_API void subtitle_init()
 {
     HEAPTRACK_SCOPE_CPP("Subtitle::init");
 
@@ -91,7 +94,7 @@ static void subtitle_init()
     delete cues; /* new[] freed with delete -> mismatched free */
 }
 
-static void player_tune()
+static DEMO_API void player_tune()
 {
     HEAPTRACK_SCOPE_CPP("Player::tune");
     decoder_alloc_buffers();
@@ -99,7 +102,7 @@ static void player_tune()
 }
 
 /* ---- Config::load: pointer overwritten without free ------------------ */
-static void config_load()
+static DEMO_API void config_load()
 {
     HEAPTRACK_SCOPE_CPP("Config::load");
 
@@ -110,7 +113,7 @@ static void config_load()
 }
 
 /* ---- Worker thread: frees what initialize handed over ---------------- */
-static void *worker_main(void *)
+static DEMO_API void *worker_main(void *)
 {
     HEAPTRACK_SCOPE_CPP("Worker::run");
     free(g_handed_to_worker);
