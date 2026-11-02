@@ -2,7 +2,6 @@
 #include "heaptrack.hpp"
 #include "ht_test_sink.h"
 
-#include <cstdio>
 #include <cstdlib>
 
 int main()
@@ -30,8 +29,7 @@ int main()
         void *c = malloc(512);
         ht_test_touch(c, 512);
         c = realloc(c, 0); /* glibc frees and returns NULL */
-        if (c != NULL)
-            printf("[test_realloc] unexpected non-NULL from realloc(p,0)\n");
+        ht_test_touch(c, 1);
 
         free(a);
         free(b);
@@ -40,7 +38,6 @@ int main()
         ht_test_touch(leak, 777);
     }
 
-    printf("[test_realloc] done, reporting\n");
     heaptrack_report();
     return 0;
 }

@@ -117,9 +117,11 @@ static void *worker_main(void *)
     return NULL;
 }
 
+/* Harness only: the expected numbers, so the report below can be compared
+ * against them. A real component prints nothing; the tracker does it all. */
 static void print_expectations()
 {
-    printf("\n===== WHAT THIS TEST DOES (expected numbers) =====\n");
+    printf("\n===== HARNESS: what this workload does (expected) =====\n");
     printf("Player::initialize                  : 64 KB leak, 4x2 KB freed, 32 KB handed to Worker::run\n");
     printf("Player::initialize > Manifest::parse: strdup freed, 10x1 KB alloc, 9 freed -> 1 KB leak\n");
     printf("Player::tune > Decoder::allocBuffers: 5x256 KB alloc, 4 freed -> 256 KB leak\n");
@@ -127,7 +129,7 @@ static void print_expectations()
     printf("Config::load                        : 4 KB OVERWRITTEN (lost from var 'g_config'), 1 KB live\n");
     printf("Worker::run                         : frees the 32 KB -> cross-context free in freed-by table\n");
     printf("Expected total suspected leak       : 64 + 1 + 256 + 4 + 1 = 326 KB\n");
-    printf("=================================================\n");
+    printf("=======================================================\n");
     fflush(stdout);
 }
 
@@ -144,8 +146,6 @@ int main()
     pthread_create(&th, NULL, worker_main, NULL);
     pthread_join(th, NULL);
 
-    printf("\n[test] workload finished, asking heaptrack for a report\n");
-    fflush(stdout);
     heaptrack_report();
     return 0;
 }

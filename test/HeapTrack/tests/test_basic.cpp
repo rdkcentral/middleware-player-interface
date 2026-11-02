@@ -2,7 +2,6 @@
 #include "heaptrack.hpp"
 #include "ht_test_sink.h"
 
-#include <cstdio>
 #include <cstdlib>
 
 static void *g_outlives_scope;
@@ -47,12 +46,9 @@ int main()
 
     player_initialize();
     player_initialize();
-
-    printf("[test_basic] scopes done, reporting\n");
     heaptrack_report();
 
     free(g_outlives_scope);
-    printf("[test_basic] freed late allocation, reporting again\n");
-    heaptrack_report();
+    heaptrack_report(); /* second report: the late free is now visible */
     return 0;
 }
