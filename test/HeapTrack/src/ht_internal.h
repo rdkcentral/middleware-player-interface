@@ -212,6 +212,7 @@ struct HtWriter
 {
     char buf[4096];
     size_t len;
+    size_t col; /* current column, for table alignment */
 };
 
 void ht_sink_set(const HeaptrackSink *sink);
@@ -219,6 +220,7 @@ void ht_sink_open(void);
 void ht_sink_close(void);
 void ht_w_flush(HtWriter *w);
 void ht_w_raw(HtWriter *w, const char *s, size_t n);
+void ht_w_col(HtWriter *w, size_t column);
 /* %s const char*, %d int, %u uint64_t, %x uintptr_t, %b byte count */
 void ht_w(HtWriter *w, const char *fmt, ...);
 

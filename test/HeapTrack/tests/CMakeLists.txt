@@ -1,20 +1,26 @@
+# name | source | text the report must contain for the test to pass
 set(HT_TESTS
-    test_basic
-    test_realloc
-    test_cpp
-    test_threads
+    "heaptrack_test|test.cpp|Decoder::allocBuffers"
+    "test_basic|test_basic.cpp|OUTLIVED_SCOPE"
+    "test_realloc|test_realloc.cpp|realloc_api"
+    "test_cpp|test_cpp.cpp|OVERWRITTEN"
+    "test_threads|test_threads.cpp|Worker::consume"
+    "test_c_api|test_c_api.c|parse_manifest"
 )
 
-foreach(t ${HT_TESTS})
-    add_executable(${t} ${t}.cpp)
-    target_link_libraries(${t} PRIVATE heaptrack pthread)
-    target_compile_options(${t} PRIVATE -Wall -Wextra -fasynchronous-unwind-tables -fno-omit-frame-pointer)
-    add_test(NAME ${t} COMMAND ${t})
-    set_tests_properties(${t} PROPERTIES ENVIRONMENT "HEAPTRACK_REPORT_AT_EXIT=0")
-endforeach()
+foreach(spec ${HT_TESTS})
+    string(REPLACE "|" ";" parts ${spec})
+    list(GET parts 0 name)
+    list(GET parts 1 src)
+    list(GET parts 2 expect)
 
-add_executable(test_c_api test_c_api.c)
-target_link_libraries(test_c_api PRIVATE heaptrack)
-target_compile_options(test_c_api PRIVATE -Wall -Wextra -fasynchronous-unwind-tables -fno-omit-frame-pointer)
-add_test(NAME test_c_api COMMAND test_c_api)
-set_tests_properties(test_c_api PROPERTIES ENVIRONMENT "HEAPTRACK_REPORT_AT_EXIT=0")
+    add_executable(${name} ${src})
+    target_link_libraries(${name} PRIVATE heaptrack pthread)
+    target_compile_options(${name} PRIVATE
+        -Wall -Wextra -fasynchronous-unwind-tables -fno-omit-frame-pointer)
+
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES
+        ENVIRONMENT "HEAPTRACK_REPORT_AT_EXIT=0"
+        PASS_REGULAR_EXPRESSION "${expect}")
+endforeach()

@@ -93,6 +93,9 @@ void ht_w_flush(HtWriter *w)
 
 void ht_w_raw(HtWriter *w, const char *s, size_t n)
 {
+    for (size_t i = 0; i < n; i++)
+        w->col = (s[i] == '\n') ? 0 : w->col + 1;
+
     while (n)
     {
         size_t space = sizeof(w->buf) - w->len;
@@ -107,6 +110,14 @@ void ht_w_raw(HtWriter *w, const char *s, size_t n)
         s += chunk;
         n -= chunk;
     }
+}
+
+void ht_w_col(HtWriter *w, size_t column)
+{
+    if (w->col >= column)
+        ht_w_raw(w, " ", 1);
+    while (w->col < column)
+        ht_w_raw(w, " ", 1);
 }
 
 static void w_u64(HtWriter *w, uint64_t v)

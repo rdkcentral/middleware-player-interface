@@ -14,6 +14,8 @@ static uint64_t g_rollup[HT_MAX_NODES];
 static uint32_t g_start[HT_MAX_NODES + 1];
 static uint32_t g_cursor[HT_MAX_NODES + 1];
 static uint32_t g_findings[HT_MAX_NODES][HT_FIND_COUNT];
+static uint64_t g_leak_bytes[HT_MAX_NODES];
+static uint64_t g_leak_count[HT_MAX_NODES];
 
 static void write_node_path(HtWriter *w, uint32_t id)
 {
@@ -102,6 +104,8 @@ void ht_report_run(void)
     /* Group live records by origin node (counting sort) and classify. */
     memset(g_start, 0, sizeof(g_start));
     memset(g_findings, 0, sizeof(g_findings));
+    memset(g_leak_bytes, 0, sizeof(g_leak_bytes));
+    memset(g_leak_count, 0, sizeof(g_leak_count));
     for (uint32_t i = 0; i < live; i++)
     {
         uint32_t id = g_snap[i].origin_node;
@@ -124,7 +128,13 @@ void ht_report_run(void)
         if (id >= HT_MAX_NODES)
             id = 0;
         g_order[g_cursor[id]++] = i;
-        g_findings[id][ht_classify(&g_snap[i], ht_node(id))]++;
+        HtFinding f = ht_classify(&g_snap[i], ht_node(id));
+        g_findings[id][f]++;
+        if (f != HT_FIND_IN_SCOPE)
+        {
+            g_leak_bytes[id] += g_snap[i].size;
+            g_leak_count[id]++;
+        }
     }
 
     /* Roll up current bytes into every ancestor. */
@@ -145,6 +155,7 @@ void ht_report_run(void)
 
     HtWriter w;
     w.len = 0;
+    w.col = 0;
     ht_w(&w, "\n========== HEAPTRACK REPORT (pid %u) ==========\n\n", (uint64_t)getpid());
 
     for (uint32_t id = 1; id < nodes; id++)
@@ -165,6 +176,7 @@ void ht_report_run(void)
              ht_get64(&s->cur_bytes), g_rollup[id]);
         ht_w(&w, "  Peak heap usage       : %b\n", ht_get64(&s->peak_bytes));
         ht_w(&w, "  Live allocations      : %u\n", ht_get64(&s->live));
+        ht_w(&w, "  Suspected leaks       : %u allocs, %b\n", g_leak_count[id], g_leak_bytes[id]);
         ht_w(&w, "  Mismatched frees      : %u\n", (uint64_t)ht_load(&s->mismatched_frees));
         ht_w(&w, "  Cross-context frees   : %u\n", ht_get64(&s->cross_frees));
         ht_w(&w, "  Findings              : IN_SCOPE=%u OUTLIVED_SCOPE=%u OVERWRITTEN=%u\n",
@@ -190,6 +202,55 @@ void ht_report_run(void)
         }
         ht_w(&w, "\n");
     }
+
+    ht_w(&w, "---------------- PER-API SUMMARY ----------------\n");
+    ht_w(&w, "API");
+    ht_w_col(&w, 40);
+    ht_w(&w, "allocs");
+    ht_w_col(&w, 50);
+    ht_w(&w, "allocated");
+    ht_w_col(&w, 64);
+    ht_w(&w, "freed");
+    ht_w_col(&w, 78);
+    ht_w(&w, "live");
+    ht_w_col(&w, 86);
+    ht_w(&w, "leaked\n");
+
+    uint64_t t_allocs = 0, t_alloc_b = 0, t_freed_b = 0, t_live = 0, t_leak_b = 0;
+    for (uint32_t id = 1; id < nodes; id++)
+    {
+        HeapTrackStats *s = &ht_node(id)->stats;
+        if (!ht_get64(&s->allocs))
+            continue;
+        t_allocs += ht_get64(&s->allocs);
+        t_alloc_b += ht_get64(&s->bytes_alloc);
+        t_freed_b += ht_get64(&s->bytes_freed);
+        t_live += ht_get64(&s->live);
+        t_leak_b += g_leak_bytes[id];
+
+        write_node_path(&w, id);
+        ht_w_col(&w, 40);
+        ht_w(&w, "%u", ht_get64(&s->allocs));
+        ht_w_col(&w, 50);
+        ht_w(&w, "%b", ht_get64(&s->bytes_alloc));
+        ht_w_col(&w, 64);
+        ht_w(&w, "%b", ht_get64(&s->bytes_freed));
+        ht_w_col(&w, 78);
+        ht_w(&w, "%u", ht_get64(&s->live));
+        ht_w_col(&w, 86);
+        ht_w(&w, "%b (%u)\n", g_leak_bytes[id], g_leak_count[id]);
+    }
+    ht_w(&w, "TOTAL");
+    ht_w_col(&w, 40);
+    ht_w(&w, "%u", t_allocs);
+    ht_w_col(&w, 50);
+    ht_w(&w, "%b", t_alloc_b);
+    ht_w_col(&w, 64);
+    ht_w(&w, "%b", t_freed_b);
+    ht_w_col(&w, 78);
+    ht_w(&w, "%u", t_live);
+    ht_w_col(&w, 86);
+    ht_w(&w, "%b\n\n", t_leak_b);
 
     bool fb_header = false;
     for (uint32_t i = 0; i < ht_freedby_count(); i++)
