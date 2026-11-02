@@ -176,7 +176,7 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
-	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
+	std::function<void(const std::string&, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
 	 *
@@ -222,18 +222,18 @@ public:
 	/**
 	 *  @fn DrmSessionManager
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
+	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
 
 	void initializeDrmSessions();
 
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
-	 *  @param[in]	sessionHandle - Session handle.
+	 *  @param[in]	sessionId - Session ID.
 	 *  @param[in]	status - Status of the session.
 	 *  @param[in]	systemData - System data.
 	 */
-	void watermarkSessionHandlerWrapper(uint32_t sessionHandle, uint32_t status, const std::string &systemData);
+	void watermarkSessionHandlerWrapper(const std::string& sessionId, uint32_t status, const std::string &systemData);
 
 	/**
 	 *  @fn registerCallback

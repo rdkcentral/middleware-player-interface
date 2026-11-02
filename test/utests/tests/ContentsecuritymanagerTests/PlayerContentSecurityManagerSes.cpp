@@ -86,11 +86,11 @@ TEST(ContentSecurityManagerSession, CopyValidSession) {
     
     EXPECT_NO_THROW({
         // Create a valid session with sessionID=100 and inputSummaryHash=12345
-        ContentSecurityManagerSession originalSession(100, 12345);
+        ContentSecurityManagerSession originalSession(std::to_string(100), 12345);
         std::cout << "Invoked ContentSecurityManagerSession(100, 12345) constructor." << std::endl;
         
         // Debug log: Retrieve original session state
-        int64_t origSessionID = originalSession.getSessionID();
+        std::string origSessionID = originalSession.getSessionID();
         std::size_t origInputSummaryHash = originalSession.getInputSummaryHash();
         std::cout << "Original session getSessionID returned: " << origSessionID << std::endl;
         std::cout << "Original session getInputSummaryHash returned: " << origInputSummaryHash << std::endl;
@@ -100,13 +100,13 @@ TEST(ContentSecurityManagerSession, CopyValidSession) {
         std::cout << "Invoked copy constructor on a valid session object." << std::endl;
         
         // Debug log: Retrieve copied session state
-        int64_t copiedSessionID = copiedSession.getSessionID();
+        std::string copiedSessionID = copiedSession.getSessionID();
         std::size_t copiedInputSummaryHash = copiedSession.getInputSummaryHash();
         std::cout << "Copied session getSessionID returned: " << copiedSessionID << std::endl;
         std::cout << "Copied session getInputSummaryHash returned: " << copiedInputSummaryHash << std::endl;
 
         // Verify that the copied session has the same sessionID and inputSummaryHash as the original
-        EXPECT_EQ(copiedSessionID, 100);
+        EXPECT_EQ(copiedSessionID, "100");
         EXPECT_EQ(copiedInputSummaryHash, 12345);
     });
     
@@ -132,7 +132,7 @@ TEST(ContentSecurityManagerSession, CopyValidSession) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_PositiveID_NonZeroHash) {
     std::cout << "Entering CreateSession_PositiveID_NonZeroHash test" << std::endl;
-    int64_t sessionID = 1000;
+    std::string sessionID = std::to_string(1000);
     std::size_t inputSummaryHash = 5000;
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -163,7 +163,7 @@ TEST(ContentSecurityManagerSession, CreateSession_PositiveID_NonZeroHash) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_ZeroID_NonZeroHash) {
     std::cout << "Entering CreateSession_ZeroID_NonZeroHash test" << std::endl;
-    int64_t sessionID = 0;
+    std::string sessionID = std::to_string(0);
     std::size_t inputSummaryHash = 1234;
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -194,7 +194,7 @@ TEST(ContentSecurityManagerSession, CreateSession_ZeroID_NonZeroHash) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_PositiveID_ZeroHash) {
     std::cout << "Entering CreateSession_PositiveID_ZeroHash test" << std::endl;
-    int64_t sessionID = 2000;
+    std::string sessionID = std::to_string(2000);
     std::size_t inputSummaryHash = 0;
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -226,7 +226,7 @@ TEST(ContentSecurityManagerSession, CreateSession_PositiveID_ZeroHash) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_NegativeID_ValidHash) {
     std::cout << "Entering CreateSession_NegativeID_ValidHash test" << std::endl;
-    int64_t sessionID = -100;
+    std::string sessionID = std::to_string(-100);
     std::size_t inputSummaryHash = 100;
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -258,7 +258,7 @@ TEST(ContentSecurityManagerSession, CreateSession_NegativeID_ValidHash) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_MaxValues) {
     std::cout << "Entering CreateSession_MaxValues test" << std::endl;
-    int64_t sessionID = INT64_MAX;
+    std::string sessionID = std::to_string(INT64_MAX);
     std::size_t inputSummaryHash = std::numeric_limits<std::size_t>::max();
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -289,7 +289,7 @@ TEST(ContentSecurityManagerSession, CreateSession_MaxValues) {
  */
 TEST(ContentSecurityManagerSession, CreateSession_MinValueID) {
     std::cout << "Entering CreateSession_MinValueID test" << std::endl;
-    int64_t sessionID = INT64_MIN;
+    std::string sessionID = std::to_string(INT64_MIN);
     std::size_t inputSummaryHash = 1;
     std::cout << "Invoking constructor ContentSecurityManagerSession(" << sessionID 
               << ", " << inputSummaryHash << ")" << std::endl;
@@ -325,7 +325,7 @@ TEST(ContentSecurityManagerSession, ValidSession_PositiveID)
     std::cout << "Entering ValidSession_PositiveID test" << std::endl;
     
     // Create object with sessionID = 12345 and a valid inputSummaryHash (e.g., 1111)
-    int64_t testSessionID = 12345;
+    std::string testSessionID = std::to_string(12345);
     std::size_t testInputSummaryHash = 1111;
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = " << testSessionID 
               << " and inputSummaryHash = " << testInputSummaryHash << std::endl;
@@ -339,7 +339,7 @@ TEST(ContentSecurityManagerSession, ValidSession_PositiveID)
     std::cout << "ToString() returned: " << result << std::endl;
     
     // Expected result: "Session 12345 valid"
-    std::string expected = "Session " + std::to_string(testSessionID) + " valid"; 
+    std::string expected = "Session " + testSessionID + " valid";
     std::cout << "Expected result: " << expected << std::endl;
     EXPECT_EQ(result, expected);
     
@@ -370,7 +370,7 @@ TEST(ContentSecurityManagerSession, ValidSession_ZeroID)
     std::cout << "Entering ValidSession_ZeroID test" << std::endl;
     
     // Create object with sessionID = 0 and a valid inputSummaryHash (e.g., 2222)
-    int64_t testSessionID = 0;
+    std::string testSessionID = std::to_string(0);
     std::size_t testInputSummaryHash = 2222;
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = " << testSessionID 
               << " and inputSummaryHash = " << testInputSummaryHash << std::endl;
@@ -384,7 +384,7 @@ TEST(ContentSecurityManagerSession, ValidSession_ZeroID)
     std::cout << "ToString() returned: " << result << std::endl;
     
     // Expected result: "Session 0 valid"
-    std::string expected = "Session " + std::to_string(testSessionID) + " valid";
+    std::string expected = "Session " + testSessionID + " valid";
     std::cout << "Expected result: " << expected << std::endl;
     EXPECT_EQ(result, expected);
     
@@ -414,7 +414,7 @@ TEST(ContentSecurityManagerSession, BoundaryCondition_MaxInt64)
     std::cout << "Entering BoundaryCondition_MaxInt64 test" << std::endl;
     
     // Create object with sessionID = INT64_MAX and a valid inputSummaryHash (e.g., 3333)
-    int64_t testSessionID = INT64_MAX;
+    std::string testSessionID = std::to_string(INT64_MAX);
     std::size_t testInputSummaryHash = 3333;
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = " << testSessionID 
               << " and inputSummaryHash = " << testInputSummaryHash << std::endl;
@@ -428,7 +428,7 @@ TEST(ContentSecurityManagerSession, BoundaryCondition_MaxInt64)
     std::cout << "ToString() returned: " << result << std::endl;
     
     // Expected result: "Session 9223372036854775807 valid"
-    std::string expected = "Session " + std::to_string(testSessionID) + " valid";
+    std::string expected = "Session " + testSessionID + " valid";
     std::cout << "Expected result: " << expected << std::endl;
     EXPECT_EQ(result, expected);
     
@@ -460,7 +460,7 @@ TEST(ContentSecurityManagerSession, getInputSummaryHash_Positive_ValidInput) {
     
     // Using parameterized constructor with sessionID = 1000, inputSummaryHash = 12345
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = 1000 and inputSummaryHash = 12345" << std::endl;
-    ContentSecurityManagerSession session(1000, 12345);
+    ContentSecurityManagerSession session(std::to_string(1000), 12345);
     
     std::cout << "Invoking getInputSummaryHash method" << std::endl;
     std::size_t result = session.getInputSummaryHash();
@@ -495,7 +495,7 @@ TEST(ContentSecurityManagerSession, getInputSummaryHash_Positive_LowBoundary) {
     
     // Using parameterized constructor with sessionID = 1001, inputSummaryHash = 0 (boundary condition)
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = 1001 and inputSummaryHash = 0" << std::endl;
-    ContentSecurityManagerSession session(1001, 0);
+    ContentSecurityManagerSession session(std::to_string(1001), 0);
     
     std::cout << "Invoking getInputSummaryHash method" << std::endl;
     std::size_t result = session.getInputSummaryHash();
@@ -531,7 +531,7 @@ TEST(ContentSecurityManagerSession, getInputSummaryHash_Positive_MaximumInput) {
     // Using parameterized constructor with sessionID = 1002, inputSummaryHash = maximum possible value
     std::size_t maxHash = std::numeric_limits<std::size_t>::max();
     std::cout << "Creating ContentSecurityManagerSession object with sessionID = 1002 and inputSummaryHash = " << maxHash << std::endl;
-    ContentSecurityManagerSession session(1002, maxHash);
+    ContentSecurityManagerSession session(std::to_string(1002), maxHash);
     
     std::cout << "Invoking getInputSummaryHash method" << std::endl;
     std::size_t result = session.getInputSummaryHash();
@@ -597,24 +597,24 @@ TEST(ContentSecurityManagerSession, getInputSummaryHash_Positive_DefaultConstruc
  */
 TEST(ContentSecurityManagerSession, PositiveValidPositiveSessionId) {
     std::cout << "Entering PositiveValidPositiveSessionId test" << std::endl;
-    int64_t expectedID = 12345;
+    std::string expectedID = "12345";
     // Instantiate object using parameterized constructor with sessionID=12345 and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
         std::cout << "Invoked parameterized constructor with sessionID = " << expectedID
                   << " and inputSummaryHash = " << 0 << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
-        int64_t sessionID = session.getSessionID();
+        std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
         EXPECT_EQ(sessionID, expectedID);
     });
     std::cout << "Exiting PositiveValidPositiveSessionId test" << std::endl;
 }
 /**
- * @brief Verify that getSessionID() returns 0 when the session is initialized with sessionID = 0.
+ * @brief Verify that a string session ID containing "0" is preserved.
  *
  * This test creates an instance of ContentSecurityManagerSession using a sessionID of 0 along with a dummy inputSummaryHash value of 0,
- * and verifies that the getSessionID() method correctly returns 0. This confirms that the class handles a zero sessionID as a valid input.
+ * and verifies that getSessionID() returns the same string. This confirms that the session holder preserves the provided value.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 017@n
@@ -627,19 +627,19 @@ TEST(ContentSecurityManagerSession, PositiveValidPositiveSessionId) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data |Expected Result |Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke the parameterized constructor with sessionID = 0 and inputSummaryHash = 0, then call getSessionID() | sessionID = 0, inputSummaryHash = 0, expected sessionID = 0 | getSessionID() returns 0 | Should Pass |
+ * | 01 | Invoke the parameterized constructor with sessionID = "0" and inputSummaryHash = 0, then call getSessionID() | sessionID = "0", inputSummaryHash = 0, expected sessionID = "0" | getSessionID() returns "0" | Should Pass |
  */
 TEST(ContentSecurityManagerSession, PositiveValidZeroSessionId) {
     GTEST_SKIP();
     std::cout << "Entering PositiveValidZeroSessionId test" << std::endl;
-    int64_t expectedID = 0;
+    std::string expectedID = "0";
     // Instantiate object using parameterized constructor with sessionID=0 and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
         std::cout << "Invoked parameterized constructor with sessionID = " << expectedID
                   << " and inputSummaryHash = " << 0 << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
-        int64_t sessionID = session.getSessionID();
+        std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
         EXPECT_EQ(sessionID, expectedID);
     });
@@ -667,14 +667,14 @@ TEST(ContentSecurityManagerSession, PositiveValidZeroSessionId) {
  */
 TEST(ContentSecurityManagerSession, BoundaryMaxInt64) {
     std::cout << "Entering BoundaryMaxInt64 test" << std::endl;
-    int64_t expectedID = std::numeric_limits<int64_t>::max();
+    std::string expectedID = std::to_string(std::numeric_limits<int64_t>::max());
     // Instantiate object using parameterized constructor with sessionID=INT64_MAX and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
         std::cout << "Invoked parameterized constructor with sessionID = " << expectedID
                   << " and inputSummaryHash = " << 0 << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
-        int64_t sessionID = session.getSessionID();
+        std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
         EXPECT_EQ(sessionID, expectedID);
     });
@@ -703,23 +703,23 @@ TEST(ContentSecurityManagerSession, BoundaryMaxInt64) {
 TEST(ContentSecurityManagerSession, BoundaryMinInt64) {
     GTEST_SKIP();
     std::cout << "Entering BoundaryMinInt64 test" << std::endl;
-    int64_t expectedID = std::numeric_limits<int64_t>::min();
+    std::string expectedID = std::to_string(std::numeric_limits<int64_t>::min());
     // Instantiate object using parameterized constructor with sessionID=INT64_MIN and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
         std::cout << "Invoked parameterized constructor with sessionID = " << expectedID
                   << " and inputSummaryHash = " << 0 << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
-        int64_t sessionID = session.getSessionID();
+        std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
         EXPECT_EQ(sessionID, expectedID);
     });
     std::cout << "Exiting BoundaryMinInt64 test" << std::endl;
 }
 /**
- * @brief Validates the default construction of ContentSecurityManagerSession and verifies that the session ID is initialized to zero.
+ * @brief Validates that a default-constructed ContentSecurityManagerSession has an empty invalid session ID.
  *
- * This test case checks the default constructor of the ContentSecurityManagerSession class to ensure that it does not throw any exceptions, and that calling getSessionID() returns a session ID of 0. This confirms that the object is correctly initialized to a default state.
+ * This test case checks that the default constructor does not throw and that getSessionID() returns the empty-string invalid-ID sentinel.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 020@n
@@ -732,19 +732,19 @@ TEST(ContentSecurityManagerSession, BoundaryMinInt64) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Instantiate ContentSecurityManagerSession using the default constructor and validate the session ID | Input: Default constructor invocation, Output: getSessionID() = 0 | No exception thrown and getSessionID() returns 0 | Should Pass |
+ * | 01 | Instantiate ContentSecurityManagerSession using the default constructor and validate the session ID | Input: Default constructor invocation, Output: getSessionID() = empty string | No exception thrown and getSessionID() returns the invalid-ID sentinel | Should Pass |
  */
 TEST(ContentSecurityManagerSession, DefaultConstructorTest_SessionIDZero) {
     GTEST_SKIP();
     std::cout << "Entering DefaultConstructorTest test" << std::endl;
-    // Instantiate object using the default constructor; expected default sessionID is 0
+    // Instantiate object using the default constructor; expected sessionID is empty.
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session;
         std::cout << "Invoked default constructor" << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
-        int64_t sessionID = session.getSessionID();
+        std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
-        EXPECT_EQ(sessionID, int64_t(0));
+        EXPECT_EQ(sessionID, CONTENT_SECURITY_MGR_INVALID_SESSION_ID);
     });
     std::cout << "Exiting DefaultConstructorTest test" << std::endl;
 }
@@ -774,7 +774,7 @@ TEST(ContentSecurityManagerSession, SessionValidProperInitialized)
     std::cout << "Entering Session is valid when a proper SessionManager is initialized test" << std::endl;
 
     // Create object using parameterized constructor with proper SessionManager initialization
-    std::int64_t sessionID = 12345;
+    std::string sessionID = std::to_string(12345);
     std::size_t inputSummaryHash = 67890;
     std::cout << "Creating ContentSecurityManagerSession with sessionID: " << sessionID 
               << " and inputSummaryHash: " << inputSummaryHash << std::endl;
@@ -860,11 +860,11 @@ TEST(ContentSecurityManagerSession, AssignmentOfTwoDistinctValidSessions) {
     std::cout << "Entering AssignmentOfTwoDistinctValidSessions test" << std::endl;
     EXPECT_NO_THROW({
         // Create SessionA with sessionID = 100 and inputSummaryHash = 555
-        ContentSecurityManagerSession sessionA(100, 555);
+        ContentSecurityManagerSession sessionA(std::to_string(100), 555);
         std::cout << "[DEBUG] Created sessionA with sessionID: " << sessionA.getSessionID() 
                   << " and inputSummaryHash: " << 555 << std::endl;
         // Create SessionB with sessionID = 200 and inputSummaryHash = 777
-        ContentSecurityManagerSession sessionB(200, 777);
+        ContentSecurityManagerSession sessionB(std::to_string(200), 777);
         std::cout << "[DEBUG] Created sessionB with sessionID: " << sessionB.getSessionID() 
                   << " and inputSummaryHash: " << 777 << std::endl;
 
@@ -902,7 +902,7 @@ TEST(ContentSecurityManagerSession, setSessionInvalidValid) {
     std::cout << "Entering setSessionInvalidValid test" << std::endl;
     EXPECT_NO_THROW({
         // Create SessionA with sessionID = 100 and inputSummaryHash = 555
-        ContentSecurityManagerSession session(100, 555);
+        ContentSecurityManagerSession session(std::to_string(100), 555);
         std::cout << "[DEBUG] Created session with sessionID: " << 100 
                   << " and inputSummaryHash: " << 555 << std::endl;
         
@@ -913,8 +913,3 @@ TEST(ContentSecurityManagerSession, setSessionInvalidValid) {
     });
     std::cout << "Exiting setSessionInvalidValid test" << std::endl;
 }
-
-
-
-
-

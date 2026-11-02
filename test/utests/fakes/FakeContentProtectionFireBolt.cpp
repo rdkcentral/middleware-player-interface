@@ -44,20 +44,21 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate(
     if (statusCode) *statusCode = 0;
     if (reasonCode) *reasonCode = 0;
     if (businessStatus) *businessStatus = 0;
-    session = ContentSecurityManagerSession(1, 0); // fake valid session
+    session = ContentSecurityManagerSession("1", 0); // fake valid session
     return true;
 }
 
-void ContentProtectionFirebolt::CloseDrmSession(int64_t) {}
-bool ContentProtectionFirebolt::SetDrmSessionState(int64_t, bool) { return true; }
-bool ContentProtectionFirebolt::SetPlaybackPosition(int64_t, float, int32_t) { return true; }
-void ContentProtectionFirebolt::ShowWatermark(bool, int64_t) {}
-bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, int64_t &sessionId, int32_t &errorCode, std::string &response)
+void ContentProtectionFirebolt::CloseDrmSession(const std::string&) {}
+bool ContentProtectionFirebolt::SetDrmSessionState(const std::string&, bool) { return true; }
+bool ContentProtectionFirebolt::SetPlaybackPosition(const std::string&, float, int32_t) { return true; }
+void ContentProtectionFirebolt::ShowWatermark(bool, const std::string&) {}
+bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, std::string& sessionId, int32_t &errorCode, std::string &response)
 {
     response = "{\"license\":\"RkFLRV9MSUNFTlNF\"}"; // base64 for "FAKE_LICENSE"
+    sessionId = "1";
     return true;
 }
-bool ContentProtectionFirebolt::UpdateDrmSession(int64_t sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response)
+bool ContentProtectionFirebolt::UpdateDrmSession(const std::string& sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response)
 {
     response = "{\"license\":\"RkFLRV9MSUNFTlNF\"}";
     return true;

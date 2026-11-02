@@ -32,7 +32,7 @@
 #include <thread>
 #include <chrono>
 #include <condition_variable>
-#include <inttypes.h>
+
 
 std::condition_variable mConnectionCV;
 std::mutex mConnectionMutex;
@@ -128,27 +128,34 @@ void ContentProtectionFirebolt::HandleWatermarkEvent(const std::string& sessionI
 {
 	MW_LOG_INFO("ContentSecurityManager HanldeWatermarkEvent invoked  | sessionId=%s status=%s appId=%s",
             sessionId.c_str(), statusStr.c_str(), appId.c_str());
-	if(mInitialized)
+	if (!mInitialized)
 	{
-   		MW_LOG_INFO("HandleWaterMarkEvent Triggered");
-    	PlayerJsonObject statusJson(statusStr);
-		int reasonCode = -1;
-		if (statusJson.get("failureReason", reasonCode ))
-        {
-			MW_LOG_INFO("HandleWaterMarkEvent Failure ReasonCode %d", reasonCode);
-        }
-		else
-		{
-			MW_LOG_INFO("Json Parsing Failed to extract Watermarking status");
-		}
-		std::lock_guard<std::mutex> lock(mFireboltInitMutex);
-		if (ContentSecurityManager::SendWatermarkSessionEvent_CB)
-		{
-			MW_LOG_INFO("ContentSecurityManager SendWatermarkSessionEvent_CB invoked | sessionId=%s reasonCode =%d appId=%s",
-            sessionId.c_str(), reasonCode, appId.c_str());
-			ContentSecurityManager::SendWatermarkSessionEvent_CB(std::stoi(sessionId), reasonCode, appId);
-		}
+		MW_LOG_WARN("Ignoring watermark event for sessionId='%s': Firebolt is not initialized", sessionId.c_str());
+		return;
 	}
+
+	MW_LOG_INFO("HandleWaterMarkEvent triggered for sessionId='%s' (length=%zu)", sessionId.c_str(), sessionId.size());
+	PlayerJsonObject statusJson(statusStr);
+	int reasonCode = -1;
+	if (statusJson.get("failureReason", reasonCode))
+	{
+		MW_LOG_INFO("HandleWaterMarkEvent failure reason=%d for sessionId='%s'", reasonCode, sessionId.c_str());
+	}
+	else
+	{
+		MW_LOG_WARN("Could not extract watermark failureReason for sessionId='%s'", sessionId.c_str());
+	}
+
+	std::lock_guard<std::mutex> lock(mFireboltInitMutex);
+	if (!ContentSecurityManager::SendWatermarkSessionEvent_CB)
+	{
+		MW_LOG_WARN("No watermark callback registered for sessionId='%s'", sessionId.c_str());
+		return;
+	}
+
+	MW_LOG_INFO("Forwarding watermark event sessionId='%s' reasonCode=%d appId=%s",
+		sessionId.c_str(), reasonCode, appId.c_str());
+	ContentSecurityManager::SendWatermarkSessionEvent_CB(sessionId, reasonCode, appId);
 }
 
 void ContentProtectionFirebolt::Initialize()
@@ -157,9 +164,10 @@ void ContentProtectionFirebolt::Initialize()
 	m_pFireboltInterface = FireboltInterface::GetInstance();
 	mInitialized = true;
 	/* hide watermarking at startup */
-	int64_t sessionId = 0;
+	std::string sessionId;
+	MW_LOG_INFO("Hiding watermark at startup with empty sessionId (length=%zu)", sessionId.size());
 	ShowWatermark(false, sessionId);
-	/* CP Thunder Plugin doesnt allow invalid sessionId like 0 as in Thunder, hence not calling CloseDrmSession */
+	/* No DRM session exists at startup, so do not close a session. */
 	//CloseDrmSession(sessionId);
 	SubscribeEvents();
 }
@@ -168,7 +176,7 @@ void ContentProtectionFirebolt::DeInitialize()
 {
 	/* SessionID is not used internally in CP Thunder Plugin for ShowWatermark.
 	   However Native SDK requires it to be sent. Keeping it dummy*/
-	ShowWatermark(false, 0);
+	ShowWatermark(false, "");
 	UnSubscribeEvents();
 	mInitialized = false;
 	m_pFireboltInterface = nullptr;
@@ -234,7 +242,7 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 	param.add("contentAspectDimensions", aspectDimensions);
 	param.add("mediaUsage", mediaUsageStr);
 
-	int64_t sessionId;
+	std::string sessionId;
 	if (session.isSessionValid())
 	{
 		// If sessionId is present, we are trying to acquire a new license within the same session
@@ -257,7 +265,8 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 			param.add("contentMetadata", contentMetaDataStr);
 
 			std::string initData = param.print_UnFormatted();
-			MW_LOG_WARN("ContentProtection %s param: %s",apiName, initData.c_str());
+			MW_LOG_INFO("ContentProtection request: operation=%s sessionId='%s' sessionIdLength=%zu update=%d licenseRequestLength=%zu initDataLength=%zu",
+				apiName, sessionId.c_str(), sessionId.size(), update, licenseRequestStr.size(), initData.size());
 			bool result = false;
 			//invoke "openDrmSession" or "updateDrmSession" with retries for specific error cases
 			do
@@ -272,15 +281,20 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 				// Call the openDrmSession method from the interface
 				if(!update)
 				{
+					MW_LOG_INFO("Opening ContentProtection DRM session; current sessionId is empty=%d", sessionId.empty());
 					result = OpenDrmSession(clientId, appId, keySystem,
 							licenseRequestStr, initData, sessionId, errorCode, drmSession);
 				}
 				else
 				{
+					MW_LOG_INFO("Updating ContentProtection DRM session sessionId='%s' (length=%zu)",
+						sessionId.c_str(), sessionId.size());
 					result = 
 						UpdateDrmSession(sessionId, errorCode,
 								licenseRequestStr, initData, drmSession);
 				}
+				MW_LOG_INFO("ContentProtection operation=%s completed result=%d sessionId='%s' (length=%zu) responseLength=%zu errorCode=%d",
+					apiName, result, sessionId.c_str(), sessionId.size(), drmSession.size(), errorCode);
 				if (drmSession.empty())
 				{
 					MW_LOG_WARN("DrmSession Response is empty.");
@@ -303,11 +317,13 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 								ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetadata,
 									contMetaLen, licenseRequest, keySystemId,
 									mediaUsage, accessToken, isVideoMuted));
+						MW_LOG_INFO("Created ContentSecurityManagerSession from Firebolt sessionId='%s' (length=%zu), valid=%d",
+							sessionId.c_str(), sessionId.size(), newSession.isSessionValid());
 
 						std::string license;
 						if (sessionObj.get("license", license))
 						{
-							MW_LOG_TRACE("ContentProtection obtained license with length: %zu and data: %s", license.size(), license.c_str());
+							MW_LOG_TRACE("ContentProtection obtained license with length: %zu", license.size());
 
 							if (!license.empty())
 							{
@@ -348,7 +364,13 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 
 					if (newSession.isSessionValid() && !session.isSessionValid())
 					{
+						MW_LOG_INFO("Storing new Firebolt sessionId='%s' in caller session", newSession.getSessionID().c_str());
 						session = newSession;
+					}
+					else
+					{
+						MW_LOG_INFO("Not replacing caller session after Firebolt operation: newSessionValid=%d callerSessionValid=%d",
+							newSession.isSessionValid(), session.isSessionValid());
 					}
 
 				}
@@ -434,8 +456,9 @@ bool ContentProtectionFirebolt::AcquireLicenseOpenOrUpdate( std::string clientId
 	return ret;
 }
 
-void ContentProtectionFirebolt::CloseDrmSession(int64_t sessionId)
+void ContentProtectionFirebolt::CloseDrmSession(const std::string& sessionId)
 {
+	MW_LOG_INFO("Requesting Firebolt closeDrmSession sessionId='%s' (length=%zu)", sessionId.c_str(), sessionId.size());
 	// Check if Firebolt is active before proceeding
 	if (!IsActive())
 	{
@@ -444,21 +467,23 @@ void ContentProtectionFirebolt::CloseDrmSession(int64_t sessionId)
 	}
 	std::lock_guard<std::mutex> lock(mContentProtectionMutex);
 	// Call the closeDrmSession method from the interface
-	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().closeDrmSession(std::to_string(sessionId));
+	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().closeDrmSession(sessionId);
 	// Check for errors
 	if (result.error() == Firebolt::Error::None)
 	{
 		// No error, session was closed successfully
-		MW_LOG_INFO("Drm session closed successfully for sessionId: %" PRId64 "", sessionId);
+		MW_LOG_INFO("Drm session closed successfully for sessionId: %s", sessionId.c_str());
 	}
 	else
 	{
 		// An error occurred, log the error
-		MW_LOG_ERR("CloseDrmSession: failed for sessionID: %" PRId64 " Firebolt Error: \"%d\"", sessionId, static_cast<int>(result.error()));
+		MW_LOG_ERR("CloseDrmSession: failed for sessionID: %s Firebolt Error: \"%d\"", sessionId.c_str(), static_cast<int>(result.error()));
 	}
 }
-bool ContentProtectionFirebolt::SetDrmSessionState(int64_t sessionId, bool active)
+bool ContentProtectionFirebolt::SetDrmSessionState(const std::string& sessionId, bool active)
 {
+	MW_LOG_INFO("Requesting Firebolt setDrmSessionState sessionId='%s' (length=%zu) active=%d",
+		sessionId.c_str(), sessionId.size(), active);
 	bool ret = false;
 	Firebolt::Error error = Firebolt::Error::None;
 	// Check if Firebolt is active before proceeding
@@ -478,26 +503,28 @@ bool ContentProtectionFirebolt::SetDrmSessionState(int64_t sessionId, bool activ
 	}
 	std::lock_guard<std::mutex> lock(mContentProtectionMutex);
 	// Call the setDrmSessionState method from the interface
-	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().setDrmSessionState(std::to_string(sessionId), sessionState);
+	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().setDrmSessionState(sessionId, sessionState);
 	// Check for errors
 	if (result.error() == Firebolt::Error::None)
 	{
 		// No error, state was set successfully
-		MW_LOG_INFO("DRM session state set to %d for sessionId: %" PRId64 "", active, sessionId);
+		MW_LOG_INFO("DRM session state set to %d for sessionId: %s", active, sessionId.c_str());
 		ret = true;
 	}
 	else
 	{
 		// An error occurred, log the error
-		MW_LOG_ERR("DRM session state failed to set to %d for sessionId: %" PRId64 ", Firebolt Error: \"%d\"", static_cast<int>(sessionState), sessionId, static_cast<int>(result.error()));
+		MW_LOG_ERR("DRM session state failed to set to %d for sessionId: %s, Firebolt Error: \"%d\"", static_cast<int>(sessionState), sessionId.c_str(), static_cast<int>(result.error()));
 	}
 	return ret;
 }
 /**
  * @brief To set Playback Speed State to SecManager
  */
-bool ContentProtectionFirebolt::SetPlaybackPosition(int64_t sessionId, float speed, int32_t position)
+bool ContentProtectionFirebolt::SetPlaybackPosition(const std::string& sessionId, float speed, int32_t position)
 {
+	MW_LOG_INFO("Requesting Firebolt setPlaybackPosition sessionId='%s' (length=%zu) speed=%.2f position=%d",
+		sessionId.c_str(), sessionId.size(), speed, position);
 	bool ret = false;
 	// Check if Firebolt is active before proceeding
 	if (!IsActive())
@@ -507,26 +534,28 @@ bool ContentProtectionFirebolt::SetPlaybackPosition(int64_t sessionId, float spe
 	}
 	std::lock_guard<std::mutex> lock(mContentProtectionMutex);
 	// Call the setPlaybackPosition method from the interface
-	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().setPlaybackPosition(std::to_string(sessionId), speed, position);
+	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().setPlaybackPosition(sessionId, speed, position);
 	// Check for errors
 	if (result.error() == Firebolt::Error::None)
 	{
 		// No error, playback position was set successfully
-		MW_LOG_INFO("SetPlaybackPosition set successfully for sessionId: %" PRId64 " at position %d with speed %.2f", sessionId, position, speed);
+		MW_LOG_INFO("SetPlaybackPosition set successfully for sessionId: %s at position %d with speed %.2f", sessionId.c_str(), position, speed);
 		ret = true;
 	}
 	else
 	{
 		// An error occurred, log the error
-		MW_LOG_ERR("SetPlaybackPosition failed to set for ID: %" PRId64 " Firebolt Error: \"%d\"", sessionId, static_cast<int>(result.error()));
+		MW_LOG_ERR("SetPlaybackPosition failed to set for ID: %s Firebolt Error: \"%d\"", sessionId.c_str(), static_cast<int>(result.error()));
 	}
 	return ret;
 }
 /**
  * @brief Show watermark image
  */
-void ContentProtectionFirebolt::ShowWatermark(bool show, int64_t sessionId)
+void ContentProtectionFirebolt::ShowWatermark(bool show, const std::string& sessionId)
 {
+	MW_LOG_INFO("Requesting Firebolt showWatermark sessionId='%s' (length=%zu) show=%d",
+		sessionId.c_str(), sessionId.size(), show);
 	// Check if Firebolt is active before proceeding
 	if (!IsActive()) {
 		MW_LOG_ERR("Firebolt is not active (or) channel couldn't be opened");
@@ -535,7 +564,7 @@ void ContentProtectionFirebolt::ShowWatermark(bool show, int64_t sessionId)
 
 	std::lock_guard<std::mutex> lock(mContentProtectionMutex);
 	// Call the showWatermark method from the interface
-	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().showWatermark(std::to_string(sessionId), show, 0);
+	auto result = Firebolt::IFireboltAampAccessor::Instance().ContentProtectionInterface().showWatermark(sessionId, show, 0);
 	// Check for errors
 	if (result.error() == Firebolt::Error::None) {
 		// No error, watermark visibility was successfully set
@@ -565,7 +594,7 @@ static Firebolt::ContentProtection::KeySystem convertStringToKeySystem(const std
 		return Firebolt::ContentProtection::KeySystem::WIDEVINE; // safest fallback default
 	}
 }
-bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, int64_t &sessionId, int32_t &errorCode, std::string &response)
+bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, std::string& sessionId, int32_t &errorCode, std::string &response)
 {
 	bool ret = false;
 	// Check if the system is active before proceeding
@@ -580,19 +609,21 @@ bool ContentProtectionFirebolt::OpenDrmSession(std::string& clientId, std::strin
 				licenseRequest, initData);
 	if (drmSession)
 	{
-		MW_LOG_WARN("DRM session opened successfully with sessionId: '%s' with Response %s", drmSession->sessionId.c_str(), drmSession->openSessionResponse.c_str());
+		MW_LOG_INFO("Firebolt openDrmSession succeeded: returned sessionId='%s' (length=%zu), responseLength=%zu",
+			drmSession->sessionId.c_str(), drmSession->sessionId.size(), drmSession->openSessionResponse.size());
 		response = drmSession->openSessionResponse;
-		sessionId = std::stoll(drmSession->sessionId);
+		sessionId = drmSession->sessionId;
+		MW_LOG_INFO("Firebolt sessionId copied to output: '%s' (length=%zu)", sessionId.c_str(), sessionId.size());
 		ret = true;
 	}
 	else
 	{
 		  errorCode =  static_cast<int>(drmSession.error());
-		  MW_LOG_ERR("openDrmSession: Firebolt Error: \"%d\"", errorCode);
+		  MW_LOG_ERR("Firebolt openDrmSession failed: error=%d", errorCode);
 	}
 	return ret;
 }
-bool ContentProtectionFirebolt::UpdateDrmSession(int64_t sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response)
+bool ContentProtectionFirebolt::UpdateDrmSession(const std::string& sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response)
 {
 	bool ret = false;
 	// Check if the system is active before proceeding
@@ -603,18 +634,19 @@ bool ContentProtectionFirebolt::UpdateDrmSession(int64_t sessionId, int32_t &err
 
 	auto drmSession =  Firebolt::IFireboltAampAccessor::Instance()
 		.ContentProtectionInterface()
-		.updateDrmSession(std::to_string(sessionId),
+		.updateDrmSession(sessionId,
 				licenseRequest, initData);
 	if(drmSession)
 	{
-		MW_LOG_INFO("DRM session updated successfully for sessionId: %" PRId64 " with Response %s", sessionId, drmSession.value().c_str());
+		MW_LOG_INFO("Firebolt updateDrmSession succeeded for sessionId='%s' (length=%zu), responseLength=%zu",
+			sessionId.c_str(), sessionId.size(), drmSession.value().size());
 		response = drmSession.value();
 		ret = true;
 	}
 	else
 	{
 		errorCode =  static_cast<int>(drmSession.error());
-		MW_LOG_ERR("updateDrmSession: Firebolt Error: \"%d\"", errorCode);
+		MW_LOG_ERR("Firebolt updateDrmSession failed for sessionId='%s': error=%d", sessionId.c_str(), errorCode);
 	}
 	return ret;
 }

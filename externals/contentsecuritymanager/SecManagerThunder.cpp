@@ -179,14 +179,13 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 	if (session.isSessionValid())
 	{
 		apiName = "updatePlaybackSession";
-		param["sessionId"] = session.getSessionID();
+		const std::string sessionId = session.getSessionID();
+		param["sessionId"] = sessionId;
 	}
 
-#ifdef DEBUG_SECMANAGER
-	std::string params;
-	param.ToString(params);
-	MW_LOG_WARN("SecManager %s param: %s",apiName, params.c_str());
-#endif
+	const std::string currentSessionId = session.getSessionID();
+	MW_LOG_INFO("SecManager request prepared: operation=%s sessionValid=%d sessionId='%s' sessionIdLength=%zu",
+		apiName, session.isSessionValid(), currentSessionId.c_str(), currentSessionId.size());
 
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
@@ -201,13 +200,8 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 			param["contentMetadata"] = contentMetaDataStr;
 			param["licenseRequest"] = licenseRequestStr;
 
-#ifdef DEBUG_SECMANAGER
-			{
-				std::string params;
-				param.ToString(params);
-				MW_LOG_WARN("SecManager %s param: %s",apiName, params.c_str());
-			}
-#endif
+			MW_LOG_INFO("SecManager %s request payload lengths: accessToken=%zu contentMetadata=%zu licenseRequest=%zu",
+				apiName, accessTokenStr.size(), contentMetaDataStr.size(), licenseRequestStr.size());
 
 			//invoke "openPlaybackSession" or "updatePlaybackSession" with retries for specific error cases
 			do
@@ -217,11 +211,6 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 				{
 					ContentSecurityManagerSession newSession;
 
-#ifdef DEBUG_SECMANAGER
-					std::string output;
-					response.ToString(output);
-					MW_LOG_WARN("SecManager %s o/p: %s",apiName, output.c_str());
-#endif
 					if (response["success"].Boolean())
 					{
 						/*
@@ -229,12 +218,20 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 						 * multiple object creation is OK as an existing instance should be returned
 						 * where input data changes e.g. following a call to updatePlaybackSession
 						 * the input data to the shared session is updated here*/
-						newSession = ContentSecurityManagerSession(response["sessionId"].Number(), 
+						const std::string sessionId = response["sessionId"].String();
+						if (sessionId.empty())
+						{
+							MW_LOG_ERR("SecManager %s succeeded without returning a session ID", apiName);
+							break;
+						}
+						MW_LOG_INFO("SecManager %s succeeded with sessionId='%s' (length=%zu)",
+							apiName, sessionId.c_str(), sessionId.size());
+						newSession = ContentSecurityManagerSession(sessionId,
 							ContentSecurityManager::getInputSummaryHash(moneyTraceMetadata, contentMetaDataStr.c_str(),
 								contMetaLen, licenseRequestStr.c_str(), keySystemId,
 								mediaUsage, accessTokenStr.c_str(), isVideoMuted));
 						std::string license = response["license"].String();
-						MW_LOG_TRACE("SecManager obtained license with length: %d and data: %s",license.size(), license.c_str());
+						MW_LOG_TRACE("SecManager obtained license with length: %zu", license.size());
 						if (!license.empty())
 						{
 							// Here license is base64 encoded
@@ -269,13 +266,24 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 							}
 						}
 					}
+					else
+					{
+						MW_LOG_ERR("SecManager %s returned success=false for sessionId='%s'",
+							apiName, currentSessionId.c_str());
+					}
 
 					// Save session ID
 					if (newSession.isSessionValid() && !session.isSessionValid())
 					{
+						MW_LOG_INFO("Attaching SecManager sessionId='%s' to caller session",
+							newSession.getSessionID().c_str());
 						session = newSession;
 					}
-
+				}
+				else
+				{
+					MW_LOG_ERR("SecManager %s JSON-RPC invocation failed for sessionId='%s'",
+						apiName, currentSessionId.c_str());
 				}
 				// TODO: Sort these values out for backward compatibility
 				if(response.HasLabel("secManagerResultContext"))
@@ -334,7 +342,7 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 /**
  * @brief To update session state to SecManager
  */
-bool SecManagerThunder::SetDrmSessionState(int64_t sessionId, bool active)
+bool SecManagerThunder::SetDrmSessionState(const std::string& sessionId, bool active)
 {
 	bool success = false;
 	bool rpcResult = false;
@@ -342,7 +350,8 @@ bool SecManagerThunder::SetDrmSessionState(int64_t sessionId, bool active)
 	JsonObject param;
 	param["clientId"] = "player";
 	param["sessionId"] = sessionId;
-	MW_LOG_INFO("%s:%d SecManager call setPlaybackSessionState for ID: %" PRId64 " and state: %d", __FUNCTION__, __LINE__, sessionId, active);
+	MW_LOG_INFO("%s:%d SecManager call setPlaybackSessionState sessionId='%s' state=%d",
+		__FUNCTION__, __LINE__, sessionId.c_str(), active);
 	if (active)
 	{
 		param["sessionState"] = "active";
@@ -367,12 +376,12 @@ bool SecManagerThunder::SetDrmSessionState(int64_t sessionId, bool active)
 		{
 			std::string responseStr;
 			result.ToString(responseStr);
-			MW_LOG_ERR("%s:%d SecManager setPlaybackSessionState failed for ID: %" PRId64 ", active:%d and result: %s", __FUNCTION__, __LINE__, sessionId, active, responseStr.c_str());
+			MW_LOG_ERR("%s:%d SecManager setPlaybackSessionState failed for ID: %s, active:%d and result: %s", __FUNCTION__, __LINE__, sessionId.c_str(), active, responseStr.c_str());
 		}
 	}
 	else
 	{
-		MW_LOG_ERR("%s:%d SecManager setPlaybackSessionState failed for ID: %" PRId64 " and active: %d", __FUNCTION__, __LINE__, sessionId, active);
+		MW_LOG_ERR("%s:%d SecManager setPlaybackSessionState failed for ID: %s and active: %d", __FUNCTION__, __LINE__, sessionId.c_str(), active);
 	}
 	return success;
 }
@@ -380,14 +389,15 @@ bool SecManagerThunder::SetDrmSessionState(int64_t sessionId, bool active)
 /**
  * @brief To notify SecManager to release a session
  */
-void SecManagerThunder::CloseDrmSession(int64_t sessionId)
+void SecManagerThunder::CloseDrmSession(const std::string& sessionId)
 {
 	bool rpcResult = false;
 	JsonObject result;
 	JsonObject param;
 	param["clientId"] = "player";
 	param["sessionId"] = sessionId;
-	MW_LOG_INFO("%s:%d SecManager call closePlaybackSession for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+	MW_LOG_INFO("%s:%d SecManager call closePlaybackSession sessionId='%s'",
+		__FUNCTION__, __LINE__, sessionId.c_str());
 
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
@@ -400,19 +410,19 @@ void SecManagerThunder::CloseDrmSession(int64_t sessionId)
 		{
 			std::string responseStr;
 			result.ToString(responseStr);
-			MW_LOG_ERR("%s:%d SecManager closePlaybackSession failed for ID: %" PRId64 " and result: %s", __FUNCTION__, __LINE__, sessionId, responseStr.c_str());
+			MW_LOG_ERR("%s:%d SecManager closePlaybackSession failed for ID: %s and result: %s", __FUNCTION__, __LINE__, sessionId.c_str(), responseStr.c_str());
 		}
 	}
 	else
 	{
-		MW_LOG_ERR("%s:%d SecManager closePlaybackSession failed for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+		MW_LOG_ERR("%s:%d SecManager closePlaybackSession failed for ID: %s", __FUNCTION__, __LINE__, sessionId.c_str());
 	}
 }
 
 /**
  * @brief To update session state to SecManager
  */
-bool SecManagerThunder::setWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height)
+bool SecManagerThunder::setWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height)
 {
 	bool rpcResult = false;
 	JsonObject result;
@@ -422,7 +432,8 @@ bool SecManagerThunder::setWindowSize(int64_t sessionId, int64_t video_width, in
 	param["videoWidth"] = video_width;
 	param["videoHeight"] = video_height;
 
-	MW_LOG_INFO("%s:%d SecManager call setVideoWindowSize for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+	MW_LOG_INFO("%s:%d SecManager call setVideoWindowSize sessionId='%s'",
+		__FUNCTION__, __LINE__, sessionId.c_str());
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
 		rpcResult = mSecManagerObj.InvokeJSONRPC("setVideoWindowSize", param, result);
@@ -434,14 +445,14 @@ bool SecManagerThunder::setWindowSize(int64_t sessionId, int64_t video_width, in
 		{
 			std::string responseStr;
 			result.ToString(responseStr);
-			MW_LOG_ERR("%s:%d SecManager setVideoWindowSize failed for ID: %" PRId64 " and result: %s", __FUNCTION__, __LINE__, sessionId, responseStr.c_str());
+			MW_LOG_ERR("%s:%d SecManager setVideoWindowSize failed for ID: %s and result: %s", __FUNCTION__, __LINE__, sessionId.c_str(), responseStr.c_str());
 			rpcResult = false;
 		}
 
 	}
 	else
 	{
-		MW_LOG_ERR("%s:%d SecManager setVideoWindowSize failed for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+		MW_LOG_ERR("%s:%d SecManager setVideoWindowSize failed for ID: %s", __FUNCTION__, __LINE__, sessionId.c_str());
 	}
 	return rpcResult;
 }
@@ -449,7 +460,7 @@ bool SecManagerThunder::setWindowSize(int64_t sessionId, int64_t video_width, in
 /**
  * @brief To set Playback Speed State to SecManager
  */
-bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_speed, int32_t playback_position)
+bool SecManagerThunder::SetPlaybackPosition(const std::string& sessionId, float playback_speed, int32_t playback_position)
 {
 	bool rpcResult = false;
 	JsonObject result;
@@ -461,7 +472,8 @@ bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_sp
 	param["playbackSpeed"] = playback_speed;
 	param["playbackPosition"] = playback_position;
 
-	MW_LOG_INFO("%s:%d SecManager call setPlaybackSpeedState for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+	MW_LOG_INFO("%s:%d SecManager call setPlaybackSpeedState sessionId='%s'",
+		__FUNCTION__, __LINE__, sessionId.c_str());
 
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
@@ -474,13 +486,13 @@ bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_sp
 		{
 			std::string responseStr;
 			result.ToString(responseStr);
-			MW_LOG_ERR("%s:%d SecManager setPlaybackSpeedState failed for ID: %" PRId64 " and result: %s", __FUNCTION__, __LINE__, sessionId, responseStr.c_str());
+			MW_LOG_ERR("%s:%d SecManager setPlaybackSpeedState failed for ID: %s and result: %s", __FUNCTION__, __LINE__, sessionId.c_str(), responseStr.c_str());
 			rpcResult = false;
 		}
 	}
 	else
 	{
-		MW_LOG_ERR("%s:%d SecManager setPlaybackSpeedState failed for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+		MW_LOG_ERR("%s:%d SecManager setPlaybackSpeedState failed for ID: %s", __FUNCTION__, __LINE__, sessionId.c_str());
 	}
 	return rpcResult;
 }
@@ -489,7 +501,7 @@ bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_sp
 /**
  * @brief To Load ClutWatermark
  */
-bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize,
+bool SecManagerThunder::loadClutWatermark(const std::string& sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize,
 		const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio)
 {
 	bool rpcResult = false;
@@ -506,7 +518,7 @@ bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, 
 	param["watermarkHeight"] = watermarkHeight;
 	param["aspectRatio"] = std::to_string(aspectRatio).c_str();
 
-	MW_LOG_INFO("%s:%d SecManager call loadClutWatermark for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+	MW_LOG_INFO("%s:%d SecManager call loadClutWatermark for sessionId='%s'", __FUNCTION__, __LINE__, sessionId.c_str());
 
 	{
 		std::lock_guard<std::mutex> lock(mSecMutex);
@@ -519,13 +531,13 @@ bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, 
 		{
 			std::string responseStr;
 			result.ToString(responseStr);
-			MW_LOG_ERR("%s:%d SecManager loadClutWatermark failed for ID: %" PRId64 " and result: %s", __FUNCTION__, __LINE__, sessionId, responseStr.c_str());
+			MW_LOG_ERR("%s:%d SecManager loadClutWatermark failed for sessionId='%s' and result: %s", __FUNCTION__, __LINE__, sessionId.c_str(), responseStr.c_str());
 			rpcResult = false;
 		}
 	}
 	else
 	{
-		MW_LOG_ERR("%s:%d SecManager loadClutWatermark failed for ID: %" PRId64 "", __FUNCTION__, __LINE__, sessionId);
+		MW_LOG_ERR("%s:%d SecManager loadClutWatermark failed for sessionId='%s'", __FUNCTION__, __LINE__, sessionId.c_str());
 	}
 	return rpcResult;
 }
@@ -590,10 +602,11 @@ void SecManagerThunder::watermarkSessionHandler(const JsonObject& parameters)
 	std::string param;
 	parameters.ToString(param);
 	MW_LOG_WARN("ContentSecurityManager::%s:%d i/p params: %s", __FUNCTION__, __LINE__, param.c_str());
-	std::function<void(uint32_t, uint32_t, const std::string&)> sendWatermarkEvent_CB = ContentSecurityManager::getWatermarkSessionEvent_CB();
+	std::function<void(const std::string&, uint32_t, const std::string&)> sendWatermarkEvent_CB = ContentSecurityManager::getWatermarkSessionEvent_CB();
 	if (nullptr != sendWatermarkEvent_CB)
 	{
-		sendWatermarkEvent_CB( parameters["sessionId"].Number(),parameters["conditionContext"].Number(),parameters["watermarkingSystem"].String());
+		sendWatermarkEvent_CB(parameters["sessionId"].String(), parameters["conditionContext"].Number(),
+			parameters["watermarkingSystem"].String());
 	}
 }
 
@@ -620,7 +633,7 @@ void SecManagerThunder::addWatermarkHandler(const JsonObject& parameters)
 		int smKey = parameters["graphicImageBufferKey"].Number();
 		int smSize = parameters["graphicImageSize"].Number();/*ToDo : graphicImageSize (long) long conversion*/
 		bool adjustVisibility = parameters["adjustVisibilityRequired"].Boolean();
-		int sessionId = parameters["sessionId"].Number();
+		std::string sessionId = parameters["sessionId"].String();
 		MW_LOG_WARN("ContentSecurityManager::%s:%d graphicId : %d smKey: %d smSize: %d", __FUNCTION__, __LINE__, graphicId, smKey, smSize);
 		ContentSecurityManager::GetInstance()->ScheduleTask(PlayerAsyncTaskObj([graphicId, smKey, smSize, adjustVisibility, sessionId](void *data)
 					{
@@ -888,7 +901,7 @@ void SecManagerThunder::AlwaysShowWatermarkOnTop(bool show)
 /**
  * @brief GetWaterMarkPalette
  */
-void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
+void SecManagerThunder::GetWaterMarkPalette(const std::string& sessionId, int graphicId)
 {
         {
              std::lock_guard<std::mutex> lock(mLoadClutMutex);
@@ -977,4 +990,3 @@ void SecManagerThunder::ModifyWatermarkPalette(int graphicId, int clutKey, int i
 		MW_LOG_ERR("ContentSecurityManager Thunder invocation for modifyPalettedWatermark failed!, graphic id: %d", graphicId);
 	}
 }
-

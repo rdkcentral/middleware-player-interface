@@ -132,13 +132,13 @@ public:
 	 * @param active Whether the session should be marked active
 	 * @return true on success, false otherwise
 	 */ 
-	bool SetDrmSessionState(int64_t sessionId, bool active) override;
+	bool SetDrmSessionState(const std::string& sessionId, bool active) override;
 	/**
 	 * @brief Closes an existing DRM session
 	 * @param sessionId DRM session ID
 	 * @return true if closed successfully
 	 */
-	void CloseDrmSession(int64_t sessionId) override;
+	void CloseDrmSession(const std::string& sessionId) override;
         /* Run AcquireLicenseOpenOrUpdate is the old AcquireLicense code
          * It is used by AcquireLicense() to for opening sessions & for calling update when this is required*/
 	bool AcquireLicenseOpenOrUpdate( std::string clientId, std::string appId, const char* licenseUrl, const char* moneyTraceMetadata[][2],
@@ -159,7 +159,7 @@ public:
 	 * @param[out] response License server response
 	 * @return true on success
 	 */	
-	bool OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, int64_t &sessionId, int32_t &errorCode, std::string &response);
+	bool OpenDrmSession(std::string& clientId, std::string appId, std::string keySystem, std::string licenseRequest, std::string initData, std::string& sessionId, int32_t &errorCode, std::string &response);
 	/**
 	 * @brief Sends update license challenge to existing session
 	 * @param sessionId DRM session ID
@@ -168,7 +168,7 @@ public:
 	 * @param[out] response Response from Firebolt
 	 * @return true on success
 	 */	
-	bool UpdateDrmSession(int64_t sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response);
+	bool UpdateDrmSession(const std::string& sessionId, int32_t &errorCode, std::string licenseRequest, std::string initData, std::string &response);
 	/**
 	 * @brief Sets playback state for watermark alignment
 	 * @param sessionId Session ID
@@ -176,13 +176,13 @@ public:
 	 * @param position Current position in seconds
 	 * @return true if command succeeded
 	 */	
-	bool SetPlaybackPosition(int64_t sessionId, float speed, int32_t position) override;
+	bool SetPlaybackPosition(const std::string& sessionId, float speed, int32_t position) override;
 	/**
 	 * @brief Enables or disables visual watermark
 	 * @param show Show/hide flag
 	 * @param sessionId Session context (optional)
 	 */
-	void ShowWatermark(bool show, int64_t sessionId);
+	void ShowWatermark(bool show, const std::string& sessionId);
 
 	void HandleWatermarkEvent(const std::string& sessionId, const std::string& statusStr, const std::string& appId);
 private:
