@@ -16,8 +16,10 @@ foreach(spec ${HT_TESTS})
 
     add_executable(${name} ${src})
     target_link_libraries(${name} PRIVATE heaptrack pthread)
+    # without -fno-builtin-* the optimiser deletes the test's malloc/free pairs
     target_compile_options(${name} PRIVATE
-        -Wall -Wextra -fasynchronous-unwind-tables -fno-omit-frame-pointer)
+        -Wall -Wextra -fasynchronous-unwind-tables -fno-omit-frame-pointer
+        -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free)
 
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES

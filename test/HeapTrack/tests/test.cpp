@@ -25,11 +25,15 @@ static void manifest_parse()
     HEAPTRACK_SCOPE_CPP("Manifest::parse");
 
     char *text = strdup("#EXTM3U ... manifest body allocated inside libc strdup");
+    ht_test_touch(text, 8);
     free(text);
 
     void *chunks[10];
     for (int i = 0; i < 10; i++)
+    {
         chunks[i] = malloc(1024);
+        ht_test_touch(chunks[i], 1024);
+    }
     for (int i = 0; i < 9; i++)
         free(chunks[i]);
     /* chunks[9] (1 KB) leaks on purpose */
@@ -41,15 +45,17 @@ static void player_initialize()
     HEAPTRACK_SCOPE_CPP("Player::initialize");
 
     void *leaked = malloc(64 * 1024); /* never freed */
-    (void)leaked;
+    ht_test_touch(leaked, 64 * 1024);
 
     for (int i = 0; i < 4; i++)
     {
         void *scratch = malloc(2048);
+        ht_test_touch(scratch, 2048);
         free(scratch);
     }
 
     g_handed_to_worker = malloc(32 * 1024);
+    ht_test_touch(g_handed_to_worker, 32 * 1024);
     HEAPTRACK_HANDOFF(g_handed_to_worker, "Worker::run");
 
     manifest_parse();
@@ -62,7 +68,10 @@ static void decoder_alloc_buffers()
 
     void *buffers[5];
     for (int i = 0; i < 5; i++)
+    {
         buffers[i] = malloc(256 * 1024);
+        ht_test_touch(buffers[i], 256 * 1024);
+    }
     for (int i = 0; i < 4; i++)
         free(buffers[i]);
     /* buffers[4] (256 KB) leaks on purpose */
@@ -74,9 +83,11 @@ static void subtitle_init()
     HEAPTRACK_SCOPE_CPP("Subtitle::init");
 
     Sample *s = new Sample();
+    ht_test_touch(s, sizeof(Sample));
     delete s; /* matched */
 
     char *cues = new char[512];
+    ht_test_touch(cues, 512);
     delete cues; /* new[] freed with delete -> mismatched free */
 }
 
@@ -93,7 +104,9 @@ static void config_load()
     HEAPTRACK_SCOPE_CPP("Config::load");
 
     HEAPTRACK_ASSIGN(g_config, (char *)malloc(4096));
+    ht_test_touch(g_config, 4096);
     HEAPTRACK_ASSIGN(g_config, (char *)malloc(1024)); /* 4 KB lost here */
+    ht_test_touch(g_config, 1024);
 }
 
 /* ---- Worker thread: frees what initialize handed over ---------------- */
@@ -107,13 +120,13 @@ static void *worker_main(void *)
 static void print_expectations()
 {
     printf("\n===== WHAT THIS TEST DOES (expected numbers) =====\n");
-    printf("Player::initialize                 : 64 KB leak, 4x2 KB freed, 32 KB handed to Worker::run\n");
+    printf("Player::initialize                  : 64 KB leak, 4x2 KB freed, 32 KB handed to Worker::run\n");
     printf("Player::initialize > Manifest::parse: strdup freed, 10x1 KB alloc, 9 freed -> 1 KB leak\n");
     printf("Player::tune > Decoder::allocBuffers: 5x256 KB alloc, 4 freed -> 256 KB leak\n");
-    printf("Player::tune > Subtitle::init      : new/delete matched, new[]/delete -> 1 mismatched free\n");
-    printf("Config::load                       : 4 KB OVERWRITTEN (lost from var 'g_config'), 1 KB live\n");
-    printf("Worker::run                        : frees the 32 KB -> cross-context free in freed-by table\n");
-    printf("Expected total suspected leak      : 64 KB + 1 KB + 256 KB + 4 KB + 1 KB = 326 KB\n");
+    printf("Player::tune > Subtitle::init       : new/delete matched, new[]/delete -> 1 mismatched free\n");
+    printf("Config::load                        : 4 KB OVERWRITTEN (lost from var 'g_config'), 1 KB live\n");
+    printf("Worker::run                         : frees the 32 KB -> cross-context free in freed-by table\n");
+    printf("Expected total suspected leak       : 64 + 1 + 256 + 4 + 1 = 326 KB\n");
     printf("=================================================\n");
     fflush(stdout);
 }

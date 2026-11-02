@@ -17,19 +17,23 @@ static void new_delete_cases()
     HEAPTRACK_SCOPE_CPP("Cpp::newDelete");
 
     Sample *s = new Sample();
+    ht_test_touch(s, sizeof(Sample));
     delete s; /* matched */
 
     char *arr = new char[256];
+    ht_test_touch(arr, 256);
     delete[] arr; /* matched */
 
     char *bad = new char[64];
+    ht_test_touch(bad, 64);
     delete bad; /* mismatch: new[] freed with delete */
 
     void *m = malloc(32);
+    ht_test_touch(m, 32);
     operator delete(m); /* mismatch: malloc freed with delete */
 
     Sample *live = new Sample();
-    (void)live; /* leaked on purpose */
+    ht_test_touch(live, sizeof(Sample)); /* leaked on purpose */
 }
 
 static void overwrite_case()
@@ -38,7 +42,9 @@ static void overwrite_case()
 
     char *buffer = NULL;
     HEAPTRACK_ASSIGN(buffer, (char *)malloc(4096));
+    ht_test_touch(buffer, 4096);
     HEAPTRACK_ASSIGN(buffer, (char *)malloc(8192)); /* old block lost -> OVERWRITTEN */
+    ht_test_touch(buffer, 8192);
     free(buffer);
 }
 
@@ -48,6 +54,7 @@ static void handoff_case()
 
     char *owned = NULL;
     HEAPTRACK_ASSIGN(owned, (char *)malloc(4096));
+    ht_test_touch(owned, 4096);
     HEAPTRACK_HANDOFF(owned, "Worker::run");
     g_handed_off = owned;
 }

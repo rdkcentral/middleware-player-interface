@@ -23,9 +23,10 @@ static void *adopted_main(void *)
 {
     heaptrack::AdoptContext adopt(g_captured_ctx);
     void *p = malloc(2048); /* attributed to the submitting thread's node */
+    ht_test_touch(p, 2048);
     free(p);
     void *leak = malloc(1024);
-    (void)leak;
+    ht_test_touch(leak, 1024);
     return NULL;
 }
 
@@ -35,6 +36,7 @@ static void *stress_main(void *)
     for (int i = 0; i < STRESS_ITERS; i++)
     {
         void *p = malloc(64 + (i & 63));
+        ht_test_touch(p, 64);
         free(p);
     }
     return NULL;
@@ -49,6 +51,7 @@ int main()
     {
         HEAPTRACK_SCOPE_CPP("Player::initialize");
         g_queued = malloc(4096);
+        ht_test_touch(g_queued, 4096);
         g_captured_ctx = heaptrack_ctx_capture();
 
         pthread_create(&th, NULL, consumer_main, NULL);

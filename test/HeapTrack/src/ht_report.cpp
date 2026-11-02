@@ -46,7 +46,9 @@ static void write_site(HtWriter *w, uint32_t site_id)
         ht_w(w, "-");
         return;
     }
-    ht_w(w, "%s:%d", ht_str(s->file_id), s->line);
+    const char *file = ht_str(s->file_id);
+    const char *base = strrchr(file, '/');
+    ht_w(w, "%s:%d", base ? base + 1 : file, s->line);
 }
 
 static void write_finding(HtWriter *w, const HeapAllocRecord *rec, HtFinding f)
