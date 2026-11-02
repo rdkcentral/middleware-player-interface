@@ -634,13 +634,15 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		 * retry; the original failure handling below still applies if the retry
 		 * also fails.
 		 */
-		auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
-		if (localSession.isSessionValid())
+		const auto &localSession = mContentSecurityManagerSession;
+		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
+		const int64_t staleSessionId = localSession.getSessionID();
+		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
 		{
 			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
-					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, localSession.getSessionID());
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
 			mContentSecurityManagerSession.setSessionInvalid();
-			ContentSecurityManager::GetInstance()->ReleaseSession(localSession.getSessionID());
+			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
 		}
 		code = this->AcquireLicenseCb(responseCode, std::move(licenseRetryHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
 	}
