@@ -2,7 +2,6 @@
 #include "heaptrack.hpp"
 #include "ht_test_sink.h"
 
-#include <cstdio>
 #include <cstdlib>
 
 struct Sample
@@ -73,8 +72,6 @@ int main()
     overwrite_case();
     handoff_case();
     worker_frees();
-
-    printf("[test_cpp] done, reporting\n");
     heaptrack_report();
     return 0;
 }

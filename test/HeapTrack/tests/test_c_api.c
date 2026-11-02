@@ -2,7 +2,6 @@
 #include "heaptrack.h"
 #include "ht_test_sink.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -46,8 +45,6 @@ int main(void)
     heaptrack_global_begin("test_c_api");
     player_tune();
     heaptrack_global_end();
-
-    printf("[test_c_api] done, reporting\n");
     heaptrack_report();
     return 0;
 }

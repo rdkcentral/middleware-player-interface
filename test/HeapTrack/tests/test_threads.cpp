@@ -2,7 +2,6 @@
 #include "heaptrack.hpp"
 #include "ht_test_sink.h"
 
-#include <cstdio>
 #include <cstdlib>
 #include <pthread.h>
 
@@ -70,7 +69,6 @@ int main()
             pthread_join(ts[i], NULL);
     }
 
-    printf("[test_threads] done, reporting\n");
     heaptrack_report();
     return 0;
 }
