@@ -597,7 +597,7 @@ TEST(ContentSecurityManagerSession, getInputSummaryHash_Positive_DefaultConstruc
  */
 TEST(ContentSecurityManagerSession, PositiveValidPositiveSessionId) {
     std::cout << "Entering PositiveValidPositiveSessionId test" << std::endl;
-    int64_t expectedID = 12345;
+    std::string expectedID = "12345";
     // Instantiate object using parameterized constructor with sessionID=12345 and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
@@ -611,10 +611,10 @@ TEST(ContentSecurityManagerSession, PositiveValidPositiveSessionId) {
     std::cout << "Exiting PositiveValidPositiveSessionId test" << std::endl;
 }
 /**
- * @brief Verify that getSessionID() returns 0 when the session is initialized with sessionID = 0.
+ * @brief Verify that a string session ID containing "0" is preserved.
  *
  * This test creates an instance of ContentSecurityManagerSession using a sessionID of 0 along with a dummy inputSummaryHash value of 0,
- * and verifies that the getSessionID() method correctly returns 0. This confirms that the class handles a zero sessionID as a valid input.
+ * and verifies that getSessionID() returns the same string. This confirms that the session holder preserves the provided value.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 017@n
@@ -627,12 +627,12 @@ TEST(ContentSecurityManagerSession, PositiveValidPositiveSessionId) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data |Expected Result |Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Invoke the parameterized constructor with sessionID = 0 and inputSummaryHash = 0, then call getSessionID() | sessionID = 0, inputSummaryHash = 0, expected sessionID = 0 | getSessionID() returns 0 | Should Pass |
+ * | 01 | Invoke the parameterized constructor with sessionID = "0" and inputSummaryHash = 0, then call getSessionID() | sessionID = "0", inputSummaryHash = 0, expected sessionID = "0" | getSessionID() returns "0" | Should Pass |
  */
 TEST(ContentSecurityManagerSession, PositiveValidZeroSessionId) {
     GTEST_SKIP();
     std::cout << "Entering PositiveValidZeroSessionId test" << std::endl;
-    int64_t expectedID = 0;
+    std::string expectedID = "0";
     // Instantiate object using parameterized constructor with sessionID=0 and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
@@ -667,7 +667,7 @@ TEST(ContentSecurityManagerSession, PositiveValidZeroSessionId) {
  */
 TEST(ContentSecurityManagerSession, BoundaryMaxInt64) {
     std::cout << "Entering BoundaryMaxInt64 test" << std::endl;
-    int64_t expectedID = std::numeric_limits<int64_t>::max();
+    std::string expectedID = std::to_string(std::numeric_limits<int64_t>::max());
     // Instantiate object using parameterized constructor with sessionID=INT64_MAX and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
@@ -703,7 +703,7 @@ TEST(ContentSecurityManagerSession, BoundaryMaxInt64) {
 TEST(ContentSecurityManagerSession, BoundaryMinInt64) {
     GTEST_SKIP();
     std::cout << "Entering BoundaryMinInt64 test" << std::endl;
-    int64_t expectedID = std::numeric_limits<int64_t>::min();
+    std::string expectedID = std::to_string(std::numeric_limits<int64_t>::min());
     // Instantiate object using parameterized constructor with sessionID=INT64_MIN and dummy inputSummaryHash
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session(expectedID, 0);
@@ -717,9 +717,9 @@ TEST(ContentSecurityManagerSession, BoundaryMinInt64) {
     std::cout << "Exiting BoundaryMinInt64 test" << std::endl;
 }
 /**
- * @brief Validates the default construction of ContentSecurityManagerSession and verifies that the session ID is initialized to zero.
+ * @brief Validates that a default-constructed ContentSecurityManagerSession has an empty invalid session ID.
  *
- * This test case checks the default constructor of the ContentSecurityManagerSession class to ensure that it does not throw any exceptions, and that calling getSessionID() returns a session ID of 0. This confirms that the object is correctly initialized to a default state.
+ * This test case checks that the default constructor does not throw and that getSessionID() returns the empty-string invalid-ID sentinel.
  *
  * **Test Group ID:** Basic: 01@n
  * **Test Case ID:** 020@n
@@ -732,19 +732,19 @@ TEST(ContentSecurityManagerSession, BoundaryMinInt64) {
  * **Test Procedure:**@n
  * | Variation / Step | Description | Test Data | Expected Result | Notes |
  * | :----: | --------- | ---------- |-------------- | ----- |
- * | 01 | Instantiate ContentSecurityManagerSession using the default constructor and validate the session ID | Input: Default constructor invocation, Output: getSessionID() = 0 | No exception thrown and getSessionID() returns 0 | Should Pass |
+ * | 01 | Instantiate ContentSecurityManagerSession using the default constructor and validate the session ID | Input: Default constructor invocation, Output: getSessionID() = empty string | No exception thrown and getSessionID() returns the invalid-ID sentinel | Should Pass |
  */
 TEST(ContentSecurityManagerSession, DefaultConstructorTest_SessionIDZero) {
     GTEST_SKIP();
     std::cout << "Entering DefaultConstructorTest test" << std::endl;
-    // Instantiate object using the default constructor; expected default sessionID is 0
+    // Instantiate object using the default constructor; expected sessionID is empty.
     EXPECT_NO_THROW({
         ContentSecurityManagerSession session;
         std::cout << "Invoked default constructor" << std::endl;
         std::cout << "Invoking getSessionID()" << std::endl;
         std::string sessionID = session.getSessionID();
         std::cout << "getSessionID() returned " << sessionID << std::endl;
-        EXPECT_EQ(sessionID, int64_t(0));
+        EXPECT_EQ(sessionID, CONTENT_SECURITY_MGR_INVALID_SESSION_ID);
     });
     std::cout << "Exiting DefaultConstructorTest test" << std::endl;
 }
@@ -913,5 +913,3 @@ TEST(ContentSecurityManagerSession, setSessionInvalidValid) {
     });
     std::cout << "Exiting setSessionInvalidValid test" << std::endl;
 }
-
-

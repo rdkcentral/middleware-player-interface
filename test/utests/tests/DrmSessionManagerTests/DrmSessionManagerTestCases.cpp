@@ -50,7 +50,7 @@ extern MockOpenCdmSessionAdapter *g_mockOpenCdmSessionAdapter;
 class TestableDrmSessionManager : public DrmSessionManager
 {
 public:
-	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback)
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallback)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback), mMaxSessions(maxDrmSessions)
 	{
 	}
@@ -1294,4 +1294,3 @@ TEST_F(DrmSessionManagerComplexTests, OpencdmConstructionFailureTest)
 	// Verify the error code is mapped to MW_DRM_SESSION_CREATE_FAILED
 	EXPECT_EQ(err, MW_DRM_SESSION_CREATE_FAILED);
 }
-

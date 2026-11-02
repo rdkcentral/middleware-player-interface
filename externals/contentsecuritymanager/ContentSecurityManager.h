@@ -142,7 +142,7 @@ public:
 	/**
 	 *   @fn SendWatermarkSessionEvent_CB
 	 */
-	static std::function<void(uint32_t, uint32_t, const std::string&)> SendWatermarkSessionEvent_CB;
+	static std::function<void(const std::string&, uint32_t, const std::string&)> SendWatermarkSessionEvent_CB;
 
 	/**
 	 * @fn UseFireboltSDK
@@ -156,14 +156,14 @@ public:
 	 * @return void
 	 * @brief Set callback function for watermark session
 	 */
-	static void setWatermarkSessionEvent_CB(const std::function<void(uint32_t, uint32_t, const std::string&)>& callback);
+	static void setWatermarkSessionEvent_CB(const std::function<void(const std::string&, uint32_t, const std::string&)>& callback);
 
 	/**
 	 * @fn getWatermarkSessionEvent_CB
-	 * @return std::function<void(uint32_t, uint32_t, const std::string&)>&
+	 * @return std::function<void(const std::string&, uint32_t, const std::string&)>&
 	 * @brief Get callback function for watermark session
 	 */
-	static std::function<void(uint32_t, uint32_t, const std::string&)>& getWatermarkSessionEvent_CB( );
+	static std::function<void(const std::string&, uint32_t, const std::string&)>& getWatermarkSessionEvent_CB( );
 
 	static std::size_t getInputSummaryHash(const char* moneyTraceMetadata[][2], const char* contentMetadata,
                                         size_t contMetaLen, const char* licenseRequest, const char* keySystemId,

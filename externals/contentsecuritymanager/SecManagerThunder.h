@@ -163,7 +163,7 @@ protected:
          * @param[in] sessionId - session id
          *  
          */
-        bool loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
+        bool loadClutWatermark(const std::string& sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
 	/**
 	 *   @fn CreateWatermark
 	 */
@@ -175,7 +175,7 @@ protected:
 	/**
 	 *   @fn GetWaterMarkPalette
 	 */
-	void GetWaterMarkPalette(int sessionId, int graphicId);
+	void GetWaterMarkPalette(const std::string& sessionId, int graphicId);
 	/**
 	 *   @fn ModifyWatermarkPalette
 	 */

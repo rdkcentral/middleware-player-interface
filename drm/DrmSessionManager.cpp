@@ -48,7 +48,7 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(NULL),
 		cachedKeyIDs(NULL), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
@@ -1010,11 +1010,11 @@ void DrmSessionManager::registerCallback()
 {
 	auto instance = this;
 
-	 std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallBack =
-	[instance](uint32_t sessionHandle, uint32_t status, const std::string& system)
+	 std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallBack =
+	[instance](const std::string& sessionId, uint32_t status, const std::string& system)
        	{
-            MW_LOG_INFO("[DrmSessionManager] Received WM callback: handle=%u, status=%u, system=%s",
-                        sessionHandle, status, system.c_str());
+            MW_LOG_INFO("[DrmSessionManager] Received WM callback: sessionId='%s', status=%u, system=%s",
+                        sessionId.c_str(), status, system.c_str());
 
             if (instance && instance->mPlayerSendWatermarkSessionUpdateEventCB)
             {
@@ -1022,7 +1022,7 @@ void DrmSessionManager::registerCallback()
                             (void*)&(instance->mPlayerSendWatermarkSessionUpdateEventCB));
 
                 // call the actual AAMP callback
-                instance->mPlayerSendWatermarkSessionUpdateEventCB(sessionHandle, status, system);
+                instance->mPlayerSendWatermarkSessionUpdateEventCB(sessionId, status, system);
             }
             else
             {
@@ -1035,15 +1035,15 @@ void DrmSessionManager::registerCallback()
 
 /**
  * @brief To wrap the callback for watermark session update
- * @param[in] sessionHandle session handle
+ * @param[in] sessionId session ID
  * @param[in] status status of the session
  * @param[in] systemData system data
  * @retval void
  */
-void DrmSessionManager::watermarkSessionHandlerWrapper(uint32_t sessionHandle, uint32_t status, const std::string &systemData)
+void DrmSessionManager::watermarkSessionHandlerWrapper(const std::string& sessionId, uint32_t status, const std::string &systemData)
 {
 	if(NULL != mPlayerSendWatermarkSessionUpdateEventCB)
 	{
-		mPlayerSendWatermarkSessionUpdateEventCB( sessionHandle, status, systemData);
+		mPlayerSendWatermarkSessionUpdateEventCB(sessionId, status, systemData);
 	}
 }

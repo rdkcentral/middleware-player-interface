@@ -64,28 +64,28 @@ public:
  */
 class WatermarkCallbackHelper {
 public:
-    static void callback(uint32_t status, uint32_t position, const std::string& message) {
+    static void callback(const std::string& sessionId, uint32_t status, const std::string& message) {
+        lastSessionId = sessionId;
         lastStatus = status;
-        lastPosition = position;
         lastMessage = message;
         callCount++;
     }
     
     static void reset() {
+        lastSessionId.clear();
         lastStatus = 0;
-        lastPosition = 0;
         lastMessage.clear();
         callCount = 0;
     }
     
+    static std::string lastSessionId;
     static uint32_t lastStatus;
-    static uint32_t lastPosition;
     static std::string lastMessage;
     static int callCount;
 };
 
+std::string WatermarkCallbackHelper::lastSessionId;
 uint32_t WatermarkCallbackHelper::lastStatus = 0;
-uint32_t WatermarkCallbackHelper::lastPosition = 0;
 std::string WatermarkCallbackHelper::lastMessage;
 int WatermarkCallbackHelper::callCount = 0;
 
@@ -1175,14 +1175,14 @@ TEST(ContentSecurityManager_Static, WatermarkCallback_SetAndGet) {
         
         // Verify callback is set (non-null)
         if (callback) {
-            callback(100, 200, "test message");
+            callback("firebolt-session:ab12-cd34", 200, "test message");
         }
     });
     
     // Verify callback was called
     if (WatermarkCallbackHelper::callCount > 0) {
-        EXPECT_EQ(WatermarkCallbackHelper::lastStatus, 100);
-        EXPECT_EQ(WatermarkCallbackHelper::lastPosition, 200);
+        EXPECT_EQ(WatermarkCallbackHelper::lastSessionId, "firebolt-session:ab12-cd34");
+        EXPECT_EQ(WatermarkCallbackHelper::lastStatus, 200);
         EXPECT_EQ(WatermarkCallbackHelper::lastMessage, "test message");
     }
     
@@ -2323,7 +2323,7 @@ TEST(FakeSecManager_Extended, WatermarkCallbacks) {
     std::cout << "[FakeSecManager_Extended] WatermarkCallbacks - START" << std::endl;
     
     bool callbackInvoked = false;
-    auto testCallback = [&callbackInvoked](uint32_t status, uint32_t code, const std::string& msg) {
+    auto testCallback = [&callbackInvoked](const std::string& sessionId, uint32_t status, const std::string& msg) {
         callbackInvoked = true;
     };
     
@@ -2331,7 +2331,7 @@ TEST(FakeSecManager_Extended, WatermarkCallbacks) {
     
     auto& retrievedCallback = FakeSecManager::getWatermarkSessionEvent_CB();
     if (retrievedCallback) {
-        retrievedCallback(0, 0, "test");
+        retrievedCallback("firebolt-session:ab12-cd34", 0, "test");
         EXPECT_TRUE(callbackInvoked);
     }
     
@@ -2475,7 +2475,7 @@ TEST(ContentSecurityManager_Integration, AllAPIsSequentially) {
     
     // Configure callbacks
     bool watermarkCalled = false;
-    auto callback = [&watermarkCalled](uint32_t s, uint32_t c, const std::string& m) {
+    auto callback = [&watermarkCalled](const std::string& sessionId, uint32_t status, const std::string& message) {
         watermarkCalled = true;
     };
     ContentSecurityManager::setWatermarkSessionEvent_CB(callback);

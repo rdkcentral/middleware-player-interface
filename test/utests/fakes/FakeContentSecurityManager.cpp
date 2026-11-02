@@ -102,7 +102,7 @@ void ContentSecurityManager::ReleaseSession(const std::string& sessionId)
 /**
  * @brief To set Watermark Session callback
  */
-void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<void(uint32_t, uint32_t, const std::string&)>& callback)
+void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<void(const std::string&, uint32_t, const std::string&)>& callback)
 {
 	return;
 }
@@ -110,9 +110,9 @@ void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<voi
 /**
  * @brief To set Watermark Session callback
  */
-std::function<void(uint32_t, uint32_t, const std::string&)>& ContentSecurityManager::getWatermarkSessionEvent_CB( )
+std::function<void(const std::string&, uint32_t, const std::string&)>& ContentSecurityManager::getWatermarkSessionEvent_CB( )
 {
-	static std::function<void(uint32_t, uint32_t, const std::string&)> callback = nullptr;
+	static std::function<void(const std::string&, uint32_t, const std::string&)> callback = nullptr;
 	return callback;
 }
 

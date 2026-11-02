@@ -71,6 +71,11 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                                 MW_LOG_WARN("ContentSecurityManagerSession: session ID %s reused or session closed too early.",
                                 sessionID.c_str());
                         }
+                        else
+                        {
+                                MW_LOG_DEBUG("ContentSecurityManagerSession: reusing session ID '%s'.",
+                                        sessionID.c_str());
+                        }
                 }
 
                 if(returnValue)
@@ -105,6 +110,7 @@ ContentSecurityManagerSession::SessionManager::~SessionManager()
 {
         if(!mID.empty())
         {
+                MW_LOG_DEBUG("ContentSecurityManagerSession: releasing session ID '%s'.", mID.c_str());
                 ContentSecurityManager::GetInstance()->ReleaseSession(mID);
         }
 }
@@ -136,6 +142,8 @@ std::string ContentSecurityManagerSession::getSessionID(void) const
                 ID = mpSessionManager->getID();
         }
 
+        MW_LOG_DEBUG("ContentSecurityManagerSession::getSessionID returning '%s' (length=%zu, valid=%d)",
+                ID.c_str(), ID.size(), mpSessionManager != nullptr);
         return ID;
 }
 
