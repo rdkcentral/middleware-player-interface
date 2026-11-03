@@ -3329,13 +3329,13 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
 			bool isVideoMaster = true;
-			if (socInterface)
+			if (socInterface && gstPrivateContext->video_sink)
 			{
 				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
 			}
 			else
 			{
-				MW_LOG_WARN("socInterface is null, assuming video master");
+				MW_LOG_WARN("socInterface or video sink is null, assuming video master");
 			}
 
 			// set applied_rate to trickplay rate if video sink doesn't use vmaster
@@ -3448,8 +3448,8 @@ void InterfacePlayerRDK::ClearProtectionEvent()
  */
 static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayerRDK, GstState stateToValidate, guint msTimeOut)
 {
-	GstState gst_current;
-	GstState gst_pending;
+	GstState gst_current = GST_STATE_VOID_PENDING;
+	GstState gst_pending = GST_STATE_VOID_PENDING;
 	float timeout = 100.0;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gint gstGetStateCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
