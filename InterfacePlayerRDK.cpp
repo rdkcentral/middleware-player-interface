@@ -86,6 +86,49 @@ const char * CipherTypeToString(CipherType type)
 	return "unknown";
 }
 
+static bool IsElementaryStreamFormat(GstStreamOutputFormat format)
+{
+	return format >= GST_FORMAT_AUDIO_ES_MP3 && format <= GST_FORMAT_VIDEO_ES_MPEG2;
+}
+
+/**
+ * @brief Apply encrypted content signaling fields to stream caps.
+ * @param[in,out] caps Caps to update in-place.
+ * @param[in] drmSystem DRM system UUID string for protection metadata.
+ */
+static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
+{
+	if (caps == NULL)
+	{
+		MW_LOG_WARN("Skipping encrypted caps conversion: caps is NULL");
+		return;
+	}
+	if (drmSystem == NULL)
+	{
+		MW_LOG_WARN("Skipping encrypted caps conversion: DRM system ID is NULL");
+		return;
+	}
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	if (structure)
+	{
+		gst_structure_set(structure,
+			"original-media-type", G_TYPE_STRING, gst_structure_get_name(structure),
+			NULL);
+		if (drmSystem != NULL)
+		{
+			gst_structure_set(structure,
+				GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, drmSystem,
+				NULL);
+		}
+		// Same for both cenc and cbcs
+		gst_structure_set_name(structure, "application/x-cenc");
+	}
+	else
+	{
+		MW_LOG_WARN("Skipping encrypted caps conversion: failed to get caps structure");
+	}
+}
+
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
@@ -293,26 +336,55 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
+	StreamCodecInfo streamInfo;
+	streamInfo.video.mCodecFormat = static_cast<GstStreamOutputFormat>(format);
+	streamInfo.audio.mCodecFormat = static_cast<GstStreamOutputFormat>(audioFormat);
+	streamInfo.subtitle.mCodecFormat = static_cast<GstStreamOutputFormat>(subFormat);
+	ConfigurePipeline(std::move(streamInfo), bESChangeStatus, setReadyAfterPipelineCreation,
+					  isSubEnable, trackId, rate, pipelineName, PipelinePriority, FirstFrameFlag, std::move(manifestUrl), enableLiveLatency);
+}
+
+/**
+ * @brief Configures the GStreamer pipeline.
+ * @param codecInfo Codec information for the stream.
+ * @param bESChangeStatus Whether ES change status is enabled.
+ * @param setReadyAfterPipelineCreation Whether to set the player as ready after pipeline creation.
+ * @param isSubEnable Whether subtitles are enabled.
+ * @param trackId Track ID.
+ * @param rate Bitrate.
+ * @param pipelineName Pipeline name.
+ * @param PipelinePriority Pipeline priority.
+ * @param FirstFrameFlag Whether the first-frame callback is required.
+ * @param manifestUrl URL of the manifest used to configure stream setup.
+ * @param enableLiveLatency Whether to enable live-latency mode in the
+ *        RialtoSink streams-info context (passed as enable-live-latency).
+ */
+void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
+										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
+										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
+{
 	mFirstFrameRequired = FirstFrameFlag;
-	GstStreamOutputFormat gstFormat 	= static_cast<GstStreamOutputFormat>(format);
-	GstStreamOutputFormat gstAudioFormat 	= static_cast<GstStreamOutputFormat>(audioFormat);
-	GstStreamOutputFormat gstSubFormat 	= static_cast<GstStreamOutputFormat>(subFormat);
+	MediaCodecInfo* codecInfoByTrack[GST_TRACK_COUNT] = {
+		&codecInfo.video,
+		&codecInfo.audio,
+		&codecInfo.subtitle
+	};
 
 	GstStreamOutputFormat newFormat[GST_TRACK_COUNT];
-	newFormat[eGST_MEDIATYPE_VIDEO] = gstFormat;
-	newFormat[eGST_MEDIATYPE_AUDIO] = gstAudioFormat;
+	newFormat[eGST_MEDIATYPE_VIDEO] = static_cast<GstStreamOutputFormat>(codecInfo.video.mCodecFormat);;
+	newFormat[eGST_MEDIATYPE_AUDIO] = static_cast<GstStreamOutputFormat>(codecInfo.audio.mCodecFormat);
 
 	bool newClosedCaptionsControl = false;
 
 	if(isSubEnable)
 	{
 		MW_LOG_MIL("Gstreamer subs enabled");
-		newFormat[eGST_MEDIATYPE_SUBTITLE] = gstSubFormat;
+		newFormat[eGST_MEDIATYPE_SUBTITLE] = static_cast<GstStreamOutputFormat>(codecInfo.subtitle.mCodecFormat);
 	}
 	else
 	{
 		MW_LOG_MIL("Gstreamer subs disabled");
-		newFormat[eGST_MEDIATYPE_SUBTITLE]=GST_FORMAT_INVALID;
+		newFormat[eGST_MEDIATYPE_SUBTITLE] = GST_FORMAT_INVALID;
 	}
 
 	if(!(m_gstConfigParam->useWesterosSink))
@@ -320,7 +392,6 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = false;
 		interfacePlayerPriv->gstPrivateContext->firstTuneWithWesterosSinkOff = interfacePlayerPriv->socInterface->IsFirstTuneWithWesteros();
 	}
-
 	else
 	{
 		interfacePlayerPriv->gstPrivateContext->using_westerossink = true;
@@ -337,7 +408,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		interfacePlayerPriv->gstPrivateContext->usingRialtoSink = true;
 
 		// If no subtitles defined, then create a closed caption control stream
-		newClosedCaptionsControl = (gstSubFormat == GST_FORMAT_INVALID);
+		newClosedCaptionsControl = (static_cast<GstStreamOutputFormat>(codecInfo.subtitle.mCodecFormat) == GST_FORMAT_INVALID);
 
 		// To avoid out of band subtitles being removed during trickplay,
 		// check if they were previously configured, and don't enable Closed Caption Control.
@@ -384,20 +455,24 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[i];
-		if(stream->format != newFormat[i])
+		bool isInitialSetup = (stream->format == GST_FORMAT_INVALID && newFormat[i] == GST_FORMAT_UNKNOWN);
+		bool isValidNewFormat = (newFormat[i] != GST_FORMAT_INVALID && newFormat[i] != GST_FORMAT_UNKNOWN);
+		bool isEncryptionChanged = (stream->codecInfo.mIsEncrypted != codecInfoByTrack[i]->mIsEncrypted);
+		// The initial-setup case must be honoured even for an unknown format (e.g. muxed HLS/TS, or audio
+		// remapped to the video slot) because the real format is only discovered from the demuxer later -
+		// without a source element the injector never unblocks. An encryption-only change is only
+		// actionable once the format is usable.
+		bool shouldReconfigure = (stream->format != newFormat[i] && (isValidNewFormat || isInitialSetup))
+		                         || (isEncryptionChanged && isValidNewFormat);
+		if(shouldReconfigure)
 		{
-			bool isInitialSetup = (stream->format == GST_FORMAT_INVALID || stream->format == GST_FORMAT_UNKNOWN);
-			bool isValidNewFormat = (newFormat[i] != GST_FORMAT_INVALID && newFormat[i] != GST_FORMAT_UNKNOWN);
-			if (isValidNewFormat || isInitialSetup)
-			{
-				MW_LOG_MIL("Closing stream %d old format = %d, new format = %d",i, stream->format, newFormat[i]);
-				configureStream[i] = true;
-				interfacePlayerPriv->gstPrivateContext->NumberOfTracks++;
-			}
-			else
-			{
-				MW_LOG_MIL("Skipping reconfiguration for stream %d - both format invalid/unknown",i);
-			}
+			MW_LOG_MIL("Closing stream %d old format = %d, new format = %d",i, stream->format, newFormat[i]);
+			configureStream[i] = true;
+			interfacePlayerPriv->gstPrivateContext->NumberOfTracks++;
+		}
+		else
+		{
+			MW_LOG_MIL("Skipping reconfiguration for stream %d for [%d]->[%d], isEncryptionChanged = %d",i, stream->format, newFormat[i], isEncryptionChanged);
 		}
 		if(interfacePlayerPriv->socInterface->ShouldTearDownForTrickplay())
 		{
@@ -434,6 +509,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 			trickTeardown = false;
 			TearDownStream((int)i);
 			stream->format = newFormat[i];
+			stream->codecInfo = std::move(*codecInfoByTrack[i]);
 			stream->trackId = trackId;
 
 			/* Sets up the stream for the given MediaType */
@@ -468,7 +544,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		g_object_get(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].sinkbin, "video-sink", &vidsink, NULL);
 		if(vidsink)
 		{
-			gboolean videoOnly = (audioFormat == GST_FORMAT_INVALID);
+			gboolean videoOnly = (newFormat[eGST_MEDIATYPE_AUDIO] == GST_FORMAT_INVALID);
 			MW_LOG_INFO("Setting single-path-stream to %d", videoOnly);
 			g_object_set(vidsink, "single-path-stream", videoOnly, NULL);
 			// RDKEMW-18286: Reinforce show-video-window before pipeline state change
@@ -515,7 +591,7 @@ void InterfacePlayerRDK::ConfigurePipeline(int format, int audioFormat, int subF
 		}
 	}
 	/* If buffering is enabled, set the pipeline in Paused state, once sufficient content has been buffered the pipeline will be set to GST_STATE_PLAYING */
-	else if (interfacePlayerPriv->gstPrivateContext->buffering_enabled && format != GST_FORMAT_INVALID && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
+	else if (interfacePlayerPriv->gstPrivateContext->buffering_enabled && newFormat[eGST_MEDIATYPE_VIDEO] != GST_FORMAT_INVALID && GST_NORMAL_PLAY_RATE == interfacePlayerPriv->gstPrivateContext->rate)
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED, target state to GST_STATE_PLAYING");
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = GST_STATE_PLAYING;
@@ -1382,6 +1458,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			interfacePlayerPriv->gstPrivateContext->decoderHandleNotified = false;
 		}
 		stream->format = GST_FORMAT_INVALID;
+		stream->codecInfo = MediaCodecInfo{};
 		if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 		{
 			interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl = false;
@@ -1869,6 +1946,7 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 	GstCaps * caps = NULL;
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
+	MW_LOG_MIL("Entry type[%d] format[%d] encrypted[%d]", mediaType, stream->format, stream->codecInfo.mIsEncrypted);
 	privatePlayer->SignalConnect(source, "need-data", G_CALLBACK(gst_need_data), _this);
 	privatePlayer->SignalConnect(source, "enough-data", G_CALLBACK(gst_enough_data), _this);	/* Sets up the call back function for enough data event */
 	privatePlayer->SignalConnect(source, "seek-data", G_CALLBACK(gstappsrc_seek), _this);		/* Sets up the call back function for seek data event */
@@ -1905,11 +1983,19 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 	}
 	else
 	{
+		// Initial source caps intentionally use only the manifest-derived stream format and encryption flag.
+		// Codec private data, dimensions, channels, and sample rate are parsed from the MP4 init segment and
+		// applied through SetStreamCaps() before elementary media samples are injected.
 		caps = GetCaps(static_cast<GstStreamOutputFormat>(stream->format));
 	}
 
 	if (caps != NULL)
 	{
+		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
+		{
+			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
+			TransformToEncryptedCaps(caps, mDrmSystem);
+		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
 		g_free(capsStr);
@@ -3700,10 +3786,46 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 			{
 				MW_LOG_WARN("PTS-RESTAMP ENABLED, but we have codec change, so Signal EOS (%s).",gstGetMediaTypeName(type));
 			}
-			GstPlayer_SignalEOS(stream);
-			// We are in buffering, but we received discontinuity, un-pause pipeline
-			shouldHaltBuffering = true;
-			ret = true;
+			
+			// For a muxed audio/video discontinuity, only trigger EOS once BOTH tracks have
+			// resumed data flow (firstBufferProcessed) after the reset. Signalling EOS for
+			// only one side leaves its sibling's appsrc out of sync - causing audio loss /
+			// video freeze. Codec-change always proceeds immediately since the decoder swap
+			// can't wait on the sibling track's buffer flow.
+			bool proceedWithEos = true;
+			GstMediaType siblingType = (type == eGST_MEDIATYPE_AUDIO) ? eGST_MEDIATYPE_VIDEO :
+						   (type == eGST_MEDIATYPE_VIDEO) ? eGST_MEDIATYPE_AUDIO : eGST_MEDIATYPE_DEFAULT;
+			if (!codecChange && siblingType != eGST_MEDIATYPE_DEFAULT)
+			{
+				gst_media_stream *siblingStream = &interfacePlayerPriv->gstPrivateContext->stream[siblingType];
+				if (siblingStream->format != GST_FORMAT_INVALID && !siblingStream->firstBufferProcessed)
+				{
+					proceedWithEos = false;
+				}
+			}
+
+			if (proceedWithEos)
+			{
+				GstPlayer_SignalEOS(stream);
+				// We are in buffering, but we received discontinuity, un-pause pipeline
+				shouldHaltBuffering = true;
+				ret = true;
+
+				//If we have an audio discontinuity, signal subtec as well
+				if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
+				{
+					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				}
+				else
+				{
+					MW_LOG_WARN("Skipped EOS %s", gstGetMediaTypeName(type));
+				}
+			}
+			else
+			{
+				MW_LOG_WARN("Skipping appsrc EOS for %s discontinuity - sibling track not yet ready (firstBufferProcessed=0)", gstGetMediaTypeName(type));
+			}
+	
 
 			//If we have an audio discontinuity, signal subtec as well
 			if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
@@ -5561,21 +5683,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			GstStructure *s = gst_caps_get_structure (caps, 0);
-			if (s)
-			{
-				gst_structure_set (s,
-					"original-media-type", G_TYPE_STRING, gst_structure_get_name (s),
-					NULL);
-				if (mDrmSystem != NULL)
-				{
-					gst_structure_set (s,
-						GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING, mDrmSystem,
-						NULL);
-				}
-				// Same for both cenc and cbcs
-				gst_structure_set_name (s, "application/x-cenc");
-			}
+			TransformToEncryptedCaps(caps, mDrmSystem);
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
@@ -5587,6 +5695,7 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 	{
 		MW_LOG_ERR("Failed to get caps for type[%d] format[%d]", type, codecInfo.mCodecFormat);
 	}
+	stream->codecInfo = std::move(codecInfo);
 }
 
 /**
