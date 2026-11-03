@@ -439,7 +439,7 @@ TEST_F(SecManagerThunderTests, AcquireRpcTransportFailureKeepsDefaults)
 	Acquire(ret, session, st, rc, bs, &lic, &licLen);
 	EXPECT_FALSE(ret);
 	EXPECT_EQ(st, CONTENT_SECURITY_MANAGER_DRM_FAILURE);
-	EXPECT_EQ(rc, CONTENT_SECURITY_MANAGER_DRM_GEN_FAILURE);
+	EXPECT_EQ(rc, CONTENT_SECURITY_MANAGER_SERVICE_CON_FAILURE);
 }
 
 TEST_F(SecManagerThunderTests, AcquireSuccessEmptyLicenseStringFails)
