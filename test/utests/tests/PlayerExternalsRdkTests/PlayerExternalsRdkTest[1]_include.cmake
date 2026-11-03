@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerExternalsRdkTests/PlayerExternalsRdkTest[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerExternalsRdkTests/PlayerExternalsRdkTest[1]_tests.cmake")
+else()
+  add_test(PlayerExternalsRdkTest_NOT_BUILT PlayerExternalsRdkTest_NOT_BUILT)
+endif()

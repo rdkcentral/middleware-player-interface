@@ -20,7 +20,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdio.h>
+#include <algorithm>
 #include <cstring>
+#include <string>
 #include "PlayerLogManager.h"
 
 
@@ -1092,4 +1094,278 @@ TEST(PlayerLogManager, NegativeScenario_SetLogLevel_Locked)
     }
     
     std::cout << "Exiting NegativeScenario_SetLogLevel_Locked test" << std::endl;
+}
+
+namespace {
+
+/* Restores the global logger state that a test modifies. */
+class LoggerStateGuard
+{
+public:
+    LoggerStateGuard()
+        : mDisable(PlayerLogManager::disableLogRedirection),
+          mEthan(PlayerLogManager::enableEthanLogRedirection),
+          mLevel(PlayerLogManager::mwLoglevel),
+          mLocked(PlayerLogManager::locked) {}
+    ~LoggerStateGuard()
+    {
+        PlayerLogManager::disableLogRedirection = mDisable;
+        PlayerLogManager::enableEthanLogRedirection = mEthan;
+        PlayerLogManager::mwLoglevel = mLevel;
+        PlayerLogManager::locked = mLocked;
+    }
+
+private:
+    bool mDisable;
+    bool mEthan;
+    MW_LogLevel mLevel;
+    bool mLocked;
+};
+
+const MW_LogLevel kAllLogLevels[] = { mLOGLEVEL_TRACE, mLOGLEVEL_DEBUG, mLOGLEVEL_INFO,
+                                      mLOGLEVEL_WARN, mLOGLEVEL_MIL, mLOGLEVEL_ERROR };
+const size_t kAllLogLevelsCount = sizeof(kAllLogLevels) / sizeof(kAllLogLevels[0]);
+
+} // namespace
+
+/**
+ * @brief Verify logprintf routes every MW log level through the Ethan redirection branch.
+ *
+ * **Test Case ID:** Redirection: 001
+ * **Priority:** High
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Enable Ethan redirection with CLI redirection disabled | Flags are set as requested |
+ * | 02 | Call logprintf for TRACE..ERROR | No exception; each level maps to an Ethan level |
+ */
+TEST(LogRedirection, EthanRedirection_AllLevelsMapped)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(false, true, mLOGLEVEL_TRACE, false);
+
+    EXPECT_TRUE(PlayerLogManager::enableEthanLogRedirection);
+    EXPECT_FALSE(PlayerLogManager::disableLogRedirection);
+
+    for (size_t i = 0; i < kAllLogLevelsCount; i++)
+    {
+        EXPECT_NO_THROW(logprintf(kAllLogLevels[i], "PlayerLogManagerFun.cpp", 42, "ethan level %d", static_cast<int>(i)));
+    }
+}
+
+/**
+ * @brief Verify logprintf prints a timestamped, formatted line to stdout in CLI mode.
+ *
+ * **Test Case ID:** Redirection: 002
+ * **Priority:** High
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Enable CLI redirection | disableLogRedirection is true |
+ * | 02 | Call logprintf at INFO with a format argument | Stdout contains the timestamp prefix, level tag, function, line and message |
+ */
+TEST(LogRedirection, CliRedirection_PrintsFormattedLineWithTimestamp)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_TRACE, false);
+
+    testing::internal::CaptureStdout();
+    logprintf(mLOGLEVEL_INFO, "PlayerLogManagerFun.cpp", 77, "cli message %d", 7);
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find("[PLAYER_IF]"), std::string::npos);
+    EXPECT_NE(out.find("[INFO]"), std::string::npos);
+    EXPECT_NE(out.find("[PlayerLogManagerFun.cpp][77]"), std::string::npos);
+    EXPECT_NE(out.find("cli message 7"), std::string::npos);
+    EXPECT_NE(out.find(": "), std::string::npos); // timestamp prefix
+}
+
+/**
+ * @brief Verify CLI redirection takes precedence over Ethan redirection when both are enabled.
+ *
+ * **Test Case ID:** Redirection: 003
+ * **Priority:** Medium
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Enable both CLI and Ethan redirection | Both flags set |
+ * | 02 | Call logprintf | Message is printed to stdout (CLI branch), not routed to Ethan |
+ */
+TEST(LogRedirection, CliRedirection_TakesPrecedenceOverEthan)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, true, mLOGLEVEL_TRACE, false);
+
+    testing::internal::CaptureStdout();
+    logprintf(mLOGLEVEL_WARN, "PlayerLogManagerFun.cpp", 88, "precedence check");
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find("precedence check"), std::string::npos);
+}
+
+/**
+ * @brief Verify logprintf uses the journal branch for every level when all redirection flags are off.
+ *
+ * **Test Case ID:** Redirection: 004
+ * **Priority:** High
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Disable CLI and Ethan redirection | Journal path is selected |
+ * | 02 | Call logprintf for each level | Each level tag is emitted; no exception |
+ */
+TEST(LogRedirection, JournalRedirection_AllLevelsEmitted)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(false, false, mLOGLEVEL_TRACE, false);
+
+    testing::internal::CaptureStdout();
+    for (size_t i = 0; i < kAllLogLevelsCount; i++)
+    {
+        EXPECT_NO_THROW(logprintf(kAllLogLevels[i], "PlayerLogManagerFun.cpp", 99, "journal level %d", static_cast<int>(i)));
+    }
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find("[TRACE]"), std::string::npos);
+    EXPECT_NE(out.find("[DEBUG]"), std::string::npos);
+    EXPECT_NE(out.find("[INFO]"), std::string::npos);
+    EXPECT_NE(out.find("[WARN]"), std::string::npos);
+    EXPECT_NE(out.find("[MIL]"), std::string::npos);
+    EXPECT_NE(out.find("[ERROR]"), std::string::npos);
+}
+
+/**
+ * @brief Verify DumpBinaryBlob splits long printable input into 64-character chunks.
+ *
+ * **Test Case ID:** Redirection: 005
+ * **Priority:** High
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Pass 150 printable bytes | All 150 bytes are emitted |
+ * | 02 | Inspect output | No chunk holds more than 64 characters |
+ */
+TEST(DumpBinaryBlob_Output, PrintableInputIsSplitIntoChunks)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_WARN, false);
+
+    // Use 'x' as the payload: it does not occur in the log prefix text.
+    std::string data(150, 'x');
+    testing::internal::CaptureStdout();
+    DumpBinaryBlob(reinterpret_cast<const unsigned char*>(data.data()), data.size());
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_EQ(std::count(out.begin(), out.end(), 'x'), 150);
+    EXPECT_NE(out.find(std::string(64, 'x') + "\n"), std::string::npos);
+    EXPECT_EQ(out.find(std::string(65, 'x')), std::string::npos);
+}
+
+/**
+ * @brief Verify DumpBinaryBlob hex-escapes non-printable bytes as [xx].
+ *
+ * **Test Case ID:** Redirection: 006
+ * **Priority:** High
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Pass NUL, 0x80, 0xFF, ESC followed by "ok" | Non-printable bytes become [00][80][ff][1b] |
+ */
+TEST(DumpBinaryBlob_Output, NonPrintableBytesAreHexEscaped)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_WARN, false);
+
+    const unsigned char data[] = { 0x00, 0x80, 0xFF, 0x1B, 'o', 'k' };
+    testing::internal::CaptureStdout();
+    DumpBinaryBlob(data, sizeof(data));
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find("[00][80][ff][1b]ok"), std::string::npos);
+}
+
+/**
+ * @brief Verify an escape that does not fit the remaining chunk space flushes the chunk.
+ *
+ * 62 printable characters leave 2 free slots; a following non-printable byte needs 4,
+ * so the chunk is flushed and the byte is dropped. The trailing 'z' goes to a new chunk.
+ *
+ * **Test Case ID:** Redirection: 007
+ * **Priority:** Medium
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Pass 62 'x', 0x01, 'z' | 62 'x' flushed as its own line; 'z' emitted separately; no escape written |
+ */
+TEST(DumpBinaryBlob_Output, InsufficientSpaceForEscapeFlushesChunk)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_WARN, false);
+
+    std::string data(62, 'x');
+    data.push_back('\x01');
+    data.push_back('z');
+    testing::internal::CaptureStdout();
+    DumpBinaryBlob(reinterpret_cast<const unsigned char*>(data.data()), data.size());
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find(std::string(62, 'x') + "\n"), std::string::npos);
+    EXPECT_NE(out.find("z\n"), std::string::npos);
+    EXPECT_EQ(out.find("[01]"), std::string::npos);
+}
+
+/**
+ * @brief Verify an escape that exactly fills the remaining chunk space flushes the chunk.
+ *
+ * **Test Case ID:** Redirection: 008
+ * **Priority:** Medium
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Pass 60 'x' followed by 0x02 | Chunk ends with [02] and is flushed once |
+ */
+TEST(DumpBinaryBlob_Output, EscapeFillingChunkExactlyFlushes)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_WARN, false);
+
+    std::string data(60, 'x');
+    data.push_back('\x02');
+    testing::internal::CaptureStdout();
+    DumpBinaryBlob(reinterpret_cast<const unsigned char*>(data.data()), data.size());
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find(std::string(60, 'x') + "[02]\n"), std::string::npos);
+}
+
+/**
+ * @brief Verify DumpBinaryBlob with a zero length produces no output.
+ *
+ * **Test Case ID:** Redirection: 009
+ * **Priority:** Low
+ *
+ * | Step | Description | Expected Result |
+ * | :--: | ----------- | --------------- |
+ * | 01 | Call DumpBinaryBlob with len = 0 | No output is produced |
+ */
+TEST(DumpBinaryBlob_Output, ZeroLengthProducesNoOutput)
+{
+    LoggerStateGuard guard;
+    PlayerLogManager::locked = false;
+    PlayerLogManager::SetLoggerInfo(true, false, mLOGLEVEL_WARN, false);
+
+    const unsigned char data[] = { 'x' };
+    testing::internal::CaptureStdout();
+    DumpBinaryBlob(data, 0);
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_TRUE(out.empty());
 }

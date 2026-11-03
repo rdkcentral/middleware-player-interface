@@ -41,6 +41,7 @@ include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES PlayerIsoBmffTestRunner.cpp
 		PlayerIsoBmffBoxTests.cpp
+		PlayerIsoBmffBoxParseTests.cpp
 		PlayerIsoBmffBufferTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
@@ -52,6 +53,8 @@ add_executable(${EXEC_NAME}
                ${PLAYER_SOURCES})
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
+
+player_utest_add_cov(${EXEC_NAME})
 
 if (CMAKE_XCODE_BUILD_SYSTEM)
   # XCode schema target

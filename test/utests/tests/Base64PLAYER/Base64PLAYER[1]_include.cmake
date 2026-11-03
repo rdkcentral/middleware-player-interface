@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/Base64PLAYER/Base64PLAYER[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/Base64PLAYER/Base64PLAYER[1]_tests.cmake")
+else()
+  add_test(Base64PLAYER_NOT_BUILT Base64PLAYER_NOT_BUILT)
+endif()

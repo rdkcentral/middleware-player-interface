@@ -43,13 +43,16 @@ public:
 	bool UseAppSrc()override;
 	
 	/**
-	 * @brief Check if Westeros sink should be used.
+	 * @brief Get video sink from sinkbin.
 	 *
-	 * Determines whether the Westeros sink should be used in the current context.
+	 * Creates a real "westerossink" element when Westeros Sink has been
+	 * enabled at runtime (mUsingWesterosSink, set via SetWesterosSinkState()).
+	 * This is only reached when useRialtoSink is disabled - see
+	 * InterfacePlayerRDK's sink-selection order.
 	 *
-	 * @return True if Westeros sink should be used, false otherwise.
+	 * @param sinkbin The GStreamer sinkbin.
 	 */
-	bool UseWesterosSink()override{return false;}
+	GstElement* GetVideoSink(GstElement* sinkbin)override;
 	
 	/**
 	 * @brief Get volume property name.

@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstHandlerControlTests/GstHandlerControlTests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstHandlerControlTests/GstHandlerControlTests[1]_tests.cmake")
+else()
+  add_test(GstHandlerControlTests_NOT_BUILT GstHandlerControlTests_NOT_BUILT)
+endif()

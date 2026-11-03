@@ -1,0 +1,5 @@
+if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstPluginL1Tests/GstPluginL1Tests[1]_tests.cmake")
+  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstPluginL1Tests/GstPluginL1Tests[1]_tests.cmake")
+else()
+  add_test(GstPluginL1Tests_NOT_BUILT GstPluginL1Tests_NOT_BUILT)
+endif()

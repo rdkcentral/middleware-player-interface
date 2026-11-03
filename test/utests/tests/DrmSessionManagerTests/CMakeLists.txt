@@ -49,6 +49,7 @@ include_directories(${PLAYER_ROOT}/../base16_64)
 set(TEST_SOURCES
 	DrmSessionManagerTestCases.cpp
 	DrmSessionManagerTests.cpp
+	DrmSessionManagerCoverageTests.cpp
 )
 
 set(UTILITY_SOURCES

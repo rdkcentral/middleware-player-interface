@@ -1,0 +1,1 @@
+/usr/bin/c++  -DUSE_GST1 -ggdb CMakeFiles/SubtitleTests.dir/SubtitleRun.cpp.o CMakeFiles/SubtitleTests.dir/VttCueFun.cpp.o CMakeFiles/SubtitleTests.dir/VttCueFillTests.cpp.o -o SubtitleTests  ../../fakes/libfakes.a -pthread /usr/lib/x86_64-linux-gnu/libglib-2.0.so /usr/lib/x86_64-linux-gnu/libgmock.a /usr/lib/x86_64-linux-gnu/libgtest.a /usr/lib/x86_64-linux-gnu/libgtest.a 

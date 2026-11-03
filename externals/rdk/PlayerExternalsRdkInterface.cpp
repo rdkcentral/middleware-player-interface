@@ -74,6 +74,11 @@ void PlayerExternalsRdkInterface::Initialize()
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
     m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
+    m_deviceInterfaceUnavailableLogged = false;
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("Initialize: DeviceFireboltInterface::GetInstance() returned null");
+    }
     DeviceFireboltInterface::Initialize();
     m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
 #else
@@ -111,6 +116,7 @@ void PlayerExternalsRdkInterface::Initialize()
     }
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
+    m_deviceInterfaceUnavailableLogged = false;
     if(useFireboltInContainer)
     {
         MW_PRE_LOGGER_LOG("Using Firebolt (containerized environment) \n");
@@ -124,6 +130,10 @@ void PlayerExternalsRdkInterface::Initialize()
         m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
         DeviceIARMInterface::Initialize();
         m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
+    }
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("Initialize: device interface GetInstance() returned null");
     }
     //remove-end
 #endif // USE_FIREBOLT
@@ -377,7 +387,18 @@ void PlayerExternalsRdkInterface::SetActiveInterface(bool isWifi)
 
 char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_t & iConfigLen)
 {
-    return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
+    if (m_pDeviceInterfaceBase)
+    {
+        m_deviceInterfaceUnavailableLogged = false;
+        return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
+    }
+    iConfigLen = 0;
+    if (!m_deviceInterfaceUnavailableLogged)
+    {
+        MW_LOG_ERR("GetTR181Config: device interface not available");
+        m_deviceInterfaceUnavailableLogged = true;
+    }
+    return nullptr;
 }
 
 void PlayerExternalsRdkInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)
