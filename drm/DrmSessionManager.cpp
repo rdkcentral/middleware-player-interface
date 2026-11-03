@@ -132,40 +132,75 @@ void DrmSessionManager::UpdateDRMConfig(
  */
 void DrmSessionManager::clearSessionData()
 {
-	MW_LOG_WARN(" DrmSessionManager:: Clearing session data");
+	MW_LOG_WARN("clearSessionData called; waiting for DRM session lock");
+	std::lock_guard<std::mutex> guard(mDrmSessionLock);
+	MW_LOG_WARN("clearSessionData acquired DRM session lock");
+	MW_LOG_WARN("clearSessionData begin maxSlots=%d contexts=%s cachedKeys=%s",
+		mMaxDRMSessions,
+		drmSessionContexts != NULL ? "present" : "null",
+		cachedKeyIDs != NULL ? "present" : "null");
+	MW_LOG_WARN("clearSessionData entering slot loop");
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
+		MW_LOG_WARN("clearSessionData slot=%d begin", i);
 		if (drmSessionContexts != NULL)
 		{
 			{
 				std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
-				MW_LOG_INFO("clearSessionData slot=%d before: session=%s contextEntries=%zu",
+				MW_LOG_WARN("clearSessionData slot=%d before: session=%s contextEntries=%zu",
 					i,
 					drmSessionContexts[i].drmSession != NULL ? "present" : "null",
 					drmSessionContexts[i].data.size());
 				if (drmSessionContexts[i].drmSession != NULL)
 				{
+					MW_LOG_WARN("clearSessionData slot=%d preparing DRM session for destruction", i);
 					/* Wait for in-flight decrypt() calls before freeing the session. */
 					drmSessionContexts[i].drmSession->PrepareForDestruction();
+					MW_LOG_WARN("clearSessionData slot=%d destruction preparation complete", i);
 					MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 					drmSessionContexts[i].drmSession = nullptr;
+					MW_LOG_WARN("clearSessionData slot=%d DRM session deleted", i);
+				}
+				else
+				{
+					MW_LOG_WARN("clearSessionData slot=%d no DRM session to delete", i);
 				}
 				drmSessionContexts[i] = DrmSessionContext();
-				MW_LOG_INFO("clearSessionData slot=%d after: session=%s contextEntries=%zu",
+				MW_LOG_WARN("clearSessionData slot=%d after: session=%s contextEntries=%zu",
 					i,
 					drmSessionContexts[i].drmSession != NULL ? "present" : "null",
 					drmSessionContexts[i].data.size());
 			}
+		}
+		else
+		{
+			MW_LOG_WARN("clearSessionData slot=%d context clear skipped: contexts is null", i);
 		}
 
 		{
 			std::lock_guard<std::mutex> guard(cachedKeyMutex);
 			if (cachedKeyIDs != NULL)
 			{
+				MW_LOG_WARN("clearSessionData slot=%d cached keys before: entries=%zu failed=%d primary=%d",
+					i,
+					cachedKeyIDs[i].data.size(),
+					cachedKeyIDs[i].isFailedKeyEntries,
+					cachedKeyIDs[i].isPrimaryKeyId);
 				cachedKeyIDs[i] = KeyIdEntries();
+				MW_LOG_WARN("clearSessionData slot=%d cached keys after: entries=%zu failed=%d primary=%d",
+					i,
+					cachedKeyIDs[i].data.size(),
+					cachedKeyIDs[i].isFailedKeyEntries,
+					cachedKeyIDs[i].isPrimaryKeyId);
+			}
+			else
+			{
+				MW_LOG_WARN("clearSessionData slot=%d cached key clear skipped: cachedKeyIDs is null", i);
 			}
 		}
+		MW_LOG_WARN("clearSessionData slot=%d complete", i);
 	}
+	MW_LOG_WARN("clearSessionData complete");
 }
 
 /**
