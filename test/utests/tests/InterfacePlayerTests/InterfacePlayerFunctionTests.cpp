@@ -516,7 +516,7 @@ TEST_F(InterfacePlayerTests, GstFlush_PipelineNull)
 	bool shouldTearDown = false;
 	bool isAppSeek = false;
 
-	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 TEST_F(InterfacePlayerTests, GstFlush_PipelineNotPlayingOrPaused)
@@ -536,7 +536,7 @@ TEST_F(InterfacePlayerTests, GstFlush_PipelineNotPlayingOrPaused)
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(_, _, _, _, _, _, _, _)).Times(0);
 
-	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 TEST_F(InterfacePlayerTests, GstFlush_DisableAsyncForTrickplay)
@@ -561,7 +561,7 @@ TEST_F(InterfacePlayerTests, GstFlush_DisableAsyncForTrickplay)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(&gst_element_pipeline, 1.0, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET, position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 		.WillOnce(Return(TRUE));
 
-	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 
@@ -591,7 +591,7 @@ TEST_F(InterfacePlayerTests, GstFlush_AudioDecoderNotReady)
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(_, _, _, _, _, _, _, _)).Times(0);
 
-	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_FALSE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 TEST_F(InterfacePlayerTests, GstFlush_Success)
@@ -633,7 +633,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
 
-	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun);
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun);
 	EXPECT_EQ(mPlayerContext->eosCallbackIdleTaskId, PLAYER_TASK_ID_INVALID);
@@ -675,7 +675,7 @@ TEST_F(InterfacePlayerTests, GstFlush_SeekFailed)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(&gst_element_pipeline, 1.0, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET, position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 		.WillOnce(Return(FALSE));
 
-	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek)); //FLUSH is true even if seek is failed , needs to be confirmed TODO.
+	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false)); //FLUSH is true even if seek is failed , needs to be confirmed TODO.
 
 }
 
@@ -699,7 +699,7 @@ TEST_F(InterfacePlayerTests, GstFlush_ProgressiveMediaFormat)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(&gst_element_pipeline, rate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET, position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 		.WillOnce(Return(TRUE));
 
-	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 TEST_F(InterfacePlayerTests, GstFlush_ISOBMFFMediaPositionReset)
@@ -727,7 +727,7 @@ TEST_F(InterfacePlayerTests, GstFlush_ISOBMFFMediaPositionReset)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek(&gst_element_pipeline, 1.0, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET, 0 * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
 		.WillOnce(Return(TRUE)); //position reset to zero
 
-	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
+	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek, false));
 }
 
 TEST_F(InterfacePlayerTests, SignalConnect_Success)
@@ -1947,15 +1947,15 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};
-	GstSample fakeSample = {};
+	GstSample *fakeSample = reinterpret_cast<GstSample *>(0x1);
 
 	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
 		.Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
 		.WillOnce(Return(&fakeCaps));
 	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
-		.WillOnce(Return(&fakeSample));
-	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(fakeSample));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, fakeSample))
 		.WillOnce(Return(GST_FLOW_OK));
 	// gst_sample_unref and gst_caps_unref expand to gst_mini_object_unref
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
@@ -1973,15 +1973,15 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};
-	GstSample fakeSample = {};
+	GstSample *fakeSample = reinterpret_cast<GstSample *>(0x1);
 
 	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
 		.Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_get_caps(_))
 		.WillOnce(Return(&fakeCaps));
 	EXPECT_CALL(*g_mockGStreamer, gst_sample_new(nullptr, &fakeCaps, _, nullptr))
-		.WillOnce(Return(&fakeSample));
-	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, &fakeSample))
+		.WillOnce(Return(fakeSample));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, fakeSample))
 		.WillOnce(Return(GST_FLOW_ERROR));
 	// gst_sample_unref and gst_caps_unref still called even on push failure
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
@@ -2029,7 +2029,10 @@ TEST_F(InterfacePlayerTests, Pause_Success)
 	mPlayerContext->pipeline = &gst_element_pipeline;
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, NotNull(), NotNull(), _))
-		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillRepeatedly(DoAll(
+			SetArgPointee<1>(GST_STATE_PAUSED),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(_, GST_STATE_PAUSED))
 		.WillOnce(Return(GST_STATE_CHANGE_ASYNC));
@@ -2064,14 +2067,17 @@ TEST_F(InterfacePlayerTests, Pause_Failure)
 	mPlayerContext->pipeline = &gst_element_pipeline;
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, NotNull(), NotNull(), _))
-		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillRepeatedly(DoAll(
+			SetArgPointee<1>(GST_STATE_PLAYING),
+			SetArgPointee<2>(GST_STATE_VOID_PENDING),
+			Return(GST_STATE_CHANGE_SUCCESS)));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(_, GST_STATE_PAUSED))
 		.WillOnce(Return(GST_STATE_CHANGE_FAILURE));
 
 	bool result = mInterfaceGstPlayer->Pause(pause, forceStopGstreamerPreBuffering);
 
-	EXPECT_TRUE(result);
+	EXPECT_FALSE(result);
 }
 
 TEST_F(InterfacePlayerTests, IsCacheEmpty_SourceNull)

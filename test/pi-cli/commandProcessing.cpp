@@ -312,7 +312,7 @@ void flushCommand(InterfacePlayerRDK& player, const std::vector<std::string>& pa
     int rate = std::stoi(params[1]);
     bool shouldTearDown = (params[2] == "1" || params[2] == "true");
     bool isAppSeek = (params[3] == "1" || params[3] == "true");
-    bool result = player.Flush(position, rate, shouldTearDown, isAppSeek);
+    bool result = player.Flush(position, rate, shouldTearDown, isAppSeek, false);
     std::cout << "Flush executed. Result: " << (result ? "true" : "false") << "\n";
 }
 
