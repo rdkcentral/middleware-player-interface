@@ -3461,6 +3461,8 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 	 * Don't worry if you see only one protection event queued here.
 	 */
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
+	MW_LOG_MIL("Queueing protection event for type(%d) keysystem(%s) initData(%p) initDataSize(%zu)", type, protSystemId, initData, initDataSize);
+
 	pthread_mutex_lock(&mProtectionLock);
 	if (interfacePlayerPriv->gstPrivateContext->protectionEvent[type] != NULL)
 	{
@@ -3468,22 +3470,19 @@ void InterfacePlayerRDK::QueueProtectionEvent(const std::string& formatType, con
 		gst_event_unref(interfacePlayerPriv->gstPrivateContext->protectionEvent[type]);
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = NULL;
 	}
-	pthread_mutex_unlock(&mProtectionLock);
-
-	MW_LOG_MIL("Queueing protection event for type(%d) keysystem(%s) initData(%p) initDataSize(%zu)", type, protSystemId, initData, initDataSize);
 
 	/* Giving invalid initData into ProtectionEvent causing "GStreamer-CRITICAL" assertion error. So if the initData is valid then its good to call the ProtectionEvent further. */
 	if (initData && initDataSize)
 	{
-		GstBuffer *pssi;
-
-		pssi = gst_buffer_new_wrapped(PLAYER_G_MEMDUP (initData, initDataSize), (gsize)initDataSize);
-		pthread_mutex_lock(&mProtectionLock);
+		GstBuffer *pssi = gst_buffer_new_wrapped(PLAYER_G_MEMDUP (initData, initDataSize), (gsize)initDataSize);
 		interfacePlayerPriv->gstPrivateContext->protectionEvent[type] = gst_event_new_protection (protSystemId, pssi, formatType.c_str());
 		pthread_mutex_unlock(&mProtectionLock);
 
-		gst_buffer_unref (pssi);
+		gst_buffer_unref(pssi);
+		return;
 	}
+	
+	pthread_mutex_unlock(&mProtectionLock);
 }
 
 /**
