@@ -19,6 +19,11 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <future>
+#include <thread>
 #include <vector>
 #include <memory>
 #include "DrmSessionManager.h"
@@ -27,6 +32,7 @@
 #include "opencdmsessionadapter.h"
 #include "MockOpenCdmSessionAdapter.h"
 #include "DrmCallbacks.h"
+#include "MockDrmCallbacks.h"
 #include "MockDrmSessionFactory.h"
 #include "DrmHelper.h"
 #include "WidevineDrmHelper.h"
@@ -272,6 +278,121 @@ static DrmInfo CreateWidevineDrmInfo()
 	drmInfo.systemUUID = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"; // Widevine UUID
 	drmInfo.keyFormat = "com.widevine.alpha";
 	return drmInfo;
+}
+
+TEST_F(DrmSessionManagerComplexTests, ClearSessionDataWaitsForLicenseCallback)
+{
+	const std::vector<uint8_t> keyId = {0x01, 0x02, 0x03, 0x04};
+	static const std::string sessionSystemId = "ocdmkeysystem";
+	auto drmHelper = CreateMockDrmHelper("com.widevine.alpha");
+	ON_CALL(*drmHelper, ocdmSystemId()).WillByDefault(ReturnRef(sessionSystemId));
+	ON_CALL(*drmHelper, getKey(_)).WillByDefault(Invoke([&](std::vector<uint8_t>& key) { key = keyId; }));
+	ON_CALL(*drmHelper, getKeys(_)).WillByDefault(Invoke([&](std::map<int, std::vector<uint8_t>>& keys) { keys[0] = keyId; }));
+	ON_CALL(*drmHelper, createInitData(_)).WillByDefault(Invoke([](std::vector<uint8_t>& initData) { initData = {0x01}; }));
+	ON_CALL(*g_mockOpenCdmSessionAdapter, getState()).WillByDefault(Return(KEY_INIT));
+
+	KeyIdEntries entries;
+	KeyIdEntry entry;
+	entry.keyId = keyId;
+	entries.data.push_back(entry);
+	mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+	mDrmSessionManager->drmSessionContexts[0].data = keyId;
+	mDrmSessionManager->drmSessionContexts[0].drmSession = new OCDMSessionAdapter(drmHelper, nullptr);
+
+	mDrmSessionManager->RegisterHandleContentProtectionCb(
+		[](DrmHelperPtr, int, const std::vector<uint8_t>&, int) { return std::string(); });
+	mDrmSessionManager->RegisterProfilingUpdateCb([] {});
+
+	std::mutex callbackMutex;
+	std::condition_variable callbackCondition;
+	bool callbackEntered = false;
+	bool releaseCallback = false;
+	mDrmSessionManager->RegisterLicenseDataCb(
+		[&](int&, DrmHelperPtr, int, int&, GstMediaType, void*, bool) {
+			std::unique_lock<std::mutex> lock(callbackMutex);
+			callbackEntered = true;
+			callbackCondition.notify_all();
+			callbackCondition.wait(lock, [&] { return releaseCallback; });
+			return KEY_READY;
+		});
+
+	MockDrmCallbacks callbacks;
+	std::atomic<bool> createSucceeded{false};
+	std::thread createThread([&] {
+		int responseCode = 0;
+		int err = 0;
+		createSucceeded = mDrmSessionManager->createDrmSession(responseCode, err, drmHelper, &callbacks, 0, nullptr) != nullptr;
+	});
+
+	bool reachedLicenseCallback = false;
+	{
+		std::unique_lock<std::mutex> lock(callbackMutex);
+		reachedLicenseCallback = callbackCondition.wait_for(lock, std::chrono::seconds(2), [&] { return callbackEntered; });
+	}
+	if (!reachedLicenseCallback)
+	{
+		{
+			std::lock_guard<std::mutex> lock(callbackMutex);
+			releaseCallback = true;
+		}
+		callbackCondition.notify_all();
+		createThread.join();
+		mDrmSessionManager->clearSessionData();
+		FAIL() << "createDrmSession did not reach its license callback";
+		return;
+	}
+
+	std::promise<void> cleanupStarted;
+	std::promise<void> cleanupFinished;
+	auto cleanupFinishedFuture = cleanupFinished.get_future();
+	std::thread cleanupThread([&] {
+		cleanupStarted.set_value();
+		mDrmSessionManager->clearSessionData();
+		cleanupFinished.set_value();
+	});
+	cleanupStarted.get_future().wait();
+	const bool cleanupWaitedForLicense = cleanupFinishedFuture.wait_for(std::chrono::milliseconds(100)) == std::future_status::timeout;
+
+	{
+		std::lock_guard<std::mutex> lock(callbackMutex);
+		releaseCallback = true;
+	}
+	callbackCondition.notify_all();
+	createThread.join();
+	cleanupThread.join();
+
+	EXPECT_TRUE(cleanupWaitedForLicense);
+	EXPECT_TRUE(createSucceeded.load());
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
+	EXPECT_TRUE(mDrmSessionManager->drmSessionContexts[0].data.empty());
+}
+
+TEST_F(DrmSessionManagerComplexTests, ClearSessionDataWaitsForSlotMutex)
+{
+	auto drmHelper = CreateMockDrmHelper("com.widevine.alpha");
+	auto session = std::make_unique<OCDMSessionAdapter>(drmHelper, nullptr);
+	auto& context = mDrmSessionManager->drmSessionContexts[0];
+	context.data = {0x01, 0x02, 0x03, 0x04};
+	context.drmSession = session.release();
+	std::unique_lock<std::mutex> slotLock(context.sessionMutex);
+
+	std::promise<void> cleanupStarted;
+	std::promise<void> cleanupFinished;
+	auto cleanupFinishedFuture = cleanupFinished.get_future();
+	std::thread cleanupThread([&] {
+		cleanupStarted.set_value();
+		mDrmSessionManager->clearSessionData();
+		cleanupFinished.set_value();
+	});
+	cleanupStarted.get_future().wait();
+	const bool cleanupWaitedForSlot = cleanupFinishedFuture.wait_for(std::chrono::milliseconds(100)) == std::future_status::timeout;
+
+	slotLock.unlock();
+	cleanupThread.join();
+
+	EXPECT_TRUE(cleanupWaitedForSlot);
+	EXPECT_EQ(context.drmSession, nullptr);
+	EXPECT_TRUE(context.data.empty());
 }
 
 /**
