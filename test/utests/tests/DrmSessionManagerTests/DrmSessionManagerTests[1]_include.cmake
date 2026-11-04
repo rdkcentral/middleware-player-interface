@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmSessionManagerTests/DrmSessionManagerTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmSessionManagerTests/DrmSessionManagerTests[1]_tests.cmake")
-else()
-  add_test(DrmSessionManagerTests_NOT_BUILT DrmSessionManagerTests_NOT_BUILT)
-endif()

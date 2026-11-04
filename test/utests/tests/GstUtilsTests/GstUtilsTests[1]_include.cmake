@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstUtilsTests/GstUtilsTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstUtilsTests/GstUtilsTests[1]_tests.cmake")
-else()
-  add_test(GstUtilsTests_NOT_BUILT GstUtilsTests_NOT_BUILT)
-endif()

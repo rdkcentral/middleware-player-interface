@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmTests/DrmTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/DrmTests/DrmTests[1]_tests.cmake")
-else()
-  add_test(DrmTests_NOT_BUILT DrmTests_NOT_BUILT)
-endif()

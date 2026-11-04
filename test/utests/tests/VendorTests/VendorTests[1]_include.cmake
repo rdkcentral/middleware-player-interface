@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/VendorTests/VendorTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/VendorTests/VendorTests[1]_tests.cmake")
-else()
-  add_test(VendorTests_NOT_BUILT VendorTests_NOT_BUILT)
-endif()

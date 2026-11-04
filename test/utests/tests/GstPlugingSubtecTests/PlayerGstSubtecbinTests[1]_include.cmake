@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstPlugingSubtecTests/PlayerGstSubtecbinTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/GstPlugingSubtecTests/PlayerGstSubtecbinTests[1]_tests.cmake")
-else()
-  add_test(PlayerGstSubtecbinTests_NOT_BUILT PlayerGstSubtecbinTests_NOT_BUILT)
-endif()

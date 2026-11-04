@@ -1,5 +1,0 @@
-if(EXISTS "/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerIsoBmffTests/PlayerIsoBmffTests[1]_tests.cmake")
-  include("/home/teuser/Desktop/Kevin2/middleware-player-interface/test/utests/tests/PlayerIsoBmffTests/PlayerIsoBmffTests[1]_tests.cmake")
-else()
-  add_test(PlayerIsoBmffTests_NOT_BUILT PlayerIsoBmffTests_NOT_BUILT)
-endif()
