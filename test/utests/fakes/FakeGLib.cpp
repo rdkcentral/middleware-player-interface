@@ -23,6 +23,8 @@
 
 #include "MockGLib.h"
 
+
+#undef g_free
 using namespace std;
 
 #ifdef g_free
