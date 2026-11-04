@@ -245,13 +245,13 @@ bool ClearKeyHelperFactory::isDRM(const struct DrmInfo& drmInfo) const
 
 DrmHelperPtr ClearKeyHelperFactory::createHelper(const struct DrmInfo& drmInfo) const
 {
-	MW_LOG_ERR("creating helper");
+	MW_LOG_INFO("ClearKeyHelperFactory: creating helper");
 	if (isDRM(drmInfo))
 	{
 		return std::make_shared<ClearKeyHelper>(drmInfo);
 	}
 	else{
-		MW_LOG_ERR("creating helper failed");
+		MW_LOG_ERR("ClearKeyHelperFactory: createHelper failed, drmInfo is not ClearKey (systemUUID=%s, method=%d)", drmInfo.systemUUID.c_str(), (int)drmInfo.method);
 	}
 	return NULL;
 }
