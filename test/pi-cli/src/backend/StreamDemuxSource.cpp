@@ -64,6 +64,11 @@ struct ManifestMemory {
     size_t position = 0;
 };
 
+struct HlsManifestSelection {
+    std::vector<uint8_t> data;
+    std::string baseUrl;
+};
+
 struct DashManifestSelection {
     std::vector<uint8_t> data;
     size_t removedAdaptationSets = 0;
@@ -130,6 +135,141 @@ std::string AvErrorString(int error)
     char buffer[AV_ERROR_MAX_STRING_SIZE] = {};
     av_strerror(error, buffer, sizeof(buffer));
     return buffer;
+}
+
+std::string ResolveHlsUrl(const std::string& baseUrl,
+                          const std::string& reference)
+{
+    if (reference.empty() || reference.find("://") != std::string::npos) {
+        return reference.empty() ? baseUrl : reference;
+    }
+    const size_t schemeEnd = baseUrl.find("://");
+    if (schemeEnd == std::string::npos) {
+        return {};
+    }
+    const size_t authorityStart = schemeEnd + 3;
+    const size_t authorityEnd = baseUrl.find_first_of("/?#", authorityStart);
+    const std::string origin = baseUrl.substr(
+        0, authorityEnd == std::string::npos ? baseUrl.size() : authorityEnd);
+    if (reference.rfind("//", 0) == 0) {
+        return baseUrl.substr(0, schemeEnd) + ":" + reference;
+    }
+    if (reference.front() == '/') {
+        return origin + reference;
+    }
+    const size_t pathEnd = baseUrl.find_first_of("?#", authorityEnd);
+    const size_t lastSlash = baseUrl.rfind('/',
+        pathEnd == std::string::npos ? baseUrl.size() : pathEnd);
+    return baseUrl.substr(0, lastSlash + 1) + reference;
+}
+
+std::string HlsAttribute(const std::string& attributes,
+                         const std::string& name)
+{
+    const std::string prefix = name + "=";
+    size_t cursor = 0;
+    while (cursor < attributes.size()) {
+        const size_t comma = attributes.find(',', cursor);
+        const size_t end = comma == std::string::npos ? attributes.size() : comma;
+        if (attributes.compare(cursor, prefix.size(), prefix) == 0) {
+            return attributes.substr(cursor + prefix.size(), end - cursor - prefix.size());
+        }
+        cursor = comma == std::string::npos ? attributes.size() : comma + 1;
+    }
+    return {};
+}
+
+bool BuildHlsManifestSelection(const std::string& url,
+                               AVIOInterruptCB* interruptCallback,
+                               HlsManifestSelection& selection)
+{
+    AVIOContext* input = nullptr;
+    AVDictionary* options = nullptr;
+    av_dict_set(&options, "rw_timeout",
+                std::to_string(kIoTimeoutSeconds * 1000000).c_str(), 0);
+    const int openResult = avio_open2(&input, url.c_str(), AVIO_FLAG_READ,
+                                      interruptCallback, &options);
+    av_dict_free(&options);
+    if (openResult < 0) {
+        return false;
+    }
+
+    std::string manifest;
+    std::array<uint8_t, 8192> buffer{};
+    while (true) {
+        const int count = avio_read(input, buffer.data(), buffer.size());
+        if (count <= 0) {
+            break;
+        }
+        manifest.append(reinterpret_cast<const char*>(buffer.data()), count);
+    }
+    avio_closep(&input);
+
+    std::string videoAttributes;
+    std::string videoReference;
+    std::string audioGroup;
+    std::string audioAttributes;
+    std::string audioReference;
+    std::vector<std::string> audioMediaLines;
+    size_t cursor = 0;
+    while (cursor < manifest.size()) {
+        const size_t lineEnd = manifest.find('\n', cursor);
+        const size_t end = lineEnd == std::string::npos ? manifest.size() : lineEnd;
+        std::string line = manifest.substr(cursor, end - cursor);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.rfind("#EXT-X-STREAM-INF:", 0) == 0 && videoReference.empty()) {
+            const std::string attributes = line.substr(18);
+            if (!HlsAttribute(attributes, "AUDIO").empty() ||
+                !HlsAttribute(attributes, "RESOLUTION").empty()) {
+                videoAttributes = attributes;
+                const size_t uriStart = lineEnd == std::string::npos ? manifest.size() : lineEnd + 1;
+                const size_t uriEnd = manifest.find_first_of("\r\n", uriStart);
+                videoReference = manifest.substr(
+                    uriStart, uriEnd == std::string::npos ? std::string::npos : uriEnd - uriStart);
+                audioGroup = HlsAttribute(videoAttributes, "AUDIO");
+            }
+        } else if (line.rfind("#EXT-X-MEDIA:", 0) == 0 &&
+                 HlsAttribute(line.substr(13), "TYPE") == "AUDIO") {
+             audioMediaLines.push_back(line.substr(13));
+        }
+        cursor = lineEnd == std::string::npos ? manifest.size() : lineEnd + 1;
+    }
+    for (const std::string& mediaLine : audioMediaLines) {
+        if (HlsAttribute(mediaLine, "GROUP-ID") == audioGroup &&
+            !HlsAttribute(mediaLine, "URI").empty()) {
+            audioAttributes = mediaLine;
+            audioReference = HlsAttribute(mediaLine, "URI");
+            break;
+        }
+    }
+    if (videoReference.empty() || audioGroup.empty() || audioReference.empty()) {
+        return false;
+    }
+    if (audioReference.size() >= 2 && audioReference.front() == '"' && audioReference.back() == '"') {
+        audioReference = audioReference.substr(1, audioReference.size() - 2);
+    }
+    const std::string videoUrl = ResolveHlsUrl(url, videoReference);
+    const std::string audioUrl = ResolveHlsUrl(url, audioReference);
+    if (videoUrl.empty() || audioUrl.empty()) {
+        return false;
+    }
+
+    std::ostringstream filtered;
+    filtered << "#EXTM3U\n#EXT-X-VERSION:3\n";
+    const size_t uriPosition = audioAttributes.find("URI=");
+    const size_t uriValueStart = uriPosition + 4;
+    const size_t uriValueEnd = audioAttributes.find(',', uriValueStart);
+    filtered << "#EXT-X-MEDIA:" << audioAttributes.substr(0, uriValueStart)
+             << '"' << audioUrl << '"'
+             << (uriValueEnd == std::string::npos ? "" : audioAttributes.substr(uriValueEnd))
+             << "\n#EXT-X-STREAM-INF:" << videoAttributes << "\n"
+             << videoUrl << "\n";
+    const std::string serialized = filtered.str();
+    selection.data.assign(serialized.begin(), serialized.end());
+    selection.baseUrl = url;
+    return true;
 }
 
 std::string H264NalTypes(const std::vector<uint8_t>& data, bool& hasIdr)
@@ -597,6 +737,7 @@ bool StreamDemuxSource::Open(const std::string& url,
     formatContext_->interrupt_callback.opaque = this;
 
     DashManifestSelection dashManifest;
+    HlsManifestSelection hlsManifest;
     AVIOContext* customManifestIo = nullptr;
     ManifestMemory manifestMemory;
     std::string dashManifestUrl =
@@ -783,6 +924,37 @@ bool StreamDemuxSource::Open(const std::string& url,
         customManifestIo->seekable = AVIO_SEEKABLE_NORMAL;
     }
 
+    const bool hlsManifestSelected =
+        !IsDashUrl(url_) &&
+        BuildHlsManifestSelection(
+            url_, &formatContext_->interrupt_callback, hlsManifest);
+    if (hlsManifestSelected) {
+        ReportProgress("ffmpeg-hls-master-filtered: audio-and-video-retained");
+        manifestMemory.data = &hlsManifest.data;
+        uint8_t* ioBuffer = static_cast<uint8_t*>(
+            av_malloc(kManifestIoBufferSize));
+        if (ioBuffer == nullptr) {
+            SetError("Could not allocate the in-memory HLS manifest buffer");
+            Stop();
+            return false;
+        }
+        customManifestIo = avio_alloc_context(
+            ioBuffer,
+            kManifestIoBufferSize,
+            0,
+            &manifestMemory,
+            &ReadManifestMemory,
+            nullptr,
+            &SeekManifestMemory);
+        if (customManifestIo == nullptr) {
+            av_free(ioBuffer);
+            SetError("Could not create an in-memory HLS manifest input");
+            Stop();
+            return false;
+        }
+        customManifestIo->seekable = AVIO_SEEKABLE_NORMAL;
+    }
+
     AVDictionary* options = nullptr;
     av_dict_set(&options, "probesize", "2000000", 0);
     av_dict_set(&options,
@@ -793,6 +965,9 @@ bool StreamDemuxSource::Open(const std::string& url,
                 "rw_timeout",
                 std::to_string(kIoTimeoutSeconds * 1000000).c_str(),
                 0);
+    av_dict_set(&options, "http_multiple", "0", 0);
+    av_dict_set(&options, "http_seekable", "0", 0);
+    const std::string inputUrl = url_;
     ReportProgress("ffmpeg-format-open-begin");
     int result = 0;
     BeginTimedIo();
@@ -800,21 +975,24 @@ bool StreamDemuxSource::Open(const std::string& url,
         ProgressWatchdog watchdog(progress_, "ffmpeg-format-open");
         if (customManifestIo != nullptr) {
             const AVInputFormat* dashFormat =
-                av_find_input_format("dash");
-            if (dashFormat == nullptr) {
+                IsDashUrl(url_) ? av_find_input_format("dash") : nullptr;
+            const AVInputFormat* hlsFormat =
+                hlsManifestSelected ? av_find_input_format("hls") : nullptr;
+            if ((IsDashUrl(url_) && dashFormat == nullptr) ||
+                (hlsManifestSelected && hlsFormat == nullptr)) {
                 result = AVERROR_DEMUXER_NOT_FOUND;
             } else {
                 formatContext_->pb = customManifestIo;
                 formatContext_->flags |= AVFMT_FLAG_CUSTOM_IO;
                 result = avformat_open_input(
                     &formatContext_,
-                    dashManifestUrl.c_str(),
-                    dashFormat,
+                    IsDashUrl(url_) ? dashManifestUrl.c_str() : url_.c_str(),
+                    IsDashUrl(url_) ? dashFormat : hlsFormat,
                     &options);
             }
         } else {
             result = avformat_open_input(&formatContext_,
-                                         url_.c_str(),
+                                         inputUrl.c_str(),
                                          nullptr,
                                          &options);
         }
