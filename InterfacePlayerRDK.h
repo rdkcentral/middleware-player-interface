@@ -26,7 +26,6 @@
 #include <vector>
 #include <mutex>
 #include "PlayerLogManager.h"
-#include "PlayerScheduler.h"
 #include <atomic>
 #include <set>
 #include <mutex>
@@ -36,6 +35,7 @@
 #include <memory>
 #include <any>
 #include "SocUtils.h"
+#include "GstHandlerControl.h"
 
 class InterfacePlayerRDK;
 
@@ -195,7 +195,6 @@ class InterfacePlayerRDK
 		std::map<InterfaceCB, std::function<void()>> callbackMap;
 		std::map<InterfaceCB, std::function<void(int)>> setupStreamCallbackMap;
         
-		PlayerScheduler mScheduler;
 		InterfacePlayerRDK(bool isRialto = false);
 		~InterfacePlayerRDK();
 		InterfacePlayerPriv* GetPrivatePlayer();
@@ -339,7 +338,6 @@ class InterfacePlayerRDK
         	bool PipelineSetToReady;				/**< To indicate the pipeline is set to ready forcefully */
         	std::mutex mSourceSetupMutex;			/**< Protects the source setup state>*/
         	std::condition_variable mSourceSetupCV; /**< Conditional Variable to notify changes in the source setup status>*/
-        	bool mSchedulerStarted;
         	/**
         	 * @brief Creates a GStreamer pipeline.
         	* @param pipelineName Name of the pipeline.
@@ -806,7 +804,12 @@ class InterfacePlayerRDK
 		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
 
 	private:
+		/**
+		 * @brief Cancel any pending idle/timer callbacks scheduled against this instance, so they can't fire after destruction.
+		 */
+		void CancelPendingCallbacks();
 		InterfacePlayerPriv *interfacePlayerPriv;
+		GstHandlerControl idleCallbackControl; /**< guards IdleCallbackOnFirstFrame/OnEOS/IdleCallback/FirstVideoFrameDisplayed */
 };
 struct data
 {
