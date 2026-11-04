@@ -206,7 +206,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 else()
 	set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
 endif()
-
+if(CMAKE_TELEMETRY_2_0_REQUIRED)
+	message("CMAKE_TELEMETRY_2_0_REQUIRED set")
+	set(LIBPLAYERGSTINTERFACE_SOURCES "${LIBPLAYERGSTINTERFACE_SOURCES}" PlayerTelemetry2.cpp)
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DPLAYER_TELEMETRY_SUPPORT=1")
+	set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "-ltelemetry_msgsender")
+endif()
 set(LIBPLAYERGSTINTERFACE_HEADERS
 	closedcaptions/CCTrackInfo.h
 	GstUtils.h
@@ -274,6 +279,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	closedcaptions/direct-rialto/IDirectRialtoCC.h
 	DESTINATION include)
 
 # Install the generated version header
@@ -476,7 +482,7 @@ if (CMAKE_SUBTITLE_SUPPORT)
 		)
 
 
-	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp closedcaptions/direct-rialto/PlayerDirectRialtoCCManager.cpp)
 endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
@@ -490,6 +496,7 @@ target_include_directories(playergstinterface PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/playerjsonobject
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/subtec
+	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/direct-rialto
 	${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 
 if (CMAKE_SUBTITLE_SUPPORT)
