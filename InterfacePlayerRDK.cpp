@@ -89,7 +89,8 @@ const char * CipherTypeToString(CipherType type)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl()
+mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl(),
 mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
@@ -104,7 +105,10 @@ mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
-	CancelProgressCallbackContext();
+	interfacePlayerPriv->gstPrivateContext->callbackControl.disable();
+	DisconnectSignals();
+	RemoveProbes();
+	CancelPendingCallbacks();
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
@@ -1523,7 +1527,6 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false ;
 	}
-	CancelPendingCallbacks();
 	/* Prevent potential side effects of injecting EOS and
 	 * make the stop process more deterministic by:
 	 1) Confirming that bus handlers (disabled above) have completed
@@ -1563,6 +1566,8 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	{
 		TearDownStream((int(i)));
 	}
+	// Signals, probes and bus handlers are drained, so nothing can schedule new idle sources now
+	CancelPendingCallbacks();
 	DestroyPipeline();
 	interfacePlayerPriv->gstPrivateContext->rate = GST_NORMAL_PLAY_RATE;
 	interfacePlayerPriv->gstPrivateContext->lastKnownPTS = 0;
@@ -1587,7 +1592,7 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
  */
 void InterfacePlayerRDK::CancelPendingCallbacks()
 {
-		IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
+	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
 	CancelProgressCallbackContext();
 	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
 	{
