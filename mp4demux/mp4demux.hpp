@@ -1170,7 +1170,7 @@ public:
 			}
 		}
 		
-		if( metadata )
+		if( metadata && verbose )
 		{ // serialize and print the metadata
 			gchar *structure_string = gst_structure_to_string( metadata );
 			PRINTF("metadata: %s\n", structure_string);

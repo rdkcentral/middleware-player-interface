@@ -131,17 +131,15 @@ bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double 
 
 	if (!isobuf.isInitSegment())
 	{
-		uint8_t *mdat;
 		size_t mdatLen;
 
 		//isobuf.printBoxes();
 		isobuf.getMdatBoxSize(mdatLen);
 
-		mdat = (uint8_t *)malloc(mdatLen);
-		isobuf.parseMdatBox(mdat, mdatLen);
-
+		// Parse the mdat payload directly into the vector — avoids a
+		// temporary malloc + copy per fragment.
 		std::vector<uint8_t> data(mdatLen);
-		data.assign(mdat, mdat+mdatLen);
+		isobuf.parseMdatBox(data.data(), mdatLen);
 		
 		//necessary because the offset into the TTML
 		//is not available in the linear manifest
@@ -183,7 +181,6 @@ bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double 
 
 		m_channel->SendDataPacket(std::move(data), 0);
 
-		free(mdat);
 		MW_LOG_TRACE("Sent buffer with size %zu position %.3f", bufferLen, position);
 	}
 	else
