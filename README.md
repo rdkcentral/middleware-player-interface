@@ -2,7 +2,7 @@
 
 The `middleware-player-interface` library provides the GStreamer-based media pipeline integration layer for RDK middleware. It serves as the bridge between the upper media player stack (such as AAMP) and the underlying GStreamer framework, platform-specific SoC capabilities, and DRM infrastructure. The component encapsulates GStreamer pipeline lifecycle management, multi-track demux and decode coordination, DRM session handling, closed caption rendering, and platform abstraction — all within a single shared library that is consumed at runtime by the media player engine.
 
-The component is structured as two cooperating shared libraries: `libplayergstinterface` (the core pipeline and DRM layer) and `libplayerfbinterface` (the external integrations layer covering Thunder, Device Settings, RFC, and content protection). A separate GStreamer plugin (`gstaamp`) is also produced, registering DRM decryptor elements into the GStreamer registry.
+The component is structured as two cooperating shared libraries: `libplayergstinterface` (the core pipeline and DRM layer) and `libplayerfbinterface` (the external integrations layer covering Thunder, Device Settings, RFC, and content protection). A separate GStreamer plugin (`gstaamp`) is also produced; when the `CMAKE_CDM_DRM` build flag is enabled, its `plugin_init` registers DRM decryptor elements into the GStreamer registry.
 
 From an RDK architecture perspective, `middleware-player-interface` sits in the RDK Core Middleware layer, below the AAMP player engine and above the platform HAL and GStreamer vendor plugins. It has no direct dependency on a Thunder JSON-RPC server of its own; instead it consumes Thunder plugin APIs through the `PlayerThunderInterface` integration to interact with platform capabilities such as HDMI-In, VideoIn, and OTA services.
 
@@ -55,7 +55,7 @@ classDef VL stroke:#808080,fill:#F2F2F2,stroke-width:2px;
 
 - **Multi-Track Media Support**: Handles concurrent video, audio, and subtitle elementary streams across multiple `gst_media_stream` contexts. Each track has its own `AppSrc` source element, sink bin, and per-track locking to allow independent management.
 
-- **DRM Content Protection**: Integrates with OpenCDM to support PlayReady, Widevine, ClearKey, and Verimatrix OTT DRM systems. The `DrmSessionManager` orchestrates session creation, key request generation, and key delivery. GStreamer decryptor elements (`playreadydecryptor`, `widevinedecryptor`, `clearkeydecryptor`, `verimatrixdecryptor`) are registered as a custom GStreamer plugin.
+- **DRM Content Protection**: Integrates with OpenCDM to support PlayReady, Widevine, ClearKey, and Verimatrix OTT DRM systems. The `DrmSessionManager` orchestrates session creation, key request generation, and key delivery. GStreamer decryptor elements (`playreadydecryptor`, `widevinedecryptor`, `clearkeydecryptor`, `verimatrixdecryptor`) are registered as a custom GStreamer plugin when `CMAKE_CDM_DRM` is enabled.
 
 - **Closed Caption Rendering**: Provides two backend paths for closed caption rendering — a Subtec path (`PlayerSubtecCCManager`) for devices with a subtec rendering service, and a Rialto path (`PlayerRialtoCCManager`) for containerized environments. Both implement the common `PlayerCCManagerBase` interface supporting EIA-608 and CEA-708 formats.
 
@@ -75,7 +75,7 @@ classDef VL stroke:#808080,fill:#F2F2F2,stroke-width:2px;
 
 `middleware-player-interface` is designed around the principle of separating the GStreamer pipeline control plane from the platform-specific and external integration concerns. The core library (`libplayergstinterface`) owns the GStreamer pipeline state machine and multi-track data flow, while the externals library (`libplayerfbinterface`) abstracts all out-of-process integrations. Both libraries are loaded as shared objects and linked by the consumer player engine at runtime. The design uses a private implementation object (`InterfacePlayerPriv` / `GstPlayerPriv`) to keep GStreamer internal state hidden from the public header, allowing the library's ABI to remain stable as internal state grows.
 
-Pipeline configuration is driven by a `Configs` structure populated at tune time. Format selection for each track (video, audio, subtitle) is expressed as `GstStreamOutputFormat` enumerations, and the `ConfigurePipeline` method selects and connects the appropriate GStreamer elements accordingly. Bus messages from the pipeline are processed via registered `BusMessageCallback` and converted into typed `BusEventData` before being dispatched to the player engine. All GStreamer idle callbacks and timeout-based progress notifications are guarded by `GstHandlerControl` scope-helpers to prevent callbacks from executing after pipeline teardown.
+Pipeline configuration is driven by a `Configs` structure populated at tune time. Format selection for each track (video, audio, subtitle) is expressed as `GstStreamOutputFormat` enumerations, and the `ConfigurePipeline` method selects and connects the appropriate GStreamer elements accordingly. Bus messages from the pipeline are processed via registered `BusMessageCallback` and converted into typed `BusEventData` before being dispatched to the player engine. GStreamer callbacks registered with the bus and pipeline elements are guarded by `GstHandlerControl` scope-helpers (via the `HANDLER_CONTROL_HELPER` macro on the `aSyncControl`, `syncControl`, and `callbackControl` gates) to prevent execution after pipeline teardown. First-frame and EOS notifications are instead dispatched through `PlayerScheduler`, and progress notification runs on a GLib timeout; those paths do not acquire a `GstHandlerControl` scope.
 
 The northbound interface toward the player engine consists entirely of C++ method calls on `InterfacePlayerRDK` and registered `std::function` callbacks. No inter-process communication is involved for the core pipeline path. The southbound interface toward the platform involves GStreamer element properties (for Westeros sink, Rialto sink, video rectangle), the `SocInterface` virtual dispatch for capability queries, and OpenCDM session APIs for DRM operations.
 
@@ -147,7 +147,7 @@ graph TD
 - **Worker Threads**:
   - _PlayerScheduler thread_: A single `std::thread` created by `PlayerScheduler::StartScheduler()`. Dequeues `PlayerAsyncTaskObj` items and executes them serially. Used for operations that must not block the caller or re-enter GStreamer from a callback context.
   - _GStreamer thread pool (gstplayertaskpool)_: A custom GStreamer task pool managing GStreamer-internal streaming threads for the pipeline.
-  - _GStreamer bus watch / idle_: GLib main-loop idle sources (`gst_bus_add_watch`, `g_idle_add`) are used to deliver pipeline events (EOS, first-frame, progress) back to the player engine on the appropriate thread.
+  - _GStreamer bus watch / timers_: `gst_bus_add_watch` delivers bus messages on the GLib main context, and GLib timeouts (`g_timeout_add`) drive the periodic progress and buffering timers. First-frame and EOS notifications are not GLib idle callbacks — they are queued onto `PlayerScheduler` via `ScheduleTask`.
 - **Synchronization**:
   - `pthread_mutex_t mProtectionLock` — guards DRM-related shared state.
   - Per-track `pthread_mutex_t sourceLock` on each `gst_media_stream` — serializes source element operations.
@@ -156,7 +156,7 @@ graph TD
   - `GstPlayerPriv::volumeMuteMutex` — protects audio volume and mute state.
   - `PlayerScheduler::mQMutex` + `mQCond` — protects the task queue.
   - `GstHandlerControl` — provides a reference-counted enable/disable gate that allows pending callbacks to complete before the pipeline is destroyed.
-- **Async / Event Dispatch**: GStreamer events such as first-frame-received, EOS, and periodic progress are posted as GLib idle callbacks (`g_idle_add`). The `GstHandlerControl::ScopeHelper` guards each callback to ensure it exits cleanly if the pipeline has been disabled before the idle fires.
+- **Async / Event Dispatch**: First-frame and EOS notifications are queued as `PlayerAsyncTaskObj` items on `PlayerScheduler` via `ScheduleTask`, moving them off the GStreamer streaming thread. Periodic progress runs on a GLib timeout (`ProgressCallbackOnTimeout`), and bus messages arrive through the GLib bus watch. GStreamer-registered callbacks are guarded by `GstHandlerControl` scope-helpers so they exit cleanly if the pipeline has been disabled.
 
 ### RDK-V Platform and Integration Requirements
 
@@ -167,7 +167,7 @@ graph TD
   - `GetDisplayResolution(int &width, int &height)` — queries current display resolution.
   - `SetHDMIStatus()` — reads HDCP protocol version and HDMI connection state.
   - `isHDCPConnection2_2()` — returns whether HDCP 2.2 is in use.
-  - `SocInterface::UseWesterosSink()` — determines video sink type.
+  - `SocInterface::UseWesterosSink()` — queries whether the platform supports the Westeros sink (runtime selection is driven by `Configs::useWesterosSink` / `useRialtoSink`).
   - `SocInterface::RequiredQueuedFrames()` — determines pre-roll frame count.
   - `SocInterface::EnablePTSRestamp()` — controls PTS re-stamping in the pipeline.
 - **IARM Bus**: `IARM_BUS_DSMGR_NAME` for HDMI/HDCP/resolution events; `NET_SRV_MGR` for network interface events (conditional on `CMAKE_IARM_MGR`).
@@ -202,7 +202,7 @@ sequenceDiagram
     MPI->>Priv: gst_element_set_state(PAUSED / PLAYING)
     Priv-->>MPI: GST_STATE_CHANGE_SUCCESS
 
-    Engine->>MPI: SendData(mediaType, buffer)
+    Engine->>MPI: SendHelper(mediaType, buffer)
     MPI->>Priv: gst_app_src_push_buffer()
     Priv-->>MPI: GST_FLOW_OK
 
@@ -213,20 +213,20 @@ sequenceDiagram
 
 #### Runtime State Changes
 
-During playback, the pipeline transitions through buffering, playing, paused, seeking, and stopping states tracked in `GstPrivPlayerState`. Bus messages (`GST_MESSAGE_EOS`, `GST_MESSAGE_ERROR`, `GST_MESSAGE_STATE_CHANGE`, `GST_MESSAGE_CLOCK_LOST`) arrive on the GStreamer bus, are handled by the registered `BusMessageCallback`, and converted into `BusEventData` dispatched to the player engine.
+During playback, runtime state is held in `GstPlayerPriv::pipelineState` (a `GstState`) together with buffering and pause flags — the `GstPrivPlayerState` enumeration is declared in `InterfacePlayerPriv.h` but is not maintained as active state. Bus messages (`GST_MESSAGE_EOS`, `GST_MESSAGE_ERROR`, `GST_MESSAGE_STATE_CHANGED`, `GST_MESSAGE_CLOCK_LOST`, ...) arrive on the GStreamer bus and are handled by the registered `BusMessageCallback`; selected messages are converted into `BusEventData` and dispatched to the player engine, while others (for example `CLOCK_LOST`) are handled internally.
 
 **State Change Triggers:**
 
 - Buffer underflow (`HandleOnGstBufferUnderflowCb`) fires when a track runs out of data, prompting the player engine to accelerate fragment delivery.
 - PTS stall detection (`HandleOnGstPtsErrorCb`) fires when the last known PTS has not advanced beyond `GST_MIN_PTS_UPDATE_INTERVAL` ms, allowing the engine to diagnose decoder hangs.
 - Decode error notifications (`HandleOnGstDecodeErrorCb`) fire when a decoder element reports a consecutive error, with a minimum interval of `GST_MIN_DECODE_ERROR_INTERVAL` ms between callbacks.
-- `GST_MESSAGE_CLOCK_LOST` triggers a pipeline flush and re-synchronization of the clock.
+- `GST_MESSAGE_CLOCK_LOST` indicates the pipeline clock became unusable. For non-DASH media the handler transitions the pipeline to PAUSED and back to PLAYING so GStreamer selects a new clock; for DASH media this handler takes no action (clock recovery happens elsewhere during pipeline rebuild).
 
 **Context Switching Scenarios:**
 
 - Trick-play rate changes are applied via a segment seek; `trickTeardown` guards re-entrant teardown during rate transitions.
 - EOS injection mode (`GstEOSInjectionModeCode`) controls whether EOS events are also pushed during `Stop()` before setting the pipeline to NULL, configurable per platform needs.
-- Rialto-based deployments substitute the standard Westeros sink with a Rialto media pipeline sink, selected at configure time via `SocInterface::UseWesterosSink()`.
+- Rialto-based deployments use a Rialto media pipeline sink in place of the Westeros sink. `ConfigurePipeline` reads the independent `Configs::useRialtoSink` and `Configs::useWesterosSink` fields — both may be enabled simultaneously, in which case a warning is logged (`"Rialto and Westeros Sink enabled"`).
 
 ---
 
@@ -269,22 +269,25 @@ sequenceDiagram
     participant GST as GStreamer Pipeline
     participant DecryptPlugin as DRM Decryptor Element
 
-    Engine->>MPI: SendData(mediaType, encryptedBuffer, drmInfo)
-    MPI->>DrmMgr: createDrmSession(keyId, drmInfo)
+    Engine->>MPI: SendHelper(mediaType, encryptedBuffer, drmInfo)
+    MPI->>GST: gst_app_src_push_buffer(encryptedBuffer)
+    GST->>DecryptPlugin: encrypted buffer + protection metadata
+    Note over DecryptPlugin: InterfacePlayerRDK does not create the session —<br/>the decryptor creates it from protection data
+    DecryptPlugin->>DrmMgr: createDrmSession(keyId, drmInfo)
     DrmMgr->>OCDM: OpenCDMSession / generateDRMSession()
     OCDM-->>DrmMgr: session handle
     DrmMgr->>OCDM: generateKeyRequest()
+    DrmMgr->>Engine: AcquireLicenseCb(challenge, destinationURL)
+    Engine-->>DrmMgr: license response
     DrmMgr->>OCDM: processDRMKey(licenseResponse)
     OCDM-->>DrmMgr: KEY_READY
 
-    MPI->>GST: gst_app_src_push_buffer(encryptedBuffer)
-    GST->>DecryptPlugin: decrypt(keyID, IV, buffer)
-    DecryptPlugin->>OCDM: OpenCDMSession decrypt()
+    DecryptPlugin->>OCDM: opencdm_session_decrypt()
     OCDM-->>DecryptPlugin: decrypted buffer
     DecryptPlugin-->>GST: decoded video/audio
 
     Note over GST: First frame rendered
-    GST->>MPI: IdleCallbackOnFirstFrame (idle callback)
+    GST->>MPI: IdleCallbackOnFirstFrame (via PlayerScheduler)
     MPI->>Engine: notifyFirstFrameCallback()
 ```
 
@@ -316,7 +319,7 @@ sequenceDiagram
 | `PlayerLogManager` | Logging subsystem supporting TRACE, DEBUG, INFO, WARN, MILESTONE, and ERROR levels. Supports optional redirection to systemd journal or Ethan logging APIs. | `playerLogManager/PlayerLogManager.h` |
 | `ProcessHandler` | Process utility class for querying process names via `/proc/<pid>/status` and for process termination. Used by the player engine for subprocess management. | `ProcessHandler.h`, `ProcessHandler.cpp` |
 | `PlayerUtils` | Context-free string utilities, base64-URL encode/decode, URL resolution, and thread ID helpers. | `PlayerUtils.h`, `PlayerUtils.cpp` |
-| `baseConversion` | Base64 (MIME and URL-safe) and base16 encoding/decoding library produced as a separate static library (`libbaseconversion`). | `baseConversion/_base64.h`, `baseConversion/base16.h` |
+| `baseConversion` | Base64 (MIME and URL-safe) and base16 encoding/decoding library produced as a separate shared library (`libbaseconversion`, `add_library(... SHARED)`). | `baseConversion/_base64.h`, `baseConversion/base16.h` |
 | `playerJsonObject` | JSON object wrapper library (`libplayerjsonobject`), used for RFC and configuration data serialization. | `playerJsonObject/` |
 | `subtec/subtecparser` | WebVTT and TTML subtitle stream parsers routing parsed cue data to the active subtitle rendering backend via `WebvttSubtecDevInterface`. | `subtec/subtecparser/WebVttSubtecParser.hpp`, `subtec/subtecparser/TtmlSubtecParser.hpp` |
 | `playerisobmff` | ISO Base Media File Format (ISOBMFF) box and buffer parser for extracting media data from MP4-fragmented streams. | `playerisobmff/playerisobmffbox.cpp`, `playerisobmff/playerisobmffbuffer.cpp` |
@@ -379,8 +382,10 @@ sequenceDiagram
     OCDM-->>DrmMgr: OpenCDMSession
     DrmMgr->>OCDM: generateKeyRequest()
     OCDM-->>DrmMgr: license challenge bytes + destinationURL
-    DrmMgr->>LicServer: HTTP POST license challenge
-    LicServer-->>DrmMgr: license response
+    DrmMgr->>Engine: AcquireLicenseCb(challenge, destinationURL)
+    Engine->>LicServer: HTTP POST license challenge
+    LicServer-->>Engine: license response
+    Engine-->>DrmMgr: license data (callback return)
     DrmMgr->>OCDM: processDRMKey(licenseResponse)
     OCDM-->>DrmMgr: KEY_READY
     DrmMgr-->>Engine: session ready
@@ -400,7 +405,7 @@ sequenceDiagram
     IARM->>DevIARM: HDMIEventHandler(eventId, data)
     DevIARM->>ExtIface: SetHDMIStatus()
     ExtIface->>ExtIface: update m_hdcpCurrentProtocol, m_isHDCPEnabled
-    ExtIface->>Engine: HDCP state updated (via registered callback)
+    Note over ExtIface,Engine: No push callback — consumers query the cached<br/>state, e.g. via isHDCPConnection2_2()
 ```
 
 ---
@@ -411,7 +416,7 @@ sequenceDiagram
 
 | HAL / DS API | Purpose | Implementation File |
 |---|---|---|
-| `SocInterface::UseWesterosSink()` | Determines whether the Westeros compositor sink is used as the video sink element | `SocUtils.cpp`, vendor SoC implementations under `vendor/` |
+| `SocInterface::UseWesterosSink()` | Queries whether the SoC supports the Westeros compositor sink; the runtime sink selection itself uses `Configs::useWesterosSink` / `useRialtoSink` | `SocUtils.cpp`, vendor SoC implementations under `vendor/` |
 | `SocInterface::UseAppSrc()` | Determines whether `GstAppSrc` is used as the source element for progressive playback | `SocUtils.cpp` |
 | `SocInterface::RequiredQueuedFrames()` | Returns the platform-specific pre-roll frame count (default: 6) | `SocUtils.cpp`, `InterfacePlayerRDK.cpp` |
 | `SocInterface::EnablePTSRestamp()` | Enables PTS re-stamping for platforms that require it | `SocUtils.cpp` |
@@ -428,11 +433,11 @@ sequenceDiagram
 
 ### Key Implementation Logic
 
-- **State / Lifecycle Management**: `GstPrivPlayerState` tracks the player state from `eGST_STATE_IDLE` through `eGST_STATE_COMPLETE` or `eGST_STATE_ERROR`. Pipeline state transitions map to GStreamer `GST_STATE_NULL`, `GST_STATE_READY`, `GST_STATE_PAUSED`, and `GST_STATE_PLAYING`. The `pendingPlayState` flag defers the transition to PLAYING until a source setup condition variable (`mSourceSetupCV`) is signaled.
+- **State / Lifecycle Management**: Runtime playback state is held in `GstPlayerPriv::pipelineState` (a `GstState`), plus buffering and pause flags. The `GstPrivPlayerState` enumeration (`eGST_STATE_IDLE` … `eGST_STATE_BLOCKED`) is declared in `InterfacePlayerPriv.h` but is not maintained as active state. Pipeline state transitions map to GStreamer `GST_STATE_NULL`, `GST_STATE_READY`, `GST_STATE_PAUSED`, and `GST_STATE_PLAYING`. The `pendingPlayState` flag defers the transition to PLAYING until a source setup condition variable (`mSourceSetupCV`) is signaled.
   - Core implementation: `InterfacePlayerRDK.cpp`
   - State holder: `InterfacePlayerPriv.h`
 
-- **Event Processing**: GStreamer bus messages are delivered through the `busMessageCallback` registered by the player engine. The callback receives a typed `BusEventData` struct. EOS and first-frame notifications are posted as GLib idle callbacks using `g_idle_add` to avoid blocking the GStreamer streaming thread. Each idle callback acquires a `GstHandlerControl::ScopeHelper` that prevents execution if the pipeline has already been disabled.
+- **Event Processing**: GStreamer bus messages are delivered through the `busMessageCallback` registered by the player engine. The callback receives a typed `BusEventData` struct. EOS and first-frame notifications are queued on `PlayerScheduler` (`ScheduleTask`) to avoid blocking the GStreamer streaming thread, while progress notification runs on a GLib timeout. GStreamer-registered callbacks are protected by `GstHandlerControl` scope-helpers that prevent execution if the pipeline has already been disabled.
 
 - **Error Handling Strategy**: Decoder errors are rate-limited with a `GST_MIN_DECODE_ERROR_INTERVAL` (10,000 ms) between consecutive `OnGstDecodeErrorCb` dispatches. PTS stall is detected by comparing `lastKnownPTS` against `ptsUpdatedTimeMS` with a `GST_MIN_PTS_UPDATE_INTERVAL` (4,000 ms) threshold. Buffer underflow triggers the `OnGstBufferUnderflowCb` which the player engine uses to accelerate data delivery. GStreamer `GST_MESSAGE_ERROR` messages are forwarded as `MESSAGE_ERROR` `BusEventData` entries.
 
@@ -452,7 +457,7 @@ Runtime behavior is driven by three mechanisms:
 | CMake Flag | Description | Source |
 |---|---|---|
 | `CMAKE_RDK_SVP` | Enables Secure Video Path (`USE_SVP=1`). Activates SVP buffer handling in the DRM decryptor pipeline. | `CMakeLists.txt` |
-| `CMAKE_GST_SUBTEC_ENABLED` | Enables GStreamer-side Subtec subtitle rendering. Sets `GST_SUBTEC_ENABLED` and links the `gst_subtec` sub-library. | `gst-plugins/CMakeLists.txt` |
+| `CMAKE_GST_SUBTEC_ENABLED` | Enables Subtec subtitle support in `libplayergstinterface` by adding `-DGST_SUBTEC_ENABLED` to `LIBPLAYERGSTINTERFACE_DEFINES`. The `gst_subtec` GStreamer plugin itself is built unconditionally by `gst-plugins/CMakeLists.txt` (which always adds `-DGST_SUBTEC_ENABLED` and `add_subdirectory(gst_subtec)`). | `CMakeLists.txt`, `gst-plugins/CMakeLists.txt` |
 | `DISABLE_SECURITY_TOKEN` | Disables WPEFramework security token acquisition, skipping `WPEFrameworkSecurityUtil` linkage. For environments without a security token service. | `CMakeLists.txt`, `externals/CMakeLists.txt` |
 | `CMAKE_CDM_DRM` | Enables CDM-based DRM. Compiles GStreamer decryptor elements (`gstplayreadydecryptor`, `gstwidevinedecryptor`, etc.) into the `gstaamp` plugin. | `gst-plugins/CMakeLists.txt` |
 | `CMAKE_USE_OPENCDM_ADAPTER` | Selects the OpenCDM adapter API path, adding `-DUSE_OPENCDM_ADAPTER` and linking against `libocdm`. | `gst-plugins/CMakeLists.txt` |
