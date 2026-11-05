@@ -104,6 +104,11 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
 	GstBuffer* IV, GstBuffer* keyID,
 	uint32_t initWithLast15)
 {
+	if (g_mockopencdm != nullptr)
+	{
+		return g_mockopencdm->opencdm_gstreamer_session_decrypt(
+			session, buffer, subSample, subSampleCount, IV, keyID, initWithLast15);
+	}
 	return ERROR_NONE;
 }
 

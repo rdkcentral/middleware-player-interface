@@ -461,6 +461,7 @@ TEST_F(OcdmGstCoverageTest, DecryptGst_ClearSampleSkipped_ReturnsZero)
     adapter.attachSession(m_session);
 
     GstBuffer buffer = {};
+        EXPECT_CALL(m_ocdm, opencdm_gstreamer_session_decrypt(_, _, _, _, _, _, _)).Times(0);
     int ret = adapter.decrypt(nullptr, nullptr, &buffer, 0, nullptr, nullptr);
 
     EXPECT_EQ(ret, 0);
@@ -476,6 +477,8 @@ TEST_F(OcdmGstCoverageTest, DecryptGst_ClearSampleDecryptRequired_ReturnsZero)
     adapter.attachSession(m_session);
 
     GstBuffer buffer = {};
+    EXPECT_CALL(m_ocdm, opencdm_gstreamer_session_decrypt(_, _, _, _, _, _, _))
+        .WillOnce(Return(ERROR_NONE));
     int ret = adapter.decrypt(nullptr, nullptr, &buffer, 0, nullptr, nullptr);
 
     EXPECT_EQ(ret, 0);

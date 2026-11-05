@@ -343,20 +343,20 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
     if(m_isHDCPEnabled) {
         if(hdcpCurrentProtocol == dsHDCP_VERSION_2X) {
-            m_hdcpCurrentProtocol = hdcpCurrentProtocol;
+            m_hdcpCurrentProtocol.store(hdcpCurrentProtocol);
         }
         else {
-            m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+            m_hdcpCurrentProtocol.store(dsHDCP_VERSION_1X);
         }
-        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol.load() == dsHDCP_VERSION_2X ? "2.x" : "1.4");
     }
     else {
         MW_LOG_WARN("DeviceSettings HDCP is not enabled\n");
     }
 
     if(!isConnected) {
-        m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
-        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
+        m_hdcpCurrentProtocol.store(dsHDCP_VERSION_1X);
+        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol.load());
     }
 
 
@@ -366,8 +366,8 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
 void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
 {
-    m_hdcpCurrentProtocol = t_protocol;
-    MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    m_hdcpCurrentProtocol.store(t_protocol);
+    MW_LOG_WARN(" detected HDCP version %s\n", t_protocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
 }
 
 std::shared_ptr<DeviceInterfaceBase> PlayerExternalsRdkInterface::GetDeviceInterface()

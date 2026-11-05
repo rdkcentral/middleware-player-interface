@@ -145,6 +145,7 @@ class GstHandlerControl{
 		std::lock_guard<std::mutex> guard(mSync);
 		return mInstanceCount;
 	}
+
 	/**
 	 * @brief Call at the start of the handler, and store the return value in a local variable with handler scope.
 	 * The returnStraightAway() method of the returned object should be called straight afterwards. e.g. using HANDLER_CONTROL_HELPER

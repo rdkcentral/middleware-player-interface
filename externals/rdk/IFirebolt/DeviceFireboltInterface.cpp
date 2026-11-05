@@ -330,9 +330,9 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 
 	std::thread([]()
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		while (true)
 		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 			{
 				std::lock_guard<std::mutex> lock(hdmiRefreshMutex);
 				hdmiRefreshPending = false;

@@ -826,6 +826,9 @@ TEST_F(InfraL1Tests, Scheduler_TaskObjFieldsPreserved)
 
 TEST_F(InfraL1Tests, ProcessHandler_GetProcessNameSelf)
 {
+#if defined(__APPLE__)
+	GTEST_SKIP() << "GetProcessName relies on the Linux /proc filesystem";
+#endif
 	ProcessHandler ph;
 	std::string pid = std::to_string(getpid());
 	std::string name = ph.GetProcessName(pid);

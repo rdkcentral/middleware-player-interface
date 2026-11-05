@@ -153,14 +153,22 @@ TEST_F(GstHandlerControlFillTests, WaitForDoneReturnsWhenScopeEndsEarly)
 
 	std::thread t([&]
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(40));
 		finished = mControl.waitForDone(2000, "worker");
 	});
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	{ auto releaseMe = std::move(scope); } // release scope while waiter sleeps
+	auto entryDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+	while (mControl.isEnabled() && std::chrono::steady_clock::now() < entryDeadline)
+	{
+		std::this_thread::yield();
+	}
+	EXPECT_FALSE(mControl.isEnabled());
+
+	auto releaseTime = std::chrono::steady_clock::now();
+	{ auto releaseMe = std::move(scope); }
 	t.join();
+	auto elapsed = std::chrono::steady_clock::now() - releaseTime;
 	EXPECT_TRUE(finished);
+	EXPECT_LT(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), 1000);
 }
 
 TEST_F(GstHandlerControlFillTests, ReturnStraightAwayEnabledFalse)

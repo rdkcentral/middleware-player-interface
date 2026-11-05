@@ -84,7 +84,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
             IARM
         };
     
-        dsHdcpProtocolVersion_t m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+        std::atomic<dsHdcpProtocolVersion_t> m_hdcpCurrentProtocol{dsHDCP_VERSION_1X};
 
         //replace-start
         std::shared_ptr<DeviceInterfaceBase> m_pDeviceInterfaceBase = nullptr;
@@ -163,7 +163,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
          * @brief Is current HDCP protocol 2.2
          * @return True if current HDCP protocol is 2.2. False, if not.
          */
-        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol == dsHDCP_VERSION_2X; }
+        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol.load() == dsHDCP_VERSION_2X; }
 
         /**
          * @fn GetActiveInterface

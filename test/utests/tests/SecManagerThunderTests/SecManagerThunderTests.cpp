@@ -1314,7 +1314,7 @@ TEST_F(SecManagerThunderTests, SetPlaybackSpeedStateWrapperSendsParams)
 	const ThunderCall *c = LastCall();
 	EXPECT_EQ(c->method, "setPlaybackSpeedState");
 	EXPECT_EQ(c->param["sessionId"].Number(), 25);
-	EXPECT_EQ(c->param["playbackSpeed"].Number(), 4);
+	EXPECT_DOUBLE_EQ(c->param["playbackSpeed"].Floating(), 4.0);
 	EXPECT_EQ(c->param["playbackPosition"].Number(), 999);
 }
 
