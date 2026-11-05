@@ -126,7 +126,7 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 	if (m_pOpenCDMSystem == nullptr)
 	{
 		MW_LOG_WARN("OpenCDM system not present, unable to generate DRM session");
-		m_eKeyState = KEY_ERROR;
+		m_eKeyState.store(KEY_ERROR);
 	}
 	else
 	{
@@ -169,7 +169,7 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		if (ocdmRet != ERROR_NONE)
 		{
 			MW_LOG_ERR("Error constructing OCDM session. OCDM err=0x%x", ocdmRet);
-			m_eKeyState = KEY_ERROR_SESSION_CREATE_FAILED;
+			m_eKeyState.store(KEY_ERROR_SESSION_CREATE_FAILED);
 		}
 	}
 }
@@ -253,13 +253,16 @@ void OCDMSessionAdapter::keysUpdatedOCDM() {
 }
 
 void OCDMSessionAdapter::errorMessageOCDM(const char message[]) {
-	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int) m_keyStatus, (int) m_eKeyState);
+	const KeyState currentState = m_eKeyState.load();
+	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int) m_keyStatus, (int) currentState);
 
 	// Key updates have already turned a ready session's status into InternalError (e.g. Rialto server crash);
 	// without this the session manager would keep reusing the dead KEY_READY session.
-	if (m_eKeyState == KEY_READY && m_keyStatus == InternalError)
+	KeyState expectedState = KEY_READY;
+	if (m_keyStatus == InternalError &&
+		m_eKeyState.compare_exchange_strong(expectedState, KEY_ERROR))
 	{
-		m_eKeyState = KEY_ERROR;
+		m_keyStatusWait.signal();
 	}
 
 	if (m_drmCallbacks)
@@ -274,7 +277,7 @@ DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
 	DrmData * result = NULL;
 
-	m_eKeyState = KEY_ERROR;
+	m_eKeyState.store(KEY_ERROR);
 
 	if (m_challengeReady.wait(timeout) == true) {
 		if (m_challenge.empty() != true) {
@@ -287,7 +290,7 @@ DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_
 			result = new DrmData(m_challenge.c_str(), m_challenge.length());
 			destinationURL.assign((m_destUrl.c_str()));
 			MW_LOG_WARN("destinationURL is %s (default value used as drm server)", destinationURL.c_str());
-			m_eKeyState = KEY_PENDING;
+			m_eKeyState.store(KEY_PENDING);
 		}
 		else {
 			MW_LOG_WARN("Empty keyRequest");
@@ -343,7 +346,7 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 		if (m_keyStatus == KeyStatus::Usable) {
 #endif
 			MW_LOG_WARN("processKey: Key Usable!");
-			m_eKeyState = KEY_READY;
+			m_eKeyState.store(KEY_READY);
 			retValue = 0;
 		}
 #ifdef USE_THUNDER_OCDM_API_0_2
@@ -398,7 +401,7 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 				MW_LOG_WARN("processKey: Update() returned keystatus: %d\n", (int) m_keyStatus);
 				retValue = (int) m_keyStatus;
 			}
-			m_eKeyState = KEY_ERROR;
+			m_eKeyState.store(KEY_ERROR);
 		}
 	}
 	m_keyStatusWait.signal();
@@ -408,19 +411,19 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 
 bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 {
-	if (m_eKeyState == state) {
+	if (m_eKeyState.load() == state) {
 		return true;
 	}
 	if (!m_keyStatusWait.wait(timeout)) {
 		return false;
 	}
-	return m_eKeyState == state;
+	return m_eKeyState.load() == state;
 }
 
 
 KeyState OCDMSessionAdapter::getState()
 {
-	return m_eKeyState;
+	return m_eKeyState.load();
 }
 
 
@@ -442,7 +445,7 @@ void OCDMSessionAdapter:: clearDecryptContext()
 		m_usableKeys.clear();
 	}
 
-	m_eKeyState = KEY_INIT;
+	m_eKeyState.store(KEY_INIT);
 }
 
 void OCDMSessionAdapter::setKeyId(const std::vector<uint8_t>& keyId)

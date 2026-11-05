@@ -31,6 +31,7 @@
 
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
+#include <atomic>
 #include <condition_variable>
 #include "DrmCallbacks.h"
 
@@ -87,7 +88,7 @@ class OCDMSessionAdapter : public DrmSession
 protected:
 	std::mutex decryptMutex;
 
-	KeyState m_eKeyState;
+	std::atomic<KeyState> m_eKeyState;
 
 	OpenCDMSession* m_pOpenCDMSession;
 #ifdef USE_THUNDER_OCDM_API_0_2
