@@ -95,7 +95,7 @@ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
-option(ENABLE_RDKPERF "Enable RDKPerf API timing" OFF)
+option(ENABLE_RDKPERF "Enable RDKPerf API timing" ON)
 
 if(COVERAGE_ENABLED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
