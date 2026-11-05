@@ -21,16 +21,11 @@
 #define PLAYER_MOCK_OPEN_CDM_H
 
 #include "open_cdm.h"
-#include "open_cdm_adapter.h"
 #include <gmock/gmock.h>
 
 class MockOpenCdm
 {
 public:
-	MOCK_METHOD(OpenCDMError, opencdm_gstreamer_session_decrypt,
-				(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample,
-				 const uint32_t subSampleCount, GstBuffer* IV, GstBuffer* keyID,
-				 uint32_t initWithLast15));
 	MOCK_METHOD(OpenCDMError, opencdm_session_decrypt,
 				(struct OpenCDMSession * session, uint8_t encrypted[],
 				 const uint32_t encryptedLength, const EncryptionScheme encScheme,

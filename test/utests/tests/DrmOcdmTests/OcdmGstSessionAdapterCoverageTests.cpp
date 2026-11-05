@@ -48,6 +48,7 @@ extern guint g_mockTimeCodeMinutes;
 extern guint g_mockTimeCodeSeconds;
 extern guint g_mockTimeCodeFrames;
 }
+extern unsigned int g_mockOcdmGstreamerDecryptCallCount;
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -229,6 +230,7 @@ protected:
         g_mockTimeCodeMinutes = 0;
         g_mockTimeCodeSeconds = 0;
         g_mockTimeCodeFrames = 0;
+        g_mockOcdmGstreamerDecryptCallCount = 0;
 
         DrmInfo drmInfo;
         m_helper = std::make_shared<CovDrmHelper>(drmInfo);
@@ -461,10 +463,10 @@ TEST_F(OcdmGstCoverageTest, DecryptGst_ClearSampleSkipped_ReturnsZero)
     adapter.attachSession(m_session);
 
     GstBuffer buffer = {};
-        EXPECT_CALL(m_ocdm, opencdm_gstreamer_session_decrypt(_, _, _, _, _, _, _)).Times(0);
     int ret = adapter.decrypt(nullptr, nullptr, &buffer, 0, nullptr, nullptr);
 
     EXPECT_EQ(ret, 0);
+    EXPECT_EQ(g_mockOcdmGstreamerDecryptCallCount, 0U);
 }
 
 /**
@@ -477,11 +479,10 @@ TEST_F(OcdmGstCoverageTest, DecryptGst_ClearSampleDecryptRequired_ReturnsZero)
     adapter.attachSession(m_session);
 
     GstBuffer buffer = {};
-    EXPECT_CALL(m_ocdm, opencdm_gstreamer_session_decrypt(_, _, _, _, _, _, _))
-        .WillOnce(Return(ERROR_NONE));
     int ret = adapter.decrypt(nullptr, nullptr, &buffer, 0, nullptr, nullptr);
 
     EXPECT_EQ(ret, 0);
+    EXPECT_EQ(g_mockOcdmGstreamerDecryptCallCount, 1U);
 }
 
 /**
