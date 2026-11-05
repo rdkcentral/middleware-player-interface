@@ -31,6 +31,7 @@
 #include "GstUtils.h"
 #include <string>
 #include <atomic>
+#include <memory>
 #include <utility>
 #include "DrmHelper.h"
 
@@ -38,6 +39,12 @@
 #include "ContentSecurityManagerSession.h"
 
 #include <functional>
+
+/**
+ * @brief Optional DRM session creator supplied by the player.
+ */
+using DrmSessionCreator =
+	std::function<std::unique_ptr<DrmSession>(DrmHelperPtr, DrmCallbacks*)>;
 
 
 #define VIDEO_SESSION 0
@@ -176,6 +183,7 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
+	DrmSessionCreator m_sessionCreator;
 	std::function<void(const std::string&, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
@@ -222,7 +230,12 @@ public:
 	/**
 	 *  @fn DrmSessionManager
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
+	DrmSessionManager(
+		int maxDrmSessions,
+		void *player,
+		std::function<void(const std::string&, uint32_t, const std::string&)>
+			watermarkSessionUpdateCallback,
+		DrmSessionCreator creator = nullptr);
 
 	void initializeDrmSessions();
 

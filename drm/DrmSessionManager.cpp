@@ -48,7 +48,13 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(NULL),
+DrmSessionManager::DrmSessionManager(
+	int maxDrmSessions,
+	void *player,
+	std::function<void(const std::string&, uint32_t, const std::string&)>
+		watermarkSessionUpdateCallback,
+	DrmSessionCreator creator)
+	: drmSessionContexts(NULL),
 		cachedKeyIDs(NULL), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
@@ -60,6 +66,7 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mIsVideoOnMute(false)
  		,mCurrentSpeed(0)
 		,mFirstFrameSeen(false)
+		,m_sessionCreator(std::move(creator))
 		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
 	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
@@ -900,7 +907,16 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			m_sessionCreator(drmHelper, Instance).release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
