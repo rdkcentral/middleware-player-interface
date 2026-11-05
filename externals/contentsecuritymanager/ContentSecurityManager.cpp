@@ -31,6 +31,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <mutex>
+#include <atomic>
 #if defined(USE_SECMANAGER)
 #include "SecManagerThunder.h"
 #endif
@@ -39,12 +41,12 @@
 #define WATERMARK_PLUGIN_CALLSIGN "org.rdk.Watermark.1"
 //#define RDKSHELL_CALLSIGN "org.rdk.RDKShell.1"   //need to be used instead of WATERMARK_PLUGIN_CALLSIGN if RDK Shell is used for rendering watermark
 
-static ContentSecurityManager *Instance = nullptr; /**< singleton instance*/
+static std::atomic<ContentSecurityManager*> Instance{nullptr}; 
 
 std::function<void(uint32_t, uint32_t, const std::string&)> ContentSecurityManager::SendWatermarkSessionEvent_CB;
 
-/* mutex GetInstance() & DestroyInstance() to improve thread safety
- * There is still a race between using the pointer returned from GetInstance() and calling DestroyInstance()*/
+/* mutex protects initialization and destruction - prevents races
+   Atomic pointer ensures visible updates across threads */
 static std::mutex InstanceMutex;
 static bool mUseFireboltSDK = false;
 
@@ -54,25 +56,28 @@ static bool mUseFireboltSDK = false;
 ContentSecurityManager* ContentSecurityManager::GetInstance()
 {
 	std::lock_guard<std::mutex> lock{InstanceMutex};
-	if(Instance == nullptr)
+	ContentSecurityManager* ptr = Instance.load(std::memory_order_acquire);
+	if(ptr == nullptr)
 	{
 /* Firebolt is applicable to all builds which uses either secmanager or secclient */
 #if defined(USE_SECCLIENT) || defined(USE_SECMANAGER)
 		if(mUseFireboltSDK)
 		{
-			Instance = new ContentProtectionFirebolt();
+			ptr = new ContentProtectionFirebolt();
 		}
 		else
 		{
 #if defined(USE_SECMANAGER)
-			Instance = new SecManagerThunder();
+			ptr = new SecManagerThunder();
 #endif
 		}
 #else
-		Instance = new FakeSecManager();
+		ptr = new FakeSecManager();
 #endif
+		// Atomic store ensures all threads see the initialized pointer
+		Instance.store(ptr, std::memory_order_release);
 	}
-	return Instance;
+	return ptr;
 }
 
 /**
@@ -81,10 +86,13 @@ ContentSecurityManager* ContentSecurityManager::GetInstance()
 void ContentSecurityManager::DestroyInstance()
 {
 	std::lock_guard<std::mutex> lock{InstanceMutex};
-	if (Instance)
+	// Atomic load capture delete pattern prevents TOCTOU races
+	ContentSecurityManager* ptr = Instance.load(std::memory_order_acquire);
+	if (ptr)
 	{
-		delete Instance;
-		Instance = nullptr;
+		delete ptr;
+		// Atomic store ensures all threads see the destruction
+		Instance.store(nullptr, std::memory_order_release);
 	}
 }
 
