@@ -302,11 +302,11 @@ type_found (GstElement * typefind, guint probability,
   {
     GstElement *current = GST_ELEMENT(tmp->data);
     GstElement *peer = tmp->prev ? GST_ELEMENT(tmp->prev->data) : typefind;
-    GST_DEBUG_OBJECT(subtecbin, "element %s", gst_element_get_name(current));
+    GST_DEBUG_OBJECT(subtecbin, "element %s", GST_OBJECT_NAME(current));
     gst_bin_add(GST_BIN(subtecbin), current);
     if (!gst_element_link(peer, current))
       GST_WARNING_OBJECT(subtecbin, "failed to link %s -> %s",
-          gst_element_get_name(peer), gst_element_get_name(current));
+          GST_OBJECT_NAME(peer), GST_OBJECT_NAME(current));
     gst_object_unref(current);
   }
 

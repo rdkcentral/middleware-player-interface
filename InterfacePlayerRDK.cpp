@@ -1070,8 +1070,15 @@ void InterfacePlayerRDK::SetPreferredDRM(const char *drmID)
 {
 	if (drmID != NULL)
 	{
+		std::lock_guard<std::mutex> lock(mDrmSystemMutex);
 		mDrmSystem = drmID;
 	}
+}
+
+std::string InterfacePlayerRDK::GetPreferredDRM() const
+{
+	std::lock_guard<std::mutex> lock(mDrmSystemMutex);
+	return mDrmSystem;
 }
 
 /**
@@ -2194,7 +2201,8 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
 		{
 			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
-			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
@@ -5692,10 +5700,11 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 			gst_message_parse_context_type(msg, &contextType);
 			if (!g_strcmp0(contextType, "drm-preferred-decryption-system-id"))
 			{
-				MW_LOG_MIL("Setting %s as preferred drm", pInterfacePlayerRDK->mDrmSystem.c_str());
+				const std::string drmSystem = pInterfacePlayerRDK->GetPreferredDRM();
+				MW_LOG_MIL("Setting %s as preferred drm", drmSystem.c_str());
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
-				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem.empty() ? NULL : pInterfacePlayerRDK->mDrmSystem.c_str(),  NULL);
+				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, drmSystem.empty() ? NULL : drmSystem.c_str(),  NULL);
 				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
 			}
 
@@ -6182,7 +6191,8 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			TransformToEncryptedCaps(caps, mDrmSystem.empty() ? NULL : mDrmSystem.c_str());
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);

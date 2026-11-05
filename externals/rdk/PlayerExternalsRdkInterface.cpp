@@ -74,7 +74,7 @@ void PlayerExternalsRdkInterface::Initialize()
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
     m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
-    m_deviceInterfaceUnavailableLogged = false;
+    m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
     if (!m_pDeviceInterfaceBase)
     {
         MW_LOG_ERR("Initialize: DeviceFireboltInterface::GetInstance() returned null");
@@ -116,7 +116,7 @@ void PlayerExternalsRdkInterface::Initialize()
     }
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
-    m_deviceInterfaceUnavailableLogged = false;
+    m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
     if(useFireboltInContainer)
     {
         MW_PRE_LOGGER_LOG("Using Firebolt (containerized environment) \n");
@@ -389,14 +389,13 @@ char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_
 {
     if (m_pDeviceInterfaceBase)
     {
-        m_deviceInterfaceUnavailableLogged = false;
+        m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
         return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
     }
     iConfigLen = 0;
-    if (!m_deviceInterfaceUnavailableLogged)
+    if (!m_deviceInterfaceUnavailableLogged.exchange(true, std::memory_order_relaxed))
     {
         MW_LOG_ERR("GetTR181Config: device interface not available");
-        m_deviceInterfaceUnavailableLogged = true;
     }
     return nullptr;
 }

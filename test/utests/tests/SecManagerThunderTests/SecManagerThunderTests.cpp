@@ -825,12 +825,15 @@ TEST_F(SecManagerThunderTests, SetPlaybackPositionSendsParams)
 	JsonObject ok;
 	ok["success"] = true;
 	g_FakeThunder.responses.push_back({true, ok});
-	mSec->SetPlaybackPosition(21, 2.0f, 12345);
+	mSec->SetPlaybackPosition(21, 0.5f, 12345);
 	const ThunderCall *c = LastCall();
 	EXPECT_EQ(c->method, "setPlaybackSpeedState");
 	EXPECT_EQ(c->param["sessionId"].Number(), 21);
-	EXPECT_EQ(c->param["playbackSpeed"].Number(), 2);
+	EXPECT_DOUBLE_EQ(c->param["playbackSpeed"].Floating(), 0.5);
 	EXPECT_EQ(c->param["playbackPosition"].Number(), 12345);
+	std::string serialized;
+	c->param.ToString(serialized);
+	EXPECT_NE(serialized.find("\"playbackSpeed\":0.5"), std::string::npos);
 }
 
 TEST_F(SecManagerThunderTests, SetPlaybackPositionRpcFailHandled)

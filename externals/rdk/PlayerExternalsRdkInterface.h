@@ -47,6 +47,7 @@ typedef enum {
 #endif
 #endif
 
+#include <atomic>
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
 #include <mutex>
@@ -89,7 +90,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
         std::shared_ptr<DeviceInterfaceBase> m_pDeviceInterfaceBase = nullptr;
         // Set once when the device interface is observed unavailable, so a
         // warning is logged per state transition instead of per call.
-        bool m_deviceInterfaceUnavailableLogged = false;
+        std::atomic<bool> m_deviceInterfaceUnavailableLogged{false};
         //replace-with
         //std::shared_ptr<DeviceFireboltInterface> m_pDeviceInterfaceBase = nullptr;
         //replace-end

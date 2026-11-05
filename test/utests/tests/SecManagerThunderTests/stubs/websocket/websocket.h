@@ -72,6 +72,7 @@ public:
 			None,
 			Boolean,
 			Number,
+			Floating,
 			String,
 			Object
 		};
@@ -116,12 +117,12 @@ public:
 		}
 		Variant &operator=(float value)
 		{
-			set(static_cast<int64_t>(value));
+			set(static_cast<double>(value));
 			return *this;
 		}
 		Variant &operator=(double value)
 		{
-			set(static_cast<int64_t>(value));
+			set(value);
 			return *this;
 		}
 		Variant &operator=(const VariantContainer &value)
@@ -133,6 +134,7 @@ public:
 
 		bool Boolean() const { return mType == Type::Boolean ? mBool : false; }
 		int64_t Number() const { return mType == Type::Number ? mNumber : 0; }
+		double Floating() const { return mType == Type::Floating ? mFloating : 0.0; }
 		std::string String() const { return mType == Type::String ? mString : std::string(); }
 		VariantContainer Object() const
 		{
@@ -151,10 +153,16 @@ public:
 			mType = Type::Number;
 			mNumber = value;
 		}
+		void set(double value)
+		{
+			mType = Type::Floating;
+			mFloating = value;
+		}
 
 		Type mType = Type::None;
 		bool mBool = false;
 		int64_t mNumber = 0;
+		double mFloating = 0.0;
 		std::string mString;
 		std::shared_ptr<VariantContainer> mObject;
 	};
@@ -201,6 +209,9 @@ public:
 					break;
 				case Variant::Type::Number:
 					ss << kv.second.Number();
+					break;
+				case Variant::Type::Floating:
+					ss << kv.second.Floating();
 					break;
 				case Variant::Type::String:
 					ss << "\"" << kv.second.String() << "\"";

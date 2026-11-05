@@ -163,6 +163,7 @@ class InterfacePlayerRDK
 	private:
 		bool trickTeardown;
 		std::mutex mMutex;
+		mutable std::mutex mDrmSystemMutex;
 		std::map<std::string, int> configMap;
 
 	public:
@@ -336,6 +337,7 @@ class InterfacePlayerRDK
         	 *@param[in] drmID preferred drm
         	 */
         	void SetPreferredDRM(const char *drmID);
+		std::string GetPreferredDRM() const;
 			/**
         	 * @brief Configures the GStreamer pipeline.
         	 * @param format Video format.

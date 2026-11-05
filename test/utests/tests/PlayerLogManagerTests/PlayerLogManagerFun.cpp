@@ -1291,19 +1291,19 @@ TEST(DumpBinaryBlob_Output, NonPrintableBytesAreHexEscaped)
 }
 
 /**
- * @brief Verify an escape that does not fit the remaining chunk space flushes the chunk.
+ * @brief Verify an escape that does not fit the remaining chunk is preserved.
  *
  * 62 printable characters leave 2 free slots; a following non-printable byte needs 4,
- * so the chunk is flushed and the byte is dropped. The trailing 'z' goes to a new chunk.
+ * so the chunk is flushed and the byte is written to the next chunk with the trailing 'z'.
  *
  * **Test Case ID:** Redirection: 007
  * **Priority:** Medium
  *
  * | Step | Description | Expected Result |
  * | :--: | ----------- | --------------- |
- * | 01 | Pass 62 'x', 0x01, 'z' | 62 'x' flushed as its own line; 'z' emitted separately; no escape written |
+ * | 01 | Pass 62 'x', 0x01, 'z' | 62 'x' flushed as its own line; [01]z emitted on the next line |
  */
-TEST(DumpBinaryBlob_Output, InsufficientSpaceForEscapeFlushesChunk)
+TEST(DumpBinaryBlob_Output, InsufficientSpaceForEscapeRetriesInNextChunk)
 {
     LoggerStateGuard guard;
     PlayerLogManager::locked = false;
@@ -1317,8 +1317,7 @@ TEST(DumpBinaryBlob_Output, InsufficientSpaceForEscapeFlushesChunk)
     std::string out = testing::internal::GetCapturedStdout();
 
     EXPECT_NE(out.find(std::string(62, 'x') + "\n"), std::string::npos);
-    EXPECT_NE(out.find("z\n"), std::string::npos);
-    EXPECT_EQ(out.find("[01]"), std::string::npos);
+    EXPECT_NE(out.find("[01]z\n"), std::string::npos);
 }
 
 /**

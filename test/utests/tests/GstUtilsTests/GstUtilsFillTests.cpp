@@ -214,11 +214,16 @@ TEST_F(GstUtilsFillTests, GetCaps_InvalidFormatNoCapsCall)
 /* CreateGstBufferWithData                                            */
 /* ================================================================== */
 
-TEST_F(GstUtilsFillTests, CreateBuffer_MapFailureReturnsNull)
+TEST_F(GstUtilsFillTests, CreateBuffer_MapFailureUnrefsBufferAndReturnsNull)
 {
 	// FakeGStreamer::gst_buffer_map always returns FALSE, so the function
 	// unrefs and returns NULL once allocation succeeds.
 	const char payload[] = {0x01, 0x02, 0x03, 0x04};
+	GstBuffer buffer{};
+	EXPECT_CALL(*g_mockGStreamer, gst_buffer_new_allocate(nullptr, sizeof(payload), nullptr))
+		.WillOnce(Return(&buffer));
+	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(GST_MINI_OBJECT_CAST(&buffer)));
+
 	GstBuffer *buf = CreateGstBufferWithData(payload, sizeof(payload));
 	EXPECT_EQ(buf, nullptr);
 }

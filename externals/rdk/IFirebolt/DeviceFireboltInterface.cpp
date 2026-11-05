@@ -44,7 +44,6 @@ IFirebolt folder to be deleted, as IARM is no longer available as an alternative
 #include <chrono>
 #include <condition_variable>
 #include <thread>
-#include <atomic>
 
 std::shared_ptr<DeviceFireboltInterface> s_pDeviceFireboltInterface = nullptr;
 
@@ -316,21 +315,43 @@ static void HDCPEventHandlerFirebolt(const Firebolt::Device::HDCPVersionMap& t_H
 	// trigger back-to-back Device.hdcp + Device.videoResolution Firebolt RPCs.
 	// Defer the refresh briefly so consecutive events collapse into one query,
 	// which also guarantees the final state is queried after the storm ends.
-	static std::atomic<bool> hdmiRefreshScheduled{false};
-	bool expected = false;
-	if (hdmiRefreshScheduled.compare_exchange_strong(expected, true))
+	static std::mutex hdmiRefreshMutex;
+	static bool hdmiRefreshWorkerActive = false;
+	static bool hdmiRefreshPending = false;
 	{
-		std::thread([]()
+		std::lock_guard<std::mutex> lock(hdmiRefreshMutex);
+		hdmiRefreshPending = true;
+		if (hdmiRefreshWorkerActive)
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(200));
-			hdmiRefreshScheduled = false;
+			return;
+		}
+		hdmiRefreshWorkerActive = true;
+	}
+
+	std::thread([]()
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		while (true)
+		{
+			{
+				std::lock_guard<std::mutex> lock(hdmiRefreshMutex);
+				hdmiRefreshPending = false;
+			}
+
 			auto pInstance = PlayerExternalsRdkInterface::GetPlayerExternalsRdkInterfaceInstance();
 			if (pInstance)
 			{
 				pInstance->SetHDMIStatus();
 			}
-		}).detach();
-	}
+
+			std::lock_guard<std::mutex> lock(hdmiRefreshMutex);
+			if (!hdmiRefreshPending)
+			{
+				hdmiRefreshWorkerActive = false;
+				break;
+			}
+		}
+	}).detach();
 
 }
 
