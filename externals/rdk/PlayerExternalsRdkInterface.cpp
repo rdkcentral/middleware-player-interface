@@ -78,6 +78,7 @@ void PlayerExternalsRdkInterface::Initialize()
     if (!m_pDeviceInterfaceBase)
     {
         MW_LOG_ERR("Initialize: DeviceFireboltInterface::GetInstance() returned null");
+        return;
     }
     DeviceFireboltInterface::Initialize();
     m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
@@ -121,6 +122,11 @@ void PlayerExternalsRdkInterface::Initialize()
     {
         MW_PRE_LOGGER_LOG("Using Firebolt (containerized environment) \n");
         m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
+        if (!m_pDeviceInterfaceBase)
+        {
+            MW_LOG_ERR("Failed to get DeviceFireboltInterface instance");
+            return;
+        }
         DeviceFireboltInterface::Initialize();
         m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
     }
@@ -128,6 +134,11 @@ void PlayerExternalsRdkInterface::Initialize()
     {
         MW_PRE_LOGGER_LOG("Using IARM \n");
         m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
+        if (!m_pDeviceInterfaceBase)
+        {
+            MW_LOG_ERR("Failed to get DeviceIARMInterface instance");
+            return;
+        }
         DeviceIARMInterface::Initialize();
         m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
     }
@@ -272,16 +283,24 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
     try {
         //Get the HDMI port
-	device::Manager::Initialize();
-        std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
-        ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
-        isConnected        = vPort.isDisplayConnected();
-        hdcpProtocol       = (dsHdcpProtocolVersion_t)vPort.getHDCPProtocol();
-        if(isConnected) {
-            isHDCPCompliant          = (vPort.getHDCPStatus() == dsHDCP_STATUS_AUTHENTICATED);
-            isHDCPEnabled            = vPort.isContentProtected();
-            hdcpReceiverProtocol     = (dsHdcpProtocolVersion_t)vPort.getHDCPReceiverProtocol();
-            hdcpCurrentProtocol      = (dsHdcpProtocolVersion_t)vPort.getHDCPCurrentProtocol();
+        if (!device::Manager::Initialize())
+        {
+            MW_LOG_ERR("device::Manager::Initialize() failed");
+            isConnected = false;
+        }
+        else
+        {
+            std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
+            if (!strVideoPort.empty())
+            {
+                ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
+                isConnected        = vPort.isDisplayConnected();
+                hdcpProtocol       = (dsHdcpProtocolVersion_t)vPort.getHDCPProtocol();
+                if(isConnected) {
+                    isHDCPCompliant          = (vPort.getHDCPStatus() == dsHDCP_STATUS_AUTHENTICATED);
+                    isHDCPEnabled            = vPort.isContentProtected();
+                    hdcpReceiverProtocol     = (dsHdcpProtocolVersion_t)vPort.getHDCPReceiverProtocol();
+                    hdcpCurrentProtocol      = (dsHdcpProtocolVersion_t)vPort.getHDCPCurrentProtocol();
             //get the resolution of the TV
             int width,height;
             int iResID = vPort.getResolution().getPixelResolution().getId();
