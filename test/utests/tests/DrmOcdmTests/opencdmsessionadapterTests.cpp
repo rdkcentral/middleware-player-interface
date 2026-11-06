@@ -1169,6 +1169,27 @@ TEST(OCDMSessionAdapter, WaitForState_KeyReady)
     std::cout << "[OCDMSessionAdapter.WaitForState_KeyReady] - PASS" << std::endl;
 }
 
+TEST(OCDMSessionAdapter, WaitForState_AbortedByClear)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    OCDMSessionAdapter adapter(drmHelper);
+    bool result = true;
+
+    std::thread waitThread([&]() {
+        result = adapter.waitForState(KEY_READY, 5000);
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    auto start = std::chrono::steady_clock::now();
+    adapter.clearDecryptContext();
+    waitThread.join();
+    auto duration = std::chrono::steady_clock::now() - start;
+
+    EXPECT_FALSE(result);
+    EXPECT_LT(duration, std::chrono::milliseconds(500));
+}
+
 /**
  * @brief Test waitForState with zero timeout.
  *

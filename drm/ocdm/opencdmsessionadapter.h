@@ -31,6 +31,7 @@
 
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
+#include <atomic>
 #include <condition_variable>
 #include "DrmCallbacks.h"
 
@@ -52,30 +53,37 @@ public:
 	virtual ~Event() {
 	}
 
-	inline bool wait(const uint32_t waitTime)
+	inline bool wait(const uint32_t waitTime, const std::atomic<bool>* abort = nullptr)
 	{
 		std::unique_lock<std::mutex> _lock(lock);
+		auto ready = [this, abort]() { return signalled || (abort && abort->load()); };
 		if (!signalled) {
 			if (waitTime == 0) {
-				condition.wait(_lock, [this]() { return signalled; });
+				condition.wait(_lock, ready);
 			} else {
 				// Use predicate version - returns false if timeout, true if condition met
-				if (!condition.wait_for(_lock, std::chrono::milliseconds(waitTime),
-					[this]() { return signalled; }))
+				if (!condition.wait_for(_lock, std::chrono::milliseconds(waitTime), ready))
 				{
 					signalled = false;
 					return false; // Timeout occurred
 				}
 			}
 		}
+		const bool completed = signalled && !(abort && abort->load());
 		signalled = false;
-		return true;
+		return completed;
 	}
 
 	inline void signal()
 	{
 		std::unique_lock<std::mutex> _lock(lock);
 		signalled = true;
+		condition.notify_all();
+	}
+
+	inline void notify_all()
+	{
+		std::unique_lock<std::mutex> _lock(lock);
 		condition.notify_all();
 	}
 };
@@ -89,7 +97,7 @@ class OCDMSessionAdapter : public DrmSession
 protected:
 	std::mutex decryptMutex;
 
-	KeyState m_eKeyState;
+	std::atomic<KeyState> m_eKeyState;
 
 	OpenCDMSession* m_pOpenCDMSession;
 #ifdef USE_THUNDER_OCDM_API_0_2
@@ -104,8 +112,9 @@ protected:
 	uint16_t m_challengeSize;
 
 	std::string m_destUrl;
-	KeyStatus m_keyStatus;
-	bool m_keyStateIndeterminate;
+	std::atomic<KeyStatus> m_keyStatus;
+	std::atomic<bool> m_keyStateIndeterminate;
+	std::atomic<bool> m_abortWaits;
 	std::vector<uint8_t> m_keyStored;
 	std::vector<std::vector<uint8_t>> m_usableKeys; // Store usable key IDs from ocdm_update_callback
 	mutable std::mutex m_usableKeysMutex; // Protects m_usableKeys from concurrent access
