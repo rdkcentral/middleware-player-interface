@@ -127,6 +127,7 @@ void PISetProfileAlwaysOn(bool alwaysOn)
 	ProfileAlwaysOnFlag().store(alwaysOn, std::memory_order_release);
 }
 
+static constexpr size_t kMaxStackLogFormatBytes = 4U * 1024U;
 std::size_t GetPlayerPrintableThreadID( void )
 {
 	return std_thread_hasher( std::this_thread::get_id() );
@@ -148,6 +149,7 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
 		snprintf(timestamp, sizeof(timestamp), MW_CLI_TIMESTAMP_PREFIX_FORMAT, (unsigned int)t.tv_sec, (unsigned int)t.tv_usec / 1000 );
 	}
 	char *format_ptr = NULL;
+	bool format_on_heap = false;
         int format_bytes = 0;
         for( int pass=0; pass<2; pass++ )
         {
@@ -166,7 +168,19 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
             if( pass==0 )
             {
                 format_bytes++; // include nul terminator
-                format_ptr = (char *)alloca(format_bytes); // allocate on stack
+			if( static_cast<size_t>(format_bytes) > kMaxStackLogFormatBytes )
+			{
+				format_ptr = (char *)malloc(format_bytes);
+				format_on_heap = (NULL != format_ptr);
+				if( !format_on_heap )
+				{
+					break;
+				}
+			}
+			else
+			{
+				format_ptr = (char *)alloca(format_bytes); // allocate on stack for common case
+			}
             }
             else
 	    {
@@ -209,6 +223,10 @@ void logprintf(MW_LogLevel logLevelIndex, const char* func, int line, const char
 		    }
 		    va_end(args);
 	    }
+	}
+	if( format_on_heap )
+	{
+		free(format_ptr);
 	}
 }
 
