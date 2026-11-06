@@ -130,7 +130,7 @@ struct gst_media_stream
 	bool resetPosition;                       /**< To indicate that the position of the stream is reset */
 	bool bufferUnderrun;
 	bool eosReached;           /**< To indicate the status of End of Stream reached */
-	bool sourceConfigured; /**< To indicate that the current source is initialized and configured */
+	std::atomic<bool> sourceConfigured; /**< To indicate that the current source is initialized and configured */
 	pthread_mutex_t sourceLock;
 	uint32_t timeScale;
 	int32_t trackId;                   /**< Current Audio Track Id,so far it is implemented for AC4 track selection only */
