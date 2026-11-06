@@ -31,6 +31,7 @@
 
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
+#include <atomic>
 #include <condition_variable>
 #include "DrmCallbacks.h"
 
@@ -87,7 +88,7 @@ class OCDMSessionAdapter : public DrmSession
 protected:
 	std::mutex decryptMutex;
 
-	KeyState m_eKeyState;
+	std::atomic<KeyState> m_eKeyState;
 
 	OpenCDMSession* m_pOpenCDMSession;
 #ifdef USE_THUNDER_OCDM_API_0_2
@@ -123,6 +124,7 @@ public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
 	void keyUpdateOCDM(const uint8_t key[], const uint8_t keySize);
+	void errorMessageOCDM(const char message[]);
 	const std::vector<std::vector<uint8_t>>& getUsableKeys() const override;
 	long long timeBeforeCallback;
 
