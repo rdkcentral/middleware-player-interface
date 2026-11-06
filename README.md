@@ -79,7 +79,7 @@ Pipeline configuration is driven by a `Configs` structure populated at tune time
 
 The northbound interface toward the player engine consists entirely of C++ method calls on `InterfacePlayerRDK` and registered `std::function` callbacks. No inter-process communication is involved for the core pipeline path. The southbound interface toward the platform involves GStreamer element properties (for Westeros sink, Rialto sink, video rectangle), the `SocInterface` virtual dispatch for capability queries, and OpenCDM session APIs for DRM operations.
 
-For platforms using IARM, the external integration layer registers event handlers on the IARM bus for HDMI hotplug (`IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG`), HDCP status change (`IARM_BUS_DSMGR_EVENT_HDCP_STATUS`), display resolution post-change (`IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE`), and network interface IP address change (`NET_SRV_MGR` / `IARM_BUS_NETWORK_MANAGER_EVENT_INTERFACE_IPADDRESS`). These IARM registrations are conditional on the `CMAKE_IARM_MGR` build flag and are intended as a transitional path toward Device Settings and Firebolt APIs.
+For platforms using IARM, the external integration layer registers event handlers on the IARM bus for HDMI hotplug (`IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG`), HDCP status change (`IARM_BUS_DSMGR_EVENT_HDCP_STATUS`), display resolution post-change (`IARM_BUS_DSMGR_EVENT_RES_POSTCHANGE`), and network interface IP address change (`NET_SRV_MGR` / `IARM_BUS_NETWORK_MANAGER_EVENT_INTERFACE_IPADDRESS`). The externals backend is selected at configure time — `CMAKE_USE_FIREBOLT` (RDK-E, Firebolt only), `CMAKE_PLATFORM_UBUNTU`/macOS (fake externals, no IARM), or the default RDK-V branch which unconditionally enables IARM (`CMAKE_IARM_MGR` is set internally; passing `-DCMAKE_IARM_MGR=OFF` does not disable it). These IARM registrations are intended as a transitional path toward Device Settings and Firebolt APIs.
 
 RFC parameter retrieval is handled through the `PlayerRfc` module, which calls into a platform TR181 API (`-ltr181api`) when `CMAKE_PLAYER_RFC_REQUIRED` is set. Thunder plugin interactions for VideoIn, HDMI-In, OTA player control, and video rectangle configuration are performed through `PlayerThunderInterface`, which maintains a WPEFramework remote object and a security token for authorized access.
 
@@ -152,7 +152,7 @@ graph TD
   - `pthread_mutex_t mProtectionLock` — guards DRM-related shared state.
   - Per-track `pthread_mutex_t sourceLock` on each `gst_media_stream` — serializes source element operations.
   - `std::mutex mSourceSetupMutex` + `std::condition_variable mSourceSetupCV` — coordinates source setup completion.
-  - `std::mutex mMutex` on `InterfacePlayerRDK` — protects config map access.
+  - `std::mutex mMutex` on `InterfacePlayerRDK` — acquired only by `Stop()` to serialize teardown.
   - `GstPlayerPriv::volumeMuteMutex` — protects audio volume and mute state.
   - `PlayerScheduler::mQMutex` + `mQCond` — protects the task queue.
   - `GstHandlerControl` — provides a reference-counted enable/disable gate that allows pending callbacks to complete before the pipeline is destroyed.
@@ -170,7 +170,7 @@ graph TD
   - `SocInterface::UseWesterosSink()` — queries whether the platform supports the Westeros sink (runtime selection is driven by `Configs::useWesterosSink` / `useRialtoSink`).
   - `SocInterface::RequiredQueuedFrames()` — determines pre-roll frame count.
   - `SocInterface::EnablePTSRestamp()` — controls PTS re-stamping in the pipeline.
-- **IARM Bus**: `IARM_BUS_DSMGR_NAME` for HDMI/HDCP/resolution events; `NET_SRV_MGR` for network interface events (conditional on `CMAKE_IARM_MGR`).
+- **IARM Bus**: `IARM_BUS_DSMGR_NAME` for HDMI/HDCP/resolution events; `NET_SRV_MGR` for network interface events (RDK-V builds — the IARM backend is auto-selected; see CMake flags below).
 - **Configuration Files**: RFC parameters accessed via `tr181api` using the TR181 namespace at runtime (conditional on `CMAKE_PLAYER_RFC_REQUIRED`).
 - **Startup Order**: The component is initialized on first use by the media player engine. The player engine process is expected to start after GStreamer and the vendor GStreamer plugins are available in the system.
 
@@ -206,9 +206,10 @@ sequenceDiagram
     MPI->>Priv: gst_app_src_push_buffer()
     Priv-->>MPI: GST_FLOW_OK
 
-    Note over Priv: First buffer decoded → first-frame callback
-    Priv->>MPI: IdleCallbackOnFirstFrame()
-    MPI->>Engine: notifyFirstFrameCallback()
+    Note over Priv: First buffer decoded → NotifyFirstFrame()
+    MPI->>Engine: notifyFirstFrameCallback() (synchronous)
+    Priv->>MPI: IdleCallbackOnFirstFrame() (via PlayerScheduler)
+    MPI->>Engine: TriggerEvent(InterfaceCB::firstVideoFrameReceived)
 ```
 
 #### Runtime State Changes
@@ -218,7 +219,7 @@ During playback, runtime state is held in `GstPlayerPriv::pipelineState` (a `Gst
 **State Change Triggers:**
 
 - Buffer underflow (`HandleOnGstBufferUnderflowCb`) fires when a track runs out of data, prompting the player engine to accelerate fragment delivery.
-- PTS stall detection (`HandleOnGstPtsErrorCb`) fires when the last known PTS has not advanced beyond `GST_MIN_PTS_UPDATE_INTERVAL` ms, allowing the engine to diagnose decoder hangs.
+- PTS error notification (`OnGstPtsErrorCb`) fires when a decoder or sink element emits its `pts-error-callback` signal, allowing the engine to diagnose decoder hangs. (Separately, `CheckForPTSChangeWithTimeout(GST_MIN_PTS_UPDATE_INTERVAL)` is used only inside `IsCacheEmpty()` for buffer-cache bookkeeping and does not dispatch this callback.)
 - Decode error notifications (`HandleOnGstDecodeErrorCb`) fire when a decoder element reports a consecutive error, with a minimum interval of `GST_MIN_DECODE_ERROR_INTERVAL` ms between callbacks.
 - `GST_MESSAGE_CLOCK_LOST` indicates the pipeline clock became unusable. For non-DASH media the handler transitions the pipeline to PAUSED and back to PLAYING so GStreamer selects a new clock; for DASH media this handler takes no action (clock recovery happens elsewhere during pipeline rebuild).
 
@@ -277,8 +278,9 @@ sequenceDiagram
     DrmMgr->>OCDM: OpenCDMSession / generateDRMSession()
     OCDM-->>DrmMgr: session handle
     DrmMgr->>OCDM: generateKeyRequest()
-    DrmMgr->>Engine: AcquireLicenseCb(challenge, destinationURL)
-    Engine-->>DrmMgr: license response
+    DrmMgr->>Engine: AcquireLicenseCb(responseCode, drmHelper, sessionSlot, cdmError, streamType, metaDataPtr, isLicenseRenewal)
+    Note over Engine: Engine performs the license exchange inside<br/>the callback and returns a KeyState
+    Engine-->>DrmMgr: KeyState (KEY_READY on success)
     DrmMgr->>OCDM: processDRMKey(licenseResponse)
     OCDM-->>DrmMgr: KEY_READY
 
@@ -357,7 +359,7 @@ sequenceDiagram
 | EOS | Internal callback (`IdleCallbackOnEOS`) | GStreamer `GST_MESSAGE_EOS` received on the bus | Player Engine (AAMP) |
 | Buffer Underflow | Internal callback (`OnGstBufferUnderflowCb`) | GStreamer reports buffer underrun for a media track | Player Engine (AAMP) |
 | Decode Error | Internal callback (`OnGstDecodeErrorCb`) | Decoder element reports decode failure | Player Engine (AAMP) |
-| PTS Error | Internal callback (`OnGstPtsErrorCb`) | PTS not advancing beyond `GST_MIN_PTS_UPDATE_INTERVAL` | Player Engine (AAMP) |
+| PTS Error | Internal callback (`OnGstPtsErrorCb`) | Decoder/sink element emits its `pts-error-callback` signal | Player Engine (AAMP) |
 | Buffering Timeout | Internal callback (`OnBuffering_timeoutCb`) | Buffering timer exceeds `DEFAULT_BUFFERING_MAX_MS` | Player Engine (AAMP) |
 | Progress | Internal callback (`ProgressCallbackOnTimeout`) | Periodic timer fires during active playback | Player Engine (AAMP) |
 | HDMI Hotplug | IARM `IARM_BUS_DSMGR_EVENT_HDMI_HOTPLUG` | HDMI connection or disconnection event from device manager | `PlayerExternalsInterface` |
@@ -382,10 +384,11 @@ sequenceDiagram
     OCDM-->>DrmMgr: OpenCDMSession
     DrmMgr->>OCDM: generateKeyRequest()
     OCDM-->>DrmMgr: license challenge bytes + destinationURL
-    DrmMgr->>Engine: AcquireLicenseCb(challenge, destinationURL)
+    DrmMgr->>Engine: AcquireLicenseCb(drmHelper, sessionSlot, ...)
+    Note over Engine: License exchange happens inside the registered callback
     Engine->>LicServer: HTTP POST license challenge
     LicServer-->>Engine: license response
-    Engine-->>DrmMgr: license data (callback return)
+    Engine-->>DrmMgr: KeyState (KEY_READY on success)
     DrmMgr->>OCDM: processDRMKey(licenseResponse)
     OCDM-->>DrmMgr: KEY_READY
     DrmMgr-->>Engine: session ready
@@ -433,7 +436,7 @@ sequenceDiagram
 
 ### Key Implementation Logic
 
-- **State / Lifecycle Management**: Runtime playback state is held in `GstPlayerPriv::pipelineState` (a `GstState`), plus buffering and pause flags. The `GstPrivPlayerState` enumeration (`eGST_STATE_IDLE` … `eGST_STATE_BLOCKED`) is declared in `InterfacePlayerPriv.h` but is not maintained as active state. Pipeline state transitions map to GStreamer `GST_STATE_NULL`, `GST_STATE_READY`, `GST_STATE_PAUSED`, and `GST_STATE_PLAYING`. The `pendingPlayState` flag defers the transition to PLAYING until a source setup condition variable (`mSourceSetupCV`) is signaled.
+- **State / Lifecycle Management**: Runtime playback state is held in `GstPlayerPriv::pipelineState` (a `GstState`), plus buffering and pause flags. The `GstPrivPlayerState` enumeration (`eGST_STATE_IDLE` … `eGST_STATE_BLOCKED`) is declared in `InterfacePlayerPriv.h` but is not maintained as active state. Pipeline state transitions map to GStreamer `GST_STATE_NULL`, `GST_STATE_READY`, `GST_STATE_PAUSED`, and `GST_STATE_PLAYING`. The `pendingPlayState` flag defers the transition to PLAYING until `NotifyFragmentCachingComplete()` clears it; separately, `mSourceSetupCV` / `WaitForSourceSetup()` gates buffer injection until source setup completes.
   - Core implementation: `InterfacePlayerRDK.cpp`
   - State holder: `InterfacePlayerPriv.h`
 
@@ -464,6 +467,6 @@ Runtime behavior is driven by three mechanisms:
 | `CMAKE_USE_SECMANAGER` | Enables SecManager-based content protection. Compiles `SecManagerThunder.cpp` and sets `-DUSE_SECMANAGER`. Requires FireboltAamp. | `externals/CMakeLists.txt` |
 | `CMAKE_USE_SECCLIENT` | Enables SecClient-based content protection. Sets `-DUSE_SECCLIENT` and links `libSecClient` and `libFireboltSDK`. | `externals/CMakeLists.txt` |
 | `CMAKE_WPEFRAMEWORK_REQUIRED` | Links WPEFramework and compiles `PlayerThunderAccess.cpp` and `Module.cpp` for Thunder plugin access. Sets `-DUSE_CPP_THUNDER_PLUGIN_ACCESS`. | `externals/CMakeLists.txt` |
-| `CMAKE_IARM_MGR` | Enables IARM bus integration. Compiles `DeviceIARMInterface.cpp`, `PlayerExternalsRdkInterface.cpp`, `DeviceFireboltInterface.cpp`, and `FireboltInterface.cpp`. Links `libIARMBus`, `libds`, `libdshalcli`. | `externals/CMakeLists.txt` |
+| `CMAKE_IARM_MGR` | Set internally by the RDK-V backend branch — not a user switch (passing `OFF` does not disable it). Compiles `DeviceIARMInterface.cpp`, `PlayerExternalsRdkInterface.cpp`, `DeviceFireboltInterface.cpp`, and `FireboltInterface.cpp`. Links `libIARMBus`, `libds`, `libdshalcli`. Backend selection is driven by `CMAKE_USE_FIREBOLT` (RDK-E), `CMAKE_PLATFORM_UBUNTU`/macOS (fake externals), else RDK-V. | `externals/CMakeLists.txt` |
 | `CMAKE_PLAYER_RFC_REQUIRED` | Enables RFC parameter fetching. Sets `-DPLAYER_RFC_ENABLED` and links `libtr181api`. | `externals/CMakeLists.txt` |
 | `USE_THUNDER_R4` | Selects Thunder R4 API (WPEFrameworkCOM) instead of the default R3 path (WPEFrameworkProtocols). Controlled via Yocto distro features `wpe_r4_4` or `wpe_r4`. | `cmake/FindWPEFramework.cmake`, `player-interface_git.bb` |
