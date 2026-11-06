@@ -35,6 +35,7 @@
 #include "PlayerSubtecCCManager.h"
 #include "PlayerRialtoCCManager.h"
 #include "PlayerDirectRialtoCCManager.h"
+#include <mutex>
 
 
 #define CHAR_CODE_1 49
@@ -102,6 +103,12 @@ static int getColor(gsw_CcAttribType attributeIndex, gsw_CcType ccType, std::str
 			}
 		}
 		GetCapability(attributeIndex, ccType, (void**) &ccColorCaps, &ccSizeOfCaps);
+
+		if (ccSizeOfCaps > GSW_CC_COLOR_MAX)
+		{
+			MW_LOG_ERR("getColor: ccSizeOfCaps (%u) exceeds maximum (%d)", ccSizeOfCaps, GSW_CC_COLOR_MAX);
+			return -1;
+		}
 
 		bool found = false;
 		const char *inputStr = input.c_str();
@@ -538,7 +545,17 @@ try
 }
 catch(const PlayerJsonParseException& e)
 {
-	MW_LOG_ERR("PlayerCCManagerBase: PlayerJsonParseException - %s", e.what());
+	MW_LOG_ERR("PlayerCCManagerBase::SetStyle - PlayerJsonParseException: %s", e.what());
+	return -1;
+}
+catch(const std::exception& e)
+{
+	MW_LOG_ERR("PlayerCCManagerBase::SetStyle - std::exception: %s", e.what());
+	return -1;
+}
+catch(...)
+{
+	MW_LOG_ERR("PlayerCCManagerBase::SetStyle - Unknown exception caught");
 	return -1;
 }
 
@@ -547,7 +564,11 @@ catch(const PlayerJsonParseException& e)
  */
 void PlayerCCManagerBase::Stop()
 {
-	EnsureRendererCommsInitialized();
+	if (!EnsureRendererCommsInitialized())
+	{
+		MW_LOG_WARN("PlayerCCManagerBase::Stop() - renderer initialization failed");
+		return;
+	}
 	MW_LOG_WARN("PlayerCCManagerBase::mEnabled=%d",mEnabled);
 	StopRendering();
 }
@@ -557,7 +578,11 @@ void PlayerCCManagerBase::Stop()
  */
 void PlayerCCManagerBase::Start()
 {
-	EnsureInitialized();
+	if (!EnsureInitialized())
+	{
+		MW_LOG_WARN("PlayerCCManagerBase::Start() - initialization failed");
+		return;
+	}
 	MW_LOG_WARN("PlayerCCManagerBase:: mEnabled=%d",  mEnabled);
 	StartRendering();
 }
@@ -638,7 +663,11 @@ void PlayerCCManagerBase::SetParentalControlStatus(bool locked)
  */
 int PlayerCCManagerBase::SetTrack(const std::string &track, const CCFormat format)
 {
-	EnsureRendererCommsInitialized();
+	if (!EnsureRendererCommsInitialized())
+	{
+		MW_LOG_WARN("PlayerCCManagerBase::SetTrack() - renderer initialization failed");
+		return -1;
+	}
 	int ret = -1;
 	unsigned int trackNum = 0;
 	CCFormat finalFormat = eCLOSEDCAPTION_FORMAT_DEFAULT;
@@ -834,29 +863,32 @@ PlayerCCManager::CCManagerType PlayerCCManager::mCCManagerType =
  */
 PlayerCCManagerBase *PlayerCCManager::GetInstance()
 {
-	if (mInstance == NULL)
-	{
+	static std::once_flag initFlag;
+	std::call_once(initFlag, []() {
+		if (mInstance == NULL)
+		{
 #if defined(SUBTITLE_SUPPORTED)
-		if (mCCManagerType == CCManagerType::DirectRialtoCCManager)
-		{
-			MW_LOG_INFO("PlayerCCManager::Creating DirectRialto CC manager");
-			mInstance = new PlayerDirectRialtoCCManager();
-		}
-		else if (mCCManagerType == CCManagerType::RialtoCCManager)
-		{
-			MW_LOG_INFO("PlayerCCManager::Creating Rialto CC manager");
-			mInstance = new PlayerRialtoCCManager();
-		}
-		else
-		{
-			MW_LOG_INFO("PlayerCCManager::Creating Subtec CC manager");
-			mInstance = new PlayerSubtecCCManager();
-		}
+			if (mCCManagerType == CCManagerType::DirectRialtoCCManager)
+			{
+				MW_LOG_INFO("PlayerCCManager::Creating DirectRialto CC manager");
+				mInstance = new PlayerDirectRialtoCCManager();
+			}
+			else if (mCCManagerType == CCManagerType::RialtoCCManager)
+			{
+				MW_LOG_INFO("PlayerCCManager::Creating Rialto CC manager");
+				mInstance = new PlayerRialtoCCManager();
+			}
+			else
+			{
+				MW_LOG_INFO("PlayerCCManager::Creating Subtec CC manager");
+				mInstance = new PlayerSubtecCCManager();
+			}
 #else
-		MW_LOG_WARN("No CC support on simulators. Creating a dummy instance!");
-		mInstance = new PlayerFakeCCManager();
+			MW_LOG_WARN("No CC support on simulators. Creating a dummy instance!");
+			mInstance = new PlayerFakeCCManager();
 #endif
-	}
+		}
+	});
 	return mInstance;
 }
 
