@@ -41,7 +41,7 @@
 
 static ContentSecurityManager *Instance = nullptr; /**< singleton instance*/
 
-std::function<void(uint32_t, uint32_t, const std::string&)> ContentSecurityManager::SendWatermarkSessionEvent_CB;
+std::function<void(const std::string&, uint32_t, const std::string&)> ContentSecurityManager::SendWatermarkSessionEvent_CB;
 
 /* mutex GetInstance() & DestroyInstance() to improve thread safety
  * There is still a race between using the pointer returned from GetInstance() and calling DestroyInstance()*/
@@ -161,13 +161,15 @@ bool ContentSecurityManager::AcquireLicense(std::string clientId, std::string ap
 				licenseResponse, licenseResponseLength, statusCode, reasonCode,
 				businessStatus, isVideoMuted, sleepTime);
 	}
+	MW_LOG_DEBUG("[SessionIdString] MPI AcquireLicense result=%d sessionId='%s'",
+		success, session.getSessionID().c_str());
 	return success;
 }
 
 /**
  * @brief To update session state to SecManager
  */
-bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
+bool ContentSecurityManager::UpdateSessionState(const std::string& sessionId, bool active)
 {
 	bool success = false;
 	success = SetDrmSessionState(sessionId, active);
@@ -177,15 +179,16 @@ bool ContentSecurityManager::UpdateSessionState(int64_t sessionId, bool active)
 /**
  * @brief To notify SecManager to release a session
  */
-void ContentSecurityManager::ReleaseSession(int64_t sessionId)
+void ContentSecurityManager::ReleaseSession(const std::string& sessionId)
 {
+	MW_LOG_DEBUG("[SessionIdString] MPI releasing DRM sessionId='%s'", sessionId.c_str());
 	CloseDrmSession(sessionId);
 }
 
 /**
  * @brief To update session state to SecManager
  */
-bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height)
+bool ContentSecurityManager::setVideoWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height)
 {
 	bool rpcResult = false;
 	rpcResult = setWindowSize(sessionId, video_width, video_height);
@@ -195,7 +198,7 @@ bool ContentSecurityManager::setVideoWindowSize(int64_t sessionId, int64_t video
 /**
  * @brief To set Playback Speed State to SecManager
  */
-bool ContentSecurityManager::setPlaybackSpeedState(int64_t sessionId, int64_t playback_speed, int64_t playback_position)
+bool ContentSecurityManager::setPlaybackSpeedState(const std::string& sessionId, int64_t playback_speed, int64_t playback_position)
 {
 	bool rpcResult = false;
 	rpcResult = SetPlaybackPosition(sessionId, static_cast<float>(playback_speed), static_cast<int32_t>(playback_position));
@@ -205,7 +208,7 @@ bool ContentSecurityManager::setPlaybackSpeedState(int64_t sessionId, int64_t pl
 /**
  * @brief To set Watermark Session callback
  */
-void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<void(uint32_t, uint32_t, const std::string&)>& callback)
+void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<void(const std::string&, uint32_t, const std::string&)>& callback)
 {
 	SendWatermarkSessionEvent_CB = callback;
 	return;
@@ -214,8 +217,7 @@ void ContentSecurityManager::setWatermarkSessionEvent_CB(const std::function<voi
 /**
  * @brief To set Watermark Session callback
  */
-std::function<void(uint32_t, uint32_t, const std::string&)>& ContentSecurityManager::getWatermarkSessionEvent_CB( )
+std::function<void(const std::string&, uint32_t, const std::string&)>& ContentSecurityManager::getWatermarkSessionEvent_CB( )
 {
 	return SendWatermarkSessionEvent_CB;
 }
-

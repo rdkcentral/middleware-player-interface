@@ -51,12 +51,12 @@ extern MockOpenCdmSessionAdapter *g_mockOpenCdmSessionAdapter;
 class TestableDrmSessionManager : public DrmSessionManager
 {
 public:
-	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback)
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallback)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback), mMaxSessions(maxDrmSessions)
 	{
 	}
 
-	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback, DrmSessionCreator creator)
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallback, DrmSessionCreator creator)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback, std::move(creator)), mMaxSessions(maxDrmSessions)
 	{
 	}
@@ -278,6 +278,26 @@ static DrmInfo CreateWidevineDrmInfo()
 	drmInfo.systemUUID = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"; // Widevine UUID
 	drmInfo.keyFormat = "com.widevine.alpha";
 	return drmInfo;
+}
+
+TEST_F(DrmSessionManagerComplexTests, WatermarkCallbackPreservesUuidSessionId)
+{
+	const std::string sessionId = "24e22c0a-6bc7-4a2d-b547-88b2293c5a80";
+	const std::string system = "watermark-provider";
+	int callbackCount = 0;
+	mDrmSessionManager = std::make_unique<TestableDrmSessionManager>(
+		maxDrmSessions, nullptr,
+		[&](const std::string& receivedId, uint32_t status, const std::string& receivedSystem)
+		{
+			++callbackCount;
+			EXPECT_EQ(receivedId, sessionId);
+			EXPECT_EQ(status, 200u);
+			EXPECT_EQ(receivedSystem, system);
+		});
+
+	mDrmSessionManager->watermarkSessionHandlerWrapper(sessionId, 200, system);
+	EXPECT_EQ(callbackCount, 1);
+	mDrmSessionManager.reset();
 }
 
 /**
@@ -1374,4 +1394,3 @@ TEST_F(DrmSessionManagerComplexTests, DrmSessionCreator_ReturnsNull_ReportsInitF
 	EXPECT_EQ(manager.drmSessionContexts[selectedSlot].drmSession, nullptr);
 	EXPECT_EQ(err, MW_DRM_INIT_FAILED);
 }
-

@@ -394,7 +394,7 @@ TEST_F(DrmSessionManagerTests, ConstructValidPositive) {
     int dummyPlayer; // dummy variable to represent a valid player pointer
     void* player = static_cast<void*>(&dummyPlayer);
     
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -444,7 +444,7 @@ TEST_F(DrmSessionManagerTests, ConstructBoundaryValue) {
     int dummyPlayer;
     void* player = static_cast<void*>(&dummyPlayer);
     
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -490,7 +490,7 @@ TEST_F(DrmSessionManagerTests, ConstructZeroSessions) {
     int dummyPlayer;
     void* player = static_cast<void*>(&dummyPlayer);
     
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
             std::cout << "Callback invoked with id1=" << id1
                     << ", id2=" << id2
                     << ", text=" << text << std::endl;
@@ -538,7 +538,7 @@ TEST_F(DrmSessionManagerTests, ConstructNegativeSessions) {
     int dummyPlayer;
     void* player = static_cast<void*>(&dummyPlayer);
 
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -587,7 +587,7 @@ TEST_F(DrmSessionManagerTests, ConstructHighSessionValue) {
     int dummyPlayer;
     void* player = static_cast<void*>(&dummyPlayer);
     
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -635,7 +635,7 @@ TEST_F(DrmSessionManagerTests, ConstructNullPlayer) {
     int maxDrmSessions = 5;
     void* player = nullptr; // null player pointer
     
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -680,7 +680,7 @@ TEST_F(DrmSessionManagerTests, EmptyKeyIdArray) {
     std::cout << "Entering EmptyKeyIdArray test" << std::endl;
     
     // Create a DrmSessionManager instance using the custom constructor.
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -739,7 +739,7 @@ TEST_F(DrmSessionManagerTests, EmptyKeyIdArray) {
 TEST_F(DrmSessionManagerTests, RegisterValidNonEmptyLambdaCallback)
 {
     std::cout << "Entering RegisterValidNonEmptyLambdaCallback test" << std::endl;
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -802,7 +802,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidNonEmptyLambdaCallback)
 TEST_F(DrmSessionManagerTests, RegisterEmptyCallback)
 {
     std::cout << "Entering RegisterEmptyCallback test" << std::endl;
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -853,7 +853,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyCallback)
 TEST_F(DrmSessionManagerTests, RegisterLambdaReturningEmptyString)
 {
     std::cout << "Entering RegisterLambdaReturningEmptyString test" << std::endl;
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -917,7 +917,7 @@ TEST_F(DrmSessionManagerTests, RegisterLambdaReturningEmptyString)
 TEST_F(DrmSessionManagerTests, RegisterLambdaThrowingException)
 {
     std::cout << "Entering RegisterLambdaThrowingException test" << std::endl;
-    auto callback = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto callback = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -989,7 +989,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidLicenseCallbackSuccess) {
     void* player = nullptr;
     std::cout << "Constructed DrmSessionManager with maxDrmSessions = " << maxDrmSessions 
               << " and player = " << player << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1071,7 +1071,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidLicenseCallbackError) {
     std::cout << "Constructed DrmSessionManager with maxDrmSessions = " << maxDrmSessions 
               << " and player = " << player << std::endl;
 
-        auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+        auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1153,7 +1153,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyLicenseCallback) {
     std::cout << "Constructed DrmSessionManager with maxDrmSessions = " << maxDrmSessions 
               << " and player = " << player << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1237,7 +1237,7 @@ TEST_F(DrmSessionManagerTests, ValidCallbackRegistration) {
     };
     std::cout << "Created callback lambda." << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1293,7 +1293,7 @@ TEST_F(DrmSessionManagerTests, RegisteringEmptyCallback) {
     std::function<void()> emptyCallback;
     std::cout << "Created empty callback using std::function<void()>." << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1361,7 +1361,7 @@ TEST_F(DrmSessionManagerTests, OverwritingPreviouslyRegisteredCallback) {
     };
     std::cout << "Created second callback lambda." << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1419,7 +1419,7 @@ TEST_F(DrmSessionManagerTests, OverwritingPreviouslyRegisteredCallback) {
 TEST_F(DrmSessionManagerTests, UpdateMaxDRMSessionsPositive) {
     std::cout << "Entering UpdateMaxDRMSessionsPositive test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1458,7 +1458,7 @@ TEST_F(DrmSessionManagerTests, UpdateMaxDRMSessionsPositive) {
 TEST_F(DrmSessionManagerTests, UpdateMaxDRMSessionsZero) {
     std::cout << "Entering UpdateMaxDRMSessionsZero test" << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1500,7 +1500,7 @@ TEST_F(DrmSessionManagerTests, UpdateMaxDRMSessionsNegative) {
     
     // Initialize with a known positive value.
     int initialMaxSessions = 3;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1540,7 +1540,7 @@ TEST_F(DrmSessionManagerTests, UpdateMaxDRMSessionsHighValue) {
     std::cout << "Entering UpdateMaxDRMSessionsHighValue test" << std::endl;
     
     // Start with an initial value for clarity.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
     std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1586,7 +1586,7 @@ TEST_F(DrmSessionManagerTests, Clearing_a_valid_access_token)
 {
     std::cout << "Entering Clearing_a_valid_access_token test" << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1626,7 +1626,7 @@ TEST_F(DrmSessionManagerTests, Repeated_calls_to_clearAccessToken)
 {
     std::cout << "Entering Repeated_calls_to_clearAccessToken test" << std::endl;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
     std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1672,7 +1672,7 @@ TEST_F(DrmSessionManagerTests, ClearDRMSessionForceFalse)
 {
     std::cout << "Entering ClearDRMSessionForceFalse test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
     std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1718,7 +1718,7 @@ TEST_F(DrmSessionManagerTests, ClearDRMSessionForceTrue)
 {
     std::cout << "Entering ClearDRMSessionForceTrue test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1765,7 +1765,7 @@ TEST_F(DrmSessionManagerTests, clearFailedKeyIds_noFailedKeys) {
     // Create an instance of DrmSessionManager using the custom constructor.
     // Using dummy values: maxDrmSessions = 5, and a dummy pointer for player.
     void* dummyPlayer = reinterpret_cast<void*>(0x1234);
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1814,7 +1814,7 @@ TEST_F(DrmSessionManagerTests, clearFailedKeyIds_Idempotency) {
     // Create an instance of DrmSessionManager using the custom constructor.
     // Using dummy values: maxDrmSessions = 10, and a dummy pointer for player.
     void* dummyPlayer = reinterpret_cast<void*>(0x5678);
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1870,7 +1870,7 @@ TEST_F(DrmSessionManagerTests, clearFailedKeyIds_Idempotency) {
 TEST_F(DrmSessionManagerTests, ClearSessionData_NewInstance) {
     std::cout << "Entering ClearSessionData_NewInstance test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -1933,7 +1933,7 @@ TEST_F(DrmSessionManagerTests, ClearSessionData_NewInstance) {
 TEST_F(DrmSessionManagerTests, ClearSessionData_MultipleCalls) {
     std::cout << "Entering ClearSessionData_MultipleCalls test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2028,7 +2028,7 @@ TEST_F(DrmSessionManagerTests, ValidDrmSessionCreation) {
     std::cout << "  streamType: " << streamType << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2091,7 +2091,7 @@ TEST_F(DrmSessionManagerTests, NullDrmHelperPointer) {
     std::cout << "  streamType: " << streamType << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2148,7 +2148,7 @@ TEST_F(DrmSessionManagerTests, NullDrmCallbacksInstance) {
     std::cout << "  streamType: " << streamType << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2206,7 +2206,7 @@ TEST_F(DrmSessionManagerTests, NullMetaDataPtr) {
     std::cout << "  streamType: " << streamType << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << " (expected nullptr)" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
     std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2269,7 +2269,7 @@ TEST_F(DrmSessionManagerTests, InvalidStreamType) {
     std::cout << "  streamType: " << streamType << " (expected negative)" << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2332,7 +2332,7 @@ TEST_F(DrmSessionManagerTests, PositivePrimary) {
     MockDrmCallbacks mockCallbacks;
     DrmCallbacks* drmCallbacksPtr = &mockCallbacks;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2398,7 +2398,7 @@ TEST_F(DrmSessionManagerTests, PositiveNonPrimary) {
     DrmCallbacks* drmCallbacksPtr = &mockCallbacks;
     void* player = nullptr;
 
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2461,7 +2461,7 @@ TEST_F(DrmSessionManagerTests, NullDrmHelper) {
 
     // Create DrmSessionManager object using custom constructor
     std::cout << "[NullDrmHelper] Creating DrmSessionManager instance" << std::endl;
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2523,7 +2523,7 @@ TEST_F(DrmSessionManagerTests, NullDrmCallbacks) {
 
     // Create DrmSessionManager object using custom constructor
     std::cout << "[NullDrmCallbacks] Creating DrmSessionManager instance" << std::endl;
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2573,7 +2573,7 @@ TEST_F(DrmSessionManagerTests, getSessionMgrState) {
     std::cout << "Creating DrmSessionManager object with maxDrmSessions = " << maxDrmSessions 
               << " and player pointer = " << playerPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2641,7 +2641,7 @@ TEST_F(DrmSessionManagerTests, getSlotIdForSession_ValidDrmSession) {
     std::cout << "  streamType: " << streamType << std::endl;
     std::cout << "  metaDataPtr: " << metaDataPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
         std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2697,7 +2697,7 @@ TEST_F(DrmSessionManagerTests, getSlotIdForSession_NullDrmSession) {
     GTEST_SKIP();
     std::cout << "Entering getSlotIdForSession_NullDrmSession test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2741,7 +2741,7 @@ TEST_F(DrmSessionManagerTests, hideWatermarkOnDetach_start) {
     // Create a DrmSessionManager object using custom constructor with a sample maxDrmSessions value and a dummy player pointer.
     int maxDrmSessions = 5;
     void* dummyPlayer = nullptr;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2796,7 +2796,7 @@ TEST_F(DrmSessionManagerTests, hideWatermarkOnDetach_repeated) {
     // Create a DrmSessionManager object using custom constructor with a sample maxDrmSessions value and a dummy player pointer.
     int maxDrmSessions = 5;
     void* dummyPlayer = nullptr;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2871,7 +2871,7 @@ TEST_F(DrmSessionManagerTests, NegativeSessionSlot) {
     std::cout << "Entering NegativeSessionSlot test" << std::endl;
     
     // Creating a valid DrmSessionManager object using custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2924,7 +2924,7 @@ TEST_F(DrmSessionManagerTests, notifyCleanup_singleCleanup) {
     // Create an instance of DrmSessionManager with dummy parameters.
     int maxDrmSessions = 5;
     void* dummyPlayer = reinterpret_cast<void*>(0x1);
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -2972,7 +2972,7 @@ TEST_F(DrmSessionManagerTests, notifyCleanup_multipleCleanup) {
     // Create an instance of DrmSessionManager with dummy parameters.
     int maxDrmSessions = 10;
     void* dummyPlayer = reinterpret_cast<void*>(0x2);
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3029,7 +3029,7 @@ TEST_F(DrmSessionManagerTests, RegisterCallbackSuccessfullyWithAllCallbacksPrope
     // Create an instance of DrmSessionManager using the custom constructor.
     int maxDrmSessions = 5;
     void* dummyPlayer = reinterpret_cast<void*>(0x1);
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3093,7 +3093,7 @@ TEST_F(DrmSessionManagerTests, MultipleConsecutiveInvocationsOfRegisterCallback)
     // Create an instance of DrmSessionManager using the custom constructor.
     int maxDrmSessions = 3;
     void* dummyPlayer = reinterpret_cast<void*>(0x2);
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3182,7 +3182,7 @@ TEST_F(DrmSessionManagerTests, MultipleConsecutiveInvocationsOfRegisterCallback)
 TEST_F(DrmSessionManagerTests, StandardLivePlayback) {
     std::cout << "Entering StandardLivePlayback test" << std::endl;
     // Create a DrmSessionManager instance using a custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3217,7 +3217,7 @@ TEST_F(DrmSessionManagerTests, StandardLivePlayback) {
 TEST_F(DrmSessionManagerTests, VODPlayback) {
     std::cout << "Entering VODPlayback test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3251,7 +3251,7 @@ TEST_F(DrmSessionManagerTests, VODPlayback) {
  */
 TEST_F(DrmSessionManagerTests, LiveWithFirstFrameSeen) {
     std::cout << "Entering LiveWithFirstFrameSeen test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3285,7 +3285,7 @@ TEST_F(DrmSessionManagerTests, LiveWithFirstFrameSeen) {
  */
 TEST_F(DrmSessionManagerTests, NegativeCurrentLatency) {
     std::cout << "Entering NegativeCurrentLatency test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3318,7 +3318,7 @@ TEST_F(DrmSessionManagerTests, NegativeCurrentLatency) {
  */
 TEST_F(DrmSessionManagerTests, NegativeLiveOffsetMs) {
     std::cout << "Entering NegativeLiveOffsetMs test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3354,7 +3354,7 @@ TEST_F(DrmSessionManagerTests, NegativeLiveOffsetMs) {
  */
 TEST_F(DrmSessionManagerTests, ZeroPlaybackSpeed) {
     std::cout << "Entering ZeroPlaybackSpeed test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3391,7 +3391,7 @@ TEST_F(DrmSessionManagerTests, ZeroPlaybackSpeed) {
  */
 TEST_F(DrmSessionManagerTests, ReversePlayback) {
     std::cout << "Entering ReversePlayback test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3425,7 +3425,7 @@ TEST_F(DrmSessionManagerTests, ReversePlayback) {
  */
 TEST_F(DrmSessionManagerTests, ExtremeValues) {
     std::cout << "Entering ExtremeValues test" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3464,7 +3464,7 @@ TEST_F(DrmSessionManagerTests, SetValidSessionMgrStates) {
     
     // Create an object of DrmSessionManager using a valid constructor.
     // Here, we use 10 for maxDrmSessions and nullptr for player.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3511,7 +3511,7 @@ TEST_F(DrmSessionManagerTests, SetValidSessionMgrStates) {
 TEST_F(DrmSessionManagerTests, SetInvalidSessionMgrStates) {
     std::cout << "Entering SetInvalidSessionMgrStates test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3559,7 +3559,7 @@ TEST_F(DrmSessionManagerTests, SetInvalidSessionMgrStates) {
 TEST_F(DrmSessionManagerTests, PositiveTest_EnableVideoMute_LiveStreaming) {
     std::cout << "Entering PositiveTest_EnableVideoMute_LiveStreaming test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3619,7 +3619,7 @@ TEST_F(DrmSessionManagerTests, PositiveTest_EnableVideoMute_LiveStreaming) {
 TEST_F(DrmSessionManagerTests, PositiveTest_DisableVideoMute_OnDemand) {
     std::cout << "Entering PositiveTest_DisableVideoMute_OnDemand test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3674,7 +3674,7 @@ TEST_F(DrmSessionManagerTests, PositiveTest_DisableVideoMute_OnDemand) {
 TEST_F(DrmSessionManagerTests, NegativeTest_NegativeLatency) {
     std::cout << "Entering NegativeTest_NegativeLatency test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3731,7 +3731,7 @@ TEST_F(DrmSessionManagerTests, NegativeTest_NegativeLatency) {
 TEST_F(DrmSessionManagerTests, NegativeTest_NegativeLiveOffset) {
     std::cout << "Entering NegativeTest_NegativeLiveOffset test" << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3784,7 +3784,7 @@ TEST_F(DrmSessionManagerTests, NegativeTest_NegativeLiveOffset) {
 TEST_F(DrmSessionManagerTests, EdgeTest_ZeroLatencyOffsetPosition) {
     std::cout << "Entering EdgeTest_ZeroLatencyOffsetPosition test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3839,7 +3839,7 @@ TEST_F(DrmSessionManagerTests, EdgeTest_ZeroLatencyOffsetPosition) {
 TEST_F(DrmSessionManagerTests, NegativeTest_NegativePositionMs) {
     std::cout << "Entering NegativeTest_NegativePositionMs test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3892,7 +3892,7 @@ TEST_F(DrmSessionManagerTests, NegativeTest_NegativePositionMs) {
 TEST_F(DrmSessionManagerTests, SetValidVideoWindowSizePositiveDimensions) {
     std::cout << "Entering SetValidVideoWindowSizePositiveDimensions test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3938,7 +3938,7 @@ TEST_F(DrmSessionManagerTests, SetVideoWindowSizeWithZeroDimensions) {
     std::cout << "Entering SetVideoWindowSizeWithZeroDimensions test" << std::endl;
 
     // Create object using custom constructor (maxDrmSessions = 5, player = nullptr)
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -3985,7 +3985,7 @@ TEST_F(DrmSessionManagerTests, SetVideoWindowSizeWithNegativeWidth) {
     std::cout << "Entering SetVideoWindowSizeWithNegativeWidth test" << std::endl;
     
     // Create object using custom constructor (maxDrmSessions = 5, player = nullptr)
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4036,7 +4036,7 @@ TEST_F(DrmSessionManagerTests, SetVideoWindowSizeWithNegativeHeight) {
     std::cout << "Entering SetVideoWindowSizeWithNegativeHeight test" << std::endl;
     
     // Create object using custom constructor (maxDrmSessions = 5, player = nullptr)
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4086,7 +4086,7 @@ TEST_F(DrmSessionManagerTests, SetVideoWindowSizeWithLargeDimensions) {
     std::cout << "Entering SetVideoWindowSizeWithLargeDimensions test" << std::endl;
     
     // Create object using custom constructor (maxDrmSessions = 5, player = nullptr)
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4136,7 +4136,7 @@ TEST_F(DrmSessionManagerTests, ValidSessionHandleAndProperSystemData)
     std::cout << "Entering ValidSessionHandleAndProperSystemData test" << std::endl;
     
     // Construct the object using custom constructor.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4144,7 +4144,7 @@ TEST_F(DrmSessionManagerTests, ValidSessionHandleAndProperSystemData)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Set up input parameters.
-    uint32_t sessionHndle = 1;
+    std::string sessionHndle = "f629d21d-63b2-4e84-aada-48e33b2ef401";
     uint32_t status = 200;
     std::string systemData = "ValidSystemData";
     
@@ -4181,7 +4181,7 @@ TEST_F(DrmSessionManagerTests, BoundaryValuesWithMinimumSessionHandleAndStatus)
 {
     std::cout << "Entering BoundaryValuesWithMinimumSessionHandleAndStatus test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4190,7 +4190,7 @@ TEST_F(DrmSessionManagerTests, BoundaryValuesWithMinimumSessionHandleAndStatus)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Set boundary input parameters.
-    uint32_t sessionHndle = 0;
+    std::string sessionHndle;
     uint32_t status = 0;
     std::string systemData = "MinimalData";
     
@@ -4224,7 +4224,7 @@ TEST_F(DrmSessionManagerTests, MaximumValuesForSessionHandleAndStatus)
 {
     std::cout << "Entering MaximumValuesForSessionHandleAndStatus test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4233,7 +4233,7 @@ TEST_F(DrmSessionManagerTests, MaximumValuesForSessionHandleAndStatus)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Maximum values for uint32_t.
-    uint32_t sessionHndle = 4294967295u;
+    std::string sessionHndle = "d6fb9dca-1288-40da-ae79-c0a41b9a4249";
     uint32_t status = 4294967295u;
     std::string systemData = "MaximalData";
     
@@ -4268,7 +4268,7 @@ TEST_F(DrmSessionManagerTests, HandlingEmptySystemDataString)
 {
     std::cout << "Entering HandlingEmptySystemDataString test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4277,7 +4277,7 @@ TEST_F(DrmSessionManagerTests, HandlingEmptySystemDataString)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Inputs with empty system data.
-    uint32_t sessionHndle = 100;
+    std::string sessionHndle = "194c6074-dc9e-4e27-a8a0-75a1e91b0a7e";
     uint32_t status = 50;
     std::string systemData = "";
     
@@ -4313,7 +4313,7 @@ TEST_F(DrmSessionManagerTests, UnsupportedStatusCodeScenario)
 {
     std::cout << "Entering UnsupportedStatusCodeScenario test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4322,7 +4322,7 @@ TEST_F(DrmSessionManagerTests, UnsupportedStatusCodeScenario)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Input with unsupported status code.
-    uint32_t sessionHndle = 10;
+    std::string sessionHndle = "0ea2a09e-c402-4c7b-8a2a-741afe221b17";
     uint32_t status = 9999;
     std::string systemData = "InvalidStatusData";
     
@@ -4360,7 +4360,7 @@ TEST_F(DrmSessionManagerTests, SystemDataContainingSpecialOrCorruptCharacters)
 {
     std::cout << "Entering SystemDataContainingSpecialOrCorruptCharacters test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4369,7 +4369,7 @@ TEST_F(DrmSessionManagerTests, SystemDataContainingSpecialOrCorruptCharacters)
     DrmSessionManager drmManager(10, nullptr, cb);
     
     // Input with special characters in systemData.
-    uint32_t sessionHndle = 10;
+    std::string sessionHndle = "0ea2a09e-c402-4c7b-8a2a-741afe221b17";
     uint32_t status = 400;
     
     // Assign fixed-size array value using strncpy.
@@ -4411,7 +4411,7 @@ TEST_F(DrmSessionManagerTests, Destructor_ValidDestruction) {
     
     {
         std::cout << "Invoking DrmSessionManager constructor with maxDrmSessions = 5 and player = nullptr" << std::endl;
-        auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+        auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4457,7 +4457,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidLAProfileBegin) {
     std::cout << "Entering RegisterValidLAProfileBegin test" << std::endl;
     
     // Create DrmSessionManager object using a custom constructor (maxDrmSessions=3, dummy player pointer)
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4519,7 +4519,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyLAProfileBegin) {
     std::cout << "Entering RegisterEmptyLAProfileBegin test" << std::endl;
     
     // Create DrmSessionManager object using a custom constructor (maxDrmSessions=3, dummy player pointer)
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4575,7 +4575,7 @@ TEST_F(DrmSessionManagerTests, RegisterLAProfEnd_ValidCallback)
     std::cout << "Entering RegisterLAProfEnd_ValidCallback test" << std::endl;
     
     // Create an instance of DrmSessionManager with dummy parameters.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4636,7 +4636,7 @@ TEST_F(DrmSessionManagerTests, RegisterLAProfEnd_EmptyCallback)
 {
     std::cout << "Entering RegisterLAProfEnd_EmptyCallback test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4711,7 +4711,7 @@ TEST_F(DrmSessionManagerTests, RegisterLAProfEnd_MultiStreamTypes)
     std::cout << "Entering RegisterLAProfEnd_MultiStreamTypes test" << std::endl;
     
     // Create an instance of DrmSessionManager with dummy parameters.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4786,7 +4786,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidLAProfileErrorCallback)
     std::cout << "[DEBUG] Creating DrmSessionManager with maxDrmSessions=" << maxDrmSessions 
               << ", player pointer=" << playerPtr << std::endl;
     
-     auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+     auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4852,7 +4852,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyLAProfileErrorCallback)
     std::cout << "[DEBUG] Creating DrmSessionManager with maxDrmSessions=" << maxDrmSessions 
               << ", player pointer=" << playerPtr << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4905,7 +4905,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidCallbackNonNull) {
     std::cout << "Entering RegisterValidCallbackNonNull test" << std::endl;
     
     // Create an instance of DrmSessionManager using the custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -4970,7 +4970,7 @@ TEST_F(DrmSessionManagerTests, RegisterCallbackReturningNullSharedPtr) {
     std::cout << "Entering RegisterCallbackReturningNullSharedPtr test" << std::endl;
     
     // Create an instance of DrmSessionManager using the custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5032,7 +5032,7 @@ TEST_F(DrmSessionManagerTests, ReRegisterCallbackUpdate) {
     std::cout << "Entering ReRegisterCallbackUpdate test" << std::endl;
     
     // Create an instance of DrmSessionManager using the custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5130,7 +5130,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfBegin_ValidCallbackTest)
     };
 
     std::cout << "Creating DrmSessionManager object with maxDrmSessions=3 and player=nullptr" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5175,7 +5175,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfBegin_EmptyCallbackTest)
     std::cout << "Entering RegisterProfBegin_EmptyCallbackTest test" << std::endl;
     
     std::cout << "Creating DrmSessionManager object with maxDrmSessions=3 and player=nullptr" << std::endl;
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5231,7 +5231,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfEnd_ValidCallbackSetsFlag) {
     };
 
     // Create DrmSessionManager object using custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5285,7 +5285,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfEnd_UpdateExternalVariable) {
     };
 
     // Create DrmSessionManager object using custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5333,7 +5333,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfEnd_EmptyCallback) {
     std::cout << "Empty callback created" << std::endl;
     
     // Create DrmSessionManager object using custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5391,7 +5391,7 @@ TEST_F(DrmSessionManagerTests, RegisterProfEnd_OverwriteCallback) {
     };
 
     // Create DrmSessionManager object using custom constructor
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5457,7 +5457,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidProfileErrorCallback) {
     std::cout << "Entering RegisterValidProfileErrorCallback test" << std::endl;
     
     // Create DrmSessionManager object using custom constructor with dummy parameters.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5514,7 +5514,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyProfileErrorCallback) {
     std::cout << "Entering RegisterEmptyProfileErrorCallback test" << std::endl;
     
     // Create DrmSessionManager object using custom constructor with dummy parameters.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5567,7 +5567,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyProfileErrorCallback) {
 TEST_F(DrmSessionManagerTests, OverwriteExistingProfileErrorCallback) {
     std::cout << "Entering OverwriteExistingProfileErrorCallback test" << std::endl;
     
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5648,7 +5648,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidCallbackFunction) {
     std::cout << "Entering RegisterValidCallbackFunction test" << std::endl;
     
     // Create an object of DrmSessionManager using custom constructor.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5711,7 +5711,7 @@ TEST_F(DrmSessionManagerTests, RegisterEmptyCallbackFunction) {
     std::cout << "Entering RegisterEmptyCallbackFunction test" << std::endl;
     
     // Create an object of DrmSessionManager using default/custom constructor.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5756,7 +5756,7 @@ TEST_F(DrmSessionManagerTests, OverwriteExistingCallbackFunction) {
     std::cout << "Entering OverwriteExistingCallbackFunction test" << std::endl;
     
     // Create an instance of DrmSessionManager.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5825,7 +5825,7 @@ TEST_F(DrmSessionManagerTests, RegisterValidCallbackWithCapturedNullPointer) {
     std::cout << "Entering RegisterValidCallbackWithCapturedNullPointer test" << std::endl;
     
     // Create an object of DrmSessionManager.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5876,7 +5876,7 @@ TEST_F(DrmSessionManagerTests, UpdateDRMConfig_AllTrue) {
     std::cout << "Entering UpdateDRMConfig_AllTrue test" << std::endl;
     
     // Construct DrmSessionManager object using custom constructor.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5925,7 +5925,7 @@ TEST_F(DrmSessionManagerTests, UpdateDRMConfig_AllFalse) {
     std::cout << "Entering UpdateDRMConfig_AllFalse test" << std::endl;
     
     // Construct DrmSessionManager object using custom constructor.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -5977,7 +5977,7 @@ TEST_F(DrmSessionManagerTests, UpdateDRMConfig_Mixed1) {
     std::cout << "Entering UpdateDRMConfig_Mixed1 test" << std::endl;
     
     // Construct DrmSessionManager object using custom constructor.
-       auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+       auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;
@@ -6028,7 +6028,7 @@ TEST_F(DrmSessionManagerTests, UpdateDRMConfig_Mixed2) {
     std::cout << "Entering UpdateDRMConfig_Mixed2 test" << std::endl;
     
     // Construct DrmSessionManager object using custom constructor.
-    auto cb = [](uint32_t id1, uint32_t id2, const std::string& text) {
+    auto cb = [](const std::string& id1, uint32_t id2, const std::string& text) {
          std::cout << "Callback invoked with id1=" << id1
                   << ", id2=" << id2
                   << ", text=" << text << std::endl;

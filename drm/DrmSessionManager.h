@@ -187,7 +187,7 @@ private:
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
 	DrmSessionCreator m_sessionCreator;
-	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
+	std::function<void(const std::string&, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
 	 *
@@ -238,7 +238,7 @@ public:
 	 *         successfully against this header's larger layout and silently
 	 *         heap-corrupt on construction, instead of failing to compile.
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator = nullptr);
+	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator = nullptr);
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
@@ -246,7 +246,7 @@ public:
 	 *  @param[in]	status - Status of the session.
 	 *  @param[in]	systemData - System data.
 	 */
-	void watermarkSessionHandlerWrapper(uint32_t sessionHandle, uint32_t status, const std::string &systemData);
+	void watermarkSessionHandlerWrapper(const std::string& sessionHandle, uint32_t status, const std::string &systemData);
 
 	/**
 	 *  @fn registerCallback

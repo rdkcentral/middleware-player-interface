@@ -52,17 +52,17 @@ class SecManagerThunder : public ContentSecurityManager
 public:
         /**
          * @brief Sets DRM session state (e.g., active/inactive)
-         * @param sessionId DRM session ID
+         * @param sessionId Opaque string DRM session ID
          * @param active Whether the session should be marked active
          * @return true on success, false otherwise
          */
-        bool SetDrmSessionState(int64_t sessionId, bool active) override;
+        bool SetDrmSessionState(const std::string& sessionId, bool active) override;
         /**
          * @brief Closes an existing DRM session
-         * @param sessionId DRM session ID
+         * @param sessionId Opaque string DRM session ID; empty IDs are rejected
          * @return true if closed successfully
          */
-        void CloseDrmSession(int64_t sessionId) override;
+        void CloseDrmSession(const std::string& sessionId) override;
         /* Run AcquireLicenseOpenOrUpdate is the old AcquireLicense code
          * It is used by AcquireLicense() to for opening sessions & for calling update when this is required*/
         bool AcquireLicenseOpenOrUpdate( std::string clientId, std::string appId, const char* licenseUrl, const char* moneyTraceMetadata[][2],
@@ -87,7 +87,7 @@ public:
          * @param position Current position in seconds
          * @return true if command succeeded
          */
-        bool SetPlaybackPosition(int64_t sessionId, float speed, int32_t position) override;
+        bool SetPlaybackPosition(const std::string& sessionId, float speed, int32_t position) override;
         /**
          * @brief Enables or disables visual watermark
          * @param show Show/hide flag
@@ -103,11 +103,11 @@ public:
 	/**
 	 * @fn setWindowSize
 	 *
-	 * @param[in] sessionId - session id
+	 * @param[in] sessionId - opaque string session id
 	 * @param[in] video_width - video width 
 	 * @param[in] video_height - video height 
 	 */
-	bool setWindowSize(int64_t sessionId, int64_t video_width, int64_t video_height);
+	bool setWindowSize(const std::string& sessionId, int64_t video_width, int64_t video_height);
 
 	/**
 	 * @fn getSchedulerStatus
@@ -163,7 +163,7 @@ protected:
          * @param[in] sessionId - session id
          *  
          */
-        bool loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
+        bool loadClutWatermark(const std::string& sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize, const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio);
 	/**
 	 *   @fn CreateWatermark
 	 */
@@ -175,7 +175,7 @@ protected:
 	/**
 	 *   @fn GetWaterMarkPalette
 	 */
-	void GetWaterMarkPalette(int sessionId, int graphicId);
+	void GetWaterMarkPalette(const std::string& sessionId, int graphicId);
 	/**
 	 *   @fn ModifyWatermarkPalette
 	 */
