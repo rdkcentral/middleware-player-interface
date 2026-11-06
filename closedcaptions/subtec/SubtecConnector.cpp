@@ -87,37 +87,47 @@ namespace ccMgrAPI
     mrcc_Error ccShow(void)
     {
         CCDataController::Instance()->sendUnmute();
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccHide(void)
     {
         CCDataController::Instance()->sendMute();
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccSetAttributes(gsw_CcAttributes * attrib, short type, gsw_CcType ccType)
     {
+        if (!attrib)
+        {
+            MW_LOG_WARN("ccSetAttributes: attrib pointer is NULL");
+            return CC_VL_OS_API_RESULT_FAILED;
+        }
         CCDataController::Instance()->sendCCSetAttribute(attrib, type, ccType);
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccSetDigitalChannel(unsigned int channel)
     {
         CCDataController::Instance()->ccSetDigitalChannel(channel);
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccSetAnalogChannel(unsigned int channel)
     {
         CCDataController::Instance()->ccSetAnalogChannel(channel);
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccGetAttributes(gsw_CcAttributes * attrib, gsw_CcType ccType)
     {
+        if (!attrib)
+        {
+            MW_LOG_WARN("ccGetAttributes: attrib pointer is NULL");
+            return CC_VL_OS_API_RESULT_FAILED;
+        }
         CCDataController::Instance()->ccGetAttributes(attrib, ccType);
-        return {};
+        return CC_VL_OS_API_RESULT_SUCCESS;
     }
 
     mrcc_Error ccGetCapability(gsw_CcAttribType attribType, gsw_CcType ccType, void **values, unsigned int *size)
