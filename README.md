@@ -95,7 +95,7 @@ graph TD
         IPP["InterfacePlayerPriv\n/ GstPlayerPriv\n(Pipeline State)"]
         SCHED["PlayerScheduler\n(Async Worker Thread)"]
         GST["GStreamer Pipeline\n(video/audio/subtitle tracks)"]
-        SOCUTILS["SocUtils → SocInterface\n(Platform Abstraction)"]
+        SOCUTILS["SocUtils -> SocInterface\n(Platform Abstraction)"]
         DRM_MGR["DrmSessionManager"]
         DRM_SESS["DrmSession / OCDMSessionAdapter"]
         CC["PlayerCCManager\n(Subtec / Rialto)"]
@@ -206,7 +206,7 @@ sequenceDiagram
     MPI->>Priv: gst_app_src_push_buffer()
     Priv-->>MPI: GST_FLOW_OK
 
-    Note over Priv: First buffer decoded → NotifyFirstFrame()
+    Note over Priv: First buffer decoded -> NotifyFirstFrame()
     MPI->>Engine: notifyFirstFrameCallback() (synchronous)
     Priv->>MPI: IdleCallbackOnFirstFrame() (via PlayerScheduler)
     MPI->>Engine: TriggerEvent(InterfaceCB::firstVideoFrameReceived)
@@ -273,7 +273,7 @@ sequenceDiagram
     Engine->>MPI: SendHelper(mediaType, encryptedBuffer, drmInfo)
     MPI->>GST: gst_app_src_push_buffer(encryptedBuffer)
     GST->>DecryptPlugin: encrypted buffer + protection metadata
-    Note over DecryptPlugin: InterfacePlayerRDK does not create the session —<br/>the decryptor creates it from protection data
+    Note over DecryptPlugin: InterfacePlayerRDK does not create the session -<br/>the decryptor creates it from protection data
     DecryptPlugin->>DrmMgr: createDrmSession(keyId, drmInfo)
     DrmMgr->>OCDM: OpenCDMSession / generateDRMSession()
     OCDM-->>DrmMgr: session handle
@@ -408,7 +408,7 @@ sequenceDiagram
     IARM->>DevIARM: HDMIEventHandler(eventId, data)
     DevIARM->>ExtIface: SetHDMIStatus()
     ExtIface->>ExtIface: update m_hdcpCurrentProtocol, m_isHDCPEnabled
-    Note over ExtIface,Engine: No push callback — consumers query the cached<br/>state, e.g. via isHDCPConnection2_2()
+    Note over ExtIface,Engine: No push callback - consumers query the cached<br/>state, e.g. via isHDCPConnection2_2()
 ```
 
 ---
