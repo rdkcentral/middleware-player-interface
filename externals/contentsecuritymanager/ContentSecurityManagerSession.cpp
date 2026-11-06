@@ -24,17 +24,18 @@
 
 #include "ContentSecurityManager.h"
 #include "PlayerLogManager.h"
-std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityManagerSession::SessionManager::getInstance(int64_t sessionID, std::size_t inputSummaryHash)
+#include <utility>
+std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityManagerSession::SessionManager::getInstance(const std::string& sessionID, std::size_t inputSummaryHash)
 {
         std::shared_ptr<SessionManager> returnValue;
 
         static std::mutex instancesMutex;
         std::lock_guard<std::mutex> lock{instancesMutex};
-        static std::map<int64_t, std::weak_ptr<SessionManager>> instances;
+        static std::map<std::string, std::weak_ptr<SessionManager>> instances;
 
         //Remove pointers to expired instances
         {
-                std::vector<int64_t> keysToRemove;
+                std::vector<std::string> keysToRemove;
                 for (auto i : instances)
                 {
                         if(i.second.expired())
@@ -57,10 +58,10 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                 }
         }
 
-        /* Only create or retrieve instances for valid sessionIDs.
-         * <0 is used as an invalid value e.g. CONTENT_SECURITY_MGR_INVALID_SESSION_ID
-         * 0 removes all sessions which is not the intended behaviour here*/
-        if(sessionID>0)
+        /* Session IDs are opaque strings. Empty IDs close all sessions in
+         * SecManager and must not be used for an individual session.
+         * Retain rejection of legacy zero and negative invalid IDs. */
+        if(!sessionID.empty() && sessionID != "0" && sessionID.front() != '-')
         {
                 if(instances.count(sessionID)>0)
                 {
@@ -70,8 +71,8 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                         if(!returnValue)
                         {
                                 //unexpected
-                                MW_LOG_WARN("ContentSecurityManagerSession: session ID %" PRId64 " reused or session closed too early.",
-                                sessionID);
+                                MW_LOG_WARN("ContentSecurityManagerSession: session ID %s reused or session closed too early.",
+                                sessionID.c_str());
                         }
                 }
 
@@ -80,7 +81,7 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                         if(returnValue->getInputSummaryHash()!=inputSummaryHash)
                         {
                                 //this should only occur after a successful updatePlaybackSession
-                                MW_LOG_MIL("ContentSecurityManagerSession: session ID %" PRId64 " input data changed.", sessionID);
+                                MW_LOG_MIL("ContentSecurityManagerSession: session ID %s input data changed.", sessionID.c_str());
                                 returnValue->setInputSummaryHash(inputSummaryHash);
                         }
                 }
@@ -90,14 +91,15 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                         * create a new instance & save a pointer to it for possible future reuse*/
                         returnValue.reset(new SessionManager{sessionID, inputSummaryHash});
                         instances[sessionID] = returnValue;
-                        MW_LOG_WARN("ContentSecurityManagerSession: new instance created for ID:%" PRId64 ", %zu instances total.",
-                        sessionID,
+                        MW_LOG_WARN("ContentSecurityManagerSession: new instance created for ID:%s, %zu instances total.",
+                        sessionID.c_str(),
                         instances.size());
                 }
+                MW_LOG_DEBUG("[SessionIdString] MPI stored/reused string sessionId='%s'", sessionID.c_str());
         }
         else
         {
-                MW_LOG_WARN("ContentSecurityManagerSession: invalid ID:%" PRId64 ".", sessionID);
+                MW_LOG_WARN("ContentSecurityManagerSession: invalid ID:%s.", sessionID.c_str());
         }
 
         return returnValue;
@@ -105,7 +107,7 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
 
 ContentSecurityManagerSession::SessionManager::~SessionManager()
 {
-        if(mID>0)
+        if(!mID.empty())
         {
                 ContentSecurityManager::GetInstance()->ReleaseSession(mID);
         }
@@ -119,20 +121,20 @@ void ContentSecurityManagerSession::SessionManager::setInputSummaryHash(std::siz
 }
 
 
-ContentSecurityManagerSession::SessionManager::SessionManager(int64_t sessionID, std::size_t inputSummaryHash):
-mID(sessionID),
+ContentSecurityManagerSession::SessionManager::SessionManager(std::string sessionID, std::size_t inputSummaryHash):
+mID(std::move(sessionID)),
 mInputSummaryHash(inputSummaryHash)
 {};
 
-ContentSecurityManagerSession::ContentSecurityManagerSession(int64_t sessionID, std::size_t inputSummaryHash):
+ContentSecurityManagerSession::ContentSecurityManagerSession(const std::string& sessionID, std::size_t inputSummaryHash):
 mpSessionManager(ContentSecurityManagerSession::SessionManager::getInstance(sessionID, inputSummaryHash)),
 sessionIdMutex()
 {};
 
-int64_t ContentSecurityManagerSession::getSessionID(void) const
+std::string ContentSecurityManagerSession::getSessionID(void) const
 {
         std::lock_guard<std::mutex>lock(sessionIdMutex);
-        int64_t ID = CONTENT_SECURITY_MGR_INVALID_SESSION_ID;
+        std::string ID = CONTENT_SECURITY_MGR_INVALID_SESSION_ID;
         if(mpSessionManager)
         {
                 ID = mpSessionManager->getID();
@@ -152,4 +154,3 @@ std::size_t ContentSecurityManagerSession::getInputSummaryHash()
 
         return hash;
 }
-

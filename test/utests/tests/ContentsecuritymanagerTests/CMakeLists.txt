@@ -79,3 +79,26 @@ endif()
 target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})
+
+find_package(WPEFrameworkCore QUIET)
+find_package(WPEFrameworkWebSocket QUIET)
+if (WPEFrameworkCore_FOUND AND WPEFrameworkWebSocket_FOUND)
+    add_executable(SecManagerThunderTests
+        PlayerContentSecurityRun.cpp
+        SecManagerThunderTests.cpp
+        ${PLAYER_SOURCES}
+        ${PLAYER_ROOT}/externals/contentsecuritymanager/SecManagerThunder.cpp
+        ${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp
+        ${PLAYER_ROOT}/baseConversion/_base64.cpp)
+    target_compile_definitions(SecManagerThunderTests PRIVATE USE_SECMANAGER)
+    target_compile_options(SecManagerThunderTests PRIVATE -Werror=format)
+    target_link_libraries(SecManagerThunderTests PRIVATE
+        WPEFrameworkCore::CompileSettings WPEFrameworkCore::WPEFrameworkCore
+        WPEFrameworkWebSocket::WPEFrameworkWebSocket
+        fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS}
+        ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+    set_target_properties(SecManagerThunderTests PROPERTIES FOLDER "utests")
+    player_utest_run_add(SecManagerThunderTests)
+else()
+    message(STATUS "Thunder SDK not found; skipping SecManagerThunderTests")
+endif()
