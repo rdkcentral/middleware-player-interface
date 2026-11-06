@@ -130,7 +130,7 @@ struct gst_media_stream
 	bool resetPosition;                       /**< To indicate that the position of the stream is reset */
 	bool bufferUnderrun;
 	bool eosReached;           /**< To indicate the status of End of Stream reached */
-	bool sourceConfigured; /**< To indicate that the current source is initialized and configured */
+	std::atomic<bool> sourceConfigured; /**< To indicate that the current source is initialized and configured */
 	pthread_mutex_t sourceLock;
 	uint32_t timeScale;
 	int32_t trackId;                   /**< Current Audio Track Id,so far it is implemented for AC4 track selection only */
@@ -285,7 +285,7 @@ class InterfacePlayerPriv
 		 * @param[in] mediaType stream type
 		 * @param[in] pts position value of first buffer
 		 */
-		void SendGstEvents(int mediaType, GstClockTime pts, int enableGstPosQuery, bool enablePTSReStamp, int vodTrickModeFPS);
+		void SendGstEvents(int mediaType, GstClockTime pts, int enableGstPosQuery, bool enablePTSReStamp, int vodTrickModeFPS, GstElement *source = nullptr);
 
 		/**
 		 * @brief Sends a new segment event.
@@ -293,7 +293,7 @@ class InterfacePlayerPriv
 		 * @param[in] startPts The start PTS value.
 		 * @param[in] stopPts The stop PTS value.
 		 */
-		void SendNewSegmentEvent(int mediaType, GstClockTime startPts, GstClockTime stopPts);
+		void SendNewSegmentEvent(int mediaType, GstClockTime startPts, GstClockTime stopPts, GstElement *source = nullptr);
 
 		/**
 		 * @fn SendQtDemuxOverrideEvent
@@ -303,6 +303,6 @@ class InterfacePlayerPriv
 		 * @param[in] len length of buffer
 		 * @ret TRUE if override is enabled, FALSE otherwise
 		 */
-		gboolean SendQtDemuxOverrideEvent(int mediaType, GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr = nullptr, size_t len = 0);
+		gboolean SendQtDemuxOverrideEvent(int mediaType, GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr = nullptr, size_t len = 0, GstElement *source = nullptr);
 };
 #endif
