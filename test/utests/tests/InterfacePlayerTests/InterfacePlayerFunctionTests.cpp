@@ -29,6 +29,8 @@
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
+#include <chrono>
+#include <thread>
 
 
 
@@ -842,9 +844,11 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 
 	EXPECT_CALL(*g_mockGstUtils, GetCaps(_)).WillOnce(Return(&caps));
 
+	stream->source = static_cast<GstElement*>(source);	// sourceConfigured is only set for the current source
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
 	EXPECT_TRUE(stream->sourceConfigured);
+	stream->source = nullptr;
 
 	delete g_mockGstUtils;
 }
@@ -969,9 +973,11 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
 
 	EXPECT_CALL(*g_mockGstUtils, GetCaps(_)).WillOnce(Return(nullptr));
 
+	stream->source = static_cast<GstElement*>(source);	// sourceConfigured is only set for the current source
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
 	EXPECT_TRUE(stream->sourceConfigured);
+	stream->source = nullptr;
 
 	delete g_mockGstUtils;
 }
@@ -993,7 +999,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_PendingSeek)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, mPlayerContext->seekPosition * GST_SECOND))
 		.WillOnce(Return(TRUE));
 
-	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
+	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS, stream->source);
 
 	EXPECT_FALSE(stream->pendingSeek);
 }
@@ -1035,7 +1041,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventOtherTrack)
 		.WillRepeatedly(Return(TRUE));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
 
-	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
+	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS, stream->source);
 
 	EXPECT_FALSE(stream->resetPosition);
 }
@@ -1059,7 +1065,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventSameTrack)
 		.WillRepeatedly(Return(FALSE));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
 
-	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
+	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS, stream->source);
 
 	EXPECT_FALSE(stream->resetPosition);
 }
@@ -1086,7 +1092,7 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampFalse)
 		.WillRepeatedly(Return(TRUE));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(1);
 
-	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len);
+	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len, stream->source);
 
 	EXPECT_TRUE(result);
 }
@@ -1108,12 +1114,14 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampTrue)
 
 	GstPad pad = {};
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(GST_ELEMENT(stream->source), StrEq("src")))
-		.WillRepeatedly(Return(&pad));
+		.Times(1)
+		.WillOnce(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_, _))
-		.WillRepeatedly(Return(FALSE));
+		.Times(1)
+		.WillOnce(Return(FALSE));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(1);
 
-	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len);
+	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len, stream->source);
 
 	EXPECT_FALSE(result);
 }
@@ -2010,6 +2018,165 @@ TEST_F(InterfacePlayerTests, WaitForSourceSetup_PauseInjector)
 	EXPECT_FALSE(stream->sourceConfigured);
 }
 
+static MediaSample MakeSendHelperTestSample()
+{
+	return MediaSample(std::vector<uint8_t>{0x00, 0x01, 0x02, 0x03}, 1.0, 1.0, 0.04);
+}
+
+// Mimics TearDownStream followed by reconfiguration publishing a new appsrc.
+static void SimulateTeardownAndReplaceSource(InterfacePlayerRDK *player, gst_media_stream *stream, GstElement *replacement)
+{
+	pthread_mutex_lock(&stream->sourceLock);
+	stream->teardownGeneration++;
+	stream->source = replacement;
+	stream->bufferUnderrun = true;
+	stream->firstBufferProcessed = false;
+	stream->sourceConfigured.store(true, std::memory_order_release);
+	pthread_mutex_unlock(&stream->sourceLock);
+	player->mSourceSetupCV.notify_all();
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_SourceSetupCompletesWhileWaiting_PushesToConfiguredSource)
+{
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	gst_media_stream *stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	stream->format = GST_FORMAT_AUDIO_ES_AAC;
+	stream->source = &appsrc;
+	stream->sourceConfigured = false;
+	stream->resetPosition = false;
+	mInterfaceGstPlayer->mPauseInjector = false;
+
+	ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::ReturnArg<0>());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(AnyNumber());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&appsrc)).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(reinterpret_cast<GstAppSrc *>(&appsrc), NotNull()))
+		.WillOnce(Return(GST_FLOW_OK));
+	stream->firstBufferProcessed = false;
+
+	bool discontinuity = false, notifyFirstBufferProcessed = false, sendNewSegmentEvent = false, resetTrickUTC = false, firstBufferPushed = false;
+	bool result = false;
+	std::thread sender([&]() {
+		result = mInterfaceGstPlayer->SendHelper(eGST_MEDIATYPE_AUDIO, MakeSendHelperTestSample(), false, discontinuity,
+			notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed);
+	});
+	// Let the sender reach WaitForSourceSetup (1s timeout) before setup completes.
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	pthread_mutex_lock(&stream->sourceLock);
+	stream->sourceConfigured.store(true, std::memory_order_release);
+	pthread_mutex_unlock(&stream->sourceLock);
+	mInterfaceGstPlayer->mSourceSetupCV.notify_all();
+	sender.join();
+
+	EXPECT_TRUE(result);
+	EXPECT_TRUE(stream->firstBufferProcessed);
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_TeardownAndReplaceWhileWaiting_DropsStaleSample)
+{
+	GstElement oldAppsrc = {.object = {.name = (gchar *)"oldAppsrc"}};
+	GstElement newAppsrc = {.object = {.name = (gchar *)"newAppsrc"}};
+	gst_media_stream *stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	stream->format = GST_FORMAT_AUDIO_ES_AAC;
+	stream->source = &oldAppsrc;
+	stream->sourceConfigured = false;
+	stream->resetPosition = false;
+	mInterfaceGstPlayer->mPauseInjector = false;
+
+	ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::ReturnArg<0>());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(_)).Times(0);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, _)).Times(0);
+
+	bool discontinuity = false, notifyFirstBufferProcessed = false, sendNewSegmentEvent = false, resetTrickUTC = false, firstBufferPushed = false;
+	bool result = true;
+	std::thread sender([&]() {
+		result = mInterfaceGstPlayer->SendHelper(eGST_MEDIATYPE_AUDIO, MakeSendHelperTestSample(), false, discontinuity,
+			notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed);
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	SimulateTeardownAndReplaceSource(mInterfaceGstPlayer, stream, &newAppsrc);
+	sender.join();
+
+	EXPECT_FALSE(result);
+	EXPECT_EQ(stream->source, &newAppsrc);
+	EXPECT_TRUE(stream->bufferUnderrun);
+	EXPECT_FALSE(stream->firstBufferProcessed);
+	EXPECT_FALSE(firstBufferPushed);
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_TeardownDuringPush_StaleCompletionIgnored)
+{
+	GstElement oldAppsrc = {.object = {.name = (gchar *)"oldAppsrc"}};
+	GstElement newAppsrc = {.object = {.name = (gchar *)"newAppsrc"}};
+	gst_media_stream *stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	stream->format = GST_FORMAT_AUDIO_ES_AAC;
+	stream->source = &oldAppsrc;
+	stream->sourceConfigured = true;
+	stream->resetPosition = false;
+	stream->firstBufferProcessed = false;
+	mInterfaceGstPlayer->mPauseInjector = false;
+
+	ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::ReturnArg<0>());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(AnyNumber());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&oldAppsrc)).Times(1);
+	// Teardown + replacement happen while the push is in flight with sourceLock released.
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(reinterpret_cast<GstAppSrc *>(&oldAppsrc), NotNull()))
+		.WillOnce(::testing::InvokeWithoutArgs([&]() {
+			SimulateTeardownAndReplaceSource(mInterfaceGstPlayer, stream, &newAppsrc);
+			return GST_FLOW_OK;
+		}));
+
+	bool discontinuity = false, notifyFirstBufferProcessed = false, sendNewSegmentEvent = false, resetTrickUTC = false, firstBufferPushed = false;
+	bool result = mInterfaceGstPlayer->SendHelper(eGST_MEDIATYPE_AUDIO, MakeSendHelperTestSample(), false, discontinuity,
+		notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed);
+
+	EXPECT_FALSE(result);
+	EXPECT_EQ(stream->source, &newAppsrc);
+	EXPECT_TRUE(stream->bufferUnderrun);
+	EXPECT_FALSE(stream->firstBufferProcessed);
+	EXPECT_FALSE(firstBufferPushed);
+	EXPECT_FALSE(notifyFirstBufferProcessed);
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_FirstPushFlushing_CompletesFirstBufferHandling)
+{
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	gst_media_stream *stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	stream->format = GST_FORMAT_AUDIO_ES_AAC;
+	stream->source = &appsrc;
+	stream->sourceConfigured = true;
+	stream->resetPosition = true;
+	mPlayerContext->using_westerossink = false;
+	mPlayerContext->usingRialtoSink = false;
+	mInterfaceGstPlayer->mPauseInjector = false;
+
+	ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::ReturnArg<0>());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(AnyNumber());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&appsrc)).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(reinterpret_cast<GstAppSrc *>(&appsrc), NotNull()))
+		.WillOnce(Return(GST_FLOW_FLUSHING));
+
+	bool discontinuity = false, notifyFirstBufferProcessed = false, sendNewSegmentEvent = false, resetTrickUTC = false, firstBufferPushed = false;
+	bool result = mInterfaceGstPlayer->SendHelper(eGST_MEDIATYPE_AUDIO, MakeSendHelperTestSample(), false, discontinuity,
+		notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed);
+
+	// SendGstEvents consumed resetPosition, so first-buffer completion must not be lost on FLUSHING.
+	EXPECT_TRUE(result);
+	EXPECT_FALSE(stream->resetPosition);
+	EXPECT_TRUE(discontinuity);
+	EXPECT_TRUE(notifyFirstBufferProcessed);
+	EXPECT_FALSE(firstBufferPushed);
+}
+
+TEST_F(InterfacePlayerTests, TearDownStream_IncrementsTeardownGeneration)
+{
+	gst_media_stream *stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
+	const uint32_t before = stream->teardownGeneration;
+
+	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_AUDIO);
+
+	EXPECT_EQ(stream->teardownGeneration, before + 1);
+}
+
 TEST_F(InterfacePlayerTests, HandleVideoBufferSent_SubsequentBuffer)
 {
 	mPlayerContext->numberOfVideoBuffersSent = 5;
@@ -2075,6 +2242,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_CapsNull)
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
 	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
 
 	// gst_app_src_get_caps returns NULL - segment cannot be pushed
 	EXPECT_CALL(*g_mockGStreamer, gst_segment_init(_, GST_FORMAT_TIME))
@@ -2088,7 +2256,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_CapsNull)
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_sample(_, _))
 		.Times(0);
 
-	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts, mPlayerContext->stream[mediaType].source);
 }
 
 TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
@@ -2098,6 +2266,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
 	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
 
 	GstCaps fakeCaps = {};
 //	GstSample fakeSample = {};
@@ -2115,7 +2284,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
 		.Times(2);
 
-	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts, mPlayerContext->stream[mediaType].source);
 }
 
 TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
@@ -2125,6 +2294,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
 	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
 
 	GstCaps fakeCaps = {};
 	//GstSample fakeSample = {};
@@ -2142,7 +2312,7 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
 	EXPECT_CALL(*g_mockGStreamer, gst_mini_object_unref(_))
 		.Times(2);
 
-	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts);
+	mInterfacePrivatePlayer->SendNewSegmentEvent(mediaType, startPts, stopPts, mPlayerContext->stream[mediaType].source);
 }
 
 TEST_F(InterfacePlayerTests, Queue_and_ClearProtectionEvent)
