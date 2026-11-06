@@ -23,6 +23,7 @@
  */
 
 #include <vector>
+#include <cstring>
 
 #include "PlayerJsonObject.h"
 #include "_base64.h"
@@ -36,6 +37,11 @@ PlayerJsonObject::PlayerJsonObject() : mParent(NULL), mJsonObj()
 
 PlayerJsonObject::PlayerJsonObject(const std::string& jsonStr) : mParent(NULL), mJsonObj()
 {
+	if (jsonStr.empty())
+	{
+		throw PlayerJsonParseException();
+	}
+	
 	mJsonObj = cJSON_Parse(jsonStr.c_str());
 
 	if (!mJsonObj)
@@ -46,6 +52,16 @@ PlayerJsonObject::PlayerJsonObject(const std::string& jsonStr) : mParent(NULL), 
 
 PlayerJsonObject::PlayerJsonObject(const char* jsonStr) : mParent(NULL), mJsonObj()
 {
+	if (NULL == jsonStr)
+	{
+		throw PlayerJsonParseException();
+	}
+	
+	if (strlen(jsonStr) == 0)
+	{
+		throw PlayerJsonParseException();
+	}
+	
 	mJsonObj = cJSON_Parse(jsonStr);
 
 	if (!mJsonObj)
