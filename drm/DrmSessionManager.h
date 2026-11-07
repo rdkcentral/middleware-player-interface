@@ -329,7 +329,7 @@ public:
 	 *  @return		bool - true if keyId is already marked as failed or processed,
 	 * 				false if key is not cached
 	 */
-	bool IsKeyIdProcessed(std::vector<uint8_t> keyIdArray, bool &status);
+	bool IsKeyIdProcessed(const std::vector<uint8_t> &keyIdArray, bool &status);
 	/**
 	 * @fn Validate multiple key IDs for a given DRM session slot using the provided DrmHelper
 	 *
@@ -437,7 +437,7 @@ public:
 	/**
 	 * @fn initializeDrmSession
 	 */
-	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int &err );
+	KeyState initializeDrmSession(const DrmHelperPtr &drmHelper, int sessionSlot,  int &err );
 	/**
 	 * @fn notifyCleanup
 	 */
