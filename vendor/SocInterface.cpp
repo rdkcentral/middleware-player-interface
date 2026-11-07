@@ -27,6 +27,7 @@
 #include "vendor/mtk/MtkSocInterface.h"
 #endif
 
+
 /**Initially re-sets the IsRialtoMode */
 bool SocInterface::mIsRialtoMode = false;
 
