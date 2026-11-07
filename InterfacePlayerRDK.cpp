@@ -195,7 +195,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(), mEncrypt(NULL), mDRMSessionManager(NULL),
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
@@ -231,10 +231,6 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
 	DestroyPipeline();
-	if (mDrmSystem)
-	{
-		delete[] mDrmSystem;
-	}
 	/* safe delete configuration parameter */
 	MW_SAFE_DELETE(m_gstConfigParam);
 	mScheduler.StopScheduler();
@@ -294,6 +290,8 @@ aSyncControl(), syncControl(), callbackControl(), seekPosition(0)
 	 * using the westerossink connected using westeros compositor.
 	 */
 	strcpy(videoRectangle, "");
+	videoRectangleWidth = 0;
+	videoRectangleHeight = 0;
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		protectionEvent[i] = NULL;
@@ -1072,20 +1070,15 @@ void InterfacePlayerRDK::SetPreferredDRM(const char *drmID)
 {
 	if (drmID != NULL)
 	{
-		if (mDrmSystem != NULL)
-		{
-			delete[] mDrmSystem;
-		}
-		mDrmSystem = new char[strlen(drmID) + 1];
-		if (mDrmSystem != NULL)
-		{
-			strcpy(mDrmSystem, drmID);
-		}
-		else
-		{
-			MW_LOG_ERR("Memory allocation failed for mDrmSystem\n");
-		}
+		std::lock_guard<std::mutex> lock(mDrmSystemMutex);
+		mDrmSystem = drmID;
 	}
+}
+
+std::string InterfacePlayerRDK::GetPreferredDRM() const
+{
+	std::lock_guard<std::mutex> lock(mDrmSystemMutex);
+	return mDrmSystem;
 }
 
 /**
@@ -2208,7 +2201,8 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
 		{
 			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
@@ -2607,7 +2601,10 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				auto subtitlebin = gst_bin_new("subtitlebin");
 				auto vipertransform = gst_element_factory_make("vipertransform", NULL);
 				gst_bin_add_many(GST_BIN(subtitlebin),vipertransform,textsink,NULL);
-				gst_element_link(vipertransform, textsink);
+				if (!gst_element_link(vipertransform, textsink))
+				{
+					MW_LOG_ERR("Failed to link vipertransform to rialtomsesubtitlesink; subtitles will not render");
+				}
 				gst_element_add_pad(subtitlebin, gst_ghost_pad_new("sink", gst_element_get_static_pad(vipertransform, "sink")));
 
 				g_object_set(stream->sinkbin, "text-sink", subtitlebin, NULL);
@@ -3160,14 +3157,13 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
  */
 void InterfacePlayerRDK::GetVideoSize(int &width, int &height)
 {
-	int x;
-	int y;
-	int w = 0;
-	int h = 0;
-	if ((4 == sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle, "%d,%d,%d,%d", &x, &y, &w, &h)) && (w > 0) && (h > 0))
+	// Use the dimensions cached by SetVideoRectangle() instead of re-parsing
+	// the "x,y,w,h" string on every call.
+	if (interfacePlayerPriv->gstPrivateContext->videoRectangleWidth > 0 &&
+	    interfacePlayerPriv->gstPrivateContext->videoRectangleHeight > 0)
 	{
-		width = w;
-		height = h;
+		width  = interfacePlayerPriv->gstPrivateContext->videoRectangleWidth;
+		height = interfacePlayerPriv->gstPrivateContext->videoRectangleHeight;
 	}
 }
 
@@ -3206,6 +3202,8 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 		return;
 	}
 	snprintf(interfacePlayerPriv->gstPrivateContext->videoRectangle, sizeof(interfacePlayerPriv->gstPrivateContext->videoRectangle), "%d,%d,%d,%d", x,y,w,h);
+	interfacePlayerPriv->gstPrivateContext->videoRectangleWidth  = w;
+	interfacePlayerPriv->gstPrivateContext->videoRectangleHeight = h;
 	MW_LOG_MIL("Rect %s, video_sink =%p",
 			   interfacePlayerPriv->gstPrivateContext->videoRectangle, interfacePlayerPriv->gstPrivateContext->video_sink);
 	if (m_gstConfigParam->enableRectPropertyCfg)
@@ -5709,10 +5707,11 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 			gst_message_parse_context_type(msg, &contextType);
 			if (!g_strcmp0(contextType, "drm-preferred-decryption-system-id"))
 			{
-				MW_LOG_MIL("Setting %s as preferred drm",pInterfacePlayerRDK->mDrmSystem);
+				const std::string drmSystem = pInterfacePlayerRDK->GetPreferredDRM();
+				MW_LOG_MIL("Setting %s as preferred drm", drmSystem.c_str());
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
-				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem,  NULL);
+				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, drmSystem.empty() ? NULL : drmSystem.c_str(),  NULL);
 				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
 			}
 
@@ -6199,7 +6198,8 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);

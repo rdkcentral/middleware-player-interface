@@ -47,6 +47,7 @@ typedef enum {
 #endif
 #endif
 
+#include <atomic>
 #include <memory>
 #include "PlayerExternalsInterfaceBase.h"
 #include <mutex>
@@ -83,10 +84,13 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
             IARM
         };
     
-        dsHdcpProtocolVersion_t m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+        std::atomic<dsHdcpProtocolVersion_t> m_hdcpCurrentProtocol{dsHDCP_VERSION_1X};
 
         //replace-start
         std::shared_ptr<DeviceInterfaceBase> m_pDeviceInterfaceBase = nullptr;
+        // Set once when the device interface is observed unavailable, so a
+        // warning is logged per state transition instead of per call.
+        std::atomic<bool> m_deviceInterfaceUnavailableLogged{false};
         //replace-with
         //std::shared_ptr<DeviceFireboltInterface> m_pDeviceInterfaceBase = nullptr;
         //replace-end
@@ -159,7 +163,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
          * @brief Is current HDCP protocol 2.2
          * @return True if current HDCP protocol is 2.2. False, if not.
          */
-        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol == dsHDCP_VERSION_2X; }
+        bool isHDCPConnection2_2() override { return m_hdcpCurrentProtocol.load() == dsHDCP_VERSION_2X; }
 
         /**
          * @fn GetActiveInterface

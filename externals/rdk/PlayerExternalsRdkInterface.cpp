@@ -74,6 +74,11 @@ void PlayerExternalsRdkInterface::Initialize()
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
     m_pDeviceInterfaceBase = DeviceFireboltInterface::GetInstance();
+    m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("Initialize: DeviceFireboltInterface::GetInstance() returned null");
+    }
     DeviceFireboltInterface::Initialize();
     m_initialized = PlayerExternalsRdkInterface::InitState::FIREBOLT;
 #else
@@ -111,6 +116,7 @@ void PlayerExternalsRdkInterface::Initialize()
     }
     // Reset before assigning new interface
     m_pDeviceInterfaceBase = nullptr;
+    m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
     if(useFireboltInContainer)
     {
         MW_PRE_LOGGER_LOG("Using Firebolt (containerized environment) \n");
@@ -124,6 +130,10 @@ void PlayerExternalsRdkInterface::Initialize()
         m_pDeviceInterfaceBase = DeviceIARMInterface::GetInstance();
         DeviceIARMInterface::Initialize();
         m_initialized = PlayerExternalsRdkInterface::InitState::IARM;
+    }
+    if (!m_pDeviceInterfaceBase)
+    {
+        MW_LOG_ERR("Initialize: device interface GetInstance() returned null");
     }
     //remove-end
 #endif // USE_FIREBOLT
@@ -333,20 +343,20 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
     if(m_isHDCPEnabled) {
         if(hdcpCurrentProtocol == dsHDCP_VERSION_2X) {
-            m_hdcpCurrentProtocol = hdcpCurrentProtocol;
+            m_hdcpCurrentProtocol.store(hdcpCurrentProtocol);
         }
         else {
-            m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
+            m_hdcpCurrentProtocol.store(dsHDCP_VERSION_1X);
         }
-        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+        MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol.load() == dsHDCP_VERSION_2X ? "2.x" : "1.4");
     }
     else {
         MW_LOG_WARN("DeviceSettings HDCP is not enabled\n");
     }
 
     if(!isConnected) {
-        m_hdcpCurrentProtocol = dsHDCP_VERSION_1X;
-        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol);
+        m_hdcpCurrentProtocol.store(dsHDCP_VERSION_1X);
+        MW_LOG_WARN(" GetHDCPVersion: Did not detect HDCP version defaulting to 1.4 (%d)\n", m_hdcpCurrentProtocol.load());
     }
 
 
@@ -356,8 +366,8 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
 void PlayerExternalsRdkInterface::setHdcpProtocol(dsHdcpProtocolVersion_t t_protocol)
 {
-    m_hdcpCurrentProtocol = t_protocol;
-    MW_LOG_WARN(" detected HDCP version %s\n", m_hdcpCurrentProtocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
+    m_hdcpCurrentProtocol.store(t_protocol);
+    MW_LOG_WARN(" detected HDCP version %s\n", t_protocol == dsHDCP_VERSION_2X ? "2.x" : "1.4");
 }
 
 std::shared_ptr<DeviceInterfaceBase> PlayerExternalsRdkInterface::GetDeviceInterface()
@@ -377,7 +387,17 @@ void PlayerExternalsRdkInterface::SetActiveInterface(bool isWifi)
 
 char * PlayerExternalsRdkInterface::GetTR181Config(const char * paramName, size_t & iConfigLen)
 {
-    return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
+    if (m_pDeviceInterfaceBase)
+    {
+        m_deviceInterfaceUnavailableLogged.store(false, std::memory_order_relaxed);
+        return m_pDeviceInterfaceBase->GetTR181Config(paramName, iConfigLen);
+    }
+    iConfigLen = 0;
+    if (!m_deviceInterfaceUnavailableLogged.exchange(true, std::memory_order_relaxed))
+    {
+        MW_LOG_ERR("GetTR181Config: device interface not available");
+    }
+    return nullptr;
 }
 
 void PlayerExternalsRdkInterface::SetUseFireBoltSDK(bool t_use_firebolt_sdk)

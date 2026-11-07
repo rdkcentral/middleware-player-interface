@@ -22,6 +22,7 @@
 
 #include <map>
 #include <cstdint>
+#include <string>
 #include <string.h>
 #include <vector>
 #include <mutex>
@@ -162,11 +163,12 @@ class InterfacePlayerRDK
 	private:
 		bool trickTeardown;
 		std::mutex mMutex;
+		mutable std::mutex mDrmSystemMutex;
 		std::map<std::string, int> configMap;
 
 	public:
 		Configs *m_gstConfigParam;
-		char *mDrmSystem;
+		std::string mDrmSystem;
 		void *mEncrypt;
 		void *mDRMSessionManager;
 		std::map<InterfaceCB, std::function<void()>> callbackMap;
@@ -335,6 +337,7 @@ class InterfacePlayerRDK
         	 *@param[in] drmID preferred drm
         	 */
         	void SetPreferredDRM(const char *drmID);
+		std::string GetPreferredDRM() const;
 			/**
         	 * @brief Configures the GStreamer pipeline.
         	 * @param format Video format.

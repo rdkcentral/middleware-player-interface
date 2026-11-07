@@ -70,9 +70,8 @@ bool GstHandlerControl::waitForDone(int MaximumDelayMilliseconds, std::string na
 	const std::chrono::steady_clock::time_point end =
 	std::chrono::milliseconds{MaximumDelayMilliseconds} + std::chrono::steady_clock::now();
 
-	disable();
-
 	std::unique_lock<std::mutex> lock(mSync);
+	mEnabled = false;
 	while(mInstanceCount && (std::chrono::steady_clock::now()<end))
 	{
 		mDoneCond.wait_until(lock, end);
