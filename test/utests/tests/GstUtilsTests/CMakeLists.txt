@@ -38,6 +38,7 @@ include_directories(${PLAYER_ROOT}/externals)
 include_directories(${UTEST_ROOT}/fakes)
 
 set(TEST_SOURCES    GstUtilsTests.cpp
+			GstUtilsFillTests.cpp
 			GstUtilsPlayerTests.cpp)
 
 set(PLAYER_SOURCES

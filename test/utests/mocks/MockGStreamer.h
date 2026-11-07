@@ -96,6 +96,7 @@ public:
 	MOCK_METHOD(gboolean, gst_element_link, (GstElement *src, GstElement *dest));
 	MOCK_METHOD(gboolean, gst_element_link_many, (GstElement *element_1, GstElement *element_2));
 	MOCK_METHOD(gpointer, gst_object_ref, (gpointer object));
+	MOCK_METHOD(gboolean, gst_init_check, (int *argc, char **argv[], GError **error));
 	/*
 gst_app_sink_get_type
 gst_app_sink_pull_sample
