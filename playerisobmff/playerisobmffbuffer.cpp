@@ -89,6 +89,14 @@ size_t PlayerIsoBmffBuffer::getMdatCount() const
  */
 bool PlayerIsoBmffBuffer::parseBuffer(bool correctBoxSize, int newTrackId)
 {
+	// Release boxes from any previous parse so a reused instance does not
+	// accumulate stale box objects until destruction.
+	for (auto *oldBox : boxes)
+	{
+		delete oldBox;
+	}
+	boxes.clear();
+	chunkedBox = NULL;
 	size_t curOffset = 0;
 	while (curOffset < bufSize)
 	{

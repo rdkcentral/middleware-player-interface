@@ -43,7 +43,15 @@ public:
 	~DrmJsonObject();
 	DrmJsonObject(const DrmJsonObject&) = delete;
 	DrmJsonObject& operator=(const DrmJsonObject&) = delete;
-	DrmJsonObject(DrmJsonObject &&) = default;
+	/* Defaulted move copied mJsonObj: a moved-from owning object (mParent==NULL)
+	 * and the move target would both cJSON_Delete the same tree. Transfer the
+	 * pointers and clear the source so only one destructor frees it. */
+	DrmJsonObject(DrmJsonObject &&other) noexcept
+		: mJsonObj(other.mJsonObj), mParent(other.mParent)
+	{
+		other.mJsonObj = nullptr;
+		other.mParent = nullptr;
+	}
 
 	enum ENCODING
 	{

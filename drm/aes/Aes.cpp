@@ -260,47 +260,49 @@ DrmReturn AesDec::Decrypt( int bucketTypeIn, void *encryptedDataPtr, size_t encr
 	if (mDrmState == eDRM_KEY_ACQUIRED)
 	{
 		MW_LOG_INFO("AesDec: Starting decrypt");
-		unsigned char *decryptedDataBuf = (unsigned char *)malloc(encryptedDataLen);
 		int decryptedDataLen = 0;
-		if (decryptedDataBuf)
+		int decLen = (int)encryptedDataLen;
+
+		this->ProfileUpdateDrmDecrypt(0, bucketType);
+		if(!EVP_DecryptInit_ex(OPEN_SSL_CONTEXT, EVP_aes_128_cbc(), NULL, (unsigned char*)m_ptr, mDrmInfo.iv))
 		{
-			int decLen = (int)encryptedDataLen;
-			memset(decryptedDataBuf, 0, encryptedDataLen);
-	               
-		       this->ProfileUpdateDrmDecrypt(0, bucketType);
-		       if(!EVP_DecryptInit_ex(OPEN_SSL_CONTEXT, EVP_aes_128_cbc(), NULL, (unsigned char*)m_ptr, mDrmInfo.iv))
+			MW_LOG_ERR( "AesDec::EVP_DecryptInit_ex failed mDrmState = %d",(int)mDrmState);
+		}
+		else
+		{
+			// EVP supports in-place decryption (out == in): decrypt directly
+			// into the input buffer, avoiding a per-segment temp allocation
+			// and a full-size copy-back.
+			if (!EVP_DecryptUpdate(OPEN_SSL_CONTEXT, (unsigned char*)encryptedDataPtr, &decLen, (const unsigned char*)encryptedDataPtr, (int)encryptedDataLen))
 			{
-				MW_LOG_ERR( "AesDec::EVP_DecryptInit_ex failed mDrmState = %d",(int)mDrmState);
+				MW_LOG_ERR("AesDec::EVP_DecryptUpdate failed mDrmState = %d",(int) mDrmState);
 			}
 			else
 			{
-				if (!EVP_DecryptUpdate(OPEN_SSL_CONTEXT, decryptedDataBuf, &decLen, (const unsigned char*)encryptedDataPtr, (int)encryptedDataLen))
+				decryptedDataLen = decLen;
+				decLen = 0;
+				MW_LOG_INFO("AesDec: EVP_DecryptUpdate success decryptedDataLen = %d encryptedDataLen %d", (int) decryptedDataLen, (int)encryptedDataLen);
+				if (!EVP_DecryptFinal_ex(OPEN_SSL_CONTEXT, (unsigned char*)encryptedDataPtr + decryptedDataLen, &decLen))
 				{
-					MW_LOG_ERR("AesDec::EVP_DecryptUpdate failed mDrmState = %d",(int) mDrmState);
+					MW_LOG_ERR("AesDec::EVP_DecryptFinal_ex failed mDrmState = %d",
+					        (int) mDrmState);
 				}
 				else
 				{
-					decryptedDataLen = decLen;
-					decLen = 0;
-					MW_LOG_INFO("AesDec: EVP_DecryptUpdate success decryptedDataLen = %d encryptedDataLen %d", (int) decryptedDataLen, (int)encryptedDataLen);
-					if (!EVP_DecryptFinal_ex(OPEN_SSL_CONTEXT, decryptedDataBuf + decryptedDataLen, &decLen))
-					{
-						MW_LOG_ERR("AesDec::EVP_DecryptFinal_ex failed mDrmState = %d", 
-						        (int) mDrmState);
-					}
-					else
-					{
-						decryptedDataLen += decLen;
-						MW_LOG_INFO("AesDec: decrypt success");
-						err = eDRM_SUCCESS;
-					}
+					decryptedDataLen += decLen;
+					MW_LOG_INFO("AesDec: decrypt success");
+					err = eDRM_SUCCESS;
 				}
 			}
-                        this->ProfileUpdateDrmDecrypt(1, bucketType);
-			memcpy(encryptedDataPtr, decryptedDataBuf, encryptedDataLen);
-			free(decryptedDataBuf);
-			(void)decryptedDataLen; // Avoid a warning as this is only used in a log.
 		}
+		this->ProfileUpdateDrmDecrypt(1, bucketType);
+		// Preserve previous semantics: bytes beyond the plaintext were zeros
+		// (the temp buffer was memset before decryption).
+		if (err == eDRM_SUCCESS && decryptedDataLen < (int)encryptedDataLen)
+		{
+			memset((unsigned char*)encryptedDataPtr + decryptedDataLen, 0, encryptedDataLen - decryptedDataLen);
+		}
+		(void)decryptedDataLen; // Avoid a warning as this is only used in a log.
 	}
 	else
 	{
