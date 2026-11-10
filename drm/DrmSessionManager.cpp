@@ -75,8 +75,8 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
-		cachedKeyIDs(NULL), accessToken(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
+		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
@@ -90,8 +90,8 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mFirstFrameSeen(false)
 		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
-	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
-	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
+	drmSessionContexts	= std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
+	cachedKeyIDs		= std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 	m_drmConfigParam = new configs();
 	playerSecInstance = new PlayerSecInterface();
 
@@ -107,8 +107,6 @@ DrmSessionManager::~DrmSessionManager()
 {
 	clearAccessToken();
 	clearSessionData();
-	MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-	MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 	MW_SAFE_DELETE(playerSecInstance);
 	MW_SAFE_DELETE(m_drmConfigParam);
 	ContentSecurityManager::setWatermarkSessionEvent_CB(nullptr);
@@ -1096,13 +1094,11 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 	{
 		// Clean up the current sessions
 		clearSessionData();
-		MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-		MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 
 		//Update to new session count
 		mMaxDRMSessions = maxSessions;
-		drmSessionContexts      = new DrmSessionContext[mMaxDRMSessions];
-		cachedKeyIDs            = new KeyIdEntries[mMaxDRMSessions];
+		drmSessionContexts      = std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
+		cachedKeyIDs            = std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }
