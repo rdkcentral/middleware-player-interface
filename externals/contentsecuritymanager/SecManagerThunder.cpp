@@ -274,11 +274,34 @@ bool SecManagerThunder::AcquireLicenseOpenOrUpdate( std::string clientId, std::s
 					if (newSession.isSessionValid() && !session.isSessionValid())
 					{
 						session = newSession;
+						/*
+						 * A session is now established. Any subsequent retry must reuse it
+						 * via updatePlaybackSession; re-invoking openPlaybackSession would
+						 * create a second server-side session and orphan this client-side
+						 * handle. sessionId must also be added to the request params since
+						 * they were built for the open call.
+						 */
+						apiName = "updatePlaybackSession";
+						param["sessionId"] = session.getSessionID();
 					}
 
 				}
+				else
+				{
+					/*
+					 * JSON-RPC transport failure or timeout: no response was received,
+					 * so there is no secManagerResultContext to parse. SecManager may
+					 * still have completed the transaction server-side. Treat this as a
+					 * retryable connection failure rather than the non-retryable
+					 * default 200:1, so a transient transport hiccup does not hard-fail
+					 * the tune.
+					 */
+					*statusCode = CONTENT_SECURITY_MANAGER_DRM_FAILURE;
+					*reasonCode = CONTENT_SECURITY_MANAGER_SERVICE_CON_FAILURE;
+					MW_LOG_ERR("SecManager %s JSON-RPC call failed, treating as retryable connection failure", apiName);
+				}
 				// TODO: Sort these values out for backward compatibility
-				if(response.HasLabel("secManagerResultContext"))
+				if(rpcResult && response.HasLabel("secManagerResultContext"))
 				{
 					JsonObject resultContext = response["secManagerResultContext"].Object();
 
@@ -492,6 +515,7 @@ bool SecManagerThunder::SetPlaybackPosition(int64_t sessionId, float playback_sp
 bool SecManagerThunder::loadClutWatermark(int64_t sessionId, int64_t graphicId, int64_t watermarkClutBufferKey, int64_t watermarkImageBufferKey, int64_t clutPaletteSize,
 		const char* clutPaletteFormat, int64_t watermarkWidth, int64_t watermarkHeight, float aspectRatio)
 {
+	PI_PROFILE_SCOPE("watermark_load_clut_rpc");
 	bool rpcResult = false;
 	JsonObject result;
 	JsonObject param;
@@ -732,6 +756,7 @@ void SecManagerThunder::showWatermarkHandler(const JsonObject& parameters)
  */
 void SecManagerThunder::ShowWatermark(bool show)
 {
+	PI_PROFILE_SCOPE("watermark_show_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -763,6 +788,7 @@ void SecManagerThunder::ShowWatermark(bool show)
  */
 void SecManagerThunder::CreateWatermark(int graphicId, int zIndex )
 {
+	PI_PROFILE_SCOPE("watermark_create_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -795,6 +821,7 @@ void SecManagerThunder::CreateWatermark(int graphicId, int zIndex )
  */
 void SecManagerThunder::DeleteWatermark(int graphicId)
 {
+	PI_PROFILE_SCOPE("watermark_delete_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -826,6 +853,7 @@ void SecManagerThunder::DeleteWatermark(int graphicId)
  */
 void SecManagerThunder::UpdateWatermark(int graphicId, int smKey, int smSize )
 {
+	PI_PROFILE_SCOPE("watermark_update_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -860,6 +888,7 @@ void SecManagerThunder::UpdateWatermark(int graphicId, int smKey, int smSize )
  */
 void SecManagerThunder::AlwaysShowWatermarkOnTop(bool show)
 {
+	PI_PROFILE_SCOPE("watermark_always_on_top_rpc");
 	JsonObject param;
 	JsonObject result;
 	bool rpcResult = false;
@@ -905,6 +934,7 @@ void SecManagerThunder::GetWaterMarkPalette(int sessionId, int graphicId)
 	param["id"] = graphicId;
 	MW_LOG_WARN("ContentSecurityManager %s:%d Graphic id: %d ", __FUNCTION__, __LINE__, graphicId);
 	{
+		PI_PROFILE_SCOPE("watermark_get_palette_rpc");
 		std::lock_guard<std::mutex> lock(mWatMutex);
 		rpcResult =  mWatermarkPluginObj.InvokeJSONRPC("getPalettedWatermark", param, result);
 	}
@@ -952,6 +982,7 @@ void SecManagerThunder::ModifyWatermarkPalette(int graphicId, int clutKey, int i
 	JsonObject result;
 
 	bool rpcResult = false;
+	PI_PROFILE_SCOPE("watermark_modify_palette_rpc");
 	param["id"] = graphicId;
 	param["clutKey"] = clutKey;
 	param["imageKey"] = imageKey;
