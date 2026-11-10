@@ -3382,7 +3382,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 				pauseInjectorState,
 				stream->resetPosition,
 				initFragment,
-				stream->sourceConfigured );
+				stream->sourceConfigured.load() );
 		//gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_NONE, pts);
 	}
 
