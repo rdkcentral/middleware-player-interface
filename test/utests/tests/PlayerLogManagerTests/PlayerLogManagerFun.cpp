@@ -407,6 +407,7 @@ TEST(PlayerLogManager, AllParametersTrue_PositiveLogLevel) {
         // Creating object of PlayerLogManager using default constructor
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=true, ethanLogStatus=true, level=3, lock=true" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(true, true, 3, true);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -446,6 +447,7 @@ TEST(PlayerLogManager, AllParametersFalse_PositiveLogLevel) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=false, ethanLogStatus=false, level=2, lock=false" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(false, false, 2, false);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -484,6 +486,7 @@ TEST(PlayerLogManager, MixedBooleans_PositiveLogLevel) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=true, ethanLogStatus=false, level=5, lock=false" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(true, false, 5, false);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -523,6 +526,7 @@ TEST(PlayerLogManager, MixedBooleansVariant_PositiveLogLevel) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=false, ethanLogStatus=true, level=4, lock=true" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(false, true, 4, true);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -563,6 +567,7 @@ TEST(PlayerLogManager, NegativeLogLevelInput) {
         PlayerLogManager manager;
         // Although test name indicates negative log level, the input level is 4 as per test plan.
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=true, ethanLogStatus=true, level=4, lock=false" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(true, true, 4, false);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -601,6 +606,7 @@ TEST(PlayerLogManager, ZeroLogLevelInput) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=true, ethanLogStatus=false, level=0, lock=true" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(true, false, 0, true);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -639,6 +645,7 @@ TEST(PlayerLogManager, ExtremePositiveLogLevel_BoundaryCase) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=false, ethanLogStatus=false, level=2147483647, lock=false" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(false, false, 2147483647, false);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
@@ -676,6 +683,7 @@ TEST(PlayerLogManager, ExtremeNegativeLogLevel_BoundaryCase) {
     EXPECT_NO_THROW({
         PlayerLogManager manager;
         std::cout << "Invoking SetLoggerInfo with parameters: logRedirectStatus=true, ethanLogStatus=false, level=-2147483648, lock=false" << std::endl;
+        PlayerLogManager::lockLogLevel(false);
         PlayerLogManager::SetLoggerInfo(true, false, -2147483648, false);
         std::cout << "Method SetLoggerInfo invoked" << std::endl;
         std::cout << "Internal state after invocation:" << std::endl;
