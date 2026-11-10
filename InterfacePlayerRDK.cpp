@@ -131,7 +131,8 @@ static const char* GstPluginNameVMX = "verimatrixdecryptor";
 #define GST_NORMAL_PLAY_RATE		1
 
 /* RDKPerf scope recorded only while this player's tune is profiled (or PLAYER_RDKPERF_ALWAYS=1) */
-#define PI_PLAYER_PROFILE_SCOPE(name) PI_PROFILE_SCOPE_IF(name, interfacePlayerPriv->gstPrivateContext->IsConfigureToFirstFrameProfileActive())
+#define PI_PLAYER_PROFILE_ACTIVE() (interfacePlayerPriv->gstPrivateContext->IsConfigureToFirstFrameProfileActive())
+#define PI_PLAYER_PROFILE_SCOPE(name) PI_PROFILE_SCOPE_IF(name, PI_PLAYER_PROFILE_ACTIVE())
 
 std::pair <CipherType, const char *> CipherToStringMap[] = {
 	{CIPHER_TYPE_CENC, "cenc"},
@@ -395,7 +396,7 @@ const char *gstGetMediaTypeName(GstMediaType mediaType)
 }
 
 
-static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState);
+static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState, bool profileActive);
 
 /**
  * @brief Decorate a GstBuffer with DRM metadata
@@ -569,7 +570,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 
 	if(setReadyAfterPipelineCreation)
 	{
-		if(SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_READY) == GST_STATE_CHANGE_FAILURE)
+		if(SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_READY, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_READY failed on forceful set");
 		}
@@ -713,7 +714,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED - pause on playback enabled");
 		interfacePlayerPriv->gstPrivateContext->paused = true;
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PAUSED failed");
 		}
@@ -726,7 +727,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		interfacePlayerPriv->gstPrivateContext->buffering_in_progress = true;
 		interfacePlayerPriv->gstPrivateContext->buffering_timeout_cnt = DEFAULT_BUFFERING_MAX_CNT;
 
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_PAUSED failed");
 		}
@@ -755,7 +756,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 	else
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PLAYING");
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PLAYING failed");
 		}
@@ -1119,13 +1120,14 @@ static void type_check_instance( const char * str, GstElement * elem);
  * @brief Signal EOS to the appsrc associated with the supplied media stream
  * @param[in] media_stream the media stream to inject EOS into
  */
-static void GstPlayer_SignalEOS(gst_media_stream& stream)
+static void GstPlayer_SignalEOS(gst_media_stream& stream, bool profileActive)
 {
+	(void)profileActive;
 	if (stream.source)
 	{
 		GstFlowReturn ret;
 		{
-			PI_PROFILE_SCOPE("gst_app_src_end_of_stream");
+			PI_PROFILE_SCOPE_IF("gst_app_src_end_of_stream", profileActive);
 			ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
 		}
 		//GST_FLOW_OK is expected in PAUSED or PLAYING states; GST_FLOW_FLUSHING is expected in other states.
@@ -1136,17 +1138,17 @@ static void GstPlayer_SignalEOS(gst_media_stream& stream)
 	}
 }
 
-static void GstPlayer_SignalEOS(gst_media_stream* stream)
+static void GstPlayer_SignalEOS(gst_media_stream* stream, bool profileActive)
 {
 	if(stream)
 	{
-		GstPlayer_SignalEOS(*stream);
+		GstPlayer_SignalEOS(*stream, profileActive);
 	}
 }
 
 /**
  *  @brief inject EOS for all media types to ensure the pipeline can be set to NULL quickly*/
-static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext)
+static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext, bool profileActive)
 {
 	MW_LOG_MIL(" InterfacePlayer: Inject EOS into all streams.");
 
@@ -1154,7 +1156,7 @@ static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext)
 	{
 		for(int mediaType=eGST_MEDIATYPE_VIDEO; mediaType<=eGST_MEDIATYPE_SUBTITLE; mediaType++)
 		{
-			GstPlayer_SignalEOS(gstPrivateContext->stream[mediaType]);
+			GstPlayer_SignalEOS(gstPrivateContext->stream[mediaType], profileActive);
 		}
 	}
 	else
@@ -1509,9 +1511,10 @@ static void LogStatus(GstElement* pElementOrBin)
  * @param[in] pInterfacePlayerRDK pointer to InterfacePlayerRDK instance
  * @retval Result of the state change (from inner gst_element_set_state())
  */
-static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState)
+static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState, bool profileActive)
 {
-	PI_PROFILE_SCOPE("pipeline_set_state");
+	(void)profileActive;
+	PI_PROFILE_SCOPE_IF("pipeline_set_state", profileActive);
 	GstStateChangeReturn rc = GST_STATE_CHANGE_FAILURE;
 	if(element)
 	{
@@ -1523,7 +1526,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 		GstStateChangeReturn stateChangeReturn;
 		{
-			PI_PROFILE_SCOPE("gst_element_get_state");
+			PI_PROFILE_SCOPE_IF("gst_element_get_state", profileActive);
 			stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout,  this function is MT-safe */
 		}
 		switch(stateChangeReturn)
@@ -1576,7 +1579,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
 		{
-			PI_PROFILE_SCOPE("gst_element_set_state");
+			PI_PROFILE_SCOPE_IF("gst_element_set_state", profileActive);
 			rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
 		}
 		if (GST_STATE_CHANGE_FAILURE == rc)
@@ -1673,7 +1676,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			/* set the playbin state to NULL before detach it */
 			if (stream->sinkbin)
 			{
-				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
 				}
@@ -1812,11 +1815,11 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		if(GstEOS_INJECTION_MODE_STOP_ONLY == EOSMode)
 		{
 			//Ensure prompt transition to GST_STATE_NULL
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext, PI_PLAYER_PROFILE_ACTIVE());
 		}
 
 		interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;   /* stopping pipeline, don't want to change state if GST_MESSAGE_ASYNC_DONE message comes in */
-		SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_NULL);
+		SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 		MW_LOG_MIL(" InterfacePlayerRDK: Pipeline state set to null");
 	}
 	if(PlayerExternalsInterface::IsPlayerExternalsInterfaceInstanceActive())
@@ -1961,7 +1964,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		// Send EOS to audio sink to prevent flush getting blocked waiting for preroll
 		if (interfacePlayerPriv->gstPrivateContext->audio_sink)
 		{
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 		}
 	}
 	GstStateChangeReturn ret;
@@ -2070,7 +2073,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		 * by bringing the audio pipeline out of pre-roll which would block streaming.
 		 */
 		MW_LOG_INFO("Trickplay rate %d - send eos to audio sink", rate);
-		GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+		GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 	}
 
 	if(bAsyncModify)
@@ -3932,7 +3935,7 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
 		}
 
-		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
+		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState, PI_PLAYER_PROFILE_ACTIVE());
 		if (GST_STATE_CHANGE_ASYNC == rc)
 		{
 			/* CID:330433 Waiting while holding lock. Sleep introduced in validateStateWithMsTimeout to prevent continuous polling when synchronizing pipeline state.
@@ -4181,7 +4184,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 
 			if (proceedWithEos)
 			{
-				GstPlayer_SignalEOS(stream);
+				GstPlayer_SignalEOS(stream, PI_PLAYER_PROFILE_ACTIVE());
 				// We are in buffering, but we received discontinuity, un-pause pipeline
 				shouldHaltBuffering = true;
 				ret = true;
@@ -4189,7 +4192,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 				//If we have an audio discontinuity, signal subtec as well
 				if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 				{
-					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 				}
 				else
 				{
@@ -4205,7 +4208,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 			//If we have an audio discontinuity, signal subtec as well
 			if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 	}
@@ -5190,8 +5193,8 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			MW_LOG_WARN("GST_MESSAGE_CLOCK_LOST");
 			if(eGST_MEDIAFORMAT_DASH != static_cast<GstMediaFormat>(pInterfacePlayerRDK->m_gstConfigParam->media))
 			{
-				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED);
-				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PLAYING);
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PLAYING, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
 			}
 			break;
 
@@ -5438,7 +5441,7 @@ static gboolean buffering_timeout (gpointer data)
 				uint32_t original_buffering_timeout_cnt = privatePlayer->gstPrivateContext->buffering_timeout_cnt;
 				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
 				gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
-				SetStateWithWarnings (privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state);
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
 				isRateCorrectionDefaultOnPlaying =  privatePlayer->socInterface->SetRateCorrection();
 
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
@@ -5868,7 +5871,7 @@ void InterfacePlayerRDK::NotifyFragmentCachingComplete()
 
 		MW_LOG_MIL("InterfacePlayer: Setting pipeline to PLAYING state ");
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = GST_STATE_PLAYING;
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayer_Configure GST_STATE_PLAYING failed");
 		}
@@ -5898,15 +5901,15 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
 	else
 	{
 		NotifyFragmentCachingComplete();                /*Set pipeline to PLAYING state once fragment caching is complete*/
-		GstPlayer_SignalEOS(stream);
+		GstPlayer_SignalEOS(stream, PI_PLAYER_PROFILE_ACTIVE());
 
 		/*For trickmodes, give EOS to audio source*/
 		if (GST_NORMAL_PLAY_RATE != interfacePlayerPriv->gstPrivateContext->rate)
 		{
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 			if (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source)
 			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 		else
@@ -5916,7 +5919,7 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
 				(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 			{
 				interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached = true;
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 
