@@ -29,6 +29,7 @@
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
+#include <thread>
 
 
 
@@ -466,6 +467,134 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	EXPECT_EQ(mPlayerContext->eosCallbackIdleTaskPending,false);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskId,PLAYER_TASK_ID_INVALID);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskPending,false);
+}
+
+TEST_F(InterfacePlayerTests, GstStopRemovesFirstFrameTimeoutTimer)
+{
+	mPlayerContext->firstFrameTimeoutTimerId = 400;
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400)).Times(1);
+
+	mInterfaceGstPlayer->Stop(false);
+	EXPECT_EQ(mPlayerContext->firstFrameTimeoutTimerId, GST_TASK_ID_INVALID);
+}
+
+TEST_F(InterfacePlayerTests, DestructorRemovesFirstFrameTimeoutTimer)
+{
+	mPlayerContext->firstFrameTimeoutTimerId = 500;
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(500)).Times(1);
+
+	DestroyAMPGstPlayer();
+}
+
+/* GLib timer source added by the player, captured so that tests can dispatch it as GLib would */
+struct CapturedTimerSource
+{
+	GSourceFunc dispatch = nullptr;
+	gpointer data = nullptr;
+	GDestroyNotify release = nullptr;
+};
+
+static void StartProgressTimer(InterfacePlayerRDK *player, guint sourceId, CapturedTimerSource &source)
+{
+	EXPECT_CALL(*g_mockGLib, g_timeout_add_full(_, _, _, _, _))
+		.WillOnce(DoAll(SaveArg<2>(&source.dispatch), SaveArg<3>(&source.data), SaveArg<4>(&source.release), Return(sourceId)));
+	InterfacePlayerRDK::IdleCallback(player);
+	ASSERT_NE(source.dispatch, nullptr);
+	ASSERT_NE(source.release, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackDispatchedAfterDestructionDoesNotAccessPlayer)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	/* g_source_remove() cannot stop a dispatch that GLib has already started */
+	EXPECT_CALL(*g_mockGLib, g_source_remove(10)).WillOnce(Return(TRUE));
+	DestroyAMPGstPlayer();
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	EXPECT_EQ(progressCount, 0);
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, DestructionDetachesPlayerFromTimerContext)
+{
+	std::shared_ptr<PlayerTimerContext> context = mPlayerContext->timerContext;
+	EXPECT_EQ(context->player, mInterfaceGstPlayer);
+
+	DestroyAMPGstPlayer();
+	EXPECT_EQ(context->player, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackDispatchedAfterStopDoesNotRun)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(10)).WillOnce(Return(TRUE));
+	mInterfaceGstPlayer->Stop(false);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	EXPECT_EQ(progressCount, 0);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, TimerAddedAfterStopRuns)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	mInterfaceGstPlayer->Stop(false);
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(progressCount, 1);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackCallsApplicationWithoutTimerLock)
+{
+	std::shared_ptr<PlayerTimerContext> context = mPlayerContext->timerContext;
+	int progressCount = 0;
+	bool lockedDuringCallback = true;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&]()
+	{
+		progressCount++;
+		/* Teardown on another thread must not be blocked while the application is called */
+		std::thread([&]()
+		{
+			std::unique_lock<std::recursive_mutex> lock(context->mutex, std::try_to_lock);
+			lockedDuringCallback = !lock.owns_lock();
+		}).join();
+	};
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(progressCount, 1);
+	EXPECT_FALSE(lockedDuringCallback);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, PlayerDestroyedByApplicationDuringTimerCallback)
+{
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [this]() { DestroyAMPGstPlayer(); };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(mInterfaceGstPlayer, nullptr);
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	source.release(source.data);
 }
 
 

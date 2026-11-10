@@ -24,6 +24,7 @@
 #include <string.h>
 #include <vector>
 #include <mutex>
+#include <memory>
 #include <PlayerLogManager.h>
 #include "PlayerScheduler.h"
 #include <gst/app/gstappsrc.h>
@@ -156,6 +157,20 @@ struct gst_media_stream
 };
 
 /**
+ * @struct PlayerTimerContext
+ * @brief State shared between a player and the GLib timer sources it creates.
+ *        Every source holds a reference, so the context outlives the player.
+ *        Timer callbacks only access the player while holding mutex, and only
+ *        if player is set and the source's generation is still current.
+ */
+struct PlayerTimerContext
+{
+	std::recursive_mutex mutex;                 /**< Held while a timer callback accesses the player */
+	InterfacePlayerRDK *player = nullptr;       /**< Cleared when the player is destroyed */
+	std::atomic<unsigned> generation{0};        /**< Incremented by Stop() to invalidate outstanding timers */
+};
+
+/**
  * @struct GstPlayerPriv
  * @brief Holds private variables of InterfacePlayerRDK
  */
@@ -172,9 +187,59 @@ struct GstPlayerPriv
 	gint n_audio;                            /**< Number of audio tracks. */
 	gint current_audio;                      /**< Offset of current audio track. */
 	std::mutex TaskControlMutex; /**< For scheduling/de-scheduling or resetting async tasks/variables and timers */
+	std::shared_ptr<PlayerTimerContext> timerContext; /**< Shared with GLib timer sources, see PlayerTimerContext */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
 	guint firstFrameTimeoutTimerId;
+	#ifdef ENABLE_RDKPERF
+	std::mutex configureToFirstFrameProfileMutex;
+	RDKPerfHandle configureToFirstFramePerfHandle = nullptr;
+	bool configureToFirstFrameProfileActive = false;
+	#endif
+	void StartConfigureToFirstFrameProfile()
+	{
+#ifdef ENABLE_RDKPERF
+		std::lock_guard<std::mutex> lock(configureToFirstFrameProfileMutex);
+		if (configureToFirstFrameProfileActive)
+		{
+			if (configureToFirstFramePerfHandle)
+			{
+				RDKPerfStop(configureToFirstFramePerfHandle);
+			}
+			PIStopTuneProfile();
+		}
+		configureToFirstFramePerfHandle = RDKPerfStart("configure_to_first_frame_client_or_timeout");
+		configureToFirstFrameProfileActive = true;
+		PIStartTuneProfile();
+#endif
+	}
+	void StopConfigureToFirstFramePerfHandle()
+	{
+#ifdef ENABLE_RDKPERF
+		std::lock_guard<std::mutex> lock(configureToFirstFrameProfileMutex);
+		if (configureToFirstFrameProfileActive && configureToFirstFramePerfHandle)
+		{
+			RDKPerfStop(configureToFirstFramePerfHandle);
+			configureToFirstFramePerfHandle = nullptr;
+		}
+#endif
+	}
+	void StopConfigureToFirstFrameProfile()
+	{
+#ifdef ENABLE_RDKPERF
+		std::lock_guard<std::mutex> lock(configureToFirstFrameProfileMutex);
+		if (configureToFirstFrameProfileActive)
+		{
+			configureToFirstFrameProfileActive = false;
+			PIStopTuneProfile();
+			if (configureToFirstFramePerfHandle)
+			{
+				RDKPerfStop(configureToFirstFramePerfHandle);
+				configureToFirstFramePerfHandle = nullptr;
+			}
+		}
+#endif
+	}
 	guint bufferingTimeoutTimerId;                    /**< ID of timer handler created for buffering timeout. */
 	GstElement *video_dec;                                    /**< Video decoder used by pipeline. */
 	GstElement *audio_dec;                                    /**< Audio decoder used by pipeline. */
