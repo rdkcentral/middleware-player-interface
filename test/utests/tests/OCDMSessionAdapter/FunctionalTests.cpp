@@ -97,7 +97,7 @@ public:
 
 	void setStateAndKeyStatus(KeyState state, KeyStatus keyStatus)
 	{
-		m_eKeyState.store(state);
+		m_eKeyState = state;
 		m_keyStatus = keyStatus;
 	}
 };
