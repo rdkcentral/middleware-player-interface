@@ -468,6 +468,25 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskPending,false);
 }
 
+TEST_F(InterfacePlayerTests, GstStopRemovesFirstFrameTimeoutTimer)
+{
+	mPlayerContext->firstFrameTimeoutTimerId = 400;
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400)).Times(1);
+
+	mInterfaceGstPlayer->Stop(false);
+	EXPECT_EQ(mPlayerContext->firstFrameTimeoutTimerId, GST_TASK_ID_INVALID);
+}
+
+TEST_F(InterfacePlayerTests, DestructorRemovesFirstFrameTimeoutTimer)
+{
+	mPlayerContext->firstFrameTimeoutTimerId = 500;
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(500)).Times(1);
+
+	DestroyAMPGstPlayer();
+}
+
 
 TEST_F(InterfacePlayerTests, TestResetGstEvents)
 {

@@ -231,6 +231,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
 	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
 	{
 		interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
@@ -1759,6 +1760,7 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
 
 	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
+	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
 	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
@@ -5351,7 +5353,10 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 	}
 
 	/* one-shot timer bookkeeping */
-	privatePlayer->gstPrivateContext->firstFrameTimeoutTimerId = GST_TASK_ID_INVALID;
+	{
+		std::lock_guard<std::mutex> lock(privatePlayer->gstPrivateContext->TaskControlMutex);
+		privatePlayer->gstPrivateContext->firstFrameTimeoutTimerId = GST_TASK_ID_INVALID;
+	}
 
 	/* avoid false positive if intentionally paused before first frame */
 	if (privatePlayer->gstPrivateContext->pauseOnStartPlayback)
