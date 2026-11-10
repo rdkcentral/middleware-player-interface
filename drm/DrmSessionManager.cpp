@@ -29,6 +29,9 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include "PlayerLogManager.h"
+#include <atomic>
+#include <fstream>
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -37,6 +40,30 @@
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
+
+namespace
+{
+std::atomic_uint32_t gVideoWindowSizeInjectionCount{0};
+constexpr const char* kVideoWindowSizeInjectionFile =
+	"/tmp/videowindowsize-inject-count";
+
+bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
+{
+	std::ifstream injectionFile(kVideoWindowSizeInjectionFile);
+	uint32_t injectAtCount = 0;
+
+	// Missing, unreadable, empty, or non-numeric file disables injection.
+	if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+	{
+		return false;
+	}
+
+	return callCount == injectAtCount;
+}
+} // namespace
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry2.hpp"
+#endif
 /**
  * @brief KeyIdEntries constructor.
  */
@@ -231,6 +258,54 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
+		const int originalWidth = width;
+		const int originalHeight = height;
+		const uint32_t callCount = ++gVideoWindowSizeInjectionCount;
+		bool injectedZeroDimension = false;
+
+		// /tmp/videowindowsize-inject-count specifies the invocation on
+		// which zero-size telemetry should be injected.
+		if (ShouldInjectVideoWindowSizeError(callCount))
+		{
+			width = 0;
+			height = 0;
+			injectedZeroDimension = true;
+			MW_LOG_WARN("setVideoWindowSize: injecting zero dimensions at "
+						"count=%u; original width=%d height=%d",
+						callCount, originalWidth, originalHeight);
+		}
+
+		if (width == 0 || height == 0)
+		{
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			std::map<std::string, int> intMetrics;
+			std::map<std::string, std::string> stringMetrics;
+			std::map<std::string, float> floatMetrics;
+
+			intMetrics["width"] = width;
+			intMetrics["height"] = height;
+
+			intMetrics["injected"] = injectedZeroDimension ? 1 : 0;
+			intMetrics["setVideoWindowSizeCount"] =
+				static_cast<int>(callCount);
+
+			stringMetrics["component"] = "AampLicenseManager";
+			stringMetrics["action"] = "setVideoWindowSize";
+			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
+
+	                PlayerTelemetry2 telemetry;
+			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
+#endif
+			
+			// Do not send intentionally injected dimensions to SecManager.
+			// Genuine zero dimensions retain the existing behavior.
+			if (injectedZeroDimension)
+			{
+				width = originalWidth;
+				height = originalHeight;
+			}
+		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }
@@ -483,7 +558,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	/**
 	 * Create drm session without primaryKeyId markup OR retrieve old DRM session.
 	 */
-	code = getDrmSession(err, drmHelper, selectedSlot,  Instance);
+	{
+		PI_PROFILE_SCOPE("drm_session_lookup");
+		code = getDrmSession(err, drmHelper, selectedSlot, Instance);
+	}
 	/**
 	 * KEY_READY code indicates that a previously created session is being reused.
 	 */
@@ -506,7 +584,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		MW_LOG_WARN(" Unable to get DrmSession : Key State %d ", code);
 		return nullptr;
 	}
-	code = initializeDrmSession(drmHelper, selectedSlot,  err);
+	{
+		PI_PROFILE_SCOPE("drm_session_init");
+		code = initializeDrmSession(drmHelper, selectedSlot, err);
+	}
 	if (code != KEY_INIT)
 	{
 		MW_LOG_WARN(" Unable to initialize DrmSession : Key State %d, err code: %d", code, err);
@@ -540,7 +621,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
-	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	{
+		PI_PROFILE_SCOPE("drm_license_acquire");
+		code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError, (GstMediaType)streamType, metaDataPtr, false);
+	}
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);

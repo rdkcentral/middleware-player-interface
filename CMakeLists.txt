@@ -95,6 +95,7 @@ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
+option(ENABLE_RDKPERF "Enable RDKPerf API timing" OFF)
 
 if(COVERAGE_ENABLED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
@@ -206,7 +207,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 else()
 	set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
 endif()
-
+if(CMAKE_TELEMETRY_2_0_REQUIRED)
+	message("CMAKE_TELEMETRY_2_0_REQUIRED set")
+	set(LIBPLAYERGSTINTERFACE_SOURCES "${LIBPLAYERGSTINTERFACE_SOURCES}" PlayerTelemetry2.cpp)
+	set(LIBPLAYERGSTINTERFACE_DEFINES "${LIBPLAYERGSTINTERFACE_DEFINES} -DPLAYER_TELEMETRY_SUPPORT=1")
+	set(LIBPLAYERGSTINTERFACE_DEPENDS ${LIBPLAYERGSTINTERFACE_DEPENDS} "-ltelemetry_msgsender")
+endif()
 set(LIBPLAYERGSTINTERFACE_HEADERS
 	closedcaptions/CCTrackInfo.h
 	GstUtils.h
@@ -511,6 +517,11 @@ target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface ${GST_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
 target_link_libraries(playergstinterface ${GSTREAMERVIDEO_LINK_LIBRARIES})
+
+if(ENABLE_RDKPERF)
+	target_compile_definitions(playergstinterface PRIVATE ENABLE_RDKPERF)
+	target_link_libraries(playergstinterface rdkperf)
+endif()
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
