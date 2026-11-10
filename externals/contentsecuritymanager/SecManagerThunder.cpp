@@ -714,7 +714,7 @@ void SecManagerThunder::updateWatermarkHandler(const JsonObject& parameters)
 					{
 						instance->ModifyWatermarkPalette(graphicId, clutKey, imageKey);
 					}
-					}, (void *) ContentSecurityManager::GetInstance(), "WatermarkModifyPalette"));
+					}, (void *) this, "WatermarkModifyPalette"));
 			}
 		}
 		if (!watermarkActive)
@@ -756,7 +756,7 @@ void SecManagerThunder::removeWatermarkHandler(const JsonObject& parameters)
 					{
 					SecManagerThunder *instance = static_cast<SecManagerThunder *>(data);
 					instance->DeleteWatermark(graphicId);
-					}, (void *) ContentSecurityManager::GetInstance(), "WatermarkDelete"));
+					}, (void *) this, "WatermarkDelete"));
 		}
 		if (taskId == PLAYER_TASK_ID_INVALID)
 		{
