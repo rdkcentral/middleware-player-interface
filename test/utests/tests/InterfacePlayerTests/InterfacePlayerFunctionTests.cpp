@@ -2002,12 +2002,20 @@ TEST_F(InterfacePlayerTests, WaitForSourceSetup_PauseInjector)
 	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->sourceConfigured = false;
-	mInterfaceGstPlayer->mPauseInjector = true;
+	std::thread pauseThread([&]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		mInterfaceGstPlayer->PauseInjector();
+	});
 
+	auto start = std::chrono::steady_clock::now();
 	bool result = mInterfaceGstPlayer->WaitForSourceSetup(mediaType);
+	auto duration = std::chrono::steady_clock::now() - start;
 
 	EXPECT_FALSE(result);
 	EXPECT_FALSE(stream->sourceConfigured);
+	EXPECT_LT(duration, std::chrono::milliseconds(500));
+
+	pauseThread.join();
 }
 
 TEST_F(InterfacePlayerTests, HandleVideoBufferSent_SubsequentBuffer)
