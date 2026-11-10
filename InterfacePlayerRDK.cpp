@@ -231,10 +231,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
-	{
-		interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
-	}
+	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
