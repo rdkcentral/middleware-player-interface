@@ -356,6 +356,7 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 			// Defer the self-kill by 5sec on a worker thread so the killed
 			// OCDM process can restart and logs can flush, without blocking
 			// this decrypt/key path which would otherwise stall playback.
+			m_eKeyState = KEY_ERROR;
 			std::thread([]()
 			{
 				std::this_thread::sleep_for(std::chrono::seconds(5));

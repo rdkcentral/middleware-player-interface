@@ -1082,13 +1082,15 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 {
 	if (mMaxDRMSessions != maxSessions)
 	{
+		auto newDrmSessionContexts = std::make_unique<DrmSessionContext[]>(maxSessions);
+		auto newCachedKeyIDs = std::make_unique<KeyIdEntries[]>(maxSessions);
+
 		// Clean up the current sessions
 		clearSessionData();
 
-		//Update to new session count
+		drmSessionContexts = std::move(newDrmSessionContexts);
+		cachedKeyIDs = std::move(newCachedKeyIDs);
 		mMaxDRMSessions = maxSessions;
-		drmSessionContexts      = std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
-		cachedKeyIDs            = std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }

@@ -227,6 +227,7 @@ PlayerExternalsRdkInterface::~PlayerExternalsRdkInterface()
 
 void PlayerExternalsRdkInterface::GetDisplayResolution(int &width, int &height)
 {
+    std::lock_guard<std::mutex> lock(m_resolutionMutex);
     width   = m_displayWidth;
     height  = m_displayHeight;
 }
@@ -234,6 +235,7 @@ void PlayerExternalsRdkInterface::GetDisplayResolution(int &width, int &height)
 void PlayerExternalsRdkInterface::SetResolution(int width, int height)
 {
     MW_LOG_WARN(" Resolution : width %d height:%d\n",width,height);
+    std::lock_guard<std::mutex> lock(m_resolutionMutex);
     m_displayWidth   = width;
     m_displayHeight  = height;
 }

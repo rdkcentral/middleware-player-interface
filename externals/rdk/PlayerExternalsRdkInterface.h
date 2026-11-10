@@ -78,6 +78,7 @@ class PlayerExternalsRdkInterface : public PlayerExternalsInterfaceBase
 #endif
 {
 	std::mutex m_hdmiStatusMutex;
+	std::mutex m_resolutionMutex;
         enum InitState{
             NOT_INITIALIZED,
             FIREBOLT,
