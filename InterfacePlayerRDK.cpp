@@ -19,6 +19,7 @@
 
 #include <iostream>
 #include <atomic>
+#include <chrono>
 #include <fstream>
 #include "InterfacePlayerRDK.h"
 #include "InterfacePlayerPriv.h"
@@ -231,6 +232,10 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
 	TimerRemove(interfacePlayerPriv->gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
+	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
+	{
+		interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
+	}
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
@@ -454,6 +459,10 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
 		return;
 	}
+#ifdef ENABLE_RDKPERF
+	interfacePlayerPriv->gstPrivateContext->StartConfigureToFirstFrameProfile();
+#endif
+	PI_PROFILE_SCOPE("configure_pipeline");
 	/* First-frame watchdog: tune not completed if callback never arrives */
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
@@ -1112,7 +1121,11 @@ static void GstPlayer_SignalEOS(gst_media_stream& stream)
 {
 	if (stream.source)
 	{
-		auto ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
+		GstFlowReturn ret;
+		{
+			PI_PROFILE_SCOPE("gst_app_src_end_of_stream");
+			ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
+		}
 		//GST_FLOW_OK is expected in PAUSED or PLAYING states; GST_FLOW_FLUSHING is expected in other states.
 		if (ret != GST_FLOW_OK)
 		{
@@ -1496,6 +1509,7 @@ static void LogStatus(GstElement* pElementOrBin)
  */
 static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState)
 {
+	PI_PROFILE_SCOPE("pipeline_set_state");
 	GstStateChangeReturn rc = GST_STATE_CHANGE_FAILURE;
 	if(element)
 	{
@@ -1505,7 +1519,11 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		GstState current;																	/* To hold the current state of the element */
 		GstState pending;																	/* Pending state, used in printing the pending state of the element */
 
-		auto stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout,  this function is MT-safe */
+		GstStateChangeReturn stateChangeReturn;
+		{
+			PI_PROFILE_SCOPE("gst_element_get_state");
+			stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout,  this function is MT-safe */
+		}
 		switch(stateChangeReturn)
 		{
 			case GST_STATE_CHANGE_FAILURE:
@@ -1555,7 +1573,10 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 		{
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
-		rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		{
+			PI_PROFILE_SCOPE("gst_element_set_state");
+			rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
+		}
 		if (GST_STATE_CHANGE_FAILURE == rc)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: set_state FAILED on %s : target %s, was current %s pending %s", SafeName(element).c_str(), gst_element_state_get_name(targetState), gst_element_state_get_name(current), gst_element_state_get_name(pending));
@@ -1580,6 +1601,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
+	PI_PROFILE_SCOPE("stream_teardown");
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
 	// (see InterfacePlayerRDK.h) and is used directly below to index
 	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
@@ -1714,6 +1736,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 void InterfacePlayerRDK::Stop(bool keepLastFrame)
 {
 	std::lock_guard<std::mutex> lock(mMutex);
+	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	/*  make the execution of this function more deterministic and
 	 *  reduce scope for potential pipeline lockups*/
 
@@ -1939,7 +1962,10 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		}
 	}
 	GstStateChangeReturn ret;
-	ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
+	{
+		PI_PROFILE_SCOPE("gst_pipeline_get_state_for_flush");
+		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
+	}
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 	{
 		MW_LOG_WARN("InterfacePlayerRDK: Pipeline state %s, ret %u", gst_element_state_get_name(current), ret);
@@ -1963,7 +1989,10 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		/* pipeline may enter paused state even when audio decoder is not ready, check again */
 		if (interfacePlayerPriv->gstPrivateContext->audio_dec)
 		{
-			ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
+			{
+				PI_PROFILE_SCOPE("gst_audio_decoder_get_state_for_flush");
+				ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
+			}
 			if ((aud_current != GST_STATE_PLAYING && aud_current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 			{
 				if (shouldTearDown)
@@ -2012,8 +2041,13 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 			}
 		}
 	}
-	if (!gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
-						  position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+	gboolean seekSucceeded;
+	{
+		PI_PROFILE_SCOPE("gst_element_seek_for_flush");
+		seekSucceeded = gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
+										position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+	}
+	if (!seekSucceeded)
 	{
 		MW_LOG_ERR("gst_element_seek failed: pos=%f rate=%f pipelineState=%s, will retry as pending seek", position, playRate, gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState));
 		SetPendingSeek(true);
@@ -2586,6 +2620,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 
 int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::string manifest)
 {
+	PI_PROFILE_SCOPE("stream_setup");
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)playerInstance;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gst_media_stream* stream = &pInterfacePlayerRDK->interfacePlayerPriv->gstPrivateContext->stream[streamId];
@@ -4298,10 +4333,15 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 		notifyFirstBuffer = true;
 		PlayerLogManager::setLogLevel(mLOGLEVEL_WARN);				//Align with player LogTuneComplete once the first frame starts, required for prod builds
 	}
+	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFramePerfHandle();
 	if(notifyFirstFrameCallback)
 	{
-		notifyFirstFrameCallback(mediaType, notifyFirstBuffer, (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified && PipelineSetToReady), requireFirstVideoFrameDisplay, audioOnly);
+		{
+			PI_PROFILE_SCOPE("first_frame_client_callback");
+			notifyFirstFrameCallback(mediaType, notifyFirstBuffer, (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified && PipelineSetToReady), requireFirstVideoFrameDisplay, audioOnly);
+		}
 	}
+	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 
 	if (eGST_MEDIATYPE_VIDEO == mediaType)
 	{
@@ -4489,6 +4529,7 @@ bool GstPlayer_isVideoSink(const char* name, InterfacePlayerRDK* pInterfacePlaye
  */
 bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePriority)
 {
+	PI_PROFILE_SCOPE("pipeline_create");
 	bool ret = false;
 	/* Destroy any existing pipeline before creating a new one */
 	if (interfacePlayerPriv->gstPrivateContext->pipeline || interfacePlayerPriv->gstPrivateContext->bus)
@@ -5331,6 +5372,7 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 
 	if (!privatePlayer->gstPrivateContext->firstFrameReceived && !audioOnlySatisfied)
 	{
+		privatePlayer->gstPrivateContext->StopConfigureToFirstFrameProfile();
 
 		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
 		const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
@@ -5888,6 +5930,7 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
  */
 int InterfacePlayerRDK::InterfacePlayer_SetupStream(int streamId, std::string manifestUrl)
 {
+	PI_PROFILE_SCOPE("interface_setup_stream");
 	int retvalue = 0;
 	GstMediaType mediaType = static_cast<GstMediaType>(streamId);
 	this->TriggerEvent(InterfaceCB::startNewSubtitleStream, mediaType);
