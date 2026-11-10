@@ -193,6 +193,169 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 	}
 }
 
+/**
+ * @brief Opt-in gate for the caps-hint early attach; replace with an RFC lookup when available.
+ */
+static bool IsCapsHintEnabled()
+{
+	static const bool enabled = []() {
+		const char *v = g_getenv("AAMP_RIALTO_CAPS_HINT");
+		return v != NULL && (strcmp(v, "1") == 0 || strcmp(v, "true") == 0);
+	}();
+	return enabled;
+}
+
+/**
+ * @brief Build the caps for a stream from its codec info (shared by the caps hint and real caps).
+ * @return Newly allocated caps (caller unrefs), or NULL if no caps can be derived.
+ */
+static GstCaps *BuildStreamCaps(GstMediaType type, const MediaCodecInfo &codecInfo, const char *drmSystem)
+{
+	GstCaps *caps = GetCaps(codecInfo.mCodecFormat);
+	if (!caps)
+	{
+		return NULL;
+	}
+	// Append some additional info to caps
+	if (!codecInfo.mCodecData.empty())
+	{
+		AddBufferFieldToStructure(gst_caps_get_structure (caps, 0), "codec_data", codecInfo.mCodecData);
+	}
+	if (type == eGST_MEDIATYPE_VIDEO)
+	{
+		if (codecInfo.mCodecFormat == GST_FORMAT_VIDEO_ES_H264)
+		{
+			gst_caps_set_simple(caps,
+								"stream-format", G_TYPE_STRING, "avc",
+								"alignment", G_TYPE_STRING, "au",
+								"width", G_TYPE_INT, codecInfo.mInfo.video.mWidth,
+								"height", G_TYPE_INT, codecInfo.mInfo.video.mHeight,
+								"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+								NULL);
+		}
+		else if (codecInfo.mCodecFormat == GST_FORMAT_VIDEO_ES_HEVC)
+		{
+			gst_caps_set_simple(caps,
+								"stream-format", G_TYPE_STRING, "hvc1",
+								"alignment", G_TYPE_STRING, "au",
+								"width", G_TYPE_INT, codecInfo.mInfo.video.mWidth,
+								"height", G_TYPE_INT, codecInfo.mInfo.video.mHeight,
+								"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+								NULL);
+		}
+	}
+	else if (type == eGST_MEDIATYPE_AUDIO)
+	{
+		if (codecInfo.mCodecFormat == GST_FORMAT_AUDIO_ES_AAC_RAW)
+		{
+			gst_caps_set_simple(caps,
+								"channels", G_TYPE_INT, codecInfo.mInfo.audio.mChannelCount,
+								"rate", G_TYPE_INT, codecInfo.mInfo.audio.mSampleRate,
+								NULL);
+		}
+		else if (codecInfo.mCodecFormat == GST_FORMAT_AUDIO_ES_EC3)
+		{
+			gst_caps_set_simple(caps,
+								"framed", G_TYPE_BOOLEAN, TRUE,
+								"rate", G_TYPE_INT, codecInfo.mInfo.audio.mSampleRate,
+								"channels", G_TYPE_INT, codecInfo.mInfo.audio.mChannelCount,
+								NULL);
+		}
+	}
+	if (codecInfo.mIsEncrypted)
+	{
+		TransformToEncryptedCaps(caps, drmSystem);
+	}
+	return caps;
+}
+
+/**
+ * @brief Push manifest-derived caps to a rialtomse sink via its "caps-hint" property.
+ *
+ * Records the hint so SetStreamCaps() can verify the real caps match it.
+ */
+bool InterfacePlayerRDK::PushCapsHintToRialtoSink(GstElement *sink, GstMediaType type, const MediaCodecInfo &codecInfo)
+{
+	if (!sink || !IsCapsHintEnabled())
+	{
+		return false;
+	}
+	if (mCapsHintMismatch)
+	{
+		MW_LOG_WARN("caps-hint skipped: disabled for this instance after an earlier mismatch");
+		return false;
+	}
+	if (!IsElementaryStreamFormat(codecInfo.mCodecFormat))
+	{
+		MW_LOG_INFO("caps-hint skipped for non-elementary format[%d]", codecInfo.mCodecFormat);
+		return false;
+	}
+	if (g_object_class_find_property(G_OBJECT_GET_CLASS(sink), "caps-hint") == NULL)
+	{
+		MW_LOG_WARN("caps-hint skipped: %s has no caps-hint property", GST_ELEMENT_NAME(sink));
+		return false;
+	}
+	GstCaps *hintCaps = BuildStreamCaps(type, codecInfo, mDrmSystem);
+	if (!hintCaps)
+	{
+		MW_LOG_WARN("caps-hint skipped: no caps derivable for format[%d]", codecInfo.mCodecFormat);
+		return false;
+	}
+	gchar *capsStr = gst_caps_to_string(hintCaps);
+	gst_caps_unref(hintCaps);
+	if (!capsStr)
+	{
+		return false;
+	}
+	{
+		std::lock_guard<std::mutex> lock(mCapsHintMutex);
+		mCapsHints[static_cast<int>(type)] = CapsHintRecord{mCapsHintGeneration, std::string(capsStr)};
+	}
+	MW_LOG_INFO("Setting caps-hint on %s: %s", GST_ELEMENT_NAME(sink), capsStr);
+	g_object_set(sink, "caps-hint", capsStr, NULL);
+	g_free(capsStr);
+	return true;
+}
+
+void InterfacePlayerRDK::ValidateRealCapsAgainstHint(GstMediaType type, const std::string &realCaps)
+{
+	std::lock_guard<std::mutex> lock(mCapsHintMutex);
+	auto it = mCapsHints.find(static_cast<int>(type));
+	if (it == mCapsHints.end())
+	{
+		return;
+	}
+	if (it->second.generation != mCapsHintGeneration)
+	{
+		mCapsHints.erase(it);
+		return;
+	}
+	if (it->second.caps == realCaps)
+	{
+		MW_LOG_MIL("caps-hint matches real caps for type[%d]", type);
+	}
+	else
+	{
+		MW_LOG_WARN("caps-hint mismatch type[%d] hint=%s real=%s; caps-hint disabled for this instance",
+			type, it->second.caps.c_str(), realCaps.c_str());
+		mCapsHintMismatch = true;
+	}
+	mCapsHints.erase(it);
+}
+
+void InterfacePlayerRDK::ClearCapsHint(int type)
+{
+	std::lock_guard<std::mutex> lock(mCapsHintMutex);
+	mCapsHints.erase(type);
+}
+
+void InterfacePlayerRDK::ResetCapsHints()
+{
+	std::lock_guard<std::mutex> lock(mCapsHintMutex);
+	++mCapsHintGeneration;
+	mCapsHints.clear();
+}
+
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
@@ -1653,6 +1816,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
 	}
 	tearDownCb(true, type);
+	ClearCapsHint(type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
 	stream->bufferUnderrun = false;
@@ -1824,6 +1988,7 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	{
 		TearDownStream((int(i)));
 	}
+	ResetCapsHints();
 	DestroyPipeline();
 	interfacePlayerPriv->gstPrivateContext->rate = GST_NORMAL_PLAY_RATE;
 	interfacePlayerPriv->gstPrivateContext->lastKnownPTS = 0;
@@ -2731,6 +2896,9 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
                                     g_object_set(vidsink, "show-video-window", FALSE, NULL);
                                 }
 
+                                // Hint caps early so server-side attach overlaps DRM license acquisition.
+                                PushCapsHintToRialtoSink(vidsink, eGST_MEDIATYPE_VIDEO, stream->codecInfo);
+
 			}
 			else
 			{
@@ -2746,6 +2914,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				MW_LOG_INFO("Created rialtomseaudiosink : %s",GST_ELEMENT_NAME(audSink));
 				g_object_set(stream->sinkbin, "audio-sink", audSink, NULL);
 				interfacePlayerPriv->gstPrivateContext->audio_sink = GST_ELEMENT(gst_object_ref(audSink));
+				PushCapsHintToRialtoSink(audSink, eGST_MEDIATYPE_AUDIO, stream->codecInfo);
 			}
 			else
 			{
@@ -6188,66 +6357,24 @@ void AddBufferFieldToStructure(GstStructure *structure, const char *fieldName, c
  */
 void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo)
 {
-	GstCaps *caps = GetCaps(codecInfo.mCodecFormat);
+	GstCaps *caps = BuildStreamCaps(type, codecInfo, mDrmSystem);
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	stream->format = codecInfo.mCodecFormat;
 	interfacePlayerPriv->gstPrivateContext->isMp4DemuxPlayback = true;
 	if (caps)
 	{
-		// Append some additional info to caps
-		if (!codecInfo.mCodecData.empty())
-		{
-			AddBufferFieldToStructure(gst_caps_get_structure (caps, 0), "codec_data", codecInfo.mCodecData);
-		}
-		if (type == eGST_MEDIATYPE_VIDEO)
-		{
-			if (codecInfo.mCodecFormat == GST_FORMAT_VIDEO_ES_H264)
-			{
-				gst_caps_set_simple(caps,
-									"stream-format", G_TYPE_STRING, "avc",
-									"alignment", G_TYPE_STRING, "au",
-									"width", G_TYPE_INT, codecInfo.mInfo.video.mWidth,
-									"height", G_TYPE_INT, codecInfo.mInfo.video.mHeight,
-									"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-									NULL);
-			}
-			else if (codecInfo.mCodecFormat == GST_FORMAT_VIDEO_ES_HEVC)
-			{
-				gst_caps_set_simple(caps,
-									"stream-format", G_TYPE_STRING, "hvc1",
-									"alignment", G_TYPE_STRING, "au",
-									"width", G_TYPE_INT, codecInfo.mInfo.video.mWidth,
-									"height", G_TYPE_INT, codecInfo.mInfo.video.mHeight,
-									"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-									NULL);
-			}
-		}
-		else if (type == eGST_MEDIATYPE_AUDIO)
-		{
-			if (codecInfo.mCodecFormat == GST_FORMAT_AUDIO_ES_AAC_RAW)
-			{
-				gst_caps_set_simple(caps,
-									"channels", G_TYPE_INT, codecInfo.mInfo.audio.mChannelCount,
-									"rate", G_TYPE_INT, codecInfo.mInfo.audio.mSampleRate,
-									NULL);
-			}
-			else if (codecInfo.mCodecFormat == GST_FORMAT_AUDIO_ES_EC3)
-			{
-				gst_caps_set_simple(caps,
-									"framed", G_TYPE_BOOLEAN, TRUE,
-									"rate", G_TYPE_INT, codecInfo.mInfo.audio.mSampleRate,
-									"channels", G_TYPE_INT, codecInfo.mInfo.audio.mChannelCount,
-									NULL);
-			}
-		}
-		if (codecInfo.mIsEncrypted)
-		{
-			TransformToEncryptedCaps(caps, mDrmSystem);
-		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);
+		ValidateRealCapsAgainstHint(type, capsStr ? std::string(capsStr) : std::string());
 		g_free(capsStr);
-		gst_app_src_set_caps(GST_APP_SRC(stream->source), caps);
+		if (stream->source)
+		{
+			gst_app_src_set_caps(GST_APP_SRC(stream->source), caps);
+		}
+		else
+		{
+			MW_LOG_ERR("No appsrc for type[%d]; stream caps not applied", type);
+		}
 		gst_caps_unref(caps);
 	}
 	else
