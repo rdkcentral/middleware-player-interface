@@ -198,28 +198,33 @@ struct GstPlayerPriv
 		PIStartTuneProfile();
 #endif
 	}
-	/* Records configure_to_first_frame once per tune; the window stays open for the
-	 * first frame client callback and is closed by StopConfigureToFirstFrameProfile(). */
-	void RecordConfigureToFirstFrame()
+	/* Records configure_to_first_frame once per tune and returns true if it did; the window stays
+	 * open for the first frame client callback and is closed by StopConfigureToFirstFrameProfile(). */
+	bool RecordConfigureToFirstFrame()
 	{
+		bool recorded = false;
 #ifdef ENABLE_RDKPERF
 		std::lock_guard<std::mutex> lock(configureToFirstFrameProfileMutex);
 		if (configureToFirstFrameProfileActive && !configureToFirstFrameRecorded)
 		{
 			configureToFirstFrameRecorded = true;
+			recorded = true;
 			MW_LOG_MIL("PI_PERF configure_to_first_frame %lld ms", ElapsedSinceConfigureMs());
 		}
 #endif
+		return recorded;
 	}
-	/* Ends the tune profile window; timedOut reports first_frame_timeout instead of a tune time. */
-	void StopConfigureToFirstFrameProfile(bool timedOut = false)
+	/* Ends the tune profile window; returns true if first_frame_timeout was reported. */
+	bool StopConfigureToFirstFrameProfile(bool timedOut = false)
 	{
+		bool timeoutReported = false;
 #ifdef ENABLE_RDKPERF
 		std::lock_guard<std::mutex> lock(configureToFirstFrameProfileMutex);
 		if (configureToFirstFrameProfileActive)
 		{
 			if (timedOut && !configureToFirstFrameRecorded)
 			{
+				timeoutReported = true;
 				MW_LOG_WARN("PI_PERF first_frame_timeout %lld ms", ElapsedSinceConfigureMs());
 			}
 			configureToFirstFrameProfileActive = false;
@@ -229,6 +234,7 @@ struct GstPlayerPriv
 #else
 		(void)timedOut;
 #endif
+		return timeoutReported;
 	}
 	bool IsConfigureToFirstFrameProfileActive()
 	{
