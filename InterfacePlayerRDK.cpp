@@ -5482,12 +5482,13 @@ static gboolean buffering_timeout (gpointer data)
 						return G_SOURCE_REMOVE;
 					}
 					MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
-						gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
+					gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
 					SetStateWithWarnings (privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state);
+					privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				}
 				isRateCorrectionDefaultOnPlaying =  privatePlayer->socInterface->SetRateCorrection();
 
-				privatePlayer->gstPrivateContext->buffering_in_progress = false;
+				
 				isPlayerReady = true;
 #ifdef PLAYER_TELEMETRY_SUPPORT
 				{
