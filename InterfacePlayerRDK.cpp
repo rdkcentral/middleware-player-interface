@@ -1697,7 +1697,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
 					if (current != GST_STATE_NULL)
 					{
 						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
-						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+						if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+						{
+							MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: forced NULL state change failed for sinkbin");
+						}
 					}
 				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
@@ -1761,7 +1764,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
 					if (current != GST_STATE_NULL)
 					{
 						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: CC sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
-						gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+						if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+						{
+							MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: forced NULL state change failed for CC sinkbin");
+						}
 					}
 				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
@@ -2616,7 +2622,10 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 				if (current != GST_STATE_NULL)
 				{
 					MW_LOG_ERR("Sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
-					gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+					if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+					{
+						MW_LOG_ERR("SetupClosedCaptionControlStream: forced NULL state change failed for stale sinkbin");
+					}
 				}
 			}
 			if (!gst_bin_remove(GST_BIN(privatePlayer->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
