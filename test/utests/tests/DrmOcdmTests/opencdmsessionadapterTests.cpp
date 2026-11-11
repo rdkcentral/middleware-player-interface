@@ -35,6 +35,7 @@
 #include <thread>
 #include <chrono>
 #include "opencdmsessionadapter.h"
+#include "MockOpenCdm.h"
 
 /**
  * @brief Test DrmCallbacks implementation
@@ -2029,4 +2030,121 @@ TEST(OCDMSessionAdapter, Integration_MultipleAdaptersConcurrent)
     for (auto* cb : callbacks) delete cb;
 
     std::cout << "[OCDMSessionAdapter.Integration_MultipleAdaptersConcurrent] - PASS" << std::endl;
+}
+
+// ========================================
+// ERROR MESSAGE CALLBACK TESTS
+// ========================================
+
+class RecordingDrmCallbacks : public TestDrmCallbacks {
+public:
+    MOCK_METHOD(void, DrmSessionError, (DrmSession* session, const std::string& message), (override));
+};
+
+class StateAccessAdapter : public OCDMSessionAdapter {
+public:
+    using OCDMSessionAdapter::OCDMSessionAdapter;
+    void setKeyState(KeyState state) { m_eKeyState = state; }
+};
+
+class OCDMErrorMessageCallbackTests : public ::testing::Test {
+protected:
+    OpenCDMSystem* m_system = reinterpret_cast<OpenCDMSystem*>(&m_systemToken);
+    OpenCDMSession* m_session = reinterpret_cast<OpenCDMSession*>(&m_sessionToken);
+    int m_systemToken = 0;
+    int m_sessionToken = 0;
+    OpenCDMSessionCallbacks* m_callbacks = nullptr;
+    void* m_userData = nullptr;
+    std::shared_ptr<WidevineDrmHelper> m_helper;
+
+    void SetUp() override
+    {
+        g_mockopencdm = new testing::NiceMock<MockOpenCdm>();
+        m_helper = std::make_shared<WidevineDrmHelper>(DrmInfo());
+        ON_CALL(*g_mockopencdm, opencdm_create_system(testing::_)).WillByDefault(testing::Return(m_system));
+        ON_CALL(*g_mockopencdm, opencdm_construct_session(testing::_, testing::_, testing::_, testing::_, testing::_,
+                                                          testing::_, testing::_, testing::_, testing::_, testing::_))
+            .WillByDefault(testing::Invoke([this](OpenCDMSystem*, const LicenseType, const char[], const uint8_t[],
+                                                  const uint16_t, const uint8_t[], const uint16_t,
+                                                  OpenCDMSessionCallbacks* callbacks, void* userData,
+                                                  OpenCDMSession** session) {
+                m_callbacks = callbacks;
+                m_userData = userData;
+                *session = m_session;
+                return ERROR_NONE;
+            }));
+    }
+
+    void TearDown() override
+    {
+        delete g_mockopencdm;
+        g_mockopencdm = nullptr;
+    }
+
+    // Registers callbacks via generateDRMSession and drives the session to KEY_READY with the given key status.
+    void prepareReadySession(StateAccessAdapter& adapter, KeyStatus status)
+    {
+        ON_CALL(*g_mockopencdm, opencdm_session_status(testing::_, testing::_, testing::_))
+            .WillByDefault(testing::Return(status));
+        const uint8_t initData[] = {0x01, 0x02, 0x03, 0x04};
+        std::string customData;
+        adapter.generateDRMSession(initData, sizeof(initData), customData);
+        ASSERT_NE(m_callbacks, nullptr);
+        ASSERT_NE(m_callbacks->error_message_callback, nullptr);
+        const uint8_t key[] = {0xAA, 0xBB, 0xCC, 0xDD};
+        adapter.keyUpdateOCDM(key, sizeof(key));
+        adapter.setKeyState(KEY_READY);
+    }
+};
+
+TEST_F(OCDMErrorMessageCallbackTests, InternalErrorOnReadySessionBecomesKeyErrorBeforeNotification)
+{
+    RecordingDrmCallbacks callbacks;
+    StateAccessAdapter adapter(m_helper, &callbacks);
+    prepareReadySession(adapter, InternalError);
+
+    KeyState stateAtNotification = KEY_INIT;
+    EXPECT_CALL(callbacks, DrmSessionError(&adapter, std::string("server crashed")))
+        .WillOnce(testing::Invoke([&](DrmSession*, const std::string&) { stateAtNotification = adapter.getState(); }));
+
+    m_callbacks->error_message_callback(m_session, m_userData, "server crashed");
+
+    EXPECT_EQ(stateAtNotification, KEY_ERROR);
+    EXPECT_EQ(adapter.getState(), KEY_ERROR);
+}
+
+TEST_F(OCDMErrorMessageCallbackTests, UsableSessionStaysReadyAndStillNotifies)
+{
+    RecordingDrmCallbacks callbacks;
+    StateAccessAdapter adapter(m_helper, &callbacks);
+    prepareReadySession(adapter, Usable);
+
+    EXPECT_CALL(callbacks, DrmSessionError(&adapter, std::string("transient error"))).Times(1);
+
+    m_callbacks->error_message_callback(m_session, m_userData, "transient error");
+
+    EXPECT_EQ(adapter.getState(), KEY_READY);
+}
+
+TEST_F(OCDMErrorMessageCallbackTests, NullMessageIsForwardedAsEmptyString)
+{
+    RecordingDrmCallbacks callbacks;
+    StateAccessAdapter adapter(m_helper, &callbacks);
+    prepareReadySession(adapter, InternalError);
+
+    EXPECT_CALL(callbacks, DrmSessionError(&adapter, std::string(""))).Times(1);
+
+    m_callbacks->error_message_callback(m_session, m_userData, nullptr);
+
+    EXPECT_EQ(adapter.getState(), KEY_ERROR);
+}
+
+TEST_F(OCDMErrorMessageCallbackTests, AbsentReceiverStillTransitionsState)
+{
+    StateAccessAdapter adapter(m_helper, nullptr);
+    prepareReadySession(adapter, InternalError);
+
+    EXPECT_NO_THROW(m_callbacks->error_message_callback(m_session, m_userData, "no receiver"));
+
+    EXPECT_EQ(adapter.getState(), KEY_ERROR);
 }
