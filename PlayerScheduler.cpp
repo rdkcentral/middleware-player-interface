@@ -62,6 +62,7 @@ void PlayerScheduler::StartScheduler()
 	std::lock_guard<std::mutex>lock(mQMutex);
 	mSchedulerRunning = true;
 	mSchedulerThread = std::thread(std::bind(&PlayerScheduler::ExecuteAsyncTask, this));
+	mSchedulerThreadId = mSchedulerThread.get_id();
 	MW_LOG_INFO("Thread created Async Worker [%zx]", GetPlayerThreadID(mSchedulerThread));
 }
 
@@ -164,8 +165,10 @@ void PlayerScheduler::RemoveAllTasks()
 void PlayerScheduler::StopScheduler()
 {
 	MW_LOG_WARN("Stopping Async Worker Thread");
+	bool calledFromWorker = false;
 	{
 		std::lock_guard<std::mutex>lock(mQMutex);
+		calledFromWorker = (mSchedulerThreadId == std::this_thread::get_id());
 		mSchedulerRunning = false;
 		mLockOut = true;
 		mSuspended = false;
@@ -176,11 +179,10 @@ void PlayerScheduler::StopScheduler()
 
 	if (mSchedulerThread.joinable())
 	{
-		if (mSchedulerThread.get_id() == std::this_thread::get_id())
+		if (calledFromWorker)
 		{
-			// Called from a scheduled task: joining self would terminate; worker exits once the task returns
-			MW_LOG_WARN("StopScheduler called from scheduler thread, detaching instead of join");
-			mSchedulerThread.detach();
+			// Called from a scheduled task: retain the handle for a non-worker thread to join.
+			MW_LOG_WARN("StopScheduler called from scheduler thread, deferring join");
 		}
 		else
 		{
@@ -198,16 +200,18 @@ void PlayerScheduler::StopScheduler()
 void PlayerScheduler::SuspendScheduler()
 {
 	std::unique_lock<std::mutex>lock(mQMutex);
-	if (mSchedulerThread.get_id() == std::this_thread::get_id())
+	if (mSchedulerThreadId == std::this_thread::get_id())
 	{
 		// Waiting for the running task (ourselves) to finish would deadlock
 		MW_LOG_ERR("SuspendScheduler called from scheduler thread, ignored");
 		return;
 	}
-	// Wait for the current task to finish and any previous suspend to be released
-	mExCond.wait(lock, [this]{ return !mExecuting && !mSuspended; });
+	// Wait for any previous suspend to be released, then close the gate.
+	mExCond.wait(lock, [this]{ return !mSuspended; });
 	mSuspended = true;
 	mLockOut = true;
+	// Prevent queued tasks from starting while the current task finishes.
+	mExCond.wait(lock, [this]{ return !mExecuting; });
 }
 
 /**

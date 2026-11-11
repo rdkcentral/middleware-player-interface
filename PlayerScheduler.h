@@ -159,6 +159,7 @@ protected:
 	std::condition_variable mQCond;		/**< To notify when a task is queued in mTaskQueue */
 	std::atomic_bool mSchedulerRunning;	/**< Flag denotes if scheduler thread is running */
 	std::thread mSchedulerThread;		/**< Scheduler thread */
+	std::thread::id mSchedulerThreadId;	/**< Worker thread id, guarded by mQMutex */
 	std::condition_variable mExCond;	/**< Notifies Suspend waiters when the worker is idle or resumed */
 	bool mSuspended;			/**< Suspend gate, guarded by mQMutex; may be released from any thread */
 	bool mExecuting;			/**< True while a task is executing, guarded by mQMutex */
