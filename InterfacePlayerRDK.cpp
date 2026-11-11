@@ -208,8 +208,7 @@ mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
 	pthread_mutex_init(&mProtectionLock, NULL);
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
-	// start Scheduler Worker for task handling
-	mScheduler.StartScheduler();
+
 #ifdef PLAYER_TELEMETRY_SUPPORT
 	PlayerTelemetry2 telemetry;
 	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
@@ -1826,7 +1825,6 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 void InterfacePlayerRDK::CancelPendingCallbacks()
 {
 	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
-	CancelProgressCallbackContext();
 	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
