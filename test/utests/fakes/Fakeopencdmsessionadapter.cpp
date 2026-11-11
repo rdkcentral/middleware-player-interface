@@ -71,7 +71,8 @@ KeyState OCDMSessionAdapter::getState()
 void OCDMSessionAdapter::clearDecryptContext()
 {
 }
-bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
+bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout,
+	const std::atomic<bool>* cancel)
 {
     return true;
 }

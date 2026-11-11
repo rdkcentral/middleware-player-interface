@@ -76,7 +76,8 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
  */
 DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
 		cachedKeyIDs(NULL), accessToken(NULL),
-		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
+		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE),
+		mDrmWaitCancellation(std::make_shared<std::atomic<bool>>(false)), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
@@ -133,16 +134,37 @@ void DrmSessionManager::UpdateDRMConfig(
 void DrmSessionManager::clearSessionData()
 {
 	MW_LOG_WARN(" DrmSessionManager:: Clearing session data");
+	std::shared_ptr<std::atomic<bool>> cancelledWaits;
+	{
+		std::lock_guard<std::mutex> guard(mDrmSessionLock);
+		cancelledWaits = mDrmWaitCancellation;
+		if (sessionMgrState.load() == SessionMgrState::eSESSIONMGR_ACTIVE)
+		{
+			mDrmWaitCancellation = std::make_shared<std::atomic<bool>>(false);
+		}
+	}
+	cancelledWaits->store(true);
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
-		if (drmSessionContexts != NULL && drmSessionContexts[i].drmSession != NULL)
+		std::shared_ptr<DrmSession> sessionOwner;
+		DrmSession* unmanagedSession = nullptr;
+		if (drmSessionContexts != NULL)
 		{
-			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
-			 * (called from a GStreamer pipeline thread via a cached raw pointer)
-			 * has completed, before freeing the object. */
-			drmSessionContexts[i].drmSession->PrepareForDestruction();
-			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
-			drmSessionContexts[i] = DrmSessionContext();
+			std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
+			sessionOwner = std::move(drmSessionContexts[i].sessionOwner);
+			unmanagedSession = sessionOwner ? nullptr : drmSessionContexts[i].drmSession;
+			drmSessionContexts[i].drmSession = nullptr;
+			drmSessionContexts[i].data.clear();
+			++drmSessionContexts[i].generation;
+		}
+		DrmSession* session = sessionOwner ? sessionOwner.get() : unmanagedSession;
+		if (session != nullptr)
+		{
+			session->PrepareForDestruction();
+			if (unmanagedSession != nullptr)
+			{
+				delete unmanagedSession;
+			}
 		}
 
 		{
@@ -160,7 +182,16 @@ void DrmSessionManager::clearSessionData()
  */
 void DrmSessionManager::setSessionMgrState(SessionMgrState state)
 {
-	sessionMgrState = state;
+	sessionMgrState.store(state);
+	std::lock_guard<std::mutex> guard(mDrmSessionLock);
+	if (state == SessionMgrState::eSESSIONMGR_INACTIVE)
+	{
+		mDrmWaitCancellation->store(true);
+	}
+	else
+	{
+		mDrmWaitCancellation = std::make_shared<std::atomic<bool>>(false);
+	}
 }
 
 /**
@@ -168,7 +199,7 @@ void DrmSessionManager::setSessionMgrState(SessionMgrState state)
  */
 SessionMgrState DrmSessionManager::getSessionMgrState()
 {
-	return sessionMgrState;
+	return sessionMgrState.load();
 }
 
 /**
@@ -237,13 +268,25 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 		}
 		if((isFailedKeyEntry || forceClearSession) && drmSessionContexts != NULL)
 		{
-			std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
-			if (drmSessionContexts[i].drmSession != NULL)
+			std::shared_ptr<DrmSession> sessionOwner;
+			DrmSession* unmanagedSession = nullptr;
+			{
+				std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
+				sessionOwner = std::move(drmSessionContexts[i].sessionOwner);
+				unmanagedSession = sessionOwner ? nullptr : drmSessionContexts[i].drmSession;
+				drmSessionContexts[i].drmSession = nullptr;
+				drmSessionContexts[i].data.clear();
+				++drmSessionContexts[i].generation;
+			}
+			DrmSession* session = sessionOwner ? sessionOwner.get() : unmanagedSession;
+			if (session != nullptr)
 			{
 				MW_LOG_WARN("DrmSessionManager:: Clearing failed Session Data Slot : %d", i);
-				/* DELIA-70726 fix: see clearSessionData() for rationale. */
-				drmSessionContexts[i].drmSession->PrepareForDestruction();
-				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+				session->PrepareForDestruction();
+				if (unmanagedSession != nullptr)
+				{
+					delete unmanagedSession;
+				}
 			}
 		}
 	}
@@ -538,13 +581,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		return nullptr;
 	}
 
-	// protect createDrmSession multi-thread calls; found during PR 4.0 DRM testing
-	std::lock_guard<std::mutex> guard(mDrmSessionLock);
-
 	int cdmError = -1;
 	KeyState code = KEY_ERROR;
 
-	if (SessionMgrState::eSESSIONMGR_INACTIVE == sessionMgrState)
+	if (SessionMgrState::eSESSIONMGR_INACTIVE == sessionMgrState.load())
 	{
 		MW_LOG_ERR(" SessionManager state inactive, aborting request");
 		return nullptr;
@@ -569,7 +609,11 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	std::vector<uint8_t> keyId;
 	drmHelper->getKey(keyId);
 	/* callback to initiate content protection data update */
-	mCustomData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
+	const std::string customData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
+	{
+		std::lock_guard<std::mutex> guard(mDrmSessionLock);
+		mCustomData = customData;
+	}
 	if (code == KEY_READY)
 	{
 		return drmSessionContexts[selectedSlot].drmSession;
@@ -580,7 +624,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		MW_LOG_WARN(" Unable to get DrmSession : Key State %d ", code);
 		return nullptr;
 	}
-	code = initializeDrmSession(drmHelper, selectedSlot,  err);
+	code = initializeDrmSession(drmHelper, selectedSlot, err, &customData);
 	if (code != KEY_INIT)
 	{
 		MW_LOG_WARN(" Unable to initialize DrmSession : Key State %d, err code: %d", code, err);
@@ -900,7 +944,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 
 	selectedSlot = sessionSlot;
 	const std::string systemId = drmHelper->ocdmSystemId();
-	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
+	std::unique_lock<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		if (drmHelper->ocdmSystemId() != drmSessionContexts[sessionSlot].drmSession->getKeySystem())
@@ -950,7 +994,24 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				}
 				else if (existingState <= KEY_READY)
 				{
-					if (drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout()))
+					DrmSession* waitingSession = drmSessionContexts[sessionSlot].drmSession;
+					auto waitingOwner = drmSessionContexts[sessionSlot].sessionOwner;
+					const uint64_t generation = drmSessionContexts[sessionSlot].generation;
+					std::shared_ptr<std::atomic<bool>> cancellation;
+					{
+						std::lock_guard<std::mutex> cancellationGuard(mDrmSessionLock);
+						cancellation = mDrmWaitCancellation;
+					}
+					guard.unlock();
+					const bool ready = waitingSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout(), cancellation.get());
+					guard.lock();
+					if (generation != drmSessionContexts[sessionSlot].generation ||
+						waitingSession != drmSessionContexts[sessionSlot].drmSession)
+					{
+						MW_LOG_WARN("DRM session slot %d changed while waiting for key", sessionSlot);
+						return KEY_ERROR;
+					}
+					if (ready)
 					{
 						MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 						return KEY_READY;
@@ -976,27 +1037,54 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			}
 		}
 		MW_LOG_WARN("deleting existing DRM session for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
-		/* DELIA-70726 fix: this slot may still be referenced by a GStreamer
-		 * decryptor element of a previous, not-yet-fully-torn-down pipeline
-		 * (rapid/back-to-back channel change). Block here until any decrypt()
-		 * call already in flight against this session finishes, so the delete
-		 * below cannot race with OCDMSessionAdapter::verifyOutputProtection()/
-		 * decrypt() running on the old pipeline's multiqueue thread. */
-		drmSessionContexts[sessionSlot].drmSession->PrepareForDestruction();
-		MW_SAFE_DELETE(drmSessionContexts[sessionSlot].drmSession);
 	}
-        this->ProfileUpdateCb();
 
+	auto previousOwner = std::move(drmSessionContexts[sessionSlot].sessionOwner);
+	DrmSession* previousSession = previousOwner ? previousOwner.get() : drmSessionContexts[sessionSlot].drmSession;
+	drmSessionContexts[sessionSlot].drmSession = nullptr;
+	const uint64_t generation = ++drmSessionContexts[sessionSlot].generation;
+	guard.unlock();
+
+	if (previousSession != nullptr)
+	{
+		previousSession->PrepareForDestruction();
+		if (!previousOwner)
+		{
+			delete previousSession;
+		}
+	}
+
+	if (ProfileUpdateCb)
+	{
+		ProfileUpdateCb();
+	}
+
+	std::shared_ptr<DrmSession> createdSession;
 	if (m_sessionCreator)
 	{
 		auto owned = m_sessionCreator(drmHelper, Instance);
-		drmSessionContexts[sessionSlot].drmSession = owned.release();
+		createdSession = std::shared_ptr<DrmSession>(std::move(owned));
 	}
 	else
 	{
-		drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+		createdSession.reset(DrmSessionFactory::GetDrmSession(drmHelper, Instance));
 	}
-	if (drmSessionContexts[sessionSlot].drmSession != NULL)
+
+	guard.lock();
+	if (generation != drmSessionContexts[sessionSlot].generation ||
+		sessionMgrState.load() == SessionMgrState::eSESSIONMGR_INACTIVE)
+	{
+		guard.unlock();
+		if (createdSession)
+		{
+			createdSession->PrepareForDestruction();
+		}
+		MW_LOG_WARN("Discarding DRM session created for stale slot %d", sessionSlot);
+		return KEY_ERROR;
+	}
+	drmSessionContexts[sessionSlot].sessionOwner = createdSession;
+	drmSessionContexts[sessionSlot].drmSession = createdSession.get();
+	if (createdSession != nullptr)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
 		drmSessionContexts[sessionSlot].data = keyIdArray;
@@ -1024,7 +1112,8 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 /**
  * @brief Initialize the Drm System with InitData(PSSH)
  */
-KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmHelper, int sessionSlot, int &err )
+KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmHelper, int sessionSlot, int &err,
+	const std::string* customData)
 {
 	KeyState code = KEY_ERROR;
 
@@ -1032,8 +1121,23 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 	drmHelper->createInitData(drmInitData);
 
 	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
-	MW_LOG_INFO("DRM session Custom Data - %s ", mCustomData.empty()?"NULL":mCustomData.c_str());
-	drmSessionContexts[sessionSlot].drmSession->generateDRMSession(drmInitData.data(), (uint32_t)drmInitData.size(), mCustomData);
+	std::string sessionCustomData;
+	if (customData != nullptr)
+	{
+		sessionCustomData = *customData;
+	}
+	else
+	{
+		std::lock_guard<std::mutex> customDataGuard(mDrmSessionLock);
+		sessionCustomData = mCustomData;
+	}
+	MW_LOG_INFO("DRM session Custom Data - %s ", sessionCustomData.empty()?"NULL":sessionCustomData.c_str());
+	if (drmSessionContexts[sessionSlot].drmSession == nullptr)
+	{
+		MW_LOG_WARN("DRM session slot %d was cleared before initialization", sessionSlot);
+		return KEY_ERROR;
+	}
+	drmSessionContexts[sessionSlot].drmSession->generateDRMSession(drmInitData.data(), (uint32_t)drmInitData.size(), sessionCustomData);
 
 	code = drmSessionContexts[sessionSlot].drmSession->getState();
 	if (code != KEY_INIT)

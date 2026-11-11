@@ -1207,6 +1207,25 @@ TEST(OCDMSessionAdapter, WaitForState_ZeroTimeout)
     std::cout << "[OCDMSessionAdapter.WaitForState_ZeroTimeout] - PASS" << std::endl;
 }
 
+TEST(Event, WaitCanBeCancelled)
+{
+    Event event;
+    std::atomic<bool> cancel{false};
+    std::thread cancelThread([&cancel]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        cancel.store(true);
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    const bool signalled = event.wait(5000, &cancel);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+
+    cancelThread.join();
+    EXPECT_FALSE(signalled);
+    EXPECT_LT(elapsed.count(), 500);
+}
+
 // ========================================
 // GET USABLE KEYS TESTS
 // ========================================

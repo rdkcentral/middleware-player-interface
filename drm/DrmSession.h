@@ -200,7 +200,8 @@ public:
 	 * @param timeout how long to wait in mSecs
 	 * @return true if obtained, false otherwise
 	 */
-	virtual bool waitForState(KeyState state, const uint32_t timeout) { return true; }
+	virtual bool waitForState(KeyState state, const uint32_t timeout,
+		const std::atomic<bool>* cancel = nullptr) { return true; }
 
 	/**
 	 * @brief Clear the current session context

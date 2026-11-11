@@ -31,6 +31,8 @@
 
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
+#include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include "DrmCallbacks.h"
 
@@ -52,21 +54,32 @@ public:
 	virtual ~Event() {
 	}
 
-	inline bool wait(const uint32_t waitTime)
+	inline bool wait(const uint32_t waitTime, const std::atomic<bool>* cancel = nullptr)
 	{
 		std::unique_lock<std::mutex> _lock(lock);
-		if (!signalled) {
-			if (waitTime == 0) {
-				condition.wait(_lock, [this]() { return signalled; });
-			} else {
-				// Use predicate version - returns false if timeout, true if condition met
-				if (!condition.wait_for(_lock, std::chrono::milliseconds(waitTime),
-					[this]() { return signalled; }))
-				{
-					signalled = false;
-					return false; // Timeout occurred
-				}
+		auto ready = [this, cancel]() { return signalled || (cancel && cancel->load()); };
+		if (waitTime == 0) {
+			while (!ready())
+			{
+				condition.wait_for(_lock, std::chrono::milliseconds(50));
 			}
+		} else {
+			const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(waitTime);
+			while (!ready())
+			{
+				const auto remaining = deadline - std::chrono::steady_clock::now();
+				if (remaining <= std::chrono::steady_clock::duration::zero())
+				{
+					return false;
+				}
+				condition.wait_for(_lock, std::min(remaining,
+					std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::milliseconds(50))));
+			}
+		}
+		if (cancel && cancel->load())
+		{
+			signalled = false;
+			return false;
 		}
 		signalled = false;
 		return true;
@@ -145,7 +158,8 @@ public:
 #if defined(USE_OPENCDM_ADAPTER)
 	void setKeyId(const std::vector<uint8_t>& keyId) override;
 #endif
-	bool waitForState(KeyState state, const uint32_t timeout) override;
+	bool waitForState(KeyState state, const uint32_t timeout,
+		const std::atomic<bool>* cancel = nullptr) override;
 };
 
 #endif

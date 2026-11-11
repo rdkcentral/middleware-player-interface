@@ -62,15 +62,17 @@ struct DrmSessionContext
 	std::vector<uint8_t> data;
 	std::mutex sessionMutex;
 	DrmSession * drmSession;
+	std::shared_ptr<DrmSession> sessionOwner;
+	uint64_t generation;
 
-	DrmSessionContext() : sessionMutex(), drmSession(NULL),data()
+	DrmSessionContext() : data(), sessionMutex(), drmSession(NULL), sessionOwner(), generation(0)
 	{
 	}
-	DrmSessionContext(const DrmSessionContext& other) : data(other.data), drmSession(other.drmSession)
+	DrmSessionContext(const DrmSessionContext& other) : data(other.data), drmSession(other.drmSession), sessionOwner(other.sessionOwner), generation(other.generation)
 	{
 		// Releases memory allocated after destructing any of these objects
 	}
-	DrmSessionContext(DrmSessionContext&& other) noexcept : data(std::move(other.data)), drmSession(other.drmSession)
+	DrmSessionContext(DrmSessionContext&& other) noexcept : data(std::move(other.data)), drmSession(other.drmSession), sessionOwner(std::move(other.sessionOwner)), generation(other.generation)
 	{
 		other.drmSession = nullptr;
 	}
@@ -78,6 +80,8 @@ struct DrmSessionContext
 	{
 		data = other.data;
 		drmSession = other.drmSession;
+		sessionOwner = other.sessionOwner;
+		generation = other.generation;
 		return *this;
 	}
 	DrmSessionContext& operator=(DrmSessionContext&& other) noexcept
@@ -86,6 +90,8 @@ struct DrmSessionContext
 		{
 			data = std::move(other.data);
 			drmSession = other.drmSession;
+			sessionOwner = std::move(other.sessionOwner);
+			generation = other.generation;
 			other.drmSession = nullptr;
 		}
 		return *this;
@@ -181,7 +187,8 @@ protected:
 private:
 	char* accessToken;
 	int accessTokenLen;
-	SessionMgrState sessionMgrState;
+	std::atomic<SessionMgrState> sessionMgrState;
+	std::shared_ptr<std::atomic<bool>> mDrmWaitCancellation;
 	std::mutex accessTokenMutex;
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
@@ -437,7 +444,8 @@ public:
 	/**
 	 * @fn initializeDrmSession
 	 */
-	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int &err );
+	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot, int &err,
+		const std::string* customData = nullptr);
 	/**
 	 * @fn notifyCleanup
 	 */
