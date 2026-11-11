@@ -361,6 +361,43 @@ int ClearKeySession::processDRMKey(DrmData* key, uint32_t timeout)
 }
 
 /**
+ * @brief Validate that the subsample table is complete and that the clear and
+ *        encrypted ranges it describes fit within the sample buffer.
+ *        The reader position is reset to the start on return.
+ * @param reader subsample table reader
+ * @param subSampleCount number of subsample entries expected in the table
+ * @param bufferSize size of the sample buffer in bytes
+ * @retval true if every entry can be read and the total length fits in the buffer
+ */
+static bool ValidateSubSamples(GstByteReader *reader, unsigned subSampleCount, gsize bufferSize)
+{
+	bool valid = true;
+	uint64_t totalBytes = 0;
+	uint16_t nBytesClear = 0;
+	uint32_t nBytesEncrypted = 0;
+
+	for (unsigned i = 0; i < subSampleCount; i++)
+	{
+		if (!gst_byte_reader_get_uint16_be(reader, &nBytesClear)
+				|| !gst_byte_reader_get_uint32_be(reader, &nBytesEncrypted))
+		{
+			MW_LOG_ERR("ClearKeySession: ERROR : Subsample table truncated, entry %u of %u", i, subSampleCount);
+			valid = false;
+			break;
+		}
+		totalBytes += (uint64_t)nBytesClear + nBytesEncrypted;
+		if (totalBytes > bufferSize)
+		{
+			MW_LOG_ERR("ClearKeySession: ERROR : Subsample ranges exceed buffer size %zu at entry %u", (size_t)bufferSize, i);
+			valid = false;
+			break;
+		}
+	}
+	gst_byte_reader_set_pos(reader, 0);
+	return valid;
+}
+
+/**
  * @brief Function to decrypt stream.
  */
 int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount,
@@ -426,11 +463,18 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 			// we need to call decrypt once for all encrypted bytes.
 			if (subSampleCount > 0)
 			{
-				pbData = (uint8_t *) malloc(sizeof(uint8_t) * bufferMap.size);
+				if (ValidateSubSamples(reader, subSampleCount, bufferMap.size))
+				{
+					pbData = (uint8_t *) malloc(sizeof(uint8_t) * bufferMap.size);
+					if (!pbData)
+					{
+						MW_LOG_ERR("ClearKeySession: ERROR : Failed to allocate %zu bytes", (size_t)bufferMap.size);
+					}
+				}
 				uint8_t *pbCurrTarget = (uint8_t *) pbData;
 				uint32_t iCurrSource = 0;
 
-		        for (int i = 0; i < subSampleCount; i++)
+		        for (int i = 0; pbData && i < subSampleCount; i++)
 		        {
 					if (!gst_byte_reader_get_uint16_be(reader, &nBytesClear)
 							|| !gst_byte_reader_get_uint32_be(reader, &nBytesEncrypted))
