@@ -327,10 +327,7 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 	TimerRemove(gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
 	TimerRemove(gstPrivateContext->bufferingTimeoutTimerId, "bufferingTimeoutTimerId");
 	TimerRemove(gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId, "ptsCheckForEosOnUnderflowIdleTaskId");
-	if (interfacePlayerPriv && interfacePlayerPriv->gstPrivateContext)
-	{
-		interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
-	}
+	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
 	if (mDrmSystem)
 	{
