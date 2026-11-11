@@ -197,8 +197,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
 mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl(),
-mProgressCallbackContext(std::make_shared<ProgressCallbackContext>(this))
+trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl()
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 1.0.4");
@@ -1855,6 +1854,7 @@ void InterfacePlayerRDK::CancelPendingCallbacks()
 	// Wait for any idle callback already running on the main loop thread to finish
 	// before the caller frees player state (g_source_remove alone won't wait for it).
 	idleCallbackControl.waitForDone(100, "idle callback handler");
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
 }
 
 void InterfacePlayerRDK::ResetGstEvents()
