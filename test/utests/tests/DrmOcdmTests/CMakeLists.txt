@@ -56,7 +56,8 @@ message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 set(TEST_SOURCES DrmOcdmTestsRun.cpp  
     OcdmBasicSessionAdapterTests.cpp
     OcdmGstSessionAdapterTests.cpp
-    opencdmsessionadapterTests.cpp)
+    opencdmsessionadapterTests.cpp
+    ClearKeySubSampleDecryptTests.cpp)
 
 set(FAKE_SOURCES ${PLAYER_ROOT}/test/utests/fakes/FakeSocUtils.cpp
 				 ${PLAYER_ROOT}/test/utests/fakes/FakeCrypto.cpp)
