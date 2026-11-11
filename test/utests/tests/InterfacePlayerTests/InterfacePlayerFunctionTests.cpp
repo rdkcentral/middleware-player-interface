@@ -434,15 +434,20 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->firstFrameCallbackIdleTaskPending = true;
+	mPlayerContext->firstFrameCallbackIdleTaskId = 500;
 
 	mPlayerConfigParams->eosInjectionMode = GstEOS_INJECTION_MODE_STOP_ONLY;
 
 	//Expect_Calls
 	EXPECT_CALL(*g_mockGStreamer, gst_bus_remove_watch(mPlayerContext->bus)).Times(2);
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->bus));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(100));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(500));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->pipeline));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _,_,0))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
@@ -660,6 +665,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = true;
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = true;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->rate = rate;
@@ -681,6 +687,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
 
 	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun);
