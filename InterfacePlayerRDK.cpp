@@ -1,4 +1,4 @@
-/*
+f/*
  * If not stated otherwise in this file or this component's license file the
  * following copyright and licenses apply:
  *
@@ -5446,7 +5446,12 @@ static gboolean buffering_timeout (gpointer data)
 
 	if(pInterfacePlayerRDK && privatePlayer->gstPrivateContext)
 	{
-		if (privatePlayer->gstPrivateContext->buffering_in_progress)
+		bool bufferingInProgress = false;
+		{
+			std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
+			bufferingInProgress = privatePlayer->gstPrivateContext->buffering_in_progress;
+		}
+		if (bufferingInProgress)
 		{
 			int frames = -1;
 			if (privatePlayer->gstPrivateContext->video_dec)
