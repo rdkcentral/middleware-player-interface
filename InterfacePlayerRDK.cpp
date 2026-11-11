@@ -2725,8 +2725,14 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				if (!gst_element_link(stream->source, stream->sinkbin))
 				{
 					MW_LOG_ERR("Failed to link rialto subtitle elements");
-					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
-					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin))
+					{
+						MW_LOG_ERR("Unable to remove subtitle sinkbin from pipeline");
+					}
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source))
+					{
+						MW_LOG_ERR("Unable to remove subtitle source from pipeline");
+					}
 					g_clear_object(&stream->sinkbin);
 					g_clear_object(&stream->source);
 					stream->sourceConfigured = false;
@@ -2739,8 +2745,14 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 					MW_LOG_ERR("Failed to sync rialto subtitle elements to parent");
 					SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
 					SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL);
-					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
-					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin))
+					{
+						MW_LOG_ERR("Unable to remove subtitle sinkbin from pipeline");
+					}
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source))
+					{
+						MW_LOG_ERR("Unable to remove subtitle source from pipeline");
+					}
 					g_clear_object(&stream->sinkbin);
 					g_clear_object(&stream->source);
 					stream->sourceConfigured = false;
