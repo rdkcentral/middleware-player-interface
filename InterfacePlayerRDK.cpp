@@ -5470,7 +5470,11 @@ static gboolean buffering_timeout (gpointer data)
 			{
 				MW_LOG_WARN("numberOfVideoBuffersSent %d frames %i", privatePlayer->gstPrivateContext->numberOfVideoBuffersSent, frames);
 				isBufferingTimeoutConditionMet = true;
-				privatePlayer->gstPrivateContext->buffering_in_progress = false;
+				
+            	{
+					std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
+					privatePlayer->gstPrivateContext->buffering_in_progress = false;
+				}
 				// application can schedule a retune based on isBufferingTimeoutConditionMet
 			}
 			else if (frames == -1 || frames >= pInterfacePlayerRDK->m_gstConfigParam->framesToQueue || (privatePlayer->gstPrivateContext->buffering_timeout_cnt > 0 && --privatePlayer->gstPrivateContext->buffering_timeout_cnt == 0))
