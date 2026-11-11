@@ -1645,7 +1645,16 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		if (interfacePlayerPriv->gstPrivateContext->pipeline)
 		{
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;   /* stopping pipeline, don't want to change state if GST_MESSAGE_ASYNC_DONE message comes in */
-			/* Subtitle appsrc is parented directly in the pipeline (not inside sinkbin), remove it first.
+			/* set the playbin state to NULL before detach it */
+			if (stream->sinkbin)
+			{
+				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+				{
+					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
+				}
+			}
+			/* Subtitle appsrc is parented directly in the pipeline (not inside sinkbin). Stop it only after the sinkbin,
+			 * otherwise its task can be blocked in downstream preroll and deadlock the state change.
 			 * Closed caption control appsrc is parented inside sinkbin instead, so exclude that case. */
 			if (mediaType == eGST_MEDIATYPE_SUBTITLE && stream->source &&
 				!interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl)
@@ -1659,13 +1668,8 @@ void InterfacePlayerRDK::TearDownStream(int type)
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Unable to remove subtitle source from pipeline");
 				}
 			}
-			/* set the playbin state to NULL before detach it */
 			if (stream->sinkbin)
 			{
-				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
-				{
-					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
-				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream:  Unable to remove sinkbin from pipeline");
@@ -2697,8 +2701,19 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 					return -1;
 				}
 
-				gst_element_sync_state_with_parent(stream->source);
-				gst_element_sync_state_with_parent(stream->sinkbin);
+				if (!gst_element_sync_state_with_parent(stream->source) ||
+					!gst_element_sync_state_with_parent(stream->sinkbin))
+				{
+					MW_LOG_ERR("Failed to sync rialto subtitle elements to parent");
+					SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+					SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL);
+					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
+					gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
+					g_clear_object(&stream->sinkbin);
+					g_clear_object(&stream->source);
+					stream->sourceConfigured = false;
+					return -1;
+				}
 
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref_sink(textsink));
 				MW_LOG_MIL("using rialtomsesubtitlesink muted=%d sink=%p", interfacePlayerPriv->gstPrivateContext->subtitleMuted, interfacePlayerPriv->gstPrivateContext->subtitle_sink);

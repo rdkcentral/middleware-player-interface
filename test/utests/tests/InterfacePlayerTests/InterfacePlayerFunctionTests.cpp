@@ -3266,6 +3266,130 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoPipelineLinkFailu
 	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
 }
 
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSourceSyncFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_WEBVTT;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&vipertransform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.Times(0);
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, _, _, 0))
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&appsrc, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_FALSE(stream->sourceConfigured);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSinkbinSyncFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_WEBVTT;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&vipertransform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, _, _, 0))
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&appsrc, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_FALSE(stream->sourceConfigured);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
 TEST_F(InterfacePlayerTests, DisableDecoderHandleNotified)
 {
 	mPlayerContext->decoderHandleNotified = true;
