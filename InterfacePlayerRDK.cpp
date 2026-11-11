@@ -448,17 +448,18 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 										   bool bESChangeStatus, bool setReadyAfterPipelineCreation,
 										   bool isSubEnable, int32_t trackId, gint rate, const char *pipelineName, int PipelinePriority, bool FirstFrameFlag, std::string manifestUrl, bool enableLiveLatency)
 {
+	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !m_gstConfigParam)
+	{
+		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
+		return;
+	}
 	{
 		std::lock_guard<std::mutex> bufferingLock(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutMutex);
 		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutControl.enable();
 	}
 	mFirstFrameRequired = FirstFrameFlag;
 
-	if (!interfacePlayerPriv || !interfacePlayerPriv->gstPrivateContext || !m_gstConfigParam)
-	{
-		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
-		return;
-	}
+	
 #ifdef ENABLE_RDKPERF
 	interfacePlayerPriv->gstPrivateContext->StartConfigureToFirstFrameProfile();
 #endif
