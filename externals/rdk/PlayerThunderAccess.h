@@ -86,7 +86,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool UnSubscribeEvent (string eventName)override;
+    bool UnSubscribeEvent (const std::string& eventName)override;
 
     /**
      *   @fn InvokeJSONRPC
@@ -95,7 +95,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool InvokeJSONRPC(std::string method, const JsonObject &param, JsonObject &result, const uint32_t waitTime = THUNDER_RPC_TIMEOUT);
+    bool InvokeJSONRPC(const std::string& method, const JsonObject &param, JsonObject &result, const uint32_t waitTime = THUNDER_RPC_TIMEOUT);
 
     /**
      *   @fn SetVideoRectangle
@@ -109,7 +109,7 @@ public:
      *   @retval true if success
      *   @retval false if failure
      */
-    bool SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim) override;
+    bool SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim) override;
 
     /**
      *   @fn SetPreferredAudioLanguages_OTA
@@ -135,12 +135,12 @@ public:
      *   @param port port number
      *   @param videoInputType string video input type
      */
-    void StartHelperVideoin(int port, std::string videoInputType) override;
+    void StartHelperVideoin(int port, const std::string& videoInputType) override;
     /**
      *   @fn StopHelper
      *   @param  videoInputType string video input type
      */
-    void StopHelperVideoin(std::string videoInputType) override;
+    void StopHelperVideoin(const std::string& videoInputType) override;
 
     /**
      *   @fn RegisterEventOnVideoStreamInfoUpdateHdmiin
@@ -168,7 +168,7 @@ public:
      *   @param preferredRenditionString player's preferred rendition
      *   @param atsc_preferredRenditionString ATSC preferred rendition
      */
-    void StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString) override;
+    void StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString) override;
 
     /**
      *   @fn StopOta
@@ -180,7 +180,7 @@ public:
      * @param audData vector to be filled with audio data
      * @return string of current track pk
      */
-    std::string GetAudioTracksOta(std::vector<PlayerAudioData> audData) override;
+    std::string GetAudioTracksOta(std::vector<PlayerAudioData>& audData) override;
 
     /**
      * @fn SetAudioTrackOta
@@ -195,7 +195,7 @@ public:
      * @param txtData vector to be filled with text data
      * @return true if successful, false if failed
      */
-    bool GetTextTracksOta(std::vector<PlayerTextData> txtData) override;
+    bool GetTextTracksOta(std::vector<PlayerTextData>& txtData) override;
 
     /**
      * @fn DisableContentRestrictionsOta
@@ -225,7 +225,7 @@ public:
      * @param onPlayerErrorHandlerCb player error handler callback
      * @return true if successful, false if failed
      */
-    bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) override;
+    bool StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) override;
 
     /**
      * @fn StopRmf
@@ -281,7 +281,7 @@ public:
      * @param metaData metaData
      * @return true if successful, false if failed
      */
-    bool PersistentStoreSaveWatermark(const char* base64Image, std::string metaData) override;
+    bool PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData) override;
 
     /**
      * @fn PersistentStoreLoadWatermark
@@ -326,7 +326,7 @@ private:
      *   @param[in] functionHandler : Event function pointer
      *   @return NA
      */
-    void RegisterEvent_VIDEOIN(string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    void RegisterEvent_VIDEOIN(const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
 
     /**
      *   @fn GetScreenResolution
@@ -347,7 +347,7 @@ private:
      *   @retval true if success
      *   @retval false if failure
      */
-    bool SetVideoRectangle_VIDEOIN(int x, int y, int w, int h, std::string videoInputType);
+    bool SetVideoRectangle_VIDEOIN(int x, int y, int w, int h, const std::string& videoInputType);
 
     /**
      *   @fn SetVideoRectangle_OTA
@@ -380,14 +380,14 @@ private:
      *   @param preferredRenditionString string containing preferred rendition
      *   @param atsc_preferredRenditionString string containing ATSC preferred rendition
      */
-    void SetPreferredAudioLanguages_OTA(std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString);
+    void SetPreferredAudioLanguages_OTA(const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString);
 
     /**
      *   @fn SetPreferredAudioLanguages_RMF
      *   @param preferredLanguagesString string containing preferred language to be set
      *   @param rmf_preferredLanguages string RMF preferred language
      */
-    void SetPreferredAudioLanguages_RMF(std::string preferredLanguagesString, std::string rmf_preferredLanguages);
+    void SetPreferredAudioLanguages_RMF(const std::string& preferredLanguagesString, const std::string& rmf_preferredLanguages);
 
     /**
      *   @fn GetResolutionFromDS_VIDEOIN
@@ -404,7 +404,7 @@ private:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
+    bool SubscribeEvent (const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler);
 
     /**
      * @fn GetAudioTrackInternal
