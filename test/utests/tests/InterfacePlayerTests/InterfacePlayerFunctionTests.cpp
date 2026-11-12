@@ -25,7 +25,6 @@
 #include "MockGStreamer.h"
 #include "MockGLib.h"
 #include "MockGstHandlerControl.h"
-#include "MockPlayerScheduler.h"
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
@@ -73,7 +72,6 @@ protected:
 		ON_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillByDefault(Return(TRUE));
 		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new NiceMock<MockGLib>();
-		g_mockPlayerScheduler = new NiceMock<MockPlayerScheduler>();	
 
 		ConstructAMPGstPlayer();
 		PlayerLogManager::lockLogLevel(false);
@@ -90,9 +88,6 @@ protected:
 
 		delete g_mockGLib;
 		g_mockGLib = nullptr;
-
-		delete g_mockPlayerScheduler;
-		g_mockPlayerScheduler = nullptr;
 	}
 
 public:
@@ -452,15 +447,20 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->firstFrameCallbackIdleTaskPending = true;
+	mPlayerContext->firstFrameCallbackIdleTaskId = 500;
 
 	mPlayerConfigParams->eosInjectionMode = GstEOS_INJECTION_MODE_STOP_ONLY;
 
 	//Expect_Calls
 	EXPECT_CALL(*g_mockGStreamer, gst_bus_remove_watch(mPlayerContext->bus)).Times(2);
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->bus));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(100));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(500));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->pipeline));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _,_,0))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
@@ -679,6 +679,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = true;
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = true;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->rate = rate;
@@ -700,6 +701,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
 
 	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun);
@@ -2592,7 +2594,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskNotPending)
 	GstTaskControlData taskDetails("TestTask");
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 				.WillOnce(Return(1));
 
 
@@ -2623,7 +2625,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskFailedToAdd)
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
 	// Simulate failure to add task
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 				.WillOnce(Return(0));
 
 	bool result = mInterfaceGstPlayer->IdleTaskAdd(taskDetails, funcPtr);
@@ -2716,7 +2718,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_VideoType_FirstFrameNotReceived)
 		audio = false;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).Times(3)
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _)).Times(3)
 		.WillOnce(Return(1)).WillOnce(Return(0)).WillOnce(Return(0));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2749,7 +2751,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_AudioType_FirstFrameNotReceived)
 		audio = true;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillRepeatedly(Return(1));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2945,8 +2947,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_TaskSchedulingFailed)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return an invalid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// Mock g_idle_add_full to return an invalid task ID
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillOnce(Return(PLAYER_TASK_ID_INVALID));
 
 	// Call the method
@@ -2964,8 +2966,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_FirstCall)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return a valid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// Mock g_idle_add_full to return a valid task ID
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillOnce(Return(1234));
 
 	mInterfaceGstPlayer->NotifyEOS();
