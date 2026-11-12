@@ -791,9 +791,41 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
+	/*
+	 * Capture whether this license request will run on a pooled (re-used)
+	 * SecManager session before the call is made. A pooled session may still be
+	 * bound to input data from previous content; a license delivered on it can
+	 * leave the required keyIds unusable even though the call reported success
+	 * (RDKEMW-24407). Keep a DrmHelper copy for the potential retry, since
+	 * AcquireLicenseCb consumes drmHelper.
+	 */
+	bool reusingPooledSession = mContentSecurityManagerSession.isSessionValid();
+	auto licenseRetryHelper = drmHelper;
+	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	if (code != KEY_READY && reusingPooledSession &&
+			sessionMgrState != SessionMgrState::eSESSIONMGR_INACTIVE)
 	{
+		/*
+		 * The license ran against a pooled SecManager session and did not yield
+		 * usable keys. Detach the stale session so it is never picked again and
+		 * release it server-side, then retry the license once via a fresh
+		 * session (openDrmSession/openPlaybackSession path). Bounded to a single
+		 * retry; the original failure handling below still applies if the retry
+		 * also fails.
+		 */
+		const auto &localSession = mContentSecurityManagerSession;
+		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
+		const int64_t staleSessionId = localSession.getSessionID();
+		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
+		{
+			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
+			mContentSecurityManagerSession.setSessionInvalid();
+			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
+		}
 		PI_PROFILE_SCOPE("drm_license_acquire");
-		code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError, (GstMediaType)streamType, metaDataPtr, false);
+    code =this->AcquireLicenseCb(responseCode, std::move(licenseRetryHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+
 	}
 	if (code != KEY_READY)
 	{
