@@ -49,7 +49,7 @@ public:
 
 	void generateLicenseRequest(const ChallengeInfo& challengeInfo, LicenseRequest& licenseRequest) const override;
 
-	void transformLicenseResponse(std::shared_ptr<DrmData> licenseResponse) const override;
+	void transformLicenseResponse(const std::shared_ptr<DrmData> &licenseResponse) const override;
 
 	virtual const std::string& friendlyName() const override { return FRIENDLY_NAME; };
 

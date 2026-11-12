@@ -371,9 +371,9 @@ void PlayerThunderInterface::SetPreferredAudioLanguages(PlayerPreferredAudioData
     m_pThunderAccess->SetPreferredAudioLanguages(std::move(data), shim);
 }
 
-std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData> audData)
+std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData> &audData)
 {
-    return m_pThunderAccess->GetAudioTracksOta(std::move(audData));
+    return m_pThunderAccess->GetAudioTracksOta(audData);
 }
 
 std::string PlayerThunderInterface::SetAudioTrackOta(int index, int primaryKey)
@@ -381,9 +381,9 @@ std::string PlayerThunderInterface::SetAudioTrackOta(int index, int primaryKey)
     return m_pThunderAccess->SetAudioTrackOta(index, primaryKey);
 }
 
-bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData> txtData)
+bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData> &txtData)
 {
-    return m_pThunderAccess->GetTextTracksOta(std::move(txtData));
+    return m_pThunderAccess->GetTextTracksOta(txtData);
 }
 
 void PlayerThunderInterface::DisableContentRestrictionsOta(long grace, long time, bool eventChange)
@@ -401,9 +401,9 @@ bool PlayerThunderInterface::InitRmf()
     return m_pThunderAccess->InitRmf();
 }
 
-bool PlayerThunderInterface::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
+bool PlayerThunderInterface::StartRmf(const std::string &url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
-    return m_pThunderAccess->StartRmf(std::move(url), std::move(onPlayerStatusHandlerCb), std::move(onPlayerErrorHandlerCb));
+    return m_pThunderAccess->StartRmf(url, std::move(onPlayerStatusHandlerCb), std::move(onPlayerErrorHandlerCb));
 }
 
 void PlayerThunderInterface::StopRmf()

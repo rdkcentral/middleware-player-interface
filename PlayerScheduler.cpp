@@ -83,7 +83,7 @@ int PlayerScheduler::ScheduleTask(PlayerAsyncTaskObj obj)
 				mNextTaskId = PLAYER_SCHEDULER_ID_DEFAULT;
 			}
 			obj.mId = id;
-			mTaskQueue.push_back(obj);
+			mTaskQueue.push_back(std::move(obj));
 			mQCond.notify_one();
 		}
 		else
