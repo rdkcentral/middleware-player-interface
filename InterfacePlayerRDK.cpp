@@ -130,6 +130,10 @@ static const char* GstPluginNameVMX = "verimatrixdecryptor";
 #include <assert.h>
 #define GST_NORMAL_PLAY_RATE		1
 
+/* RDKPerf scope recorded only while this player's tune is profiled (or PLAYER_RDKPERF_ALWAYS=1) */
+#define PI_PLAYER_PROFILE_ACTIVE() (interfacePlayerPriv->gstPrivateContext->IsConfigureToFirstFrameProfileActive())
+#define PI_PLAYER_PROFILE_SCOPE(name) PI_PROFILE_SCOPE_IF(name, PI_PLAYER_PROFILE_ACTIVE())
+
 std::pair <CipherType, const char *> CipherToStringMap[] = {
 	{CIPHER_TYPE_CENC, "cenc"},
 	{CIPHER_TYPE_CBC1, "cbc1"},
@@ -196,8 +200,8 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), mScheduler(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
-trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false), mSchedulerStarted(false)
+mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl()
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
 	MW_LOG_MIL("InterfacePlayerRDK constructed using external library -TAG- 1.0.4");
@@ -207,8 +211,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	pthread_mutex_init(&mProtectionLock, NULL);
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
-	// start Scheduler Worker for task handling
-	mScheduler.StartScheduler();
+
 #ifdef PLAYER_TELEMETRY_SUPPORT
 	PlayerTelemetry2 telemetry;
 	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
@@ -231,6 +234,10 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 /* InterfacePlayerRDK destructor*/
 InterfacePlayerRDK::~InterfacePlayerRDK()
 {
+	interfacePlayerPriv->gstPrivateContext->callbackControl.disable();
+	DisconnectSignals();
+	RemoveProbes();
+	CancelPendingCallbacks();
 	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
 	if (mDrmSystem)
@@ -239,7 +246,6 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 	}
 	/* safe delete configuration parameter */
 	MW_SAFE_DELETE(m_gstConfigParam);
-	mScheduler.StopScheduler();
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		pthread_mutex_destroy(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock);
@@ -389,7 +395,7 @@ const char *gstGetMediaTypeName(GstMediaType mediaType)
 }
 
 
-static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState);
+static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState, bool profileActive);
 
 /**
  * @brief Decorate a GstBuffer with DRM metadata
@@ -458,7 +464,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 #ifdef ENABLE_RDKPERF
 	interfacePlayerPriv->gstPrivateContext->StartConfigureToFirstFrameProfile();
 #endif
-	PI_PROFILE_SCOPE("configure_pipeline");
+	PI_PLAYER_PROFILE_SCOPE("configure_pipeline");
 	/* First-frame watchdog: tune not completed if callback never arrives */
 		/* reset for new tune attempt */
 		interfacePlayerPriv->gstPrivateContext->firstFrameReceived = false;
@@ -563,7 +569,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 
 	if(setReadyAfterPipelineCreation)
 	{
-		if(SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_READY) == GST_STATE_CHANGE_FAILURE)
+		if(SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_READY, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_READY failed on forceful set");
 		}
@@ -707,7 +713,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		MW_LOG_INFO("Setting state to GST_STATE_PAUSED - pause on playback enabled");
 		interfacePlayerPriv->gstPrivateContext->paused = true;
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PAUSED failed");
 		}
@@ -720,7 +726,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		interfacePlayerPriv->gstPrivateContext->buffering_in_progress = true;
 		interfacePlayerPriv->gstPrivateContext->buffering_timeout_cnt = DEFAULT_BUFFERING_MAX_CNT;
 
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PAUSED, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK_Configure GST_STATE_PAUSED failed");
 		}
@@ -749,7 +755,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 	else
 	{
 		MW_LOG_INFO("Setting state to GST_STATE_PLAYING");
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayerRDK: GST_STATE_PLAYING failed");
 		}
@@ -788,7 +794,8 @@ gboolean InterfacePlayerRDK::IdleCallbackOnFirstFrame(gpointer user_data)
 
 	if (pInterfacePlayerRDK)
 	{
-                privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::firstVideoFrameReceived);
 		privatePlayer->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 		privatePlayer->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
@@ -852,7 +859,8 @@ gboolean InterfacePlayerRDK::IdleCallbackOnEOS(gpointer user_data)
 
 	if (pInterfacePlayerRDK)
 	{
-	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+	    privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		MW_LOG_MIL("eosCallbackIdleTaskId %d", privatePlayer->gstPrivateContext->eosCallbackIdleTaskId);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::notifyEOS);
 		privatePlayer->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
@@ -1022,7 +1030,8 @@ gboolean InterfacePlayerRDK::IdleCallback(gpointer user_data)
 	InterfacePlayerPriv* privatePlayer = nullptr;
 	if (pInterfacePlayerRDK)
 	{
-	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+	    privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::idleCb);
 		pInterfacePlayerRDK->IdleTaskClearFlags(privatePlayer->gstPrivateContext->firstProgressCallbackIdleTask);
 
@@ -1053,7 +1062,8 @@ gboolean InterfacePlayerRDK::IdleCallbackFirstVideoFrameDisplayed(gpointer user_
 	InterfacePlayerPriv* privatePlayer = nullptr;
 	if (pInterfacePlayerRDK)
 	{
-	        privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+	    privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		HANDLER_CONTROL_HELPER(pInterfacePlayerRDK->idleCallbackControl, G_SOURCE_REMOVE);
 		pInterfacePlayerRDK->TriggerEvent(InterfaceCB::firstVideoFrameDisplayed);
 		pInterfacePlayerRDK->IdleTaskRemove(privatePlayer->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
 	}
@@ -1113,13 +1123,14 @@ static void type_check_instance( const char * str, GstElement * elem);
  * @brief Signal EOS to the appsrc associated with the supplied media stream
  * @param[in] media_stream the media stream to inject EOS into
  */
-static void GstPlayer_SignalEOS(gst_media_stream& stream)
+static void GstPlayer_SignalEOS(gst_media_stream& stream, bool profileActive)
 {
+	(void)profileActive;
 	if (stream.source)
 	{
 		GstFlowReturn ret;
 		{
-			PI_PROFILE_SCOPE("gst_app_src_end_of_stream");
+			PI_PROFILE_SCOPE_IF("gst_app_src_end_of_stream", profileActive);
 			ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
 		}
 		//GST_FLOW_OK is expected in PAUSED or PLAYING states; GST_FLOW_FLUSHING is expected in other states.
@@ -1130,17 +1141,17 @@ static void GstPlayer_SignalEOS(gst_media_stream& stream)
 	}
 }
 
-static void GstPlayer_SignalEOS(gst_media_stream* stream)
+static void GstPlayer_SignalEOS(gst_media_stream* stream, bool profileActive)
 {
 	if(stream)
 	{
-		GstPlayer_SignalEOS(*stream);
+		GstPlayer_SignalEOS(*stream, profileActive);
 	}
 }
 
 /**
  *  @brief inject EOS for all media types to ensure the pipeline can be set to NULL quickly*/
-static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext)
+static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext, bool profileActive)
 {
 	MW_LOG_MIL(" InterfacePlayer: Inject EOS into all streams.");
 
@@ -1148,7 +1159,7 @@ static void GstPlayer_SignalEOS(GstPlayerPriv* gstPrivateContext)
 	{
 		for(int mediaType=eGST_MEDIATYPE_VIDEO; mediaType<=eGST_MEDIATYPE_SUBTITLE; mediaType++)
 		{
-			GstPlayer_SignalEOS(gstPrivateContext->stream[mediaType]);
+			GstPlayer_SignalEOS(gstPrivateContext->stream[mediaType], profileActive);
 		}
 	}
 	else
@@ -1503,9 +1514,10 @@ static void LogStatus(GstElement* pElementOrBin)
  * @param[in] pInterfacePlayerRDK pointer to InterfacePlayerRDK instance
  * @retval Result of the state change (from inner gst_element_set_state())
  */
-static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState)
+static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState targetState, bool profileActive)
 {
-	PI_PROFILE_SCOPE("pipeline_set_state");
+	(void)profileActive;
+	PI_PROFILE_SCOPE_IF("pipeline_set_state", profileActive);
 	GstStateChangeReturn rc = GST_STATE_CHANGE_FAILURE;
 	if(element)
 	{
@@ -1517,7 +1529,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 		GstStateChangeReturn stateChangeReturn;
 		{
-			PI_PROFILE_SCOPE("gst_element_get_state");
+			PI_PROFILE_SCOPE_IF("gst_element_get_state", profileActive);
 			stateChangeReturn = gst_element_get_state(element, &current, &pending, 0);		/* Get the current playing state of the element with no blocking timeout,  this function is MT-safe */
 		}
 		switch(stateChangeReturn)
@@ -1570,7 +1582,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 			MW_LOG_DEBUG("InterfacePlayerRDK: Attempting to set %s state to %s", SafeName(element).c_str(), gst_element_state_get_name(targetState));
 		}
 		{
-			PI_PROFILE_SCOPE("gst_element_set_state");
+			PI_PROFILE_SCOPE_IF("gst_element_set_state", profileActive);
 			rc = gst_element_set_state(element, targetState);					/* Set the state of the element to the targetState, this function is MT-safe*/
 		}
 		if (GST_STATE_CHANGE_FAILURE == rc)
@@ -1597,7 +1609,7 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 
 void InterfacePlayerRDK::TearDownStream(int type)
 {
-	PI_PROFILE_SCOPE("stream_teardown");
+	PI_PLAYER_PROFILE_SCOPE("stream_teardown");
 	// ISSUE [OUT-OF-BOUNDS ARRAY ACCESS]: `type` is a raw int on this public API
 	// (see InterfacePlayerRDK.h) and is used directly below to index
 	// gstPrivateContext->stream[GST_TRACK_COUNT] (fixed size 3, InterfacePlayerPriv.h)
@@ -1667,7 +1679,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			/* set the playbin state to NULL before detach it */
 			if (stream->sinkbin)
 			{
-				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
 				}
@@ -1732,6 +1744,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 void InterfacePlayerRDK::Stop(bool keepLastFrame)
 {
 	std::lock_guard<std::mutex> lock(mMutex);
+	PI_PLAYER_PROFILE_SCOPE("player_stop");
 	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	/*  make the execution of this function more deterministic and
 	 *  reduce scope for potential pipeline lockups*/
@@ -1753,36 +1766,6 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		interfacePlayerPriv->gstPrivateContext->firstVideoFrameReceived = false;
 		interfacePlayerPriv->gstPrivateContext->firstAudioFrameReceived = false ;
 	}
-	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
-
-	this->TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
-	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
-		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
-		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	if (interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending)
-	{
-		MW_LOG_MIL("InterfacePlayerRDK: Remove firstFrameCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
-		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
-		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
-	}
-	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
 	/* Prevent potential side effects of injecting EOS and
 	 * make the stop process more deterministic by:
 	 1) Confirming that bus handlers (disabled above) have completed
@@ -1805,11 +1788,11 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 		if(GstEOS_INJECTION_MODE_STOP_ONLY == EOSMode)
 		{
 			//Ensure prompt transition to GST_STATE_NULL
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext, PI_PLAYER_PROFILE_ACTIVE());
 		}
 
 		interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;   /* stopping pipeline, don't want to change state if GST_MESSAGE_ASYNC_DONE message comes in */
-		SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_NULL);
+		SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 		MW_LOG_MIL(" InterfacePlayerRDK: Pipeline state set to null");
 	}
 	if(PlayerExternalsInterface::IsPlayerExternalsInterfaceInstanceActive())
@@ -1821,6 +1804,8 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	{
 		TearDownStream((int(i)));
 	}
+	// Signals, probes and bus handlers are drained, so nothing can schedule new idle sources now
+	CancelPendingCallbacks();
 	DestroyPipeline();
 	interfacePlayerPriv->gstPrivateContext->rate = GST_NORMAL_PLAY_RATE;
 	interfacePlayerPriv->gstPrivateContext->lastKnownPTS = 0;
@@ -1838,6 +1823,45 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 
 	// Reset mp4demux playback semantic shim on pipeline event reset
 	interfacePlayerPriv->gstPrivateContext->isMp4DemuxPlayback = false;
+}
+
+/**
+ *  @brief CancelPendingCallbacks - cancel idle/timer callbacks scheduled against this instance
+ */
+void InterfacePlayerRDK::CancelPendingCallbacks()
+{
+	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstProgressCallbackIdleTask);
+	if (interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove bufferingTimeoutTimerId %d", interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId);
+		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutTimerId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove ptsCheckForEosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
+		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	if (interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending)
+	{
+		MW_LOG_MIL("InterfacePlayerRDK: Remove firstFrameCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
+		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
+		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
+	}
+	IdleTaskRemove(interfacePlayerPriv->gstPrivateContext->firstVideoFrameDisplayedCallbackTask);
+	// Wait for any idle callback already running on the main loop thread to finish
+	// before the caller frees player state (g_source_remove alone won't wait for it).
+	idleCallbackControl.waitForDone(100, "idle callback handler");
+	TimerRemove(interfacePlayerPriv->gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
 }
 
 void InterfacePlayerRDK::ResetGstEvents()
@@ -1881,7 +1905,7 @@ bool InterfacePlayerRDK::IdleTaskRemove(GstTaskControlData& taskDetails)
 	if (0 != taskDetails.taskID)
 	{
 		MW_LOG_INFO("InterfacePlayerRDK: Remove task <%.50s> with ID %d", taskDetails.taskName.c_str(), taskDetails.taskID);
-		mScheduler.RemoveTask(taskDetails.taskID);
+		g_source_remove(taskDetails.taskID);
 		taskDetails.taskID = 0;
 		ret = true;
 	}
@@ -1913,13 +1937,14 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	GstState pending;
 
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO];
+	PI_PLAYER_PROFILE_SCOPE("player_flush");
 	interfacePlayerPriv->gstPrivateContext->rate = rate;
 	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = false;
 	interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = false;
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d", interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
 
@@ -1953,12 +1978,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		// Send EOS to audio sink to prevent flush getting blocked waiting for preroll
 		if (interfacePlayerPriv->gstPrivateContext->audio_sink)
 		{
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 		}
 	}
 	GstStateChangeReturn ret;
 	{
-		PI_PROFILE_SCOPE("gst_pipeline_get_state_for_flush");
+		PI_PLAYER_PROFILE_SCOPE("gst_pipeline_get_state_for_flush");
 		ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->pipeline, &current, &pending, 100 * GST_MSECOND);
 	}
 	if ((current != GST_STATE_PLAYING && current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
@@ -1985,7 +2010,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		if (interfacePlayerPriv->gstPrivateContext->audio_dec)
 		{
 			{
-				PI_PROFILE_SCOPE("gst_audio_decoder_get_state_for_flush");
+				PI_PLAYER_PROFILE_SCOPE("gst_audio_decoder_get_state_for_flush");
 				ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
 			}
 			if ((aud_current != GST_STATE_PLAYING && aud_current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
@@ -2038,7 +2063,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 	gboolean seekSucceeded;
 	{
-		PI_PROFILE_SCOPE("gst_element_seek_for_flush");
+		PI_PLAYER_PROFILE_SCOPE("gst_element_seek_for_flush");
 		seekSucceeded = gst_element_seek(interfacePlayerPriv->gstPrivateContext->pipeline, playRate, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET,
 										position * GST_SECOND, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
 	}
@@ -2062,7 +2087,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		 * by bringing the audio pipeline out of pre-roll which would block streaming.
 		 */
 		MW_LOG_INFO("Trickplay rate %d - send eos to audio sink", rate);
-		GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+		GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 	}
 
 	if(bAsyncModify)
@@ -2615,7 +2640,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 
 int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::string manifest)
 {
-	PI_PROFILE_SCOPE("stream_setup");
+	PI_PLAYER_PROFILE_SCOPE("stream_setup");
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)playerInstance;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gst_media_stream* stream = &pInterfacePlayerRDK->interfacePlayerPriv->gstPrivateContext->stream[streamId];
@@ -3221,6 +3246,7 @@ void InterfacePlayerRDK::SetSubtitleMute(bool muted)
 void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 {
 	int currentX = 0, currentY = 0, currentW = 0, currentH = 0;
+	PI_PLAYER_PROFILE_SCOPE("player_set_video_rectangle");
 	if (strcmp(interfacePlayerPriv->gstPrivateContext->videoRectangle, "") != 0)
 	{
 		int parsed = sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle,"%d,%d,%d,%d",&currentX,&currentY,&currentW,&currentH);
@@ -3906,6 +3932,7 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 {
 	bool retValue = true;
+	PI_PLAYER_PROFILE_SCOPE("player_pause");
 	if (interfacePlayerPriv->gstPrivateContext->pipeline != NULL)
 	{
 		GstState nextState = pause ? GST_STATE_PAUSED : GST_STATE_PLAYING;
@@ -3922,7 +3949,7 @@ bool InterfacePlayerRDK::Pause(bool pause , bool forceStopGstreamerPreBuffering)
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
 		}
 
-		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState);
+		GstStateChangeReturn rc = SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, nextState, PI_PLAYER_PROFILE_ACTIVE());
 		if (GST_STATE_CHANGE_ASYNC == rc)
 		{
 			/* CID:330433 Waiting while holding lock. Sleep introduced in validateStateWithMsTimeout to prevent continuous polling when synchronizing pipeline state.
@@ -4171,7 +4198,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 
 			if (proceedWithEos)
 			{
-				GstPlayer_SignalEOS(stream);
+				GstPlayer_SignalEOS(stream, PI_PLAYER_PROFILE_ACTIVE());
 				// We are in buffering, but we received discontinuity, un-pause pipeline
 				shouldHaltBuffering = true;
 				ret = true;
@@ -4179,7 +4206,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 				//If we have an audio discontinuity, signal subtec as well
 				if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 				{
-					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 				}
 				else
 				{
@@ -4195,7 +4222,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 			//If we have an audio discontinuity, signal subtec as well
 			if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 	}
@@ -4267,8 +4294,8 @@ bool InterfacePlayerRDK::IdleTaskAdd(GstTaskControlData& taskDetails, Background
 	if (0 == taskDetails.taskID)
 	{
 		taskDetails.taskIsPending = false;
-		taskDetails.taskID = mScheduler.ScheduleTask(PlayerAsyncTaskObj(funcPtr, (void *)this));
-		// Wait for scheduler response , if failed to create task for wrong state , not to make pending flag as true
+		taskDetails.taskID = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)funcPtr, (gpointer)this, NULL);
+		// Wait for g_idle_add response , if failed to create task for wrong state , not to make pending flag as true
 		if(0 != taskDetails.taskID)
 		{
 			taskDetails.taskIsPending = true;
@@ -4328,11 +4355,11 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 		notifyFirstBuffer = true;
 		PlayerLogManager::setLogLevel(mLOGLEVEL_WARN);				//Align with player LogTuneComplete once the first frame starts, required for prod builds
 	}
-	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFramePerfHandle();
+	interfacePlayerPriv->gstPrivateContext->RecordConfigureToFirstFrame();
 	if(notifyFirstFrameCallback)
 	{
 		{
-			PI_PROFILE_SCOPE("first_frame_client_callback");
+			PI_PLAYER_PROFILE_SCOPE("first_frame_client_callback");
 			notifyFirstFrameCallback(mediaType, notifyFirstBuffer, (!interfacePlayerPriv->gstPrivateContext->decoderHandleNotified && PipelineSetToReady), requireFirstVideoFrameDisplay, audioOnly);
 		}
 	}
@@ -4346,8 +4373,8 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 		{
 			interfacePlayerPriv->gstPrivateContext->decoderHandleNotified = true;
 			interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-			interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = mScheduler.ScheduleTask(PlayerAsyncTaskObj(IdleCallbackOnFirstFrame, (void *)this, "FirstFrameCallback"));
-			// Wait for scheduler response , if failed to create task for wrong state , not to make pending flag as true
+			interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)IdleCallbackOnFirstFrame, (gpointer)this, NULL);
+			// Wait for g_idle_add response , if failed to create task for wrong state , not to make pending flag as true
 			if(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId != PLAYER_TASK_ID_INVALID)
 			{
 				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = true;
@@ -4374,8 +4401,7 @@ void InterfacePlayerRDK::NotifyFirstFrame(int mediaType)
 			{
 				interfacePlayerPriv->gstPrivateContext->decoderHandleNotified = true;
 				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
-				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = mScheduler.ScheduleTask(PlayerAsyncTaskObj(IdleCallbackOnFirstFrame, (void *)this, "FirstFrameCallback"));
-				// Wait for scheduler response , if failed to create task for wrong state , not to make pending flag as true
+				interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)IdleCallbackOnFirstFrame, (gpointer)this, NULL);
 				if(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId != PLAYER_TASK_ID_INVALID)
 				{
 					interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = true;
@@ -4524,7 +4550,7 @@ bool GstPlayer_isVideoSink(const char* name, InterfacePlayerRDK* pInterfacePlaye
  */
 bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePriority)
 {
-	PI_PROFILE_SCOPE("pipeline_create");
+	PI_PLAYER_PROFILE_SCOPE("pipeline_create");
 	bool ret = false;
 	/* Destroy any existing pipeline before creating a new one */
 	if (interfacePlayerPriv->gstPrivateContext->pipeline || interfacePlayerPriv->gstPrivateContext->bus)
@@ -4548,6 +4574,8 @@ bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePr
 			(void)busWatchId;
 			interfacePlayerPriv->gstPrivateContext->syncControl.enable();
 			gst_bus_set_sync_handler(interfacePlayerPriv->gstPrivateContext->bus, (GstBusSyncHandler) bus_sync_handler, this, NULL);
+			// Re-arm idle callback guard for this pipeline's lifecycle (disabled by CancelPendingCallbacks() on Stop/destruction)
+			idleCallbackControl.enable();
 			interfacePlayerPriv->gstPrivateContext->buffering_enabled = m_gstConfigParam->gstreamerBufferingBeforePlay;
 			interfacePlayerPriv->gstPrivateContext->buffering_in_progress = false;
 			interfacePlayerPriv->gstPrivateContext->buffering_timeout_cnt = DEFAULT_BUFFERING_MAX_CNT;
@@ -5180,8 +5208,8 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			MW_LOG_WARN("GST_MESSAGE_CLOCK_LOST");
 			if(eGST_MEDIAFORMAT_DASH != static_cast<GstMediaFormat>(pInterfacePlayerRDK->m_gstConfigParam->media))
 			{
-				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED);
-				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PLAYING);
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PAUSED, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, GST_STATE_PLAYING, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
 			}
 			break;
 
@@ -5238,6 +5266,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 bool InterfacePlayerRDK::SetPlayBackRate(double rate)
 {
 	bool ret = false;
+	PI_PLAYER_PROFILE_SCOPE("player_set_playback_rate");
 	std::vector<GstElement*> sources;
 	MW_LOG_TRACE("InterfacePlayerRDK: gst_event_new_instant_rate_change: %f ...V6", rate);
 	for (int iTrack = 0; iTrack < GST_TRACK_COUNT; iTrack++)
@@ -5364,7 +5393,7 @@ static gboolean FirstFrameTimeoutCallback(gpointer user_data)
 
 	if (!privatePlayer->gstPrivateContext->firstFrameReceived && !audioOnlySatisfied)
 	{
-		privatePlayer->gstPrivateContext->StopConfigureToFirstFrameProfile();
+		privatePlayer->gstPrivateContext->StopConfigureToFirstFrameProfile(true);
 
 		// In FirstFrameTimeoutCallback(), use runtime value for logs/telemetry:
 		const int firstFrameTimeoutMs = GetFirstFrameTimeoutMs();
@@ -5427,7 +5456,7 @@ static gboolean buffering_timeout (gpointer data)
 				uint32_t original_buffering_timeout_cnt = privatePlayer->gstPrivateContext->buffering_timeout_cnt;
 				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
 				gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
-				SetStateWithWarnings (privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state);
+				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
 				isRateCorrectionDefaultOnPlaying =  privatePlayer->socInterface->SetRateCorrection();
 
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
@@ -5821,7 +5850,7 @@ void InterfacePlayerRDK::NotifyEOS()
 			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = true;
 			// eosSignalled is reset once the async task is completed either in Configure/Flush/ResetEOSSignalled, so set the flag before scheduling the task
 			interfacePlayerPriv->gstPrivateContext->eosSignalled = true;
-			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = mScheduler.ScheduleTask(PlayerAsyncTaskObj(IdleCallbackOnEOS, (void *)this, "IdleCallbackOnEOS"));
+			interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)IdleCallbackOnEOS, (gpointer)this, NULL);
 			if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId == PLAYER_TASK_ID_INVALID && true == interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 			{
 				interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
@@ -5857,7 +5886,7 @@ void InterfacePlayerRDK::NotifyFragmentCachingComplete()
 
 		MW_LOG_MIL("InterfacePlayer: Setting pipeline to PLAYING state ");
 		interfacePlayerPriv->gstPrivateContext->buffering_target_state = GST_STATE_PLAYING;
-		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+		if (SetStateWithWarnings(interfacePlayerPriv->gstPrivateContext->pipeline, GST_STATE_PLAYING, PI_PLAYER_PROFILE_ACTIVE()) == GST_STATE_CHANGE_FAILURE)
 		{
 			MW_LOG_ERR("InterfacePlayer_Configure GST_STATE_PLAYING failed");
 		}
@@ -5887,15 +5916,15 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
 	else
 	{
 		NotifyFragmentCachingComplete();                /*Set pipeline to PLAYING state once fragment caching is complete*/
-		GstPlayer_SignalEOS(stream);
+		GstPlayer_SignalEOS(stream, PI_PLAYER_PROFILE_ACTIVE());
 
 		/*For trickmodes, give EOS to audio source*/
 		if (GST_NORMAL_PLAY_RATE != interfacePlayerPriv->gstPrivateContext->rate)
 		{
-			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO]);
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 			if (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source)
 			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 		else
@@ -5905,7 +5934,7 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
 				(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
 			{
 				interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached = true;
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE]);
+				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
 		}
 
@@ -5922,7 +5951,7 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
  */
 int InterfacePlayerRDK::InterfacePlayer_SetupStream(int streamId, std::string manifestUrl)
 {
-	PI_PROFILE_SCOPE("interface_setup_stream");
+	PI_PLAYER_PROFILE_SCOPE("interface_setup_stream");
 	int retvalue = 0;
 	GstMediaType mediaType = static_cast<GstMediaType>(streamId);
 	this->TriggerEvent(InterfaceCB::startNewSubtitleStream, mediaType);
