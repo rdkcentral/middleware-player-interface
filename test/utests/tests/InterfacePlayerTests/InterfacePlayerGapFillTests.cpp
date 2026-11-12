@@ -122,6 +122,8 @@ protected:
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
 		g_mockGLib = new NiceMock<MockGLib>();
+		g_mockGstHandlerControl = new NiceMock<MockGstHandlerControl>();
+		ON_CALL(*g_mockGstHandlerControl, isEnabled()).WillByDefault(Return(true));
 
 		ConstructAMPGstPlayer();
 		PlayerLogManager::lockLogLevel(false);
@@ -131,10 +133,14 @@ protected:
 
 	void TearDown() override
 	{
+		::testing::Mock::VerifyAndClearExpectations(g_mockGstHandlerControl);
 		::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
 		::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
 
 		DestroyAMPGstPlayer();
+
+		delete g_mockGstHandlerControl;
+		g_mockGstHandlerControl = nullptr;
 
 		delete g_mockGStreamer;
 		g_mockGStreamer = nullptr;
