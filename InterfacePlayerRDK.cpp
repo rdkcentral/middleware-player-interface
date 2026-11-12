@@ -560,7 +560,7 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		interfacePlayerPriv->gstPrivateContext->bufferingTimeoutControl.enable();
 	}
 	mFirstFrameRequired = FirstFrameFlag;
-
+	{
 	
 		std::unique_lock<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
 		if (!interfacePlayerPriv->gstPrivateContext->mTeardownCV.wait_for(teardownLock, std::chrono::milliseconds(3000),
@@ -5812,7 +5812,6 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 {
 
 
-	InterfacePlayerRDK * pInterfacePlayerRDK = (InterfacePlayerRDK *) data;
 	InterfacePlayerPriv* privatePlayer = nullptr;
 	if(pInterfacePlayerRDK)
 	{
@@ -5834,12 +5833,12 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 
 	if(privatePlayer->gstPrivateContext)
 	{
-		bool bufferingInProgress = false;
+		bool wasBufferingInProgress = false;
 		{
 			std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
-			bufferingInProgress = privatePlayer->gstPrivateContext->buffering_in_progress;
+			wasBufferingInProgress = privatePlayer->gstPrivateContext->buffering_in_progress;
 		}
-		if (bufferingInProgress)
+		if (wasBufferingInProgress)
 		{
 			int frames = -1;
 			if (privatePlayer->gstPrivateContext->video_dec)
@@ -5877,11 +5876,10 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 				{
 					gst_object_ref(pipeline);
 				}
-				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				isPlayerReady = true;
 			}
 		}
-		const gboolean bufferingInProgress = privatePlayer->gstPrivateContext->buffering_in_progress;
+		const gboolean bufferingInProgress = privatePlayer->gstPrivateContext->buffering_in_progress && !isPlayerReady;
 		if (!bufferingInProgress)
 		{
 			//reset timer id after buffering operation is completed
@@ -5889,28 +5887,35 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 		}
 
 		callout = [bufferingTimeoutCb = pInterfacePlayerRDK->OnBuffering_timeoutCb, socInterface = privatePlayer->socInterface,
-				   pipeline, targetState, profileActive, queuedFrames, bufferingTimeoutCnt, isBufferingTimeoutConditionMet, isPlayerReady]()
+				   privatePlayer, pipeline, targetState, profileActive, queuedFrames, bufferingTimeoutCnt, isBufferingTimeoutConditionMet, isPlayerReady]()
 		{
 			bool isRateCorrectionDefaultOnPlaying = false;
 			if (isPlayerReady)
 			{
-
-        {
-            std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
-					   if (!privatePlayer->gstPrivateContext->bufferingTimeoutControl.isEnabled() ||
-						     !privatePlayer->gstPrivateContext->buffering_in_progress)
-					   {
-						   return G_SOURCE_REMOVE;
-					   }
-				   MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
-				   gst_element_state_get_name(targetState), bufferingTimeoutCnt, queuedFrames);
-				   SetStateWithWarnings(pipeline, targetState);
-        }
+				{
+					std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
+					if (!privatePlayer->gstPrivateContext->bufferingTimeoutControl.isEnabled() ||
+						!privatePlayer->gstPrivateContext->buffering_in_progress)
+					{
+						if (pipeline)
+						{
+							gst_object_unref(pipeline);
+						}
+						return;
+					}
+					MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
+					gst_element_state_get_name(targetState), bufferingTimeoutCnt, queuedFrames);
+					SetStateWithWarnings(pipeline, targetState, profileActive);
+				}
 				if (pipeline)
 				{
 					gst_object_unref(pipeline);
 				}
 				isRateCorrectionDefaultOnPlaying = socInterface->SetRateCorrection();
+				{
+					std::lock_guard<std::mutex> bufferingLock(privatePlayer->gstPrivateContext->bufferingTimeoutMutex);
+					privatePlayer->gstPrivateContext->buffering_in_progress = false;
+				}
 #ifdef PLAYER_TELEMETRY_SUPPORT
 				std::map<std::string, int> intMetrics;
 				std::map<std::string, std::string> stringMetrics;
