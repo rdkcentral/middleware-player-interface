@@ -260,11 +260,11 @@ TEST_F(InterfacePlayerTests, SetPreferredDRM)
 {
 	const char* testDrmID1 = "Widevine";
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID1);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 	//null check
 	const char* testDrmID2 = NULL;
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID2);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 }
 
 TEST_F(InterfacePlayerTests, GstSetSeekPosition)
