@@ -35,7 +35,6 @@
 #include "MockGStreamer.h"
 #include "MockGLib.h"
 #include "MockGstHandlerControl.h"
-#include "MockPlayerScheduler.h"
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
@@ -123,7 +122,6 @@ protected:
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
 		g_mockGLib = new NiceMock<MockGLib>();
-		g_mockPlayerScheduler = new NiceMock<MockPlayerScheduler>();
 
 		ConstructAMPGstPlayer();
 		PlayerLogManager::lockLogLevel(false);
@@ -133,16 +131,16 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
+		::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
 
 		DestroyAMPGstPlayer();
 
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
+
 		delete g_mockGLib;
 		g_mockGLib = nullptr;
-
-		delete g_mockPlayerScheduler;
-		g_mockPlayerScheduler = nullptr;
 	}
 
 public:
@@ -530,9 +528,9 @@ TEST_F(InterfacePlayerGapFillTests, IdleTaskClearFlags_ZeroId)
 
 TEST_F(InterfacePlayerGapFillTests, IdleTaskAdd_NullFuncStillSchedules)
 {
-	// funcPtr nullptr is legal for ScheduleTask signature; mock returns task id
 	GstTaskControlData task("nullFunc");
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).WillOnce(Return(11));
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, nullptr, mInterfaceGstPlayer, nullptr))
+		.WillOnce(Return(11));
 	EXPECT_TRUE(mInterfaceGstPlayer->IdleTaskAdd(task, nullptr));
 	EXPECT_TRUE(task.taskIsPending);
 	EXPECT_EQ(task.taskID, 11u);
@@ -902,7 +900,8 @@ TEST_F(InterfacePlayerGapFillTests, NotifyFirstFrame_DecoderAlreadyNotifiedSkips
 	// IdleTaskAdd(firstProgressCallbackIdleTask) still schedules once.
 	mPlayerContext->decoderHandleNotified = true;
 	mPlayerContext->firstVideoFrameReceived = true;
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).Times(1).WillOnce(Return(9));
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, _, mInterfaceGstPlayer, nullptr))
+		.WillOnce(Return(9));
 	mInterfaceGstPlayer->NotifyFirstFrame(eGST_MEDIATYPE_VIDEO);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskId, 0u);
 	EXPECT_FALSE(mPlayerContext->firstFrameCallbackIdleTaskPending);
@@ -915,7 +914,9 @@ TEST_F(InterfacePlayerGapFillTests, NotifyFirstFrame_AudioOnlySchedulesFirstFram
 	mInterfaceGstPlayer->FirstFrameCallback(
 		[](int mediaType, bool notifyFirstBuffer, bool decoder, bool &reqDisplay, bool &audioOnly)
 		{ audioOnly = true; });
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).Times(AnyNumber()).WillRepeatedly(Return(5));
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, _, mInterfaceGstPlayer, nullptr))
+		.Times(2)
+		.WillRepeatedly(Return(5));
 	mInterfaceGstPlayer->NotifyFirstFrame(eGST_MEDIATYPE_AUDIO);
 	EXPECT_TRUE(mPlayerContext->firstFrameReceived);
 	EXPECT_TRUE(mPlayerContext->decoderHandleNotified);
@@ -927,7 +928,8 @@ TEST_F(InterfacePlayerGapFillTests, NotifyFirstFrame_AudioOnlySchedulesFirstFram
 
 TEST_F(InterfacePlayerGapFillTests, NotifyEOS_SetsPendingAndSignalledFlags)
 {
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).WillOnce(Return(33));
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, _, mInterfaceGstPlayer, nullptr))
+		.WillOnce(Return(33));
 	mInterfaceGstPlayer->NotifyEOS();
 	EXPECT_TRUE(mPlayerContext->eosSignalled);
 	EXPECT_TRUE(mPlayerContext->eosCallbackIdleTaskPending);
@@ -936,7 +938,8 @@ TEST_F(InterfacePlayerGapFillTests, NotifyEOS_SetsPendingAndSignalledFlags)
 
 TEST_F(InterfacePlayerGapFillTests, NotifyEOS_ScheduleFailureClearsPending)
 {
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).WillOnce(Return(PLAYER_TASK_ID_INVALID));
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, _, mInterfaceGstPlayer, nullptr))
+		.WillOnce(Return(PLAYER_TASK_ID_INVALID));
 	mInterfaceGstPlayer->NotifyEOS();
 	EXPECT_TRUE(mPlayerContext->eosSignalled);
 	EXPECT_FALSE(mPlayerContext->eosCallbackIdleTaskPending);

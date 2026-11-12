@@ -218,6 +218,10 @@ protected:
 
 	void TearDown() override
 	{
+		::testing::Mock::VerifyAndClearExpectations(g_mockGstHandlerControl);
+		::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
+
 		delete mInterfaceGstPlayer;
 		mInterfaceGstPlayer = nullptr;
 		mPlayerContext = nullptr;

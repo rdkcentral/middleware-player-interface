@@ -1046,7 +1046,8 @@ TEST_F(SecManagerThunderTests, AddWatermarkHandlerSchedulesCreateAndUpdate)
 	params["sessionId"] = 33;
 	g_FakeThunder.handlers["onAddWatermark"](params);
 
-	EXPECT_EQ(tasks.size(), 2u); // CreateWatermark + UpdateWatermark tasks
+	ASSERT_EQ(tasks.size(), 1u);
+	EXPECT_EQ(tasks[0].mTaskName, "WatermarkAdd");
 	g_mockPlayerScheduler = nullptr;
 }
 
@@ -1081,16 +1082,25 @@ TEST_F(SecManagerThunderTests, UpdateWatermarkHandlerSchedulesTask)
 {
 	NiceMock<MockPlayerScheduler> mockSched;
 	g_mockPlayerScheduler = &mockSched;
-	int calls = 0;
+	std::vector<PlayerAsyncTaskObj> tasks;
 	EXPECT_CALL(mockSched, ScheduleTask(_)).WillRepeatedly(
-		DoAll(Invoke([&](PlayerAsyncTaskObj) { ++calls; }), Return(1)));
+		DoAll(Invoke([&](PlayerAsyncTaskObj task) { tasks.push_back(task); }), Return(1)));
 
 	JsonObject params;
 	params["graphicId"] = 4;
+	params["zIndex"] = 2;
+	params["graphicImageBufferKey"] = 700;
+	params["graphicImageSize"] = 1024;
+	params["adjustVisibilityRequired"] = false;
+	params["sessionId"] = 33;
+	g_FakeThunder.handlers["onAddWatermark"](params);
+
+	tasks.clear();
 	params["watermarkClutBufferKey"] = 10;
 	params["watermarkImageBufferKey"] = 20;
 	g_FakeThunder.handlers["onUpdateWatermark"](params);
-	EXPECT_EQ(calls, 1);
+	ASSERT_EQ(tasks.size(), 1u);
+	EXPECT_EQ(tasks[0].mTaskName, "WatermarkModifyPalette");
 	g_mockPlayerScheduler = nullptr;
 }
 
