@@ -190,7 +190,6 @@ struct GstPlayerPriv
 	std::shared_ptr<PlayerTimerContext> timerContext; /**< Shared with GLib timer sources, see PlayerTimerContext */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
-	guint firstFrameTimeoutTimerId;
 	#ifdef ENABLE_RDKPERF
 	std::mutex configureToFirstFrameProfileMutex;
 	std::chrono::steady_clock::time_point configureToFirstFrameStart;
