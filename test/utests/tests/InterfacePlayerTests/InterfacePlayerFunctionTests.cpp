@@ -3325,6 +3325,8 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoMP4SetupAndTearDo
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&subtitlebin, _, _, 100 * GST_MSECOND))
+		.WillOnce(DoAll(SetArgPointee<1>(GST_STATE_NULL), SetArgPointee<2>(GST_STATE_VOID_PENDING), Return(GST_STATE_CHANGE_SUCCESS)));
 	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
 		.WillOnce(Return(TRUE));
 

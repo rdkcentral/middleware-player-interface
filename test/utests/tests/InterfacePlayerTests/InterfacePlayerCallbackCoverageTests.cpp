@@ -133,6 +133,7 @@ protected:
 	std::map<std::string, GCallback> mSignalHandlers;
 	GSourceFunc mTimerFunc = nullptr;
 	gpointer mTimerData = nullptr;
+	GDestroyNotify mTimerRelease = nullptr;
 	GstState mOldState = GST_STATE_NULL;
 	GstState mNewState = GST_STATE_NULL;
 
@@ -179,6 +180,15 @@ protected:
 				return 7;
 			}));
 
+		ON_CALL(*g_mockGLib, g_timeout_add_full(_, _, _, _, _))
+			.WillByDefault(Invoke([this](gint, guint, GSourceFunc func, gpointer data, GDestroyNotify notify) -> guint {
+				ReleaseTimerData();
+				mTimerFunc = func;
+				mTimerData = data;
+				mTimerRelease = notify;
+				return 7;
+			}));
+
 		mInterfaceGstPlayer = new InterfacePlayerRDK();
 		mInterfacePrivatePlayer = mInterfaceGstPlayer->GetPrivatePlayer();
 		mPlayerContext = mInterfacePrivatePlayer->gstPrivateContext;
@@ -218,11 +228,21 @@ protected:
 		PlayerLogManager::setLogLevel(mLOGLEVEL_TRACE);
 	}
 
+	void ReleaseTimerData()
+	{
+		if (mTimerRelease)
+		{
+			mTimerRelease(mTimerData);
+			mTimerRelease = nullptr;
+		}
+	}
+
 	void TearDown() override
 	{
 		delete mInterfaceGstPlayer;
 		mInterfaceGstPlayer = nullptr;
 		mPlayerContext = nullptr;
+		ReleaseTimerData();
 
 		delete g_mockGstHandlerControl;
 		g_mockGstHandlerControl = nullptr;
