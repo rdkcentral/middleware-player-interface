@@ -816,10 +816,33 @@ class InterfacePlayerRDK
 		void SetStreamCaps(GstMediaType type, MediaCodecInfo&& codecInfo);
 
 	private:
+
+		/** Caps-hint state for one track; valid only while generation matches mCapsHintGeneration. */
+		struct CapsHintRecord
+		{
+			uint64_t generation;
+			std::string caps;
+		};
+		/**
+		 * @brief Push manifest-derived caps to a rialtomse sink via its "caps-hint" property.
+		 * @return true if the hint was set; false means the normal caps path is used.
+		 */
+		bool PushCapsHintToRialtoSink(GstElement *sink, GstMediaType type, const MediaCodecInfo &codecInfo);
+		/** @brief Compare real caps with the recorded hint; a mismatch disables the hint for this instance. */
+		void ValidateRealCapsAgainstHint(GstMediaType type, const std::string &realCaps);
+		void ClearCapsHint(int type);
+		void ResetCapsHints();
+
+		std::mutex mCapsHintMutex;					/**< Guards mCapsHints and mCapsHintGeneration */
+		std::map<int, CapsHintRecord> mCapsHints;	/**< Hint per track for the current tune */
+		uint64_t mCapsHintGeneration = 0;			/**< Bumped on Stop() to invalidate stale hints */
+		bool mCapsHintMismatch = false;				/**< Sticky: set once real caps differ from hint */
+
 		/**
 		 * @brief Cancel any pending idle/timer callbacks scheduled against this instance, so they can't fire after destruction.
 		 */
 		void CancelPendingCallbacks();
+
 		InterfacePlayerPriv *interfacePlayerPriv;
 		GstHandlerControl idleCallbackControl; /**< guards IdleCallbackOnFirstFrame/OnEOS/IdleCallback/FirstVideoFrameDisplayed */
 };
