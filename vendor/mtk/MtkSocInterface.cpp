@@ -82,15 +82,38 @@ bool MtkSocInterface::IsVideoDecoder(const char* name)
  */
 bool MtkSocInterface::IsAudioOrVideoDecoder(const char* name)
 {
-	bool AudioOrVideoDecoder = false;
+        return name && StartsWith(name, "westerossink");
+}
 
-	// ignore audio/video decoder check if westeros sink disabled via config, UseWesterosSink()
-    if(UseWesterosSink() && StartsWith(name, "westerossink"))
-    {
-        AudioOrVideoDecoder = true;
-    }
-
-    return AudioOrVideoDecoder;
+/**
+ * @brief Get video sink from sinkbin.
+ *
+ * Only creates a westerossink when Westeros has been explicitly enabled for
+ * this session (mUsingWesterosSink, set via SetWesterosSinkState()). Reached
+ * only when useRialtoSink is off, since InterfacePlayerRDK checks Rialto first.
+ *
+ * @param sinkbin The GStreamer sinkbin.
+ */
+GstElement* MtkSocInterface::GetVideoSink(GstElement* sinkbin)
+{
+       GstElement* vidsink = nullptr;
+       if(!sinkbin)
+       {
+               MW_LOG_ERR("Invalid SinkBin");
+       }
+       else if(mUsingWesterosSink)
+       {
+               vidsink = gst_element_factory_make("westerossink", NULL);
+               if(vidsink)
+               {
+                       g_object_set(sinkbin, "video-sink", vidsink, NULL);
+               }
+               else
+               {
+                       MW_LOG_WARN("Failed to create westerossink. Plugin is not registered on this platform");
+               }
+       }
+       return vidsink;
 }
 
 /**
