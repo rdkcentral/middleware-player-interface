@@ -170,7 +170,7 @@ class DrmSessionManager
 {
 public:
 
-	DrmSessionContext *drmSessionContexts;
+	std::unique_ptr<DrmSessionContext[]> drmSessionContexts;
 	configs *m_drmConfigParam;
 	PlayerSecInterface *playerSecInstance;/** PlayerSecInterface instance **/
 	ContentSecurityManagerSession mContentSecurityManagerSession;
@@ -178,7 +178,7 @@ public:
 	std::atomic<bool> mIsVideoOnMute;
 	std::atomic<int> mCurrentSpeed;
 protected:
-	KeyIdEntries *cachedKeyIDs;
+	std::unique_ptr<KeyIdEntries[]> cachedKeyIDs;
 	std::mutex cachedKeyMutex;
 
 	/**

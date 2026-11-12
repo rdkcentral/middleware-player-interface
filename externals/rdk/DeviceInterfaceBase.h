@@ -44,6 +44,8 @@ class DeviceInterfaceBase {
     DeviceInterfaceBase()
     {}
 
+    virtual ~DeviceInterfaceBase() = default;
+
     virtual void RegisterDsMgrEventHandler() = 0;
 
     virtual void RegisterNtwMgrEventHandler() = 0;
