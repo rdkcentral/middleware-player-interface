@@ -24,6 +24,7 @@
 #include <string.h>
 #include <vector>
 #include <mutex>
+#include <memory>
 #include <PlayerLogManager.h>
 #include "PlayerScheduler.h"
 #include <gst/app/gstappsrc.h>
@@ -156,6 +157,20 @@ struct gst_media_stream
 };
 
 /**
+ * @struct PlayerTimerContext
+ * @brief State shared between a player and the GLib timer sources it creates.
+ *        Every source holds a reference, so the context outlives the player.
+ *        Timer callbacks only access the player while holding mutex, and only
+ *        if player is set and the source's generation is still current.
+ */
+struct PlayerTimerContext
+{
+	std::recursive_mutex mutex;                 /**< Held while a timer callback accesses the player */
+	InterfacePlayerRDK *player = nullptr;       /**< Cleared when the player is destroyed */
+	std::atomic<unsigned> generation{0};        /**< Incremented by Stop() to invalidate outstanding timers */
+};
+
+/**
  * @struct GstPlayerPriv
  * @brief Holds private variables of InterfacePlayerRDK
  */
@@ -172,6 +187,7 @@ struct GstPlayerPriv
 	gint n_audio;                            /**< Number of audio tracks. */
 	gint current_audio;                      /**< Offset of current audio track. */
 	std::mutex TaskControlMutex; /**< For scheduling/de-scheduling or resetting async tasks/variables and timers */
+	std::shared_ptr<PlayerTimerContext> timerContext; /**< Shared with GLib timer sources, see PlayerTimerContext */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
 	guint firstFrameTimeoutTimerId;
