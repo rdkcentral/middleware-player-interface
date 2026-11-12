@@ -123,6 +123,9 @@ public:
 
 	void DestroyAMPGstPlayer()
 	{
+		::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
+
 		if (isPipelineSetup)
 		{
 			// AAMPGstPlayer::DestroyPipeline()
@@ -493,7 +496,6 @@ TEST_F(GstPlayerTests, TimerAdd)
 	int repeatTimeout = 100;
 	guint taskId = 0;
 	GstElement dummyelement;
-	mInterfaceGstPlayer = new InterfacePlayerRDK();
 	ConstructAMPGstPlayer();
 
 	// Expectations
@@ -550,6 +552,8 @@ TEST_F(GstPlayerTests, TimerRemove)
 	EXPECT_CALL(*g_mockGLib, g_source_remove(_)) .WillOnce(Return(TRUE));
 	mInterfaceGstPlayer->TimerRemove(taskId, "TimerRemove");
 	EXPECT_EQ(0,taskId);
+
+	DestroyAMPGstPlayer();
 }
 
 

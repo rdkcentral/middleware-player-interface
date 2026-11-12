@@ -213,7 +213,7 @@ bool PlayerThunderAccess::ActivatePlugin()
 /**
  * @brief  subscribeEvent
  */
-bool PlayerThunderAccess::SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+bool PlayerThunderAccess::SubscribeEvent (const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
 {
     bool ret = true;
     uint32_t status = Core::ERROR_NONE;
@@ -238,7 +238,7 @@ bool PlayerThunderAccess::SubscribeEvent (string eventName, std::function<void(c
 /**
  * @brief  unSubscribeEvent
  */
-bool PlayerThunderAccess::UnSubscribeEvent (string eventName)
+bool PlayerThunderAccess::UnSubscribeEvent (const std::string& eventName)
 {
     bool ret = true;
     if (NULL != remoteObject) {
@@ -256,7 +256,7 @@ bool PlayerThunderAccess::UnSubscribeEvent (string eventName)
  *  @brief  invokeJSONRPC
  *  @note   Invoke JSONRPC call for the plugin
  */
-bool PlayerThunderAccess::InvokeJSONRPC(std::string method, const JsonObject &param, JsonObject &result, const uint32_t waitTime)
+bool PlayerThunderAccess::InvokeJSONRPC(const std::string& method, const JsonObject &param, JsonObject &result, const uint32_t waitTime)
 {
     bool ret = true;
     std::string response;
@@ -289,7 +289,7 @@ bool PlayerThunderAccess::InvokeJSONRPC(std::string method, const JsonObject &pa
     return ret;
 }
 
-bool PlayerThunderAccess::SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim)
+bool PlayerThunderAccess::SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim)
 {
     bool bRet = false;
     switch(shim)
@@ -310,7 +310,7 @@ bool PlayerThunderAccess::SetVideoRectangle(int x, int y, int w, int h, std::str
     return bRet;
 }
 
-bool PlayerThunderAccess::SetVideoRectangle_VIDEOIN(int x, int y, int w, int h, std::string videoInputType)
+bool PlayerThunderAccess::SetVideoRectangle_VIDEOIN(int x, int y, int w, int h, const std::string& videoInputType)
 {
     int screenWidth = 0;
     int screenHeight = 0;
@@ -380,7 +380,7 @@ bool PlayerThunderAccess::GetScreenResolution(int & screenWidth, int & screenHei
 /**
  *  @brief  Registers  Event to input plugin and to mRegisteredEvents list for later use.
  */
-void PlayerThunderAccess::RegisterEvent_VIDEOIN(string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+void PlayerThunderAccess::RegisterEvent_VIDEOIN(const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
 {
 	bool bSubscribed;
 	bSubscribed = SubscribeEvent(_T(eventName), std::move(functionHandler));
@@ -449,7 +449,7 @@ void PlayerThunderAccess::OnSignalChanged (const JsonObject& parameters)
 /**
  *  @brief  calls start on video in specified by port and method name
  */
-void PlayerThunderAccess::StartHelperVideoin(int port, std::string videoInputType)
+void PlayerThunderAccess::StartHelperVideoin(int port, const std::string& videoInputType)
 {
 	MW_LOG_WARN("port:%d",port);
 
@@ -465,7 +465,7 @@ void PlayerThunderAccess::StartHelperVideoin(int port, std::string videoInputTyp
 /**
  *  @brief  Stops streaming.
  */
-void PlayerThunderAccess::StopHelperVideoin(std::string videoInputType)
+void PlayerThunderAccess::StopHelperVideoin(const std::string& videoInputType)
 {
 	if( videoInputPort>=0 )
 	{
@@ -577,7 +577,7 @@ void PlayerThunderAccess::ReleaseOta()
     MW_LOG_INFO("[OTA_SHIM]StreamAbstraction_OTA Destructor called !! ");
 }
 
-void PlayerThunderAccess::StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString)
+void PlayerThunderAccess::StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString)
 {
     MW_LOG_INFO( "[OTA_SHIM] url : %s ", url.c_str());
 
@@ -648,7 +648,7 @@ void PlayerThunderAccess::SetPreferredAudioLanguages(PlayerPreferredAudioData da
     }
 }
 
-void PlayerThunderAccess::SetPreferredAudioLanguages_OTA(std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString)
+void PlayerThunderAccess::SetPreferredAudioLanguages_OTA(const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString)
 {
     JsonObject properties;
     bool modifiedLang = false;
@@ -714,7 +714,7 @@ int PlayerThunderAccess::GetAudioTrackInternal_OTA()
 /**
  *  @brief GetAudioTracks get the available audio tracks for the selected service / media
  */
-std::string PlayerThunderAccess::GetAudioTracksOta(std::vector<PlayerAudioData> audData)
+std::string PlayerThunderAccess::GetAudioTracksOta(std::vector<PlayerAudioData>& audData)
 {
 	JsonObject param;
     JsonObject result;
@@ -789,7 +789,7 @@ std::string PlayerThunderAccess::SetAudioTrackOta(int trackId, int primaryKey)
 /**
  * @brief GetTextTracks get the available text tracks for the selected service / media
  */
-bool PlayerThunderAccess::GetTextTracksOta(std::vector<PlayerTextData> txtData)
+bool PlayerThunderAccess::GetTextTracksOta(std::vector<PlayerTextData>& txtData)
 {
 	MW_LOG_TRACE("[OTA_SHIM]");
 	JsonObject param;
@@ -930,7 +930,7 @@ void PlayerThunderAccess::onPlayerErrorHandler_RMF(const JsonObject& parameters)
 	mOnPlayerErrorHandlerCb(std::move(error_message));
 }
 
-bool PlayerThunderAccess::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
+bool PlayerThunderAccess::StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
     bool bRet = true;
     mOnPlayerStatusHandlerCb = std::move(onPlayerStatusHandlerCb);
@@ -964,7 +964,7 @@ bool PlayerThunderAccess::StartRmf(std::string url, std::function<void(std::stri
 /**
  * @brief SetPreferredAudioLanguages set the preferred audio language list
  */
-void PlayerThunderAccess::SetPreferredAudioLanguages_RMF(std::string preferredLanguagesString, std::string rmf_preferredLanguages)
+void PlayerThunderAccess::SetPreferredAudioLanguages_RMF(const std::string& preferredLanguagesString, const std::string& rmf_preferredLanguages)
 {
 	JsonObject properties;
 	bool modifiedLang = false;
@@ -1128,7 +1128,7 @@ std::string PlayerThunderAccess::GetMetaDataWatermark()
 /**
  * @brief PersistentStoreSaveWatermark saves in persistent store
  */
-bool PlayerThunderAccess::PersistentStoreSaveWatermark(const char* base64Image, std::string metaData)
+bool PlayerThunderAccess::PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData)
 {
     bool ret = false;
     JsonObject param, result;
