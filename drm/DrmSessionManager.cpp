@@ -133,16 +133,24 @@ void DrmSessionManager::UpdateDRMConfig(
 void DrmSessionManager::clearSessionData()
 {
 	MW_LOG_WARN(" DrmSessionManager:: Clearing session data");
+	std::lock_guard<std::mutex> guard(mDrmSessionLock);
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
-		if (drmSessionContexts != NULL && drmSessionContexts[i].drmSession != NULL)
+		if (drmSessionContexts != NULL)
 		{
-			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
-			 * (called from a GStreamer pipeline thread via a cached raw pointer)
-			 * has completed, before freeing the object. */
-			drmSessionContexts[i].drmSession->PrepareForDestruction();
-			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
-			drmSessionContexts[i] = DrmSessionContext();
+			{
+				std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
+				if (drmSessionContexts[i].drmSession != NULL)
+				{
+					/* DELIA-70726 fix: block until any in-flight decrypt() on this session
+					 * (called from a GStreamer pipeline thread via a cached raw pointer)
+					 * has completed, before freeing the object. */
+					drmSessionContexts[i].drmSession->PrepareForDestruction();
+					MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+					drmSessionContexts[i].drmSession = nullptr;
+				}
+				drmSessionContexts[i] = DrmSessionContext();
+			}
 		}
 
 		{
@@ -153,6 +161,7 @@ void DrmSessionManager::clearSessionData()
 			}
 		}
 	}
+	MW_LOG_WARN("DrmSessionManager:: clearSessionData complete");
 }
 
 /**
