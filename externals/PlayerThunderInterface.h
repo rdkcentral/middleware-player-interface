@@ -73,7 +73,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool UnSubscribeEvent (std::string eventName);
+    bool UnSubscribeEvent (const std::string& eventName);
 
     /**
      *   @fn SetVideoRectangle
@@ -87,7 +87,7 @@ public:
      *   @retval true if success
      *   @retval false if failure
      */
-    bool SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim);
+    bool SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim);
 
     /**
      *   @fn SetPreferredAudioLanguages_OTA
@@ -115,13 +115,13 @@ public:
      *   @param port port number
      *   @param  videoInputType string video input type
      */
-    void StartHelperVideoin(int port, std::string videoInputType);
+    void StartHelperVideoin(int port, const std::string& videoInputType);
 
     /**
      *   @fn StopHelper
      *   @param  videoInputType string video input type
      */
-    void StopHelperVideoin(std::string videoInputType);
+    void StopHelperVideoin(const std::string& videoInputType);
 
     //-----------------VIDEOIN APIs end-----------------
 
@@ -156,7 +156,7 @@ public:
      *   @param preferredRenditionString player's preferred rendition
      *   @param atsc_preferredRenditionString ATSC preferred rendition
      */
-    void StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString);
+    void StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString);
 
     /**
      *   @fn StopOta
@@ -168,7 +168,7 @@ public:
      * @param audData vector to be filled with audio data
      * @return string of current track pk
      */
-    std::string GetAudioTracksOta(std::vector<PlayerAudioData> audData);
+    std::string GetAudioTracksOta(std::vector<PlayerAudioData>& audData);
 
     /**
      * @fn SetAudioTrackOta
@@ -183,7 +183,7 @@ public:
      * @param txtData vector to be filled with text data
      * @return true if successful, false if failed
      */
-    bool GetTextTracksOta(std::vector<PlayerTextData> txtData);
+    bool GetTextTracksOta(std::vector<PlayerTextData>& txtData);
 
     /**
      * @fn DisableContentRestrictionsOta
@@ -217,7 +217,7 @@ public:
      * @param onPlayerErrorHandlerCb player error handler callback
      * @return true if successful, false if failed
      */
-    bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb);
+    bool StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb);
 
     /**
      * @fn StopRmf
@@ -277,7 +277,7 @@ public:
      * @param metaData metaData
      * @return true if successful, false if failed
      */
-    bool PersistentStoreSaveWatermark(const char* base64Image, std::string metaData);
+    bool PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData);
 
     /**
      * @fn PersistentStoreLoadWatermark

@@ -88,18 +88,16 @@ public:
 	using DrmSessionManager::trackActiveKeyId;
 
 	// Detach/restore the key cache to exercise the null-cache guards
-	KeyIdEntries *DetachCachedKeyIds()
+	std::unique_ptr<KeyIdEntries[]> DetachCachedKeyIds()
 	{
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
-		KeyIdEntries *entries = cachedKeyIDs;
-		cachedKeyIDs = nullptr;
-		return entries;
+		return std::move(cachedKeyIDs);
 	}
 
-	void RestoreCachedKeyIds(KeyIdEntries *entries)
+	void RestoreCachedKeyIds(std::unique_ptr<KeyIdEntries[]> entries)
 	{
 		std::lock_guard<std::mutex> guard(cachedKeyMutex);
-		cachedKeyIDs = entries;
+		cachedKeyIDs = std::move(entries);
 	}
 
 	// Snapshot of a cached slot entry for assertions
@@ -1637,13 +1635,13 @@ TEST_F(DrmSessionManagerComplexTests, MarkActiveSessionsFailed_OldestKeyDroppedB
 TEST_F(DrmSessionManagerComplexTests, FailedSessionHelpers_NullKeyCache_NoCrash)
 {
 	const auto key = CreateAsciiHexKeyId("11111111111111111111111111111111");
-	KeyIdEntries *entries = mDrmSessionManager->DetachCachedKeyIds();
+	auto entries = mDrmSessionManager->DetachCachedKeyIds();
 
 	EXPECT_FALSE(mDrmSessionManager->markSessionFailed(key));
 	mDrmSessionManager->clearFailedSlots();
 	mDrmSessionManager->clearDrmSession(false);
 
-	mDrmSessionManager->RestoreCachedKeyIds(entries);
+	mDrmSessionManager->RestoreCachedKeyIds(std::move(entries));
 }
 
 // ----------------------------------------------------------------------------
