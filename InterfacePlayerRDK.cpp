@@ -334,8 +334,6 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 	DisconnectSignals();
 	RemoveProbes();
 	CancelPendingCallbacks();
-	
-	
 	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
 	if (mDrmSystem)
