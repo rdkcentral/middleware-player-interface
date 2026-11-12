@@ -1769,3 +1769,46 @@ TEST(ContentProtectionFirebolt, StackAllocationDestructorTest) {
 
     std::cout << "Exiting StackAllocationDestructorTest test" << std::endl;
 }
+
+/**
+ * @brief Verify that getSessionToken is reported as unsupported in Firebolt mode
+ *
+ * ContentProtectionFirebolt has no session token source; it must return false and clear the output token
+ * instead of falling back silently to the base class.
+ */
+TEST(ContentProtectionFirebolt, GetSessionTokenIsNotSupported)
+{
+    ContentProtectionFirebolt client;
+    std::string token{"stale-token"};
+    EXPECT_FALSE(client.getSessionToken(token));
+    EXPECT_TRUE(token.empty());
+}
+
+/**
+ * @brief Verify that getSessionToken is dispatched to the Firebolt implementation through the base class
+ */
+TEST(ContentProtectionFirebolt, GetSessionTokenThroughBaseClass)
+{
+    ContentProtectionFirebolt client;
+    ContentSecurityManager &manager = client;
+    std::string token{"stale-token"};
+    EXPECT_FALSE(manager.getSessionToken(token));
+    EXPECT_TRUE(token.empty());
+}
+
+/**
+ * @brief Verify that repeated getSessionToken calls keep failing, also after Initialize()
+ */
+TEST(ContentProtectionFirebolt, GetSessionTokenRepeatedCallsAfterInitialize)
+{
+    ContentProtectionFirebolt client;
+    client.Initialize();
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        std::string token;
+        EXPECT_FALSE(client.getSessionToken(token));
+        EXPECT_TRUE(token.empty());
+    }
+    client.DeInitialize();
+}
+

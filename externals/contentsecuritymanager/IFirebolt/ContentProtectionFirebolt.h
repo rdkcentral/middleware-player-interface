@@ -25,6 +25,7 @@
 
 #include "ContentSecurityManager.h"
 #include "ContentSecurityManagerSession.h"
+#include "PlayerLogManager.h"
 
 #include <iostream>
 #include <list>
@@ -126,6 +127,17 @@ public:
 	 * @return true if initialized
 	 */
 	bool IsActive(bool force=false);
+	/**
+	 * @brief Session token is not available through the Firebolt SDK; the application has to provide it
+	 * @param[out] token Cleared
+	 * @return false
+	 */
+	bool getSessionToken(std::string &token) override
+	{
+		token.clear();
+		MW_LOG_ERR("getSessionToken is not supported in Firebolt mode; the session token must be provided by the application");
+		return false;
+	}
 	/**
 	 * @brief Sets DRM session state (e.g., active/inactive)
 	 * @param sessionId DRM session ID
