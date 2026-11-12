@@ -104,8 +104,9 @@ PlayerTelemetryWorker &getTelemetryWorker()
     static PlayerTelemetryWorker worker(
         [](const PlayerTelemetryWorker::Item &item)
         {
-            T2ERROR t2Error = item.isEvent ? t2_event_d(item.marker.c_str(), 1)
-                                           : t2_event_s(item.marker.c_str(), item.value.c_str());
+            char *marker = const_cast<char *>(item.marker.c_str());
+            T2ERROR t2Error = item.isEvent ? t2_event_d(marker, 1)
+                                           : t2_event_s(marker, const_cast<char *>(item.value.c_str()));
             if (T2ERROR_SUCCESS != t2Error)
             {
                 MW_LOG_ERR("[M] Telemetry event %s failed: %d", item.marker.c_str(), t2Error);

@@ -41,6 +41,12 @@ template <typename Pred> bool waitFor(Pred pred, std::chrono::milliseconds timeo
     return true;
 }
 
+size_t fakeRecordCount()
+{
+    std::lock_guard<std::mutex> lock(fakeTelemetry().mutex);
+    return fakeTelemetry().markers.size();
+}
+
 struct Recorder
 {
     std::mutex mutex;
@@ -160,16 +166,17 @@ TEST(PlayerTelemetryWorkerTest, DropsWhenQueueIsFull)
 
 TEST(PlayerTelemetryWorkerTest, InitAndUninitRunOnWorkerThread)
 {
-    std::thread::id initThread;
+    std::promise<std::thread::id> initThread;
+    std::future<std::thread::id> initThreadFuture = initThread.get_future();
     std::atomic<bool> uninitCalled{false};
     {
         PlayerTelemetryWorker worker([](const PlayerTelemetryWorker::Item &) { return true; },
-                                     [&] { initThread = std::this_thread::get_id(); },
+                                     [&] { initThread.set_value(std::this_thread::get_id()); },
                                      [&] { uninitCalled = true; });
         EXPECT_TRUE(worker.enqueue({"A", "{}", false}));
-        ASSERT_TRUE(waitFor([&] { return initThread != std::thread::id(); }));
+        ASSERT_EQ(initThreadFuture.wait_for(2s), std::future_status::ready);
     }
-    EXPECT_NE(initThread, std::this_thread::get_id());
+    EXPECT_NE(initThreadFuture.get(), std::this_thread::get_id());
     EXPECT_TRUE(uninitCalled.load());
 }
 
@@ -180,6 +187,7 @@ TEST(PlayerTelemetry2Test, SendReturnsBeforeSlowT2Call)
     std::map<std::string, int> intData{{"frames", 3}};
     std::map<std::string, std::string> stringData{{"state", "started"}};
     std::map<std::string, float> floatData;
+    const size_t initialCount = fakeRecordCount();
 
     const auto start = std::chrono::steady_clock::now();
     EXPECT_TRUE(telemetry.send("BUFFERING_STARTED", intData, stringData, floatData));
@@ -189,7 +197,7 @@ TEST(PlayerTelemetry2Test, SendReturnsBeforeSlowT2Call)
         [&]
         {
             std::lock_guard<std::mutex> lock(fakeTelemetry().mutex);
-            return !fakeTelemetry().markers.empty();
+            return fakeTelemetry().markers.size() > initialCount;
         }));
     std::lock_guard<std::mutex> lock(fakeTelemetry().mutex);
     EXPECT_EQ(fakeTelemetry().markers.back(), "BUFFERING_STARTED");
@@ -200,14 +208,16 @@ TEST(PlayerTelemetry2Test, SendReturnsBeforeSlowT2Call)
 TEST(PlayerTelemetry2Test, SendEventUsesEventApi)
 {
     PlayerTelemetry2 telemetry;
+    const size_t initialCount = fakeRecordCount();
     telemetry.sendEvent("INTERFACE_INITIALIZED");
     ASSERT_TRUE(waitFor(
         [&]
         {
             std::lock_guard<std::mutex> lock(fakeTelemetry().mutex);
-            return !fakeTelemetry().markers.empty() && fakeTelemetry().markers.back() == "INTERFACE_INITIALIZED";
+            return fakeTelemetry().markers.size() > initialCount;
         }));
     std::lock_guard<std::mutex> lock(fakeTelemetry().mutex);
+    EXPECT_EQ(fakeTelemetry().markers.back(), "INTERFACE_INITIALIZED");
     EXPECT_EQ(fakeTelemetry().values.back(), "1");
 }
 
