@@ -470,3 +470,13 @@ Runtime behavior is driven by three mechanisms:
 | `CMAKE_IARM_MGR` | Set internally by the RDK-V backend branch — not a user switch (passing `OFF` does not disable it). Compiles `DeviceIARMInterface.cpp`, `PlayerExternalsRdkInterface.cpp`, `DeviceFireboltInterface.cpp`, and `FireboltInterface.cpp`. Links `libIARMBus`, `libds`, `libdshalcli`. Backend selection is driven by `CMAKE_USE_FIREBOLT` (RDK-E), `CMAKE_PLATFORM_UBUNTU`/macOS (fake externals), else RDK-V. | `externals/CMakeLists.txt` |
 | `CMAKE_PLAYER_RFC_REQUIRED` | Enables RFC parameter fetching. Sets `-DPLAYER_RFC_ENABLED` and links `libtr181api`. | `externals/CMakeLists.txt` |
 | `USE_THUNDER_R4` | Selects Thunder R4 API (WPEFrameworkCOM) instead of the default R3 path (WPEFrameworkProtocols). Controlled via Yocto distro features `wpe_r4_4` or `wpe_r4`. | `cmake/FindWPEFramework.cmake`, `player-interface_git.bb` |
+| `ENABLE_RDKPERF` | Default `OFF`. Enables RDKPerf scope timing (`PI_PROFILE_SCOPE`) in `libplayergstinterface` and, when SecClient/SecManager/Firebolt is enabled, `libplayerfbinterface`. Configuration fails with a clear error if `rdk_perf.h` or `librdkperf` is not found. See [RDKPerf Profiling](#rdkperf-profiling). | `CMakeLists.txt`, `externals/CMakeLists.txt` |
+
+### RDKPerf Profiling
+
+When built with `-DENABLE_RDKPERF=ON`:
+
+- `PI_PROFILE_SCOPE("name")` creates a named RDKPerf timer for the enclosing scope. By default it records only while a tune is being profiled, from `ConfigurePipeline()` until the first-frame client callback returns, the first-frame timeout fires, or `Stop()` is called.
+- Scopes inside `InterfacePlayerRDK` use `PI_PLAYER_PROFILE_SCOPE`, which is gated on that player's own tune window, so a tune in one player instance does not turn on recording for another. Scopes without a player context (DRM session manager, SecManager, Firebolt content protection) are gated on any tune in the process.
+- Set `PLAYER_RDKPERF_ALWAYS=1` in the player's environment to record every scope, including seek/flush, trick play, pause, rate changes and DRM/watermark calls after the first frame.
+- The tune time is logged as `PI_PERF configure_to_first_frame <ms>` (MIL) and a first-frame timeout as `PI_PERF first_frame_timeout <ms>` (WARN). These are measured with `std::chrono::steady_clock` because the window ends on a different thread than it starts on, and an RDKPerf timer must be closed on the thread that opened it.
