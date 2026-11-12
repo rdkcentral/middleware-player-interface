@@ -289,7 +289,7 @@ void g_clear_error(GError **err)
     // no-op in mock
 }
 
-void g_free(gpointer mem)
+void (g_free)(gpointer mem)
 {
     if (g_mockGLib != nullptr)
     {

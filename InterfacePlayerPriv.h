@@ -349,6 +349,8 @@ public:
 	GstHandlerControl aSyncControl;
 	GstHandlerControl syncControl;
 	GstHandlerControl callbackControl;
+	GstHandlerControl bufferingTimeoutControl;
+	std::mutex bufferingTimeoutMutex;
 
 	/* Prevent a new tune from reconfiguring the shared pipeline while a prior
 	 * teardown is still releasing its decoder and sink resources. */

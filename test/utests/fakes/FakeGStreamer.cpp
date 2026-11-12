@@ -419,7 +419,7 @@ gboolean gst_element_sync_state_with_parent(GstElement *element)
 	{
 		return g_mockGStreamer->gst_element_sync_state_with_parent(element);
 	}
-	return FALSE;
+	return TRUE;
 }
 
 GstPad *gst_element_get_static_pad(GstElement *element, const gchar *name)
