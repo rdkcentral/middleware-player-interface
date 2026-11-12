@@ -146,6 +146,13 @@ public:
 	using SecManagerThunder::UnRegisterAllEvents;
 	using SecManagerThunder::UpdateWatermark;
 	using SecManagerThunder::loadClutWatermark;
+
+	void SetCurrentWatermarkOperation(int graphicId, std::uint64_t generation)
+	{
+		std::lock_guard<std::mutex> lock(mWatermarkOpMutex);
+		mWatermarkGeneration[graphicId] = generation;
+		mWatermarkActive.insert(graphicId);
+	}
 };
 
 class SecManagerThunderTests : public ::testing::Test
@@ -938,7 +945,8 @@ TEST_F(SecManagerThunderTests, GetWaterMarkPaletteSendsId)
 	JsonObject ok;
 	ok["success"] = false;
 	g_FakeThunder.responses.push_back({true, ok});
-	mSec->GetWaterMarkPalette(100, 6);
+	mSec->SetCurrentWatermarkOperation(6, 1);
+	mSec->GetWaterMarkPalette(100, 6, 1);
 	EXPECT_EQ(LastCall()->method, "getPalettedWatermark");
 	EXPECT_EQ(LastCall()->param["id"].Number(), 6);
 }
