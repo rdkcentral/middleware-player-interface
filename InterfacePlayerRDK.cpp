@@ -459,6 +459,14 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
 		return;
 	}
+	{
+		std::unique_lock<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		if (!interfacePlayerPriv->gstPrivateContext->mTeardownCV.wait_for(teardownLock, std::chrono::milliseconds(3000),
+			[this]{ return !interfacePlayerPriv->gstPrivateContext->mTeardownInProgress; }))
+		{
+			MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: timed out waiting for prior TearDownStream to complete");
+		}
+	}
 #ifdef ENABLE_RDKPERF
 	interfacePlayerPriv->gstPrivateContext->StartConfigureToFirstFrameProfile();
 #endif
@@ -1654,6 +1662,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
 
 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
 	}
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = true;
+	}
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
@@ -1675,6 +1687,25 @@ void InterfacePlayerRDK::TearDownStream(int type)
 				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for sinkbin");
+				}
+				else
+				{
+					GstState current = GST_STATE_VOID_PENDING;
+					GstState pending = GST_STATE_VOID_PENDING;
+					gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+					do
+					{
+						(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+					}
+					while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+					if (current != GST_STATE_NULL)
+					{
+						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+						if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+						{
+							MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: forced NULL state change failed for sinkbin");
+						}
+					}
 				}
 				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))			/* Removes the sinkbin element from the pipeline */
 				{
@@ -1720,7 +1751,34 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_lock(&stream->sourceLock);
 		if (stream->sinkbin)
 		{
-			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, clearing");
+			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, tearing down before clearing");
+			if (interfacePlayerPriv->gstPrivateContext->pipeline)
+			{
+				GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+				if (GST_STATE_CHANGE_FAILURE != nullRc)
+				{
+					GstState current = GST_STATE_VOID_PENDING;
+					GstState pending = GST_STATE_VOID_PENDING;
+					gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+					do
+					{
+						(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+					}
+					while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+					if (current != GST_STATE_NULL)
+					{
+						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: CC sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+						if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+						{
+							MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: forced NULL state change failed for CC sinkbin");
+						}
+					}
+				}
+				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+				{
+					MW_LOG_INFO("InterfacePlayerRDK::TearDownStream: Unable to remove CC sinkbin from pipeline");
+				}
+			}
 			g_clear_object(&stream->sinkbin);
 		}
 		if (stream->source)
@@ -1731,6 +1789,11 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_unlock(&stream->sourceLock);
 	}
 	tearDownCb(false, mediaType);
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = false;
+	}
+	interfacePlayerPriv->gstPrivateContext->mTeardownCV.notify_all();
 	MW_LOG_MIL("InterfacePlayerRDK::TearDownStream: exit mediaType = %d", mediaType);
 }
 
@@ -2560,7 +2623,34 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 	// Check elements are not already assigned
 	if (stream->sinkbin)
 	{
-		MW_LOG_ERR("Sinkbin already assigned");
+		MW_LOG_WARN("Sinkbin already assigned, tearing down before clearing");
+		if (privatePlayer->gstPrivateContext->pipeline)
+		{
+			GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+			if (GST_STATE_CHANGE_FAILURE != nullRc)
+			{
+				GstState current = GST_STATE_VOID_PENDING;
+				GstState pending = GST_STATE_VOID_PENDING;
+				gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+				do
+				{
+					(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+				}
+				while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+				if (current != GST_STATE_NULL)
+				{
+					MW_LOG_ERR("Sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+					if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+					{
+						MW_LOG_ERR("SetupClosedCaptionControlStream: forced NULL state change failed for stale sinkbin");
+					}
+				}
+			}
+			if (!gst_bin_remove(GST_BIN(privatePlayer->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+			{
+				MW_LOG_INFO("Unable to remove stale sinkbin from pipeline");
+			}
+		}
 		g_clear_object(&stream->sinkbin);
 	}
 	if (privatePlayer->gstPrivateContext->subtitle_sink)
