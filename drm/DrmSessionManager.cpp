@@ -29,6 +29,8 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include <atomic>
+#include <fstream>
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -37,6 +39,30 @@
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
+
+namespace
+{
+std::atomic_uint32_t gVideoWindowSizeInjectionCount{0};
+constexpr const char* kVideoWindowSizeInjectionFile =
+	"/tmp/videowindowsize-inject-count";
+
+bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
+{
+	std::ifstream injectionFile(kVideoWindowSizeInjectionFile);
+	uint32_t injectAtCount = 0;
+
+	// Missing, unreadable, empty, or non-numeric file disables injection.
+	if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
+	{
+		return false;
+	}
+
+	return callCount == injectAtCount;
+}
+} // namespace
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry2.hpp"
+#endif
 /**
  * @brief KeyIdEntries constructor.
  */
@@ -48,13 +74,14 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
 		cachedKeyIDs(NULL), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
+		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -230,6 +257,54 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
+		const int originalWidth = width;
+		const int originalHeight = height;
+		const uint32_t callCount = ++gVideoWindowSizeInjectionCount;
+		bool injectedZeroDimension = false;
+
+		// /tmp/videowindowsize-inject-count specifies the invocation on
+		// which zero-size telemetry should be injected.
+		if (ShouldInjectVideoWindowSizeError(callCount))
+		{
+			width = 0;
+			height = 0;
+			injectedZeroDimension = true;
+			MW_LOG_WARN("setVideoWindowSize: injecting zero dimensions at "
+						"count=%u; original width=%d height=%d",
+						callCount, originalWidth, originalHeight);
+		}
+
+		if (width == 0 || height == 0)
+		{
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+			std::map<std::string, int> intMetrics;
+			std::map<std::string, std::string> stringMetrics;
+			std::map<std::string, float> floatMetrics;
+
+			intMetrics["width"] = width;
+			intMetrics["height"] = height;
+
+			intMetrics["injected"] = injectedZeroDimension ? 1 : 0;
+			intMetrics["setVideoWindowSizeCount"] =
+				static_cast<int>(callCount);
+
+			stringMetrics["component"] = "AampLicenseManager";
+			stringMetrics["action"] = "setVideoWindowSize";
+			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
+
+	                PlayerTelemetry2 telemetry;
+			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
+#endif
+			
+			// Do not send intentionally injected dimensions to SecManager.
+			// Genuine zero dimensions retain the existing behavior.
+			if (injectedZeroDimension)
+			{
+				width = originalWidth;
+				height = originalHeight;
+			}
+		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }
@@ -527,7 +602,19 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
-	code =this->AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+
+	if (!AcquireLicenseCb)
+	{
+		MW_LOG_WARN("AcquireLicenseCb not registered - cannot acquire license");
+		err = MW_DRM_INIT_FAILED;
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		if (cachedKeyIDs)
+		{
+			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+		}
+		return nullptr;
+	}
+	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);
@@ -900,7 +987,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		auto owned = m_sessionCreator(drmHelper, Instance);
+		drmSessionContexts[sessionSlot].drmSession = owned.release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -913,16 +1008,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			drmSessionContexts[sessionSlot].drmSession->setOutputProtection(true);
 			drmHelper->setOutputProtectionFlag(true);
 		}
+		// setKeyId() is a no-op default on DrmSession, so it's safe to call
+		// for every backend (OpenCDM, Direct-Rialto, etc.), not just OpenCDM.
+		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
 	}
 	else
 	{
 		MW_LOG_WARN("Unable to Get DrmSession for DrmSystemId %s", systemId.c_str());
 		err = MW_DRM_INIT_FAILED ;
 	}
-
-#if defined(USE_OPENCDM_ADAPTER)
-	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
-#endif
 
 	return code;
 }

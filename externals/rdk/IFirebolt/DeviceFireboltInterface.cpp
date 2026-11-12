@@ -108,7 +108,7 @@ void DeviceFireboltInterface::RegisterDsMgrEventHandler()
 
 	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnHdcpChanged(
 					[](const auto& hdcpProtocol) {
-						MW_LOG_ERR("[Event] HDCP changed");
+						MW_LOG_MIL("[Event] HDCP changed");
 						HDCPEventHandlerFirebolt(hdcpProtocol);
 					});
 
@@ -157,7 +157,7 @@ void DeviceFireboltInterface::RegisterNtwMgrEventHandler()
 
 	auto result =  Firebolt::IFireboltAampAccessor::Instance().DeviceInterface().subscribeOnNetworkChanged(
 					[](const auto& network) {
-						MW_LOG_ERR("[Event] network changed");
+						MW_LOG_MIL("[Event] network changed");
 					    getActiveInterfaceEventHandlerFirebolt(network);
 					});
 	
