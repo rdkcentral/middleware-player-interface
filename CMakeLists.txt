@@ -95,6 +95,7 @@ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
+option(ENABLE_RDKPERF "Enable RDKPerf API timing" OFF)
 
 if(COVERAGE_ENABLED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
@@ -516,6 +517,11 @@ target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface ${GST_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
 target_link_libraries(playergstinterface ${GSTREAMERVIDEO_LINK_LIBRARIES})
+
+if(ENABLE_RDKPERF)
+	target_compile_definitions(playergstinterface PRIVATE ENABLE_RDKPERF)
+	target_link_libraries(playergstinterface rdkperf)
+endif()
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 
