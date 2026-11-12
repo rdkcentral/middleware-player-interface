@@ -51,6 +51,7 @@ set(TEST_SOURCES
 
 set(PLAYER_SOURCES
 	${PLAYER_ROOT}/PlayerUtils.cpp ${PLAYER_ROOT}/baseConversion/_base64.cpp
+	${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
 )
 
 add_definitions(-DAAMP_SIMULATOR_BUILD)
@@ -72,6 +73,6 @@ if (COVERAGE_ENABLED)
 	APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
-target_link_libraries(${EXEC_NAME} playerlogmanager baseconversion fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+target_link_libraries(${EXEC_NAME} fakes ${OS_LD_FLAGS} -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${LIBCJSON_LINK_LIBRARIES} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})

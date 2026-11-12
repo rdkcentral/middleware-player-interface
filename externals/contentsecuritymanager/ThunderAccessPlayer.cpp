@@ -59,7 +59,7 @@ ThunderSecurityPlayerData gSecurityPlayerData;
 /**
  * @brief  ThunderAccessPlayer constructor
  */
-ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
+ThunderAccessPlayer::ThunderAccessPlayer(const std::string& callsign)
                  : remoteObject(NULL)
                    ,controllerObject(NULL)
                    ,pluginCallsign(std::move(callsign))
@@ -159,7 +159,7 @@ bool ThunderAccessPlayer::ActivatePlugin()
 /**
  * @brief  subscribeEvent
  */
-bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
+bool ThunderAccessPlayer::SubscribeEvent (const std::string& eventName, std::function<void(const WPEFramework::Core::JSON::VariantContainer&)> functionHandler)
 {
     bool ret = true;
     uint32_t status = Core::ERROR_NONE;
@@ -183,7 +183,7 @@ bool ThunderAccessPlayer::SubscribeEvent (string eventName, std::function<void(c
 /**
  * @brief  unSubscribeEvent
  */
-bool ThunderAccessPlayer::UnSubscribeEvent (std::string eventName)
+bool ThunderAccessPlayer::UnSubscribeEvent (const std::string& eventName)
 {
     bool ret = true;
     if (NULL != remoteObject) {
@@ -200,7 +200,7 @@ bool ThunderAccessPlayer::UnSubscribeEvent (std::string eventName)
  *  @brief  invokeJSONRPC
  *  @note   Invoke JSONRPC call for the plugin
  */
-bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject &param, JsonObject &result, const uint32_t waitTime)
+bool ThunderAccessPlayer::InvokeJSONRPC(const std::string& method, const JsonObject &param, JsonObject &result, const uint32_t waitTime)
 {
     bool ret = true;
     std::string response;

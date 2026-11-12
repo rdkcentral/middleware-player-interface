@@ -22,6 +22,7 @@
 #include "MockOpenCdm.h"
 
 MockOpenCdm *g_mockopencdm = nullptr;
+unsigned int g_mockOcdmGstreamerDecryptCallCount = 0;
 
 struct OpenCDMSystem* opencdm_create_system(const char keySystem[])
 {
@@ -104,6 +105,7 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
 	GstBuffer* IV, GstBuffer* keyID,
 	uint32_t initWithLast15)
 {
+	g_mockOcdmGstreamerDecryptCallCount++;
 	return ERROR_NONE;
 }
 
