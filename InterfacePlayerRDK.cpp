@@ -205,6 +205,9 @@ static bool IsCapsHintEnabled()
 	return enabled;
 }
 
+
+void AddBufferFieldToStructure(GstStructure *structure, const char *fieldName, const std::vector<uint8_t> &data);
+
 /**
  * @brief Build the caps for a stream from its codec info (shared by the caps hint and real caps).
  * @return Newly allocated caps (caller unrefs), or NULL if no caps can be derived.
