@@ -1690,7 +1690,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			if (mediaType == eGST_MEDIATYPE_SUBTITLE && stream->source &&
 				!interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl)
 			{
-				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL))
+				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for subtitle source");
 				}
@@ -2768,8 +2768,8 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 					!gst_element_sync_state_with_parent(stream->sinkbin))
 				{
 					MW_LOG_ERR("Failed to sync rialto subtitle elements to parent");
-					SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
-					SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL);
+					SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+					SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin))
 					{
 						MW_LOG_ERR("Unable to remove subtitle sinkbin from pipeline");
