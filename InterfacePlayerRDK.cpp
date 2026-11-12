@@ -1904,14 +1904,14 @@ void InterfacePlayerRDK::Stop(bool keepLastFrame)
 	if (interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove eosCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
-		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId);
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskPending = false;
 		interfacePlayerPriv->gstPrivateContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 	}
 	if (interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending)
 	{
 		MW_LOG_MIL("InterfacePlayerRDK: Remove firstFrameCallbackIdleTaskId %d",interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
-		mScheduler.RemoveTask(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
+		g_source_remove(interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId);
 		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskPending = false;
 		interfacePlayerPriv->gstPrivateContext->firstFrameCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 	}
@@ -5573,6 +5573,7 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 	GstState targetState = GST_STATE_NULL;
 	int queuedFrames = -1;
 	uint32_t bufferingTimeoutCnt = 0;
+	bool profileActive = false;
 
 	if(privatePlayer->gstPrivateContext)
 	{
@@ -5605,16 +5606,11 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 				queuedFrames = frames;
 				targetState = privatePlayer->gstPrivateContext->buffering_target_state;
 				pipeline = privatePlayer->gstPrivateContext->pipeline;
+				profileActive = privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive();
 				if (pipeline)
 				{
 					gst_object_ref(pipeline);
 				}
-				uint32_t original_buffering_timeout_cnt = privatePlayer->gstPrivateContext->buffering_timeout_cnt;
-				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
-				gst_element_state_get_name(privatePlayer->gstPrivateContext->buffering_target_state), original_buffering_timeout_cnt, frames);
-				SetStateWithWarnings(privatePlayer->gstPrivateContext->pipeline, privatePlayer->gstPrivateContext->buffering_target_state, privatePlayer->gstPrivateContext->IsConfigureToFirstFrameProfileActive());
-				isRateCorrectionDefaultOnPlaying =  privatePlayer->socInterface->SetRateCorrection();
-
 				privatePlayer->gstPrivateContext->buffering_in_progress = false;
 				isPlayerReady = true;
 			}
@@ -5627,14 +5623,14 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 		}
 
 		callout = [bufferingTimeoutCb = pInterfacePlayerRDK->OnBuffering_timeoutCb, socInterface = privatePlayer->socInterface,
-				   pipeline, targetState, queuedFrames, bufferingTimeoutCnt, isBufferingTimeoutConditionMet, isPlayerReady]()
+				   pipeline, targetState, profileActive, queuedFrames, bufferingTimeoutCnt, isBufferingTimeoutConditionMet, isPlayerReady]()
 		{
 			bool isRateCorrectionDefaultOnPlaying = false;
 			if (isPlayerReady)
 			{
 				MW_LOG_MIL("Set pipeline state to %s - buffering_timeout_cnt %u  frames %i",
 				gst_element_state_get_name(targetState), bufferingTimeoutCnt, queuedFrames);
-				SetStateWithWarnings(pipeline, targetState);
+				SetStateWithWarnings(pipeline, targetState, profileActive);
 				if (pipeline)
 				{
 					gst_object_unref(pipeline);

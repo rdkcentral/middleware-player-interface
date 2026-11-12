@@ -500,7 +500,12 @@ static void StartProgressTimer(InterfacePlayerRDK *player, guint sourceId, Captu
 {
 	EXPECT_CALL(*g_mockGLib, g_timeout_add_full(_, _, _, _, _))
 		.WillOnce(DoAll(SaveArg<2>(&source.dispatch), SaveArg<3>(&source.data), SaveArg<4>(&source.release), Return(sourceId)));
+	/* IdleCallback returns straight away unless its handler control is enabled */
+	NiceMock<MockGstHandlerControl> handlerControl;
+	ON_CALL(handlerControl, isEnabled()).WillByDefault(Return(true));
+	g_mockGstHandlerControl = &handlerControl;
 	InterfacePlayerRDK::IdleCallback(player);
+	g_mockGstHandlerControl = nullptr;
 	ASSERT_NE(source.dispatch, nullptr);
 	ASSERT_NE(source.release, nullptr);
 }
