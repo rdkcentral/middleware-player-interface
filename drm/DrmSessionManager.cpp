@@ -27,6 +27,7 @@
 #include "_base64.h"
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
@@ -76,8 +77,8 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
-		cachedKeyIDs(NULL), accessToken(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
+		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
@@ -91,8 +92,8 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mFirstFrameSeen(false)
 		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
-	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
-	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
+	drmSessionContexts	= std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
+	cachedKeyIDs		= std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 	m_drmConfigParam = new configs();
 	playerSecInstance = new PlayerSecInterface();
 
@@ -106,13 +107,59 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
  */
 DrmSessionManager::~DrmSessionManager()
 {
+	/* DELIA-70726-style fix: block here until any in-flight callback invocation
+	 * (e.g. gstcdmidecryptor calling laprofileBeginCb/laprofileEndCb/etc. from the
+	 * streaming thread on a cached raw pointer) has finished, so this object isn't
+	 * freed out from under it. */
+	{
+		std::unique_lock<std::mutex> lock(mLifecycleMutex);
+		mMarkedForDestruction = true;
+		if (mActiveCallbackOps > 0)
+		{
+			MW_LOG_WARN("DrmSessionManager::~DrmSessionManager : waiting for %d in-flight callback op(s) to complete before delete", mActiveCallbackOps);
+			mLifecycleCV.wait_for(lock, std::chrono::milliseconds(3000), [this]() { return mActiveCallbackOps == 0; });
+			if (mActiveCallbackOps > 0)
+			{
+				MW_LOG_ERR("DrmSessionManager::~DrmSessionManager : timed out waiting for in-flight callback op(s); proceeding with destruction");
+			}
+		}
+	}
 	clearAccessToken();
 	clearSessionData();
-	MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-	MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 	MW_SAFE_DELETE(playerSecInstance);
 	MW_SAFE_DELETE(m_drmConfigParam);
 	ContentSecurityManager::setWatermarkSessionEvent_CB(nullptr);
+}
+
+/**
+* @brief DELIA-70726-style fix: acquire lifecycle guard before invoking a callback
+*        on a DrmSessionManager reached via a raw/cached pointer.
+*/
+bool DrmSessionManager::AcquireForCallback()
+{
+std::lock_guard<std::mutex> lock(mLifecycleMutex);
+if (mMarkedForDestruction)
+{
+return false;
+}
+mActiveCallbackOps++;
+return true;
+}
+
+/**
+ * @brief Release lifecycle guard acquired via AcquireForCallback().
+ */
+void DrmSessionManager::ReleaseAfterCallback()
+{
+std::lock_guard<std::mutex> lock(mLifecycleMutex);
+if (mActiveCallbackOps > 0)
+{
+mActiveCallbackOps--;
+}
+if (mActiveCallbackOps == 0)
+{
+mLifecycleCV.notify_all();
+}
 }
 void DrmSessionManager::UpdateDRMConfig(
                 bool useSecManager,
@@ -1248,15 +1295,15 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 {
 	if (mMaxDRMSessions != maxSessions)
 	{
+		auto newDrmSessionContexts = std::make_unique<DrmSessionContext[]>(maxSessions);
+		auto newCachedKeyIDs = std::make_unique<KeyIdEntries[]>(maxSessions);
+
 		// Clean up the current sessions
 		clearSessionData();
-		MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-		MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 
-		//Update to new session count
+		drmSessionContexts = std::move(newDrmSessionContexts);
+		cachedKeyIDs = std::move(newCachedKeyIDs);
 		mMaxDRMSessions = maxSessions;
-		drmSessionContexts      = new DrmSessionContext[mMaxDRMSessions];
-		cachedKeyIDs            = new KeyIdEntries[mMaxDRMSessions];
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }

@@ -31,6 +31,8 @@
 #include "GstUtils.h"
 #include <string>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include <map>
 #include <vector>
 #include <utility>
@@ -170,7 +172,7 @@ class DrmSessionManager
 {
 public:
 
-	DrmSessionContext *drmSessionContexts;
+	std::unique_ptr<DrmSessionContext[]> drmSessionContexts;
 	configs *m_drmConfigParam;
 	PlayerSecInterface *playerSecInstance;/** PlayerSecInterface instance **/
 	ContentSecurityManagerSession mContentSecurityManagerSession;
@@ -178,7 +180,7 @@ public:
 	std::atomic<bool> mIsVideoOnMute;
 	std::atomic<int> mCurrentSpeed;
 protected:
-	KeyIdEntries *cachedKeyIDs;
+	std::unique_ptr<KeyIdEntries[]> cachedKeyIDs;
 	std::mutex cachedKeyMutex;
 
 	/**
@@ -194,6 +196,11 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
+	std::mutex mLifecycleMutex;
+	std::condition_variable mLifecycleCV;
+	int mActiveCallbackOps = 0;
+	bool mMarkedForDestruction = false;
+
 	std::mutex mActiveKeyMutex;
 	/** Key IDs of the sessions handed out per stream type (current and pre-fetched), bounded by mMaxDRMSessions */
 	std::map<int, std::vector<std::vector<uint8_t>>> mActiveKeyIds;
@@ -308,6 +315,22 @@ public:
 	 *  @fn ~DrmSessionManager
 	 */
 	~DrmSessionManager();
+	
+	/**
+	 * @fn AcquireForCallback
+	 * @brief DELIA-70726-style guard: must be called by any external caller (e.g. the
+	 *        GStreamer decryptor element) before invoking any callback/method on a
+	 *        DrmSessionManager obtained via a raw/cached pointer. Returns false if this
+	 *        instance is being torn down, in which case it must not be used further.
+	 */
+	bool AcquireForCallback();
+
+	/**
+	 * @fn ReleaseAfterCallback
+	 * @brief Must be called exactly once for every successful AcquireForCallback().
+	 */
+	void ReleaseAfterCallback();
+
 	/**
 	 *  @fn 	createDrmSession
 	 *  @param[in]	err - To retrieve the error case  and to report to application 

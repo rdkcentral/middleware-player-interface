@@ -224,19 +224,15 @@ shared_ptr<DrmHelper> ProcessContentProtection( std::string attrName, bool propa
 		}
 		if (PlayerLogManager::isLogLevelAllowed(mLOGLEVEL_TRACE))
 		{
-			MW_LOG_TRACE("content metadata from manifest; length %zu", dataLength);
-			printf("*****************************************************************\n");
+			string dump;
+			dump.reserve(dataLength * 3 + 1);
 			for (int i = 0; i < dataLength; i++)
 			{
-				printf("%c", data[i]);
+				char hexByte[4];
+				snprintf(hexByte, sizeof(hexByte), "%02x ", data[i]);
+				dump += hexByte;
 			}
-			printf("\n*****************************************************************\n");
-			for (int i = 0; i < dataLength; i++)
-			{
-				printf("%02x ", data[i]);
-			}
-			printf("\n*****************************************************************\n");
-
+			MW_LOG_TRACE("content metadata from manifest; length %zu data %s", dataLength, dump.c_str());
 		}
 		if (!drmHelper->parsePssh(data, (uint32_t)dataLength))
 		{

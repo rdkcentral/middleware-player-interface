@@ -298,6 +298,8 @@ public:
 	bool usingRialtoSink;                                                            /**< true if rialto sink is used for video and audio sinks */
 	bool usingClosedCaptionsControl;                                                 /**< true if subtitle sink being used for CC control */
 	char videoRectangle[VIDEO_COORDINATES_SIZE];
+	int videoRectangleWidth;                                                             /**< Cached width parsed from videoRectangle; 0 when unset/invalid */
+	int videoRectangleHeight;                                                            /**< Cached height parsed from videoRectangle; 0 when unset/invalid */
 	bool pauseOnStartPlayback;                                                               /**< true if should start playback paused */
 	std::atomic<bool> eosSignalled;                                                  /**< Indicates if EOS has signaled */
 	gboolean buffering_enabled;                                                              /**< enable buffering based on multiqueue */
@@ -349,6 +351,12 @@ public:
 	GstHandlerControl callbackControl;
 	GstHandlerControl bufferingTimeoutControl;
 	std::mutex bufferingTimeoutMutex;
+
+	/* Prevent a new tune from reconfiguring the shared pipeline while a prior
+	 * teardown is still releasing its decoder and sink resources. */
+	std::mutex mTeardownMutex;
+	std::condition_variable mTeardownCV;
+	bool mTeardownInProgress = false;
 
 	bool filterAudioDemuxBuffers; /**< flag to filter audio demux buffers */
 	double seekPosition;              /**< the position to seek the pipeline to in seconds */

@@ -225,11 +225,12 @@ void DumpBinaryBlob(const unsigned char *ptr, size_t len)
 	int fit = FIT_CHARS;
 	while (ptr < fin)
 	{
-		unsigned char c = *ptr++;
+		unsigned char c = *ptr;
 		if (c >= ' ' && c < 128)
 		{ // printable ascii
 			*dst++ = c;
 			fit--;
+			ptr++;
 		}
 		else if( fit>=4 )
 		{
@@ -237,6 +238,7 @@ void DumpBinaryBlob(const unsigned char *ptr, size_t len)
 			WRITE_HASCII( dst, c );
 			*dst++ = ']';
 			fit -= 4;
+			ptr++;
 		}
 		else
 		{
