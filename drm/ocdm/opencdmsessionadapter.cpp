@@ -145,6 +145,8 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		};
 
 		m_OCDMSessionCallbacks.error_message_callback = [](OpenCDMSession* session, void* userData, const char message[]) {
+			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+			userSession->errorMessageOCDM(message);
 		};
 
 		m_OCDMSessionCallbacks.keys_updated_callback = [](const OpenCDMSession* session, void* userData) {
@@ -248,6 +250,22 @@ void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySiz
 void OCDMSessionAdapter::keysUpdatedOCDM() {
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
 	m_keyStatusReady.signal();
+}
+
+void OCDMSessionAdapter::errorMessageOCDM(const char message[]) {
+	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int) m_keyStatus, (int) m_eKeyState);
+
+	// Key updates have already turned a ready session's status into InternalError (e.g. Rialto server crash);
+	// without this the session manager would keep reusing the dead KEY_READY session.
+	if (m_eKeyState == KEY_READY && m_keyStatus == InternalError)
+	{
+		m_eKeyState = KEY_ERROR;
+	}
+
+	if (m_drmCallbacks)
+	{
+		m_drmCallbacks->DrmSessionError(this, (message != nullptr) ? message : "");
+	}
 }
 
 
