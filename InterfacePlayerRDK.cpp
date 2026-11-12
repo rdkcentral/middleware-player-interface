@@ -334,12 +334,8 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 	DisconnectSignals();
 	RemoveProbes();
 	CancelPendingCallbacks();
-	GstPlayerPriv *gstPrivateContext = interfacePlayerPriv->gstPrivateContext;
-	InvalidatePlayerTimers(*gstPrivateContext->timerContext, true);
-	TimerRemove(gstPrivateContext->periodicProgressCallbackIdleTaskId, "periodicProgressCallbackIdleTaskId");
-	TimerRemove(gstPrivateContext->firstFrameTimeoutTimerId, "firstFrameTimeoutTimerId");
-	TimerRemove(gstPrivateContext->bufferingTimeoutTimerId, "bufferingTimeoutTimerId");
-	TimerRemove(gstPrivateContext->ptsCheckForEosOnUnderflowIdleTaskId, "ptsCheckForEosOnUnderflowIdleTaskId");
+	
+	
 	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
 	if (mDrmSystem)
