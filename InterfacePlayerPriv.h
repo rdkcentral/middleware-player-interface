@@ -350,6 +350,12 @@ public:
 	GstHandlerControl syncControl;
 	GstHandlerControl callbackControl;
 
+	/* Prevent a new tune from reconfiguring the shared pipeline while a prior
+	 * teardown is still releasing its decoder and sink resources. */
+	std::mutex mTeardownMutex;
+	std::condition_variable mTeardownCV;
+	bool mTeardownInProgress = false;
+
 	bool filterAudioDemuxBuffers; /**< flag to filter audio demux buffers */
 	double seekPosition;              /**< the position to seek the pipeline to in seconds */
 	GstPlayerPriv();
