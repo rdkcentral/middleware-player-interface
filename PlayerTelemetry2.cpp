@@ -59,7 +59,8 @@ void PlayerTelemetryWorker::run()
     while (true)
     {
         mCv.wait(lock, [this] { return mStop || !mQueue.empty(); });
-        if (mStop)
+        // On shutdown, deliver markers already accepted; a slow sender still disables and clears the queue
+        if (mQueue.empty())
         {
             break;
         }

@@ -180,6 +180,49 @@ TEST(PlayerTelemetryWorkerTest, InitAndUninitRunOnWorkerThread)
     EXPECT_TRUE(uninitCalled.load());
 }
 
+TEST(PlayerTelemetryWorkerTest, DeliversQueuedMarkersOnShutdown)
+{
+    std::mutex mutex;
+    std::vector<std::string> delivered;
+    {
+        PlayerTelemetryWorker worker(
+            [&](const PlayerTelemetryWorker::Item &item)
+            {
+                std::this_thread::sleep_for(10ms);
+                std::lock_guard<std::mutex> lock(mutex);
+                delivered.push_back(item.marker);
+                return true;
+            },
+            nullptr, nullptr);
+        for (int i = 0; i < 5; ++i)
+        {
+            EXPECT_TRUE(worker.enqueue({"M" + std::to_string(i), "{}", false}));
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex);
+    EXPECT_EQ(delivered, (std::vector<std::string>{"M0", "M1", "M2", "M3", "M4"}));
+}
+
+TEST(PlayerTelemetryWorkerTest, ShutdownStopsDrainingWhenSenderIsSlow)
+{
+    std::atomic<int> calls{0};
+    {
+        PlayerTelemetryWorker worker(
+            [&](const PlayerTelemetryWorker::Item &)
+            {
+                ++calls;
+                std::this_thread::sleep_for(30ms);
+                return true;
+            },
+            nullptr, nullptr, 64, 10ms, 2);
+        for (int i = 0; i < 10; ++i)
+        {
+            EXPECT_TRUE(worker.enqueue({"M" + std::to_string(i), "{}", false}));
+        }
+    }
+    EXPECT_EQ(calls.load(), 2);
+}
+
 TEST(PlayerTelemetry2Test, SendReturnsBeforeSlowT2Call)
 {
     fakeTelemetry().blockMs = 300;
