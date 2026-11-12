@@ -147,8 +147,15 @@ void DrmUtils::convertEndianness(unsigned char *original, unsigned char *guidByt
 std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int dataLength)
 {
 	//WV PSSH format 4+4+4+16(system id)+4(data size)
-	uint32_t header = 28;
+	constexpr uint32_t header = 28;
+	constexpr uint32_t metadataOffset = header + 4;
 	std::string metadata;
+	if (psshData == nullptr || dataLength < static_cast<int>(metadataOffset))
+	{
+		MW_LOG_WARN("Invalid PSSH data or length: %d", dataLength);
+		return metadata;
+	}
+
 	uint32_t  content_id_size =
                     (uint32_t)((psshData[header] & 0x000000FFu) << 24 |
                                (psshData[header+1] & 0x000000FFu) << 16 |
@@ -156,9 +163,9 @@ std::string DrmUtils::extractWVContentMetadataFromPssh(const char* psshData, int
                                (psshData[header+3] & 0x000000FFu));
 
 	MW_LOG_INFO("content meta data length  : %d",content_id_size);
-	if ((header + 4 + content_id_size) <= dataLength)
+	if (content_id_size <= static_cast<uint32_t>(dataLength - metadataOffset))
 	{
-		metadata = std::string(psshData + header + 4, content_id_size);
+		metadata = std::string(psshData + metadataOffset, content_id_size);
 	}
 	else
 	{

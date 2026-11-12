@@ -74,20 +74,20 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGLib;
-		g_mockGLib = nullptr;
-
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
-
 		delete mInterfaceGstPlayer;
 		mInterfaceGstPlayer = nullptr;
 
 		delete g_mockGstHandlerControl;
 		g_mockGstHandlerControl = nullptr;
 
-	    delete g_mockPlayerScheduler;
-	    g_mockPlayerScheduler = nullptr;
+		delete g_mockPlayerScheduler;
+		g_mockPlayerScheduler = nullptr;
+
+		delete g_mockGLib;
+		g_mockGLib = nullptr;
+
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
 	}
 
 public:

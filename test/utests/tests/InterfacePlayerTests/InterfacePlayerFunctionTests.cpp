@@ -78,10 +78,19 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
+		if (g_mockGLib)
+		{
+			::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		}
+		if (g_mockGStreamer)
+		{
+			::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
+		}
 
 		DestroyAMPGstPlayer();
+
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
 
 		delete g_mockGLib;
 		g_mockGLib = nullptr;
@@ -118,6 +127,7 @@ public:
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerConfigParams->useWesterosSink = true;
 	EXPECT_EQ(mPlayerContext->using_westerossink, false);
@@ -133,6 +143,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
@@ -171,6 +182,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalid
 // the real caps arrive later from the demuxer via SetStreamCaps().
 TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
@@ -183,6 +195,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatO
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerContext->buffering_enabled = true;
 	mPlayerContext->rate = GST_NORMAL_PLAY_RATE;
@@ -196,6 +209,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
@@ -210,6 +224,7 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_ESChange)
 {
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
@@ -246,11 +261,11 @@ TEST_F(InterfacePlayerTests, SetPreferredDRM)
 {
 	const char* testDrmID1 = "Widevine";
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID1);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 	//null check
 	const char* testDrmID2 = NULL;
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID2);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 }
 
 TEST_F(InterfacePlayerTests, GstSetSeekPosition)
@@ -1871,8 +1886,7 @@ TEST_F(InterfacePlayerTests, GstGetVideoSize_ValidRectangle)
 {
 	int width = 0;
 	int height = 0;
-	std::string videoRectangle = "10,20,1920,1080";
-	strncpy(mPlayerContext->videoRectangle, videoRectangle.c_str(), sizeof(mPlayerContext->videoRectangle) - 1);
+	mInterfaceGstPlayer->SetVideoRectangle(10, 20, 1920, 1080);
 
 	mInterfaceGstPlayer->GetVideoSize(width, height);
 
@@ -3932,6 +3946,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(ConfigurePipelineShouldReconfigureTest, ConfigurePipeline_ShouldReconfigureDecisionMatrix)
 {
 	auto param = GetParam();
+	delete g_mockGStreamer;
 	g_mockGStreamer = nullptr;
 
 	mPlayerContext->NumberOfTracks = 0;
