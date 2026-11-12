@@ -1761,7 +1761,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, tearing down before clearing");
 			if (interfacePlayerPriv->gstPrivateContext->pipeline)
 			{
-				GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+				GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 				if (GST_STATE_CHANGE_FAILURE != nullRc)
 				{
 					GstState current = GST_STATE_VOID_PENDING;
@@ -2632,7 +2632,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 		MW_LOG_WARN("Sinkbin already assigned, tearing down before clearing");
 		if (privatePlayer->gstPrivateContext->pipeline)
 		{
-			GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL);
+			GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 			if (GST_STATE_CHANGE_FAILURE != nullRc)
 			{
 				GstState current = GST_STATE_VOID_PENDING;
