@@ -36,6 +36,7 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 
 set(TEST_SOURCES PlayerLogManagerFun.cpp
+		 PlayerProfileScopeTests.cpp
 		 PlayerLogManagerRun.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
@@ -43,6 +44,10 @@ set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
 add_executable(${EXEC_NAME}
                ${TEST_SOURCES}
                ${PLAYER_SOURCES})
+
+# Build with RDKPerf profiling against a recording rdk_perf.h stub
+target_compile_definitions(${EXEC_NAME} PRIVATE ENABLE_RDKPERF)
+target_include_directories(${EXEC_NAME} BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdkperf_stub)
 
 set_target_properties(${EXEC_NAME} PROPERTIES FOLDER "utests")
 if (CMAKE_XCODE_BUILD_SYSTEM)
