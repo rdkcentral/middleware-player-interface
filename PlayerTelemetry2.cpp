@@ -4,9 +4,11 @@
 #include <telemetry_busmessage_sender.h>
 
 PlayerTelemetryWorker::PlayerTelemetryWorker(Sender sender, Hook init, Hook uninit, size_t maxQueueSize,
-                                             std::chrono::milliseconds slowCallThreshold, unsigned maxSlowCalls)
+                                             std::chrono::milliseconds slowCallThreshold, unsigned maxSlowCalls,
+                                             std::chrono::milliseconds cooldown, std::chrono::milliseconds drainTimeout)
     : mSender(std::move(sender)), mInit(std::move(init)), mUninit(std::move(uninit)), mMaxQueueSize(maxQueueSize),
-      mSlowCallThreshold(slowCallThreshold), mMaxSlowCalls(maxSlowCalls)
+      mSlowCallThreshold(slowCallThreshold), mMaxSlowCalls(maxSlowCalls), mCooldown(cooldown),
+      mDrainTimeout(drainTimeout)
 {
     mThread = std::thread(&PlayerTelemetryWorker::run, this);
 }
@@ -16,6 +18,7 @@ PlayerTelemetryWorker::~PlayerTelemetryWorker()
     {
         std::lock_guard<std::mutex> lock(mMutex);
         mStop = true;
+        mDrainDeadline = std::chrono::steady_clock::now() + mDrainTimeout;
     }
     mCv.notify_all();
     if (mThread.joinable())
@@ -28,9 +31,23 @@ bool PlayerTelemetryWorker::enqueue(Item item)
 {
     {
         std::lock_guard<std::mutex> lock(mMutex);
-        if (mDisabled || mStop)
+        if (mStop)
         {
             return false;
+        }
+        if (mDisabled)
+        {
+            if (std::chrono::steady_clock::now() - mDisabledAt < mCooldown)
+            {
+                ++mDroppedWhileDisabled;
+                return false;
+            }
+            // Cooldown elapsed: half-open, allow sending again and reset the slow-call count
+            MW_LOG_MIL("[M] Telemetry re-enabled after cooldown; %zu markers dropped while disabled",
+                       mDroppedWhileDisabled);
+            mDisabled = false;
+            mDroppedWhileDisabled = 0;
+            mSlowCalls = 0;
         }
         if (mQueue.size() >= mMaxQueueSize)
         {
@@ -59,7 +76,12 @@ void PlayerTelemetryWorker::run()
     while (true)
     {
         mCv.wait(lock, [this] { return mStop || !mQueue.empty(); });
-        // On shutdown, deliver markers already accepted; a slow sender still disables and clears the queue
+        // On shutdown, deliver markers already accepted, but never past the drain deadline
+        if (mStop && !mQueue.empty() && std::chrono::steady_clock::now() >= mDrainDeadline)
+        {
+            MW_LOG_WARN("[M] Telemetry drain timeout on shutdown; dropping %zu queued markers", mQueue.size());
+            mQueue.clear();
+        }
         if (mQueue.empty())
         {
             break;
@@ -80,9 +102,11 @@ void PlayerTelemetryWorker::run()
                         static_cast<long long>(elapsed.count()));
             if (++mSlowCalls >= mMaxSlowCalls)
             {
-                MW_LOG_ERR("[M] Telemetry disabled after %u consecutive slow calls; dropping %zu queued markers",
+                MW_LOG_ERR("[M] Telemetry disabled for %lld s after %u consecutive slow calls; dropping %zu queued markers",
+                           static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(mCooldown).count()),
                            mSlowCalls, mQueue.size());
                 mDisabled = true;
+                mDisabledAt = std::chrono::steady_clock::now();
                 mQueue.clear();
             }
         }
