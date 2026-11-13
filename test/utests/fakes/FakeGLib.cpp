@@ -23,8 +23,6 @@
 
 #include "MockGLib.h"
 
-
-#undef g_free
 using namespace std;
 
 #if 0
@@ -276,7 +274,7 @@ void g_free(gpointer mem)
 {
 	if (g_mockGLib != nullptr)
 	{
-		g_mockGLib->freeMemory(mem);
+		g_mockGLib->g_free(mem);
 	}
 }
 
