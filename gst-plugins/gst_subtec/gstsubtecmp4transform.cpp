@@ -339,7 +339,11 @@ gst_subtecmp4transform_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 
   GstMapInfo map;
 
-  gst_buffer_map(buf, &map, (GstMapFlags)GST_MAP_READWRITE);
+  if (!gst_buffer_map(buf, &map, (GstMapFlags)GST_MAP_READWRITE))
+    {
+      GST_ERROR_OBJECT (subtecmp4transform, "failed to map buffer");
+      return GST_FLOW_ERROR;
+    }
 
   size_t offset = 0, length = 0;
 
@@ -348,7 +352,7 @@ gst_subtecmp4transform_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 		if (findBoxOffsetAndLength(subtecmp4transform, reinterpret_cast<uint8_t *>(map.data), map.size, "mdat", offset, length))
     {
       GST_DEBUG_OBJECT (subtecmp4transform, "offset %zu length %zu", offset, length);
-      memcpy(map.data, map.data + offset, length);
+      memmove(map.data, map.data + offset, length);
       gst_buffer_resize(buf, 0, length);
     }
   }
