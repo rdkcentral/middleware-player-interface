@@ -3247,6 +3247,7 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinCreatio
 
 	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl), -1);
 	EXPECT_EQ(mPlayerContext->stream[streamId].sinkbin, nullptr);
+}
 TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSubtitleSinkCreationFailed)
 {
 	mPlayerConfigParams->gstreamerSubsEnabled = true;
