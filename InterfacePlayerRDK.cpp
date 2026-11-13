@@ -6434,10 +6434,13 @@ static void DecorateGstBufferWithDrmMetadata(GstBuffer *buffer, const MediaDrmMe
 
 	if (metadata)
 	{
-		// serialize and print the metadata
-		gchar *metaStr = gst_structure_to_string(metadata);
-		MW_LOG_DEBUG("Added drm metadata: %s", metaStr);
-		g_free(metaStr);
+		if (PlayerLogManager::isLogLevelAllowed(mLOGLEVEL_DEBUG))
+		{
+			// serialize and print the metadata (expensive: includes subsamples)
+			gchar *metaStr = gst_structure_to_string(metadata);
+			MW_LOG_DEBUG("Added drm metadata: %s", metaStr);
+			g_free(metaStr);
+		}
 
 		gst_buffer_add_protection_meta(buffer, metadata);
 	}

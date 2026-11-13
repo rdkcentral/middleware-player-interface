@@ -108,9 +108,17 @@ void PacketSender::senderTask()
         mCv.wait(lock);
         while (!mPacketQueue.empty())
         {
-            sendPacket(std::move(mPacketQueue.front()));
+            PacketPtr pkt = std::move(mPacketQueue.front());
             mPacketQueue.pop();
-            MW_LOG_TRACE("PacketSender:  queue size %zu", mPacketQueue.size());
+            size_t queueSize = mPacketQueue.size();
+            // Drop the mutex before the (potentially blocking) socket write
+            // and reconnect so SendPacket producers are not stalled behind a
+            // stalled subtec client. sendPacket only touches members owned
+            // by this thread, so it is safe to run unlocked.
+            lock.unlock();
+            sendPacket(std::move(pkt));
+            MW_LOG_TRACE("PacketSender:  queue size %zu", queueSize);
+            lock.lock();
         }
     } while(running);
 }
