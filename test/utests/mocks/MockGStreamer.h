@@ -98,7 +98,6 @@ public:
 	MOCK_METHOD(gboolean, gst_bin_remove, (GstBin *bin, GstElement *element));
 	MOCK_METHOD(gboolean, gst_element_add_pad, (GstElement *element, GstPad *pad));
 	MOCK_METHOD(GstPad *, gst_ghost_pad_new, (const gchar *name, GstPad *target));
-	MOCK_METHOD(gboolean, gst_element_sync_state_with_parent, (GstElement *element));
 	MOCK_METHOD(gboolean, gst_element_link_many, (GstElement *element_1, GstElement *element_2));
 	MOCK_METHOD(gpointer, gst_object_ref, (gpointer object));
 	/*
