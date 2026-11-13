@@ -49,7 +49,9 @@ public:
 
     PlayerTelemetryWorker(Sender sender, Hook init, Hook uninit, size_t maxQueueSize = 64,
                           std::chrono::milliseconds slowCallThreshold = std::chrono::milliseconds(500),
-                          unsigned maxSlowCalls = 2);
+                          unsigned maxSlowCalls = 2,
+                          std::chrono::milliseconds cooldown = std::chrono::seconds(30),
+                          std::chrono::milliseconds drainTimeout = std::chrono::seconds(1));
     ~PlayerTelemetryWorker();
     PlayerTelemetryWorker(const PlayerTelemetryWorker &) = delete;
     PlayerTelemetryWorker &operator=(const PlayerTelemetryWorker &) = delete;
@@ -74,12 +76,17 @@ private:
     const size_t mMaxQueueSize;
     const std::chrono::milliseconds mSlowCallThreshold;
     const unsigned mMaxSlowCalls;
+    const std::chrono::milliseconds mCooldown;
+    const std::chrono::milliseconds mDrainTimeout;
     mutable std::mutex mMutex;
     std::condition_variable mCv;
     std::deque<Item> mQueue;
     unsigned mSlowCalls{0};
     bool mDisabled{false};
+    std::chrono::steady_clock::time_point mDisabledAt{};
+    size_t mDroppedWhileDisabled{0};
     bool mStop{false};
+    std::chrono::steady_clock::time_point mDrainDeadline{};
     std::thread mThread;
 };
 
