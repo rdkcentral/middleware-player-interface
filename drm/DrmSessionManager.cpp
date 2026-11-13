@@ -27,12 +27,11 @@
 #include "_base64.h"
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
 #include "PlayerLogManager.h"
-#include <atomic>
-#include <fstream>
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -42,29 +41,6 @@
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
 
-namespace
-{
-std::atomic_uint32_t gVideoWindowSizeInjectionCount{0};
-constexpr const char* kVideoWindowSizeInjectionFile =
-	"/tmp/videowindowsize-inject-count";
-
-bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
-{
-	std::ifstream injectionFile(kVideoWindowSizeInjectionFile);
-	uint32_t injectAtCount = 0;
-
-	// Missing, unreadable, empty, or non-numeric file disables injection.
-	if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
-	{
-		return false;
-	}
-
-	return callCount == injectAtCount;
-}
-} // namespace
-#ifdef PLAYER_TELEMETRY_SUPPORT
-#include "PlayerTelemetry2.hpp"
-#endif
 /**
  * @brief KeyIdEntries constructor.
  */
@@ -106,11 +82,59 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
  */
 DrmSessionManager::~DrmSessionManager()
 {
+	/* DELIA-70726-style fix: block here until any in-flight callback invocation
+	 * (e.g. gstcdmidecryptor calling laprofileBeginCb/laprofileEndCb/etc. from the
+	 * streaming thread on a cached raw pointer) has finished, so this object isn't
+	 * freed out from under it. */
+	{
+		std::unique_lock<std::mutex> lock(mLifecycleMutex);
+		mMarkedForDestruction = true;
+		if (mActiveCallbackOps > 0)
+		{
+			MW_LOG_WARN("DrmSessionManager::~DrmSessionManager : waiting for %d in-flight callback op(s) to complete before delete", mActiveCallbackOps);
+			mLifecycleCV.wait_for(lock, std::chrono::milliseconds(3000), [this]() { return mActiveCallbackOps == 0; });
+			if (mActiveCallbackOps > 0)
+			{
+				MW_LOG_ERR("DrmSessionManager::~DrmSessionManager : timed out waiting for in-flight callback op(s); proceeding with destruction");
+			}
+		}
+	}
 	clearAccessToken();
 	clearSessionData();
 	MW_SAFE_DELETE(playerSecInstance);
 	MW_SAFE_DELETE(m_drmConfigParam);
 	ContentSecurityManager::setWatermarkSessionEvent_CB(nullptr);
+}
+
+/**
+* @brief DELIA-70726-style fix: acquire lifecycle guard before invoking a callback
+*        on a DrmSessionManager reached via a raw/cached pointer.
+*/
+bool DrmSessionManager::AcquireForCallback()
+{
+std::lock_guard<std::mutex> lock(mLifecycleMutex);
+if (mMarkedForDestruction)
+{
+return false;
+}
+mActiveCallbackOps++;
+return true;
+}
+
+/**
+ * @brief Release lifecycle guard acquired via AcquireForCallback().
+ */
+void DrmSessionManager::ReleaseAfterCallback()
+{
+std::lock_guard<std::mutex> lock(mLifecycleMutex);
+if (mActiveCallbackOps > 0)
+{
+mActiveCallbackOps--;
+}
+if (mActiveCallbackOps == 0)
+{
+mLifecycleCV.notify_all();
+}
 }
 void DrmSessionManager::UpdateDRMConfig(
                 bool useSecManager,
@@ -376,54 +400,6 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
-		const int originalWidth = width;
-		const int originalHeight = height;
-		const uint32_t callCount = ++gVideoWindowSizeInjectionCount;
-		bool injectedZeroDimension = false;
-
-		// /tmp/videowindowsize-inject-count specifies the invocation on
-		// which zero-size telemetry should be injected.
-		if (ShouldInjectVideoWindowSizeError(callCount))
-		{
-			width = 0;
-			height = 0;
-			injectedZeroDimension = true;
-			MW_LOG_WARN("setVideoWindowSize: injecting zero dimensions at "
-						"count=%u; original width=%d height=%d",
-						callCount, originalWidth, originalHeight);
-		}
-
-		if (width == 0 || height == 0)
-		{
-
-#ifdef PLAYER_TELEMETRY_SUPPORT
-			std::map<std::string, int> intMetrics;
-			std::map<std::string, std::string> stringMetrics;
-			std::map<std::string, float> floatMetrics;
-
-			intMetrics["width"] = width;
-			intMetrics["height"] = height;
-
-			intMetrics["injected"] = injectedZeroDimension ? 1 : 0;
-			intMetrics["setVideoWindowSizeCount"] =
-				static_cast<int>(callCount);
-
-			stringMetrics["component"] = "AampLicenseManager";
-			stringMetrics["action"] = "setVideoWindowSize";
-			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
-
-	                PlayerTelemetry2 telemetry;
-			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
-#endif
-			
-			// Do not send intentionally injected dimensions to SecManager.
-			// Genuine zero dimensions retain the existing behavior.
-			if (injectedZeroDimension)
-			{
-				width = originalWidth;
-				height = originalHeight;
-			}
-		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }

@@ -23,8 +23,6 @@
 
 #include "MockGLib.h"
 
-
-#undef g_free
 using namespace std;
 
 #ifdef g_free
@@ -289,7 +287,7 @@ void g_clear_error(GError **err)
     // no-op in mock
 }
 
-void g_free(gpointer mem)
+void (g_free)(gpointer mem)
 {
     if (g_mockGLib != nullptr)
     {
@@ -304,7 +302,18 @@ int g_strcmp0(const char *str1, const char *str2)
 
 guint g_timeout_add_full(gint priority, guint interval, GSourceFunc function, gpointer data, GDestroyNotify notify)
 {
-    return 0;
+    guint retval = 0;
+
+    if (g_mockGLib != nullptr)
+    {
+        retval = g_mockGLib->g_timeout_add_full(priority, interval, function, data, notify);
+    }
+    if ((0 == retval) && notify)
+    {
+        /* No source was added, so release its data as GLib would on source destruction */
+        notify(data);
+    }
+    return retval;
 }
 
 void g_usleep(gulong microseconds)
