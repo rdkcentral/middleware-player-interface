@@ -10,6 +10,12 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <functional>
+#include <mutex>
+#include <thread>
 #include "PlayerLogManager.h"
 
 
@@ -23,20 +29,70 @@
 // this class is created to take care of uninitialization of telemetry but having object as global variable 
 // when process goes down, destructor of this class will be called and it will uninitialize the telemetry. 
 
-class Player_TelemetryInitializer {
-private:
-    bool m_Initialized = false;
+/**
+ * @class PlayerTelemetryWorker
+ * @brief Sends telemetry markers from a dedicated thread, so that callers (tune thread, GLib callbacks)
+ *        never block on the Telemetry 2.0 library. Stops sending after consecutive slow calls,
+ *        e.g. when the T2 message bus cannot be reached and every call waits for its connect timeout.
+ */
+class PlayerTelemetryWorker
+{
 public:
-    Player_TelemetryInitializer();
-    void Init();
-    bool isInitialized() const; 
-    ~Player_TelemetryInitializer();
+    struct Item
+    {
+        std::string marker;
+        std::string value;
+        bool isEvent{false};
+    };
+    using Sender = std::function<bool(const Item &)>;
+    using Hook = std::function<void()>;
+
+    PlayerTelemetryWorker(Sender sender, Hook init, Hook uninit, size_t maxQueueSize = 64,
+                          std::chrono::milliseconds slowCallThreshold = std::chrono::milliseconds(500),
+                          unsigned maxSlowCalls = 2,
+                          std::chrono::milliseconds cooldown = std::chrono::seconds(30),
+                          std::chrono::milliseconds drainTimeout = std::chrono::seconds(1));
+    ~PlayerTelemetryWorker();
+    PlayerTelemetryWorker(const PlayerTelemetryWorker &) = delete;
+    PlayerTelemetryWorker &operator=(const PlayerTelemetryWorker &) = delete;
+
+    /**
+     * @brief Queues an item for sending
+     * @return false if the worker is disabled or the queue is full
+     */
+    bool enqueue(Item item);
+
+    /**
+     * @brief True once sending has been stopped because of consecutive slow calls
+     */
+    bool isDisabled() const;
+
+private:
+    void run();
+
+    Sender mSender;
+    Hook mInit;
+    Hook mUninit;
+    const size_t mMaxQueueSize;
+    const std::chrono::milliseconds mSlowCallThreshold;
+    const unsigned mMaxSlowCalls;
+    const std::chrono::milliseconds mCooldown;
+    const std::chrono::milliseconds mDrainTimeout;
+    mutable std::mutex mMutex;
+    std::condition_variable mCv;
+    std::deque<Item> mQueue;
+    unsigned mSlowCalls{0};
+    bool mDisabled{false};
+    std::chrono::steady_clock::time_point mDisabledAt{};
+    size_t mDroppedWhileDisabled{0};
+    bool mStop{false};
+    std::chrono::steady_clock::time_point mDrainDeadline{};
+    std::thread mThread;
 };
 
 
 class PlayerTelemetry2 {
 private:
-    static Player_TelemetryInitializer mInitializer;
     std::string appName;
     
 public:

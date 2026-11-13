@@ -3,40 +3,162 @@
 
 #include <telemetry_busmessage_sender.h>
 
-Player_TelemetryInitializer::Player_TelemetryInitializer()
-: m_Initialized(false) // Initialize 'initialized' to false
+PlayerTelemetryWorker::PlayerTelemetryWorker(Sender sender, Hook init, Hook uninit, size_t maxQueueSize,
+                                             std::chrono::milliseconds slowCallThreshold, unsigned maxSlowCalls,
+                                             std::chrono::milliseconds cooldown, std::chrono::milliseconds drainTimeout)
+    : mSender(std::move(sender)), mInit(std::move(init)), mUninit(std::move(uninit)), mMaxQueueSize(maxQueueSize),
+      mSlowCallThreshold(slowCallThreshold), mMaxSlowCalls(maxSlowCalls), mCooldown(cooldown),
+      mDrainTimeout(drainTimeout)
 {
+    mThread = std::thread(&PlayerTelemetryWorker::run, this);
 }
 
-void Player_TelemetryInitializer::Init()
+PlayerTelemetryWorker::~PlayerTelemetryWorker()
 {
-    if(false == m_Initialized)
     {
-        m_Initialized = true;
-        t2_init((char *)"mwplayer");
-        MW_LOG_MIL("t2_init done ");
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStop = true;
+        mDrainDeadline = std::chrono::steady_clock::now() + mDrainTimeout;
+    }
+    mCv.notify_all();
+    if (mThread.joinable())
+    {
+        mThread.join();
     }
 }
 
-bool Player_TelemetryInitializer::isInitialized() const
+bool PlayerTelemetryWorker::enqueue(Item item)
 {
-    return m_Initialized;
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (mStop)
+        {
+            return false;
+        }
+        if (mDisabled)
+        {
+            if (std::chrono::steady_clock::now() - mDisabledAt < mCooldown)
+            {
+                ++mDroppedWhileDisabled;
+                return false;
+            }
+            // Cooldown elapsed: half-open, allow sending again and reset the slow-call count
+            MW_LOG_MIL("[M] Telemetry re-enabled after cooldown; %zu markers dropped while disabled",
+                       mDroppedWhileDisabled);
+            mDisabled = false;
+            mDroppedWhileDisabled = 0;
+            mSlowCalls = 0;
+        }
+        if (mQueue.size() >= mMaxQueueSize)
+        {
+            MW_LOG_WARN("[M] Telemetry queue full, dropping marker %s", item.marker.c_str());
+            return false;
+        }
+        mQueue.push_back(std::move(item));
+    }
+    mCv.notify_one();
+    return true;
 }
 
-Player_TelemetryInitializer::~Player_TelemetryInitializer()
+bool PlayerTelemetryWorker::isDisabled() const
 {
-    t2_uninit();
-    MW_LOG_MIL("t2_uninit done ");
+    std::lock_guard<std::mutex> lock(mMutex);
+    return mDisabled;
 }
 
-Player_TelemetryInitializer PlayerTelemetry2::mInitializer;
+void PlayerTelemetryWorker::run()
+{
+    if (mInit)
+    {
+        mInit();
+    }
+    std::unique_lock<std::mutex> lock(mMutex);
+    while (true)
+    {
+        mCv.wait(lock, [this] { return mStop || !mQueue.empty(); });
+        // On shutdown, deliver markers already accepted, but never past the drain deadline
+        if (mStop && !mQueue.empty() && std::chrono::steady_clock::now() >= mDrainDeadline)
+        {
+            MW_LOG_WARN("[M] Telemetry drain timeout on shutdown; dropping %zu queued markers", mQueue.size());
+            mQueue.clear();
+        }
+        if (mQueue.empty())
+        {
+            break;
+        }
+        Item item = std::move(mQueue.front());
+        mQueue.pop_front();
+        lock.unlock();
 
-PlayerTelemetry2::PlayerTelemetry2() {
-    PlayerTelemetry2("");
+        const auto start = std::chrono::steady_clock::now();
+        mSender(item);
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+
+        lock.lock();
+        if (elapsed > mSlowCallThreshold)
+        {
+            MW_LOG_WARN("[M] Telemetry marker %s took %lld ms", item.marker.c_str(),
+                        static_cast<long long>(elapsed.count()));
+            if (++mSlowCalls >= mMaxSlowCalls)
+            {
+                MW_LOG_ERR("[M] Telemetry disabled for %lld s after %u consecutive slow calls; dropping %zu queued markers",
+                           static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(mCooldown).count()),
+                           mSlowCalls, mQueue.size());
+                mDisabled = true;
+                mDisabledAt = std::chrono::steady_clock::now();
+                mQueue.clear();
+            }
+        }
+        else
+        {
+            mSlowCalls = 0;
+        }
+    }
+    lock.unlock();
+    if (mUninit)
+    {
+        mUninit();
+    }
 }
 
-PlayerTelemetry2::PlayerTelemetry2( const std::string &appName) : appName(appName) {
-    mInitializer.Init();	// deinit is done in destructor of PlayerTelemetryInitializer.
+namespace
+{
+PlayerTelemetryWorker &getTelemetryWorker()
+{
+    static PlayerTelemetryWorker worker(
+        [](const PlayerTelemetryWorker::Item &item)
+        {
+            char *marker = const_cast<char *>(item.marker.c_str());
+            T2ERROR t2Error = item.isEvent ? t2_event_d(marker, 1)
+                                           : t2_event_s(marker, const_cast<char *>(item.value.c_str()));
+            if (T2ERROR_SUCCESS != t2Error)
+            {
+                MW_LOG_ERR("[M] Telemetry event %s failed: %d", item.marker.c_str(), t2Error);
+                return false;
+            }
+            return true;
+        },
+        []()
+        {
+            t2_init(const_cast<char *>("mwplayer"));
+            MW_LOG_MIL("t2_init done ");
+        },
+        []()
+        {
+            t2_uninit();
+            MW_LOG_MIL("t2_uninit done ");
+        });
+    return worker;
+}
+} // namespace
+
+PlayerTelemetry2::PlayerTelemetry2() : PlayerTelemetry2("")
+{
+}
+
+PlayerTelemetry2::PlayerTelemetry2(const std::string &appName) : appName(appName)
+{
 }
 
 bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::string, int>& intData, const std::map<std::string, std::string>& stringData, const std::map<std::string, float>& floatData ) {
@@ -44,8 +166,6 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
 
     // Log entry and initializer status
 
-    bool init = mInitializer.isInitialized();
-    if(init)
     {
 
         cJSON *root = cJSON_CreateObject();
@@ -88,23 +208,10 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
 
         MW_LOG_INFO("[M] Marker Name: %s | JSON: %s", markerName.c_str(), jsonString);
 
-        T2ERROR t2Error = t2_event_s((char *)markerName.c_str(), jsonString);
-
-        if(T2ERROR_SUCCESS == t2Error)
-        {
-            bRet = true;
-        }
-        else
-        {
-            MW_LOG_ERR("[M] Telemetry event failed: %d", t2Error);
-        }
+        bRet = getTelemetryWorker().enqueue({markerName, jsonString, false});
 
         cJSON_free(jsonString);
         cJSON_Delete(root);
-    }
-    else
-    {
-        MW_LOG_ERR("[M] Telemetry initializer not ready");
     }
 
     return bRet;
@@ -113,25 +220,15 @@ bool PlayerTelemetry2::send( const std::string &markerName, const std::map<std::
 bool PlayerTelemetry2::send( const std::string &markerName, const char *  data)
 {
     bool bRet = false;
-    if(mInitializer.isInitialized()	&& NULL != data)
+    if(NULL != data)
     {
         MW_LOG_INFO("[S] Marker Name: %s value:%s", markerName.c_str(),data );
-        T2ERROR t2Error =  t2_event_s( (char *)markerName.c_str(),(char*)data );
-
-        if(T2ERROR_SUCCESS == t2Error)
-        {
-            bRet = true;
-        }
-        else
-        {
-            MW_LOG_ERR("t2_event_s string failed:%d ", t2Error);
-        }
+        bRet = getTelemetryWorker().enqueue({markerName, data, false});
     }
     return bRet;
 }
 void PlayerTelemetry2::sendEvent(const std::string& eventName)
 {
-    bool init = mInitializer.isInitialized();
     MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-    t2_event_d(const_cast<char*>(eventName.c_str()), 1);
+    getTelemetryWorker().enqueue({eventName, "", true});
 }
