@@ -49,10 +49,11 @@ PacketSender::~PacketSender()
 
 void PacketSender::Close()
 {
+    std::lock_guard<std::mutex> lock(mStartMutex);
     closeSenderTask();
-    if (mSubtecSocketHandle)
+    if (mSubtecSocketHandle >= 0)
         ::close(mSubtecSocketHandle);
-    mSubtecSocketHandle = 0;
+    mSubtecSocketHandle = -1;
 }
 
 void PacketSender::Flush()
@@ -103,16 +104,33 @@ void PacketSender::SendPacket(PacketPtr && packet)
 void PacketSender::senderTask()
 {
     std::unique_lock<std::mutex> lock(mPktMutex);
-    do {
-        running = true;
-        mCv.wait(lock);
-        while (!mPacketQueue.empty())
+    MW_LOG_WARN("PATCH_CONFIRM: PacketSender predicate-wait and unlocked-send loop active");
+    while (true)
+    {
+        MW_LOG_TRACE("PacketSender: waiting; running=%d queue size=%zu",
+            running.load(), mPacketQueue.size());
+        mCv.wait(lock, [this] {
+            return !mPacketQueue.empty() || !running.load();
+        });
+        MW_LOG_TRACE("PacketSender: awakened; running=%d queue size=%zu",
+            running.load(), mPacketQueue.size());
+
+        if (mPacketQueue.empty())
         {
-            sendPacket(std::move(mPacketQueue.front()));
-            mPacketQueue.pop();
-            MW_LOG_TRACE("PacketSender:  queue size %zu", mPacketQueue.size());
+            MW_LOG_INFO("PacketSender: sender task stopping; queue is empty");
+            break;
         }
-    } while(running);
+
+        PacketPtr packet = std::move(mPacketQueue.front());
+        mPacketQueue.pop();
+        MW_LOG_TRACE("PacketSender: dequeued packet; %zu packets remain",
+            mPacketQueue.size());
+
+        lock.unlock();
+        MW_LOG_TRACE("PacketSender: sending packet without queue mutex");
+        sendPacket(std::move(packet));
+        lock.lock();
+    }
 }
 
 bool PacketSender::IsRunning()
@@ -185,10 +203,18 @@ void PacketSender::sendPacket(PacketPtr && pkt)
 bool PacketSender::initSenderTask()
 {
     try {
+        {
+            std::lock_guard<std::mutex> lock(mPktMutex);
+            running = true;
+        }
         mSendThread = std::thread(runWorkerTask, this);
         MW_LOG_INFO("Thread created for runWorkerTask [%zx]", std::hash<std::thread::id>()(mSendThread.get_id()));
     }
     catch (const std::exception& e) {
+        {
+            std::lock_guard<std::mutex> lock(mPktMutex);
+            running = false;
+        }
         MW_LOG_WARN("PacketSender: Error in initSenderTask: %s", e.what());
         return false;
     }
@@ -198,16 +224,23 @@ bool PacketSender::initSenderTask()
 
 void PacketSender::closeSenderTask()
 {
-    if (running)
     {
-        running = false;
-        mCv.notify_all();
-        if (mSendThread.joinable())
+        std::lock_guard<std::mutex> lock(mPktMutex);
+        if (running)
         {
-            mSendThread.join();        
+            running = false;
+            MW_LOG_INFO("PacketSender: shutdown requested; %zu queued packets will be drained",
+                mPacketQueue.size());
         }
     }
+    mCv.notify_all();
 
+    if (mSendThread.joinable())
+    {
+        MW_LOG_TRACE("PacketSender: waiting for sender task to exit");
+        mSendThread.join();
+        MW_LOG_INFO("PacketSender: sender task stopped");
+    }
 }
 
 bool PacketSender::initSocket(const char *socket_path)
@@ -237,6 +270,7 @@ bool PacketSender::initSocket(const char *socket_path)
     if (::connect(mSubtecSocketHandle, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0)
     {
         ::close(mSubtecSocketHandle);
+        mSubtecSocketHandle = -1;
         MW_LOG_WARN("PacketSender: cannot connect to address \'%s\'", socket_path);
         return false;
     }

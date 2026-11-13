@@ -41,6 +41,7 @@
 #define AES_128_KEY_LEN_BYTES 16
 
 static std::mutex instanceLock;
+static std::mutex licenseAcquisitionThreadLock;
 
 /**
  * @brief key acquisition thread
@@ -165,6 +166,7 @@ DRMState AesDec::GetState()
 DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWaitTime)
 {
 	DrmReturn err = eDRM_ERROR;
+	std::lock_guard<std::mutex> threadLock(licenseAcquisitionThreadLock);
         std::unique_lock<std::mutex> lock(mMutex);
 
 	mAcquireKeyWaitTime = acquireKeyWaitTime;
@@ -173,25 +175,29 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 		MW_LOG_WARN("AesDec:: acquiring key in progress");
 		WaitForKeyAcquireCompleteUnlocked(mAcquireKeyWaitTime, err, lock );
 	}
-	mDrmInfo = *drmInfo;
-
 	if (!mDrmUrl.empty())
 	{
 		if ((eDRM_KEY_ACQUIRED == mDrmState) && (drmInfo->keyURI == mDrmUrl))
 		{
+			mDrmInfo = *drmInfo;
 			MW_LOG_TRACE("AesDec: same url:%s - not acquiring key", mDrmUrl.c_str());
 			return eDRM_SUCCESS;
 		}
 	}
+	std::thread previousAcquisitionThread;
+	if (licenseAcquisitionThreadId.joinable())
+	{
+		previousAcquisitionThread = std::move(licenseAcquisitionThreadId);
+		MW_LOG_WARN("PATCH_CONFIRM: AES joins the previous license thread outside mMutex");
+		lock.unlock();
+		previousAcquisitionThread.join();
+		lock.lock();
+	}
+	mDrmInfo = *drmInfo;
 	mDrmUrl = drmInfo->keyURI;
 	mDrmState = eDRM_ACQUIRING_KEY;
 	mPrevDrmState = eDRM_INITIALIZED;
 	this->GetCurlInitCb(mCurlInstance);
-
-	if (licenseAcquisitionThreadId.joinable())
-	{
-		licenseAcquisitionThreadId.join();
-	}
 
 	try
 	{
@@ -316,6 +322,7 @@ DrmReturn AesDec::Decrypt( int bucketTypeIn, void *encryptedDataPtr, size_t encr
 void AesDec::Release()
 {
 	DrmReturn err = eDRM_ERROR;
+	std::lock_guard<std::mutex> threadLock(licenseAcquisitionThreadLock);
 	std::unique_lock<std::mutex> lock(mMutex);
 	//We wait for license acquisition to complete. Once license acquisition is complete
 	//the appropriate state will be set to mDrmState and hence RestoreKeyState will be a no-op.
@@ -323,9 +330,13 @@ void AesDec::Release()
 	{
 		WaitForKeyAcquireCompleteUnlocked(mAcquireKeyWaitTime, err, lock );
 	}
+	std::thread acquisitionThread;
 	if (licenseAcquisitionThreadId.joinable())
 	{
-		licenseAcquisitionThreadId.join();
+		acquisitionThread = std::move(licenseAcquisitionThreadId);
+		lock.unlock();
+		acquisitionThread.join();
+		lock.lock();
 	}
 	mCond.notify_all();
 	if (-1 != mCurlInstance)
