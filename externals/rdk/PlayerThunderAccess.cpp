@@ -346,9 +346,9 @@ bool PlayerThunderAccess::GetResolutionFromDS_VIDEOIN(int & widthFromDS, int & h
 	JsonObject param;
     JsonObject result;
 
-    PlayerThunderAccess* thunderDsObj = new PlayerThunderAccess(PlayerThunderAccessPlugin::DS);
+    PlayerThunderAccess thunderDsObj(PlayerThunderAccessPlugin::DS);
 
-    if( thunderDsObj->InvokeJSONRPC("getCurrentResolution", param, result) )
+    if( thunderDsObj.InvokeJSONRPC("getCurrentResolution", param, result) )
     {
         widthFromDS = result["w"].Number();
         heightFromDS = result["h"].Number();
@@ -365,9 +365,9 @@ bool PlayerThunderAccess::GetScreenResolution(int & screenWidth, int & screenHei
     JsonObject param;
     JsonObject result;		
 
-    PlayerThunderAccess* thunderRDKShellObj = new PlayerThunderAccess(PlayerThunderAccessPlugin::RDKSHELL);
+    PlayerThunderAccess thunderRDKShellObj(PlayerThunderAccessPlugin::RDKSHELL);
 
-    if( thunderRDKShellObj->InvokeJSONRPC("getScreenResolution", param, result) )
+    if( thunderRDKShellObj.InvokeJSONRPC("getScreenResolution", param, result) )
     {
         screenWidth = result["w"].Number();
         screenHeight = result["h"].Number();
@@ -676,9 +676,9 @@ void PlayerThunderAccess::SetPreferredAudioLanguages_OTA(const std::string& pref
         JsonObject param;
 
         param["properties"] = properties;
-        PlayerThunderAccess* mediaSettingsObj = new PlayerThunderAccess(PlayerThunderAccessPlugin::MEDIASETTINGS);
-        mediaSettingsObj->ActivatePlugin();
-        rpcResult = mediaSettingsObj->InvokeJSONRPC("setProperties", param, result);
+        PlayerThunderAccess mediaSettingsObj(PlayerThunderAccessPlugin::MEDIASETTINGS);
+        mediaSettingsObj.ActivatePlugin();
+        rpcResult = mediaSettingsObj.InvokeJSONRPC("setProperties", param, result);
         if (rpcResult){
             if (!result["success"].Boolean()){
                 std::string responseStr;
