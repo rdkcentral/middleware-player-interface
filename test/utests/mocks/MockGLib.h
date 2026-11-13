@@ -35,7 +35,10 @@ public:
 	MOCK_METHOD(guint, g_idle_add_full, (gint priority, GSourceFunc function, gpointer data, GDestroyNotify notify));
 	MOCK_METHOD(gboolean, g_source_remove, (guint tag));
 	MOCK_METHOD(gpointer, g_malloc, (gsize n_bytes));
-	MOCK_METHOD(void, mock_g_free, (gpointer mem));
+#pragma push_macro("g_free")
+#undef g_free
+	MOCK_METHOD(void, g_free, (gpointer mem));
+#pragma pop_macro("g_free")
 	MOCK_METHOD(gpointer, g_realloc, (gpointer mem, gsize n_bytes));
 
 	MOCK_METHOD(void, g_object_set, (gpointer object, const gchar *property_name, int value));
