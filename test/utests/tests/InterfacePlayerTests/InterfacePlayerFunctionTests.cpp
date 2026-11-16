@@ -29,6 +29,7 @@
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
 #include <thread>
+#include <future>
 
 
 
@@ -2121,7 +2122,7 @@ TEST_F(InterfacePlayerTests, WaitForSourceSetup_Success)
 	std::thread setupThread([&]() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		{
-			std::lock_guard<std::mutex> lock(mInterfaceGstPlayer->mSourceSetupMutex);
+			std::lock_guard<std::mutex> lock(stream->sourceLock);
 			stream->sourceConfigured = true;
 		}
 		mInterfaceGstPlayer->mSourceSetupCV.notify_all();
@@ -2158,6 +2159,179 @@ TEST_F(InterfacePlayerTests, WaitForSourceSetup_PauseInjector)
 
 	EXPECT_FALSE(result);
 	EXPECT_FALSE(stream->sourceConfigured);
+}
+
+TEST_F(InterfacePlayerTests, WaitForSourceSetup_PauseInjectorWakesWaiter)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	{
+		std::lock_guard<std::mutex> lock(stream->sourceLock);
+		stream->sourceConfigured = false;
+	}
+
+	auto waiter = std::async(std::launch::async, [&]() {
+		return mInterfaceGstPlayer->WaitForSourceSetup(mediaType);
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	mInterfaceGstPlayer->PauseInjector();
+
+	EXPECT_EQ(waiter.wait_for(std::chrono::milliseconds(250)), std::future_status::ready);
+	EXPECT_FALSE(waiter.get());
+}
+
+class InterfacePlayerInjectionTests : public InterfacePlayerTests
+{
+protected:
+	GstElement source = {.object = {.name = (gchar *)"source"}};
+	GstBuffer buffer = {};
+	GstPad pad = {};
+	gst_media_stream *stream = nullptr;
+	std::unique_ptr<void, GDestroyNotify> payload{nullptr, nullptr};
+
+	void SetUp() override
+	{
+		InterfacePlayerTests::SetUp();
+		stream = &mPlayerContext->stream[eGST_MEDIATYPE_VIDEO];
+		stream->format = GST_FORMAT_VIDEO_ES_H264;
+		stream->source = &source;
+		stream->sourceConfigured = true;
+		mPlayerConfigParams->enablePTSReStamp = false;
+		mPlayerConfigParams->enableGstPosQuery = 0;
+		mPlayerConfigParams->vodTrickModeFPS = 0;
+		ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::ReturnArg<0>());
+		ON_CALL(*g_mockGStreamer, gst_element_get_state(_, _, _, _))
+			.WillByDefault(DoAll(SetArgPointee<1>(GST_STATE_NULL),
+				SetArgPointee<2>(GST_STATE_VOID_PENDING), Return(GST_STATE_CHANGE_SUCCESS)));
+		ON_CALL(*g_mockGStreamer, gst_element_set_state(_, _)).WillByDefault(Return(GST_STATE_CHANGE_SUCCESS));
+		ON_CALL(*g_mockGStreamer, gst_element_send_event(_, _)).WillByDefault(Return(TRUE));
+		ON_CALL(*g_mockGStreamer, gst_element_get_static_pad(_, _)).WillByDefault(Return(&pad));
+		ON_CALL(*g_mockGStreamer, gst_buffer_new_wrapped_full(_, _, _, _, _, _, _))
+			.WillByDefault([this](GstMemoryFlags, gpointer, gsize, gsize, gsize,
+				gpointer userData, GDestroyNotify notify) {
+				payload = std::unique_ptr<void, GDestroyNotify>(userData, notify);
+				return &buffer;
+			});
+		ON_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, _))
+			.WillByDefault([this](GstAppSrc *, GstBuffer *) {
+				payload.reset();
+				return GST_FLOW_OK;
+			});
+	}
+
+	bool Inject()
+	{
+		bool discontinuity = false, notifyFirstBuffer = false, newSegment = false;
+		bool resetTrickUTC = false, firstPushed = false;
+		return mInterfaceGstPlayer->SendHelper(eGST_MEDIATYPE_VIDEO,
+			MediaSample(std::vector<uint8_t>{1, 2, 3}, 1.0, 1.0, 0.04),
+			false, discontinuity, notifyFirstBuffer, newSegment, resetTrickUTC, firstPushed);
+	}
+};
+
+TEST_F(InterfacePlayerInjectionTests, TearDownFlushesBlockedPushBeforeDrainingIt)
+{
+	std::promise<void> pushing;
+	auto pushingFuture = pushing.get_future();
+	std::mutex mutex;
+	std::condition_variable cv;
+	bool stopped = false;
+	std::atomic<bool> pushReturned{false};
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, &buffer))
+		.WillOnce([&](GstAppSrc *, GstBuffer *) {
+			const bool lockAvailable = stream->sourceLock.try_lock();
+			EXPECT_TRUE(lockAvailable);
+			if (lockAvailable) stream->sourceLock.unlock();
+			pushing.set_value();
+			std::unique_lock<std::mutex> lock(mutex);
+			EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&] { return stopped; }));
+			payload.reset();
+			pushReturned = true;
+			return GST_FLOW_FLUSHING;
+		});
+	{
+		::testing::InSequence shutdown;
+		EXPECT_CALL(*g_mockGStreamer, gst_element_send_event(&source, _)).WillOnce(Return(TRUE));
+		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&source, GST_STATE_NULL))
+			.WillOnce([&](GstElement *, GstState) {
+				const bool lockAvailable = stream->sourceLock.try_lock();
+				EXPECT_TRUE(lockAvailable);
+				if (lockAvailable) stream->sourceLock.unlock();
+				{
+					std::lock_guard<std::mutex> lock(mutex);
+					stopped = true;
+				}
+				cv.notify_all();
+				return GST_STATE_CHANGE_SUCCESS;
+			});
+	}
+	std::thread injector([&] { Inject(); });
+	EXPECT_EQ(pushingFuture.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
+	injector.join();
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_FALSE(Inject());
+}
+
+TEST_F(InterfacePlayerInjectionTests, TearDownCancelsInjectorWaitingForSourceSetup)
+{
+	stream->sourceConfigured = false;
+	bool accepted = true;
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, _)).Times(0);
+	std::thread injector([&] { accepted = Inject(); });
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+	bool injecting = false;
+	while (std::chrono::steady_clock::now() < deadline)
+	{
+		if (!stream->injectionMutex.try_lock())
+		{
+			injecting = true;
+			break;
+		}
+		stream->injectionMutex.unlock();
+		std::this_thread::yield();
+	}
+	EXPECT_TRUE(injecting);
+	const auto start = std::chrono::steady_clock::now();
+	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
+	injector.join();
+	EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(500));
+	EXPECT_FALSE(accepted);
+}
+
+TEST_F(InterfacePlayerInjectionTests, UnexpectedPushFailureReturnsFalseAndReleasesLocks)
+{
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, &buffer))
+		.WillOnce([this](GstAppSrc *, GstBuffer *) {
+			payload.reset();
+			return GST_FLOW_ERROR;
+		});
+
+	EXPECT_FALSE(Inject());
+	EXPECT_TRUE(stream->sourceLock.try_lock());
+	stream->sourceLock.unlock();
+	EXPECT_TRUE(stream->injectionMutex.try_lock());
+	stream->injectionMutex.unlock();
+}
+
+TEST_F(InterfacePlayerInjectionTests, FirstBufferEventsUseRetainedSource)
+{
+	GstElement replacement = {.object = {.name = (gchar *)"replacement"}};
+	stream->resetPosition = true;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&source))
+		.WillOnce([&](gpointer object) {
+			stream->source = &replacement;
+			return object;
+		});
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&source, StrEq("src")))
+		.Times(::testing::AtLeast(2))
+		.WillRepeatedly(Return(&pad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&replacement, _)).Times(0);
+
+	EXPECT_TRUE(Inject());
+	stream->source = &source;
 }
 
 TEST_F(InterfacePlayerTests, HandleVideoBufferSent_SubsequentBuffer)
@@ -3235,6 +3409,27 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success)
 	int retvalue = mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl);
 
 	EXPECT_EQ(retvalue, 0);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinActivationFails)
+{
+	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
+	std::string manifestUrl = "http://example.com/manifest.mpd";
+	GstElement playbin = {.object = {.name = (gchar *)"playbin"}};
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(&playbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&gst_element_pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&playbin))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&gst_element_pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl), -1);
+	EXPECT_EQ(mPlayerContext->stream[streamId].sinkbin, nullptr);
+	EXPECT_TRUE(mPlayerContext->stream[streamId].tearingDown);
 }
 
 TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinCreationFails)
