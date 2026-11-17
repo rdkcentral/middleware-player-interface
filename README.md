@@ -73,6 +73,24 @@ classDef VL stroke:#808080,fill:#F2F2F2,stroke-width:2px;
 
 ## Design
 
+### Content protection session identifiers
+
+SecManager playback session identifiers are opaque strings. The player retains
+and reuses the service-provided value unchanged for license updates, session
+state, playback position, video window size, watermark operations, and release.
+No integer conversion or UUID generation is performed by the player.
+
+An empty identifier is invalid for a normal session. Only the explicit
+startup cleanup request uses an empty string to close all sessions for the
+`player` client; releasing an invalid session must not invoke close-all.
+
+This requires a coordinated upgrade of AAMP, both player-interface libraries,
+and their consumers, with a string-ID-capable SecManager and, for the Firebolt
+path, ContentProtection and its interface/bindings. Integer-ID services and
+mixed old/new binaries are not supported. The AAMP `watermarkSessionUpdate`
+event exposes the service ID as a string in `sessionHandle`; applications
+must not assume it is numeric.
+
 `middleware-player-interface` is designed around the principle of separating the GStreamer pipeline control plane from the platform-specific and external integration concerns. The core library (`libplayergstinterface`) owns the GStreamer pipeline state machine and multi-track data flow, while the externals library (`libplayerfbinterface`) abstracts all out-of-process integrations. Both libraries are loaded as shared objects and linked by the consumer player engine at runtime. The design uses a private implementation object (`InterfacePlayerPriv` / `GstPlayerPriv`) to keep GStreamer internal state hidden from the public header, allowing the library's ABI to remain stable as internal state grows.
 
 Pipeline configuration is driven by a `Configs` structure populated at tune time. Format selection for each track (video, audio, subtitle) is expressed as `GstStreamOutputFormat` enumerations, and the `ConfigurePipeline` method selects and connects the appropriate GStreamer elements accordingly. Bus messages from the pipeline are processed via registered `BusMessageCallback` and converted into typed `BusEventData` before being dispatched to the player engine. GStreamer callbacks registered with the bus and pipeline elements are guarded by `GstHandlerControl` scope-helpers (via the `HANDLER_CONTROL_HELPER` macro on the `aSyncControl`, `syncControl`, and `callbackControl` gates) to prevent execution after pipeline teardown. First-frame and EOS notifications are instead dispatched through `PlayerScheduler`, and progress notification runs on a GLib timeout; those paths do not acquire a `GstHandlerControl` scope.

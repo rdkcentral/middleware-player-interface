@@ -51,12 +51,12 @@ extern MockOpenCdmSessionAdapter *g_mockOpenCdmSessionAdapter;
 class TestableDrmSessionManager : public DrmSessionManager
 {
 public:
-	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback)
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallback)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback), mMaxSessions(maxDrmSessions)
 	{
 	}
 
-	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallback, DrmSessionCreator creator)
+	TestableDrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallback, DrmSessionCreator creator)
 		: DrmSessionManager(maxDrmSessions, player, watermarkCallback, std::move(creator)), mMaxSessions(maxDrmSessions)
 	{
 	}
