@@ -24,7 +24,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Weffc++"
 #ifndef DISABLE_SECURITY_TOKEN
-#include <securityagent/SecurityTokenUtil.h>
+#include "PlayerSecurityToken.h"
 #endif
 #pragma GCC diagnostic pop
 #include "PlayerThunderAccess.h"
@@ -127,7 +127,7 @@ PlayerThunderAccess::PlayerThunderAccess(PlayerThunderAccessPlugin callsign)
     if(!gPlayerSecurityData.tokenQueried)
     {
         unsigned char buffer[MAX_LENGTH] = {0};
-        gPlayerSecurityData.tokenStatus = GetSecurityToken(MAX_LENGTH,buffer);
+        gPlayerSecurityData.tokenStatus = PlayerGetSecurityToken(MAX_LENGTH,buffer);
         if(gPlayerSecurityData.tokenStatus > 0){
             // LOG_INFO( "[ThunderAccess] : GetSecurityToken success");
             sToken = (char*)buffer;

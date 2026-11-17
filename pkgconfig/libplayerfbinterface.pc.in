@@ -9,4 +9,4 @@ Version: @PROJECT_VERSION@
 Requires: gstreamer-1.0, gstreamer-app-1.0, gstreamer-video-1.0
 Requires.private: libplayerlogmanager, libbaseconversion, libplayerjsonobject
 Libs: -L${libdir} -lplayerfbinterface
-Cflags: -I${includedir}
+Cflags: -I${includedir} @PLAYER_THUNDER_CFLAGS@
