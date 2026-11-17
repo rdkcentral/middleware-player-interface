@@ -439,6 +439,13 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 						cbData = 0;
 						break;
 					}
+					// PLI-036: reject subsample ranges that run past the mapped buffer before memcpy.
+					if ((uint64_t)iCurrSource + nBytesClear + nBytesEncrypted > bufferMap.size)
+					{
+						MW_LOG_ERR("ClearKeySession: ERROR : subsample range exceeds buffer size");
+						cbData = 0;
+						break;
+					}
 					// Skip the clear byte range from source buffer.
 					iCurrSource += nBytesClear;
 
