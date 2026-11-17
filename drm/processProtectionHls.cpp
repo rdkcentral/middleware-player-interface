@@ -71,7 +71,7 @@ static int GetFieldValue(string &attrName, string keyName, string &valuePtr){
 		 keyName.c_str());
 
 		valueStartPos = foundpos + keylen;
-		if (attrName.at(valueStartPos) == '=')
+		if (valueStartPos < attrName.length() && attrName[valueStartPos] == '=')
 		{
 			string valueTempPtr = attrName.substr(valueStartPos+1);
 
@@ -80,7 +80,7 @@ static int GetFieldValue(string &attrName, string keyName, string &valuePtr){
 
 			/* update start position based on substring */
 			valueStartPos = 0;
-			if (valueTempPtr.at(0) == '"')
+			if (!valueTempPtr.empty() && valueTempPtr[0] == '"')
 			{
 				valueTempPtr = valueTempPtr.substr(1);
 				valueEndPos = (int)valueTempPtr.find('"');
