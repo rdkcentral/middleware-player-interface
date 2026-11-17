@@ -136,8 +136,10 @@ public:
 	 *        in-flight decrypt() operations that already acquired the guard
 	 *        have completed, making it safe to free the object.
 	 * @param timeoutMs maximum time to wait for in-flight operations to drain.
+	 * @retval true if in-flight operations drained to zero and delete is safe,
+	 *         false if timeout elapsed with active operations still present.
 	 */
-	void PrepareForDestruction(uint32_t timeoutMs = 3000);
+	bool PrepareForDestruction(uint32_t timeoutMs = 3000);
 
 
 	/**

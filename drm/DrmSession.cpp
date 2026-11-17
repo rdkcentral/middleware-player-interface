@@ -25,6 +25,7 @@
 #include "DrmSession.h"
 #include "PlayerLogManager.h"
 #include <chrono>
+#include <limits>
 
 /**
  * @brief Constructor for DrmSession.
@@ -50,9 +51,15 @@ DrmSession::~DrmSession()
  */
 bool DrmSession::AcquireForUse()
 {
+	// PLI-025: Guard active-operation counter overflow before increment.
 	std::lock_guard<std::mutex> lock(mLifecycleMutex);
 	if (mMarkedForDestruction)
 	{
+		return false;
+	}
+	if (mActiveOperations == std::numeric_limits<int>::max())
+	{
+		MW_LOG_ERR("DrmSession::AcquireForUse : mActiveOperations overflow guard hit");
 		return false;
 	}
 	mActiveOperations++;
@@ -79,8 +86,9 @@ void DrmSession::ReleaseAfterUse()
  * @brief DELIA-70726 fix: Block deletion of this session until any decrypt()
  *        call already in progress (having acquired the guard) has finished.
  */
-void DrmSession::PrepareForDestruction(uint32_t timeoutMs)
+bool DrmSession::PrepareForDestruction(uint32_t timeoutMs)
 {
+	// PLI-025: Return explicit drain status so caller can avoid unsafe delete/reuse.
 	std::unique_lock<std::mutex> lock(mLifecycleMutex);
 	mMarkedForDestruction = true;
 	if (mActiveOperations > 0)
@@ -90,8 +98,10 @@ void DrmSession::PrepareForDestruction(uint32_t timeoutMs)
 		if (mActiveOperations > 0)
 		{
 			MW_LOG_ERR("DrmSession::PrepareForDestruction : timed out waiting for in-flight decrypt operation(s); proceeding with destruction");
+			return false;
 		}
 	}
+	return true;
 }
 
 /**
