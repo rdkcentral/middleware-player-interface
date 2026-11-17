@@ -200,7 +200,7 @@ static void TransformToEncryptedCaps(GstCaps *caps, const char *drmSystem)
 /*InterfacePlayerRDK constructor*/
 InterfacePlayerRDK::InterfacePlayerRDK(bool isRialto) :
 mProtectionLock(), mPauseInjector(false), mSourceSetupMutex(), stopCallback(NULL), tearDownCb(NULL), notifyFirstFrameCallback(NULL),
-mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(NULL), mEncrypt(NULL), mDRMSessionManager(NULL),
+mSourceSetupCV(), callbackMap(), setupStreamCallbackMap(), mDrmSystem(), mEncrypt(NULL), mDRMSessionManager(NULL),
 trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), PipelineSetToReady(false),idleCallbackControl()
 {
 	interfacePlayerPriv = new InterfacePlayerPriv(isRialto);
@@ -240,10 +240,6 @@ InterfacePlayerRDK::~InterfacePlayerRDK()
 	CancelPendingCallbacks();
 	interfacePlayerPriv->gstPrivateContext->StopConfigureToFirstFrameProfile();
 	DestroyPipeline();
-	if (mDrmSystem)
-	{
-		delete[] mDrmSystem;
-	}
 	/* safe delete configuration parameter */
 	MW_SAFE_DELETE(m_gstConfigParam);
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
@@ -302,6 +298,8 @@ aSyncControl(), syncControl(), callbackControl(), seekPosition(0)
 	 * using the westerossink connected using westeros compositor.
 	 */
 	strcpy(videoRectangle, "");
+	videoRectangleWidth = 0;
+	videoRectangleHeight = 0;
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	{
 		protectionEvent[i] = NULL;
@@ -460,6 +458,14 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 	{
 		MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: private context not initialized, aborting configure");
 		return;
+	}
+	{
+		std::unique_lock<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		if (!interfacePlayerPriv->gstPrivateContext->mTeardownCV.wait_for(teardownLock, std::chrono::milliseconds(3000),
+			[this]{ return !interfacePlayerPriv->gstPrivateContext->mTeardownInProgress; }))
+		{
+			MW_LOG_ERR("InterfacePlayerRDK::ConfigurePipeline: timed out waiting for prior TearDownStream to complete");
+		}
 	}
 #ifdef ENABLE_RDKPERF
 	interfacePlayerPriv->gstPrivateContext->StartConfigureToFirstFrameProfile();
@@ -1088,20 +1094,15 @@ void InterfacePlayerRDK::SetPreferredDRM(const char *drmID)
 {
 	if (drmID != NULL)
 	{
-		if (mDrmSystem != NULL)
-		{
-			delete[] mDrmSystem;
-		}
-		mDrmSystem = new char[strlen(drmID) + 1];
-		if (mDrmSystem != NULL)
-		{
-			strcpy(mDrmSystem, drmID);
-		}
-		else
-		{
-			MW_LOG_ERR("Memory allocation failed for mDrmSystem\n");
-		}
+		std::lock_guard<std::mutex> lock(mDrmSystemMutex);
+		mDrmSystem = drmID;
 	}
+}
+
+std::string InterfacePlayerRDK::GetPreferredDRM() const
+{
+	std::lock_guard<std::mutex> lock(mDrmSystemMutex);
+	return mDrmSystem;
 }
 
 /**
@@ -1661,6 +1662,10 @@ void InterfacePlayerRDK::TearDownStream(int type)
 
 		return; // ISSUE MARKER: bug condition met here -- would otherwise index out of bounds below
 	}
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = true;
+	}
 	tearDownCb(true, type);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	RemoveProbe(type);
@@ -1745,7 +1750,34 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_lock(&stream->sourceLock);
 		if (stream->sinkbin)
 		{
-			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, clearing");
+			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC sinkbin still assigned, tearing down before clearing");
+			if (interfacePlayerPriv->gstPrivateContext->pipeline)
+			{
+				GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+				if (GST_STATE_CHANGE_FAILURE != nullRc)
+				{
+					GstState current = GST_STATE_VOID_PENDING;
+					GstState pending = GST_STATE_VOID_PENDING;
+					gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+					do
+					{
+						(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+					}
+					while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+					if (current != GST_STATE_NULL)
+					{
+						MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: CC sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+						if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+						{
+							MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: forced NULL state change failed for CC sinkbin");
+						}
+					}
+				}
+				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+				{
+					MW_LOG_INFO("InterfacePlayerRDK::TearDownStream: Unable to remove CC sinkbin from pipeline");
+				}
+			}
 			g_clear_object(&stream->sinkbin);
 		}
 		if (stream->source)
@@ -1756,6 +1788,11 @@ void InterfacePlayerRDK::TearDownStream(int type)
 		pthread_mutex_unlock(&stream->sourceLock);
 	}
 	tearDownCb(false, mediaType);
+	{
+		std::lock_guard<std::mutex> teardownLock(interfacePlayerPriv->gstPrivateContext->mTeardownMutex);
+		interfacePlayerPriv->gstPrivateContext->mTeardownInProgress = false;
+	}
+	interfacePlayerPriv->gstPrivateContext->mTeardownCV.notify_all();
 	MW_LOG_MIL("InterfacePlayerRDK::TearDownStream: exit mediaType = %d", mediaType);
 }
 
@@ -2282,7 +2319,8 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		if (stream->codecInfo.mIsEncrypted && IsElementaryStreamFormat(static_cast<GstStreamOutputFormat>(stream->format)))
 		{
 			MW_LOG_DEBUG("Applying encrypted caps during source configuration for type[%d] format[%d]", mediaType, stream->format);
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar *capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting caps for source[type:%d]: %s", mediaType, capsStr);
@@ -2584,7 +2622,34 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 	// Check elements are not already assigned
 	if (stream->sinkbin)
 	{
-		MW_LOG_ERR("Sinkbin already assigned");
+		MW_LOG_WARN("Sinkbin already assigned, tearing down before clearing");
+		if (privatePlayer->gstPrivateContext->pipeline)
+		{
+			GstStateChangeReturn nullRc = SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+			if (GST_STATE_CHANGE_FAILURE != nullRc)
+			{
+				GstState current = GST_STATE_VOID_PENDING;
+				GstState pending = GST_STATE_VOID_PENDING;
+				gint retryCnt = GST_ELEMENT_GET_STATE_RETRY_CNT_MAX;
+				do
+				{
+					(void)gst_element_get_state(GST_ELEMENT(stream->sinkbin), &current, &pending, 100 * GST_MSECOND);
+				}
+				while ((current != GST_STATE_NULL) && (--retryCnt > 0));
+				if (current != GST_STATE_NULL)
+				{
+					MW_LOG_ERR("Sinkbin did not reach NULL (current=%s), forcing", gst_element_state_get_name(current));
+					if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL))
+					{
+						MW_LOG_ERR("SetupClosedCaptionControlStream: forced NULL state change failed for stale sinkbin");
+					}
+				}
+			}
+			if (!gst_bin_remove(GST_BIN(privatePlayer->gstPrivateContext->pipeline), GST_ELEMENT(stream->sinkbin)))
+			{
+				MW_LOG_INFO("Unable to remove stale sinkbin from pipeline");
+			}
+		}
 		g_clear_object(&stream->sinkbin);
 	}
 	if (privatePlayer->gstPrivateContext->subtitle_sink)
@@ -3334,14 +3399,13 @@ long InterfacePlayerRDK::GetDurationMilliseconds(void)
  */
 void InterfacePlayerRDK::GetVideoSize(int &width, int &height)
 {
-	int x;
-	int y;
-	int w = 0;
-	int h = 0;
-	if ((4 == sscanf(interfacePlayerPriv->gstPrivateContext->videoRectangle, "%d,%d,%d,%d", &x, &y, &w, &h)) && (w > 0) && (h > 0))
+	// Use the dimensions cached by SetVideoRectangle() instead of re-parsing
+	// the "x,y,w,h" string on every call.
+	if (interfacePlayerPriv->gstPrivateContext->videoRectangleWidth > 0 &&
+	    interfacePlayerPriv->gstPrivateContext->videoRectangleHeight > 0)
 	{
-		width = w;
-		height = h;
+		width  = interfacePlayerPriv->gstPrivateContext->videoRectangleWidth;
+		height = interfacePlayerPriv->gstPrivateContext->videoRectangleHeight;
 	}
 }
 
@@ -3381,6 +3445,8 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 		return;
 	}
 	snprintf(interfacePlayerPriv->gstPrivateContext->videoRectangle, sizeof(interfacePlayerPriv->gstPrivateContext->videoRectangle), "%d,%d,%d,%d", x,y,w,h);
+	interfacePlayerPriv->gstPrivateContext->videoRectangleWidth  = w;
+	interfacePlayerPriv->gstPrivateContext->videoRectangleHeight = h;
 	MW_LOG_MIL("Rect %s, video_sink =%p",
 			   interfacePlayerPriv->gstPrivateContext->videoRectangle, interfacePlayerPriv->gstPrivateContext->video_sink);
 	if (m_gstConfigParam->enableRectPropertyCfg)
@@ -5894,10 +5960,11 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 			gst_message_parse_context_type(msg, &contextType);
 			if (!g_strcmp0(contextType, "drm-preferred-decryption-system-id"))
 			{
-				MW_LOG_MIL("Setting %s as preferred drm",pInterfacePlayerRDK->mDrmSystem);
+				const std::string drmSystem = pInterfacePlayerRDK->GetPreferredDRM();
+				MW_LOG_MIL("Setting %s as preferred drm", drmSystem.c_str());
 				GstContext* context = gst_context_new("drm-preferred-decryption-system-id", FALSE);
 				GstStructure* contextStructure = gst_context_writable_structure(context);
-				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, pInterfacePlayerRDK->mDrmSystem,  NULL);
+				gst_structure_set(contextStructure, "decryption-system-id", G_TYPE_STRING, drmSystem.empty() ? NULL : drmSystem.c_str(),  NULL);
 				gst_element_set_context(GST_ELEMENT(GST_MESSAGE_SRC(msg)), context);
 			}
 
@@ -6385,7 +6452,8 @@ void InterfacePlayerRDK::SetStreamCaps(GstMediaType type, MediaCodecInfo&& codec
 		}
 		if (codecInfo.mIsEncrypted)
 		{
-			TransformToEncryptedCaps(caps, mDrmSystem);
+			const std::string drmSystem = GetPreferredDRM();
+			TransformToEncryptedCaps(caps, drmSystem.empty() ? NULL : drmSystem.c_str());
 		}
 		gchar* capsStr = gst_caps_to_string(caps);
 		MW_LOG_MIL("Setting stream caps for type[%d] format[%d]: %s", type, codecInfo.mCodecFormat, capsStr);

@@ -26,6 +26,7 @@ include_directories(${PLAYER_ROOT}/subtec/libsubtec)
 include_directories(${PLAYER_ROOT}/subtec/subtecparser)
 include_directories(${PLAYER_ROOT}/playerJsonobject)
 include_directories(${PLAYER_ROOT}/baseConversion)
+include_directories(${PLAYER_ROOT}/playerLogManager)
 
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${GMOCK_INCLUDE_DIRS})

@@ -41,6 +41,7 @@ include_directories(${PLAYER_ROOT}/../)
 
 set(TEST_SOURCES PlayerIsoBmffTestRunner.cpp
 		PlayerIsoBmffBoxTests.cpp
+		PlayerIsoBmffBoxParseTests.cpp
 		PlayerIsoBmffBufferTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp
@@ -61,6 +62,7 @@ endif()
 if (COVERAGE_ENABLED)
     include(CodeCoverage)
     APPEND_COVERAGE_COMPILER_FLAGS()
+    player_utest_add_cov(${EXEC_NAME})
 endif()
 
 if (CMAKE_PLATFORM_UBUNTU)
