@@ -31,6 +31,11 @@
 #include "GstUtils.h"
 #include <string>
 #include <atomic>
+
+#include <mutex>
+#include <condition_variable>
+
+
 #include <utility>
 #include <memory>
 #include "DrmHelper.h"
@@ -186,6 +191,13 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
+
+  
+	std::mutex mLifecycleMutex;
+	std::condition_variable mLifecycleCV;
+	int mActiveCallbackOps = 0;
+	bool mMarkedForDestruction = false;
+
 	DrmSessionCreator m_sessionCreator;
 	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
@@ -297,6 +309,22 @@ public:
 	 *  @fn ~DrmSessionManager
 	 */
 	~DrmSessionManager();
+	
+	/**
+	 * @fn AcquireForCallback
+	 * @brief DELIA-70726-style guard: must be called by any external caller (e.g. the
+	 *        GStreamer decryptor element) before invoking any callback/method on a
+	 *        DrmSessionManager obtained via a raw/cached pointer. Returns false if this
+	 *        instance is being torn down, in which case it must not be used further.
+	 */
+	bool AcquireForCallback();
+
+	/**
+	 * @fn ReleaseAfterCallback
+	 * @brief Must be called exactly once for every successful AcquireForCallback().
+	 */
+	void ReleaseAfterCallback();
+
 	/**
 	 *  @fn 	createDrmSession
 	 *  @param[in]	err - To retrieve the error case  and to report to application 
