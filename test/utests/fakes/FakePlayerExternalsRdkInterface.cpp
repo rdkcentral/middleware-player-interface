@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <functional>
+#include <mutex>
 
 // Enum and type definitions for standalone fake implementation
 enum dsDisplayEvent_t {
@@ -105,6 +106,7 @@ private:
 	// Static pointer to allow resetting the singleton for test isolation
 	// Using inline to avoid multiple definition errors when this file is included
 	inline static std::shared_ptr<PlayerExternalsRdkInterface> s_instance = nullptr;
+	std::mutex m_resolutionMutex;
 
 public:
 	static std::shared_ptr<PlayerExternalsRdkInterface> GetPlayerExternalsRdkInterfaceInstance()
@@ -150,12 +152,14 @@ public:
 
 	void GetDisplayResolution(int &width, int &height)
 	{
+		std::lock_guard<std::mutex> lock(m_resolutionMutex);
 		width = m_displayWidth;
 		height = m_displayHeight;
 	}
 
 	void SetResolution(int width, int height)
 	{
+		std::lock_guard<std::mutex> lock(m_resolutionMutex);
 		// Validate input: reject zero, negative, or out-of-range values
 		if (width <= 0 || height <= 0 || 
 		    width < MIN_RESOLUTION || width > MAX_RESOLUTION ||
@@ -267,6 +271,7 @@ public:
 	 */
 	void Reset()
 	{
+		std::lock_guard<std::mutex> lock(m_resolutionMutex);
 		ResetFakePlayerExternalsRdkInterfaceState();
 	}
 };

@@ -29,8 +29,7 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
-#include <atomic>
-#include <fstream>
+#include "PlayerLogManager.h"
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -40,29 +39,6 @@
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
 
 
-namespace
-{
-std::atomic_uint32_t gVideoWindowSizeInjectionCount{0};
-constexpr const char* kVideoWindowSizeInjectionFile =
-	"/tmp/videowindowsize-inject-count";
-
-bool ShouldInjectVideoWindowSizeError(uint32_t callCount)
-{
-	std::ifstream injectionFile(kVideoWindowSizeInjectionFile);
-	uint32_t injectAtCount = 0;
-
-	// Missing, unreadable, empty, or non-numeric file disables injection.
-	if (!(injectionFile >> injectAtCount) || injectAtCount == 0)
-	{
-		return false;
-	}
-
-	return callCount == injectAtCount;
-}
-} // namespace
-#ifdef PLAYER_TELEMETRY_SUPPORT
-#include "PlayerTelemetry2.hpp"
-#endif
 /**
  * @brief KeyIdEntries constructor.
  */
@@ -74,8 +50,8 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
-		cachedKeyIDs(NULL), accessToken(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
+		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
@@ -89,8 +65,8 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mFirstFrameSeen(false)
 		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
-	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
-	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
+	drmSessionContexts	= std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
+	cachedKeyIDs		= std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 	m_drmConfigParam = new configs();
 	playerSecInstance = new PlayerSecInterface();
 
@@ -106,8 +82,6 @@ DrmSessionManager::~DrmSessionManager()
 {
 	clearAccessToken();
 	clearSessionData();
-	MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-	MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 	MW_SAFE_DELETE(playerSecInstance);
 	MW_SAFE_DELETE(m_drmConfigParam);
 	ContentSecurityManager::setWatermarkSessionEvent_CB(nullptr);
@@ -257,54 +231,6 @@ void DrmSessionManager::setVideoWindowSize(int width, int height)
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
-		const int originalWidth = width;
-		const int originalHeight = height;
-		const uint32_t callCount = ++gVideoWindowSizeInjectionCount;
-		bool injectedZeroDimension = false;
-
-		// /tmp/videowindowsize-inject-count specifies the invocation on
-		// which zero-size telemetry should be injected.
-		if (ShouldInjectVideoWindowSizeError(callCount))
-		{
-			width = 0;
-			height = 0;
-			injectedZeroDimension = true;
-			MW_LOG_WARN("setVideoWindowSize: injecting zero dimensions at "
-						"count=%u; original width=%d height=%d",
-						callCount, originalWidth, originalHeight);
-		}
-
-		if (width == 0 || height == 0)
-		{
-
-#ifdef PLAYER_TELEMETRY_SUPPORT
-			std::map<std::string, int> intMetrics;
-			std::map<std::string, std::string> stringMetrics;
-			std::map<std::string, float> floatMetrics;
-
-			intMetrics["width"] = width;
-			intMetrics["height"] = height;
-
-			intMetrics["injected"] = injectedZeroDimension ? 1 : 0;
-			intMetrics["setVideoWindowSizeCount"] =
-				static_cast<int>(callCount);
-
-			stringMetrics["component"] = "AampLicenseManager";
-			stringMetrics["action"] = "setVideoWindowSize";
-			stringMetrics["reason"] = "watermark_enabled_zero_dimension";
-
-	                PlayerTelemetry2 telemetry;
-			telemetry.send("TELEMETRY_WATERMARK_ZERO_DIMENSION", intMetrics, stringMetrics, floatMetrics);
-#endif
-			
-			// Do not send intentionally injected dimensions to SecManager.
-			// Genuine zero dimensions retain the existing behavior.
-			if (injectedZeroDimension)
-			{
-				width = originalWidth;
-				height = originalHeight;
-			}
-		}
 		ContentSecurityManager::GetInstance()->setVideoWindowSize(localSession.getSessionID(), width, height);
 	}
 }
@@ -557,7 +483,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	/**
 	 * Create drm session without primaryKeyId markup OR retrieve old DRM session.
 	 */
-	code = getDrmSession(err, drmHelper, selectedSlot,  Instance);
+	{
+		PI_PROFILE_SCOPE("drm_session_lookup");
+		code = getDrmSession(err, drmHelper, selectedSlot, Instance);
+	}
 	/**
 	 * KEY_READY code indicates that a previously created session is being reused.
 	 */
@@ -580,7 +509,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		MW_LOG_WARN(" Unable to get DrmSession : Key State %d ", code);
 		return nullptr;
 	}
-	code = initializeDrmSession(drmHelper, selectedSlot,  err);
+	{
+		PI_PROFILE_SCOPE("drm_session_init");
+		code = initializeDrmSession(drmHelper, selectedSlot, err);
+	}
 	if (code != KEY_INIT)
 	{
 		MW_LOG_WARN(" Unable to initialize DrmSession : Key State %d, err code: %d", code, err);
@@ -614,7 +546,42 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
+	/*
+	 * Capture whether this license request will run on a pooled (re-used)
+	 * SecManager session before the call is made. A pooled session may still be
+	 * bound to input data from previous content; a license delivered on it can
+	 * leave the required keyIds unusable even though the call reported success
+	 * (RDKEMW-24407). Keep a DrmHelper copy for the potential retry, since
+	 * AcquireLicenseCb consumes drmHelper.
+	 */
+	bool reusingPooledSession = mContentSecurityManagerSession.isSessionValid();
+	auto licenseRetryHelper = drmHelper;
 	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	if (code != KEY_READY && reusingPooledSession &&
+			sessionMgrState != SessionMgrState::eSESSIONMGR_INACTIVE)
+	{
+		/*
+		 * The license ran against a pooled SecManager session and did not yield
+		 * usable keys. Detach the stale session so it is never picked again and
+		 * release it server-side, then retry the license once via a fresh
+		 * session (openDrmSession/openPlaybackSession path). Bounded to a single
+		 * retry; the original failure handling below still applies if the retry
+		 * also fails.
+		 */
+		const auto &localSession = mContentSecurityManagerSession;
+		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
+		const int64_t staleSessionId = localSession.getSessionID();
+		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
+		{
+			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
+			mContentSecurityManagerSession.setSessionInvalid();
+			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
+		}
+		PI_PROFILE_SCOPE("drm_license_acquire");
+    code =this->AcquireLicenseCb(responseCode, std::move(licenseRetryHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+
+	}
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);
@@ -1084,15 +1051,15 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 {
 	if (mMaxDRMSessions != maxSessions)
 	{
+		auto newDrmSessionContexts = std::make_unique<DrmSessionContext[]>(maxSessions);
+		auto newCachedKeyIDs = std::make_unique<KeyIdEntries[]>(maxSessions);
+
 		// Clean up the current sessions
 		clearSessionData();
-		MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-		MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 
-		//Update to new session count
+		drmSessionContexts = std::move(newDrmSessionContexts);
+		cachedKeyIDs = std::move(newCachedKeyIDs);
 		mMaxDRMSessions = maxSessions;
-		drmSessionContexts      = new DrmSessionContext[mMaxDRMSessions];
-		cachedKeyIDs            = new KeyIdEntries[mMaxDRMSessions];
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }

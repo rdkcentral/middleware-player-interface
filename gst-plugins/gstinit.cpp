@@ -45,41 +45,41 @@ static gboolean plugin_init(GstPlugin * plugin)
 			GST_RANK_PRIMARY, GST_TYPE_PLAYREADYDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNamePR);
+		GST_INFO("player plugin_init registered %s element", GstPluginNamePR);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNamePR);
+		GST_ERROR("player plugin_init FAILED to register %s element", GstPluginNamePR);
 	}
 	ret = gst_element_register(plugin, GstPluginNameWV,
 			GST_RANK_PRIMARY, GST_TYPE_WIDEVINEDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameWV);
+		GST_INFO("player plugin_init registered %s element", GstPluginNameWV);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameWV);
+		GST_ERROR("player plugin_init FAILED to register %s element", GstPluginNameWV);
 	}
 	ret = gst_element_register(plugin, GstPluginNameCK,
 			GST_RANK_PRIMARY, GST_TYPE_CLEARKEYDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameCK);
+		GST_INFO("player plugin_init registered %s element", GstPluginNameCK);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameCK);
+		GST_ERROR("player plugin_init FAILED to register %s element", GstPluginNameCK);
 	}
 	ret = gst_element_register(plugin, GstPluginNameVMX,
 			GST_RANK_PRIMARY, GST_TYPE_VERIMATRIXDECRYPTOR );
 	if(ret)
 	{
-		printf("player plugin_init registered %s element\n", GstPluginNameVMX);
+		GST_INFO("player plugin_init registered %s element", GstPluginNameVMX);
 	}
 	else
 	{
-		printf("player plugin_init FAILED to register %s element\n", GstPluginNameVMX);
+		GST_ERROR("player plugin_init FAILED to register %s element", GstPluginNameVMX);
 	}
 #else
 #endif
