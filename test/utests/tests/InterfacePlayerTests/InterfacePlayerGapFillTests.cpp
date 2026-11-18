@@ -1257,6 +1257,17 @@ TEST_F(InterfacePlayerGapFillTests, InterfacePlayerSetupStream_TriggersSubtitleE
 
 TEST_F(InterfacePlayerGapFillTests, InterfacePlayerSetupStream_NoCallbackRegistered)
 {
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement playbin = {.object = {.name = (gchar *)"playbin"}};
+	mPlayerContext->pipeline = &pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(&playbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&playbin))
+		.WillOnce(Return(TRUE));
+
 	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_VIDEO, "url"), 0);
 }
 
