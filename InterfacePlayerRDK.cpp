@@ -39,6 +39,11 @@
 #endif
 #include "PlayerUtils.h"
 
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+#include "PlayerTelemetry2.hpp"
+#endif //PLAYER_TELEMETRY_SUPPORT
+       
 #define DEFAULT_BUFFERING_TO_MS 10                       /**< TimeOut interval to check buffer fullness */
 #define DEFAULT_BUFFERING_MAX_MS (1000)                  /**< max buffering time */
 #define DEFAULT_BUFFERING_MAX_CNT (DEFAULT_BUFFERING_MAX_MS/DEFAULT_BUFFERING_TO_MS)   /**< max buffering timeout count */
@@ -241,6 +246,23 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
 	pthread_mutex_init(&interfacePlayerPriv->gstPrivateContext->stream[i].sourceLock, NULL);
 
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	PlayerTelemetry2 telemetry;
+	telemetry.sendEvent(TELEMETRY_EVENT_INITIALIZED);
+#endif
+
+#ifdef PLAYER_TELEMETRY_SUPPORT
+	std::map<std::string, int> intMetrics;
+	std::map<std::string, std::string> stringMetrics;
+	std::map<std::string, float> floatMetrics;
+
+	intMetrics["isRialto"] = isRialto ? 1 : 0;
+	stringMetrics["component"] = "InterfacePlayerRDK";
+	stringMetrics["action"] = "constructor";
+
+
+	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
+#endif
 }
 
 /* InterfacePlayerRDK destructor*/
