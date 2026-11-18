@@ -103,7 +103,7 @@ bool PlayerIsoBmffBuffer::parseBuffer(bool correctBoxSize, int newTrackId)
 		uint32_t boxSize = box->getSize();
 		if (boxSize > bufSize - curOffset)
 		{
-			MW_LOG_WARN("Box extends past buffer bounds: offset=%zu, size=%u, bufSize=%zu", curOffset, boxSize, bufSize);
+			MW_LOG_TRACE("Partial (chunked) box: offset=%zu, size=%u, bufSize=%zu", curOffset, boxSize, bufSize);
 			break;  // Stop parsing to prevent buffer overrun
 		}
 		

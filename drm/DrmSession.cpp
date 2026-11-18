@@ -97,7 +97,7 @@ bool DrmSession::PrepareForDestruction(uint32_t timeoutMs)
 		mLifecycleCV.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this]() { return mActiveOperations == 0; });
 		if (mActiveOperations > 0)
 		{
-			MW_LOG_ERR("DrmSession::PrepareForDestruction : timed out waiting for in-flight decrypt operation(s); proceeding with destruction");
+			MW_LOG_ERR("DrmSession::PrepareForDestruction : timed out waiting for in-flight decrypt operation(s); caller must not delete");
 			return false;
 		}
 	}

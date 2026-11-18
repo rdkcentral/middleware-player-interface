@@ -111,10 +111,6 @@ void * player_CreateSharedMem( size_t shmLen, key_t & shmKey)
 	{
 		MW_LOG_ERR("invalid shmLen=%zu", shmLen);
 	}
-	
-	volatile key_t *vkey = (volatile key_t *)&shmKey;
-	*vkey = 0;
-	
 	return shmPointer;
 }
 
@@ -125,8 +121,15 @@ void player_CleanUpSharedMem(void* shmPointer, key_t shmKey, size_t shmLen)
 {
 	if( NULL != shmPointer && (void*)-1 != shmPointer)
 	{
-		secure_memzero(shmPointer, shmLen);
-		
+		// Clamp to the real segment size; callers may pass a larger shmLen
+		struct shmid_ds segInfo;
+		int lookupId = shmget(shmKey, 0, SHM_ACCESS_PERMISSION);
+		if( lookupId != -1 && 0 == shmctl(lookupId, IPC_STAT, &segInfo) )
+		{
+			size_t segSize = (size_t)segInfo.shm_segsz;
+			secure_memzero(shmPointer, (shmLen < segSize) ? shmLen : segSize);
+		}
+
 		// detach shared memory
 		if( -1 == shmdt(shmPointer) )
 		{

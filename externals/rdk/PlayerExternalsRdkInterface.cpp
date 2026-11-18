@@ -283,24 +283,16 @@ void PlayerExternalsRdkInterface::SetHDMIStatus()
 
     try {
         //Get the HDMI port
-        if (!device::Manager::Initialize())
-        {
-            MW_LOG_ERR("device::Manager::Initialize() failed");
-            isConnected = false;
-        }
-        else
-        {
-            std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
-            if (!strVideoPort.empty())
-            {
-                ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
-                isConnected        = vPort.isDisplayConnected();
-                hdcpProtocol       = (dsHdcpProtocolVersion_t)vPort.getHDCPProtocol();
-                if(isConnected) {
-                    isHDCPCompliant          = (vPort.getHDCPStatus() == dsHDCP_STATUS_AUTHENTICATED);
-                    isHDCPEnabled            = vPort.isContentProtected();
-                    hdcpReceiverProtocol     = (dsHdcpProtocolVersion_t)vPort.getHDCPReceiverProtocol();
-                    hdcpCurrentProtocol      = (dsHdcpProtocolVersion_t)vPort.getHDCPCurrentProtocol();
+	device::Manager::Initialize();
+        std::string strVideoPort = device::Host::getInstance().getDefaultVideoPortName();
+        ::device::VideoOutputPort &vPort = ::device::Host::getInstance().getVideoOutputPort(strVideoPort);
+        isConnected        = vPort.isDisplayConnected();
+        hdcpProtocol       = (dsHdcpProtocolVersion_t)vPort.getHDCPProtocol();
+        if(isConnected) {
+            isHDCPCompliant          = (vPort.getHDCPStatus() == dsHDCP_STATUS_AUTHENTICATED);
+            isHDCPEnabled            = vPort.isContentProtected();
+            hdcpReceiverProtocol     = (dsHdcpProtocolVersion_t)vPort.getHDCPReceiverProtocol();
+            hdcpCurrentProtocol      = (dsHdcpProtocolVersion_t)vPort.getHDCPCurrentProtocol();
             //get the resolution of the TV
             int width,height;
             int iResID = vPort.getResolution().getPixelResolution().getId();

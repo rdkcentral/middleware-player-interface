@@ -182,9 +182,9 @@ protected:
 
 	/**
 	 * @brief Impl specific initialization code called before each public interface call
-	 * @return void
+	 * @return true on success, false on failure
 	 */
-	virtual void EnsureInitialized(){};
+	virtual bool EnsureInitialized(){ return true; };
 
 	/**
 	 * @brief Impl specific initialization code for HAL
@@ -194,9 +194,9 @@ protected:
 
 	/**
 	 * @brief Impl specific initialization code for Communication with renderer
-	 * @return void
+	 * @return true on success, false on failure
 	 */
-	virtual void EnsureRendererCommsInitialized(){};
+	virtual bool EnsureRendererCommsInitialized(){ return true; };
 
 	/**
 	 * @brief Impl specific initialization code called once in Init() function
