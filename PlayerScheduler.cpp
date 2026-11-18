@@ -135,8 +135,21 @@ void PlayerScheduler::ExecuteAsyncTask()
 					queueLock.unlock();
 
 					MW_LOG_WARN("SchedulerTask Execution:%s taskId:%d",obj.mTaskName.c_str(),obj.mId);
-					//Execute function
-					obj.mTask(obj.mData);
+					//Execute function - an exception escaping a task would
+					//terminate this worker thread and silently kill all
+					//remaining queued player work; log and continue instead.
+					try
+					{
+						obj.mTask(obj.mData);
+					}
+					catch (const std::exception &e)
+					{
+						MW_LOG_ERR("SchedulerTask '%s' taskId:%d threw: %s",obj.mTaskName.c_str(),obj.mId,e.what());
+					}
+					catch (...)
+					{
+						MW_LOG_ERR("SchedulerTask '%s' taskId:%d threw an unknown exception",obj.mTaskName.c_str(),obj.mId);
+					}
 					//May be used in a wait() in future loops, it needs to be locked
 					queueLock.lock();
 				}

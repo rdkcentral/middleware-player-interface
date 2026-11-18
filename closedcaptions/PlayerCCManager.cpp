@@ -85,22 +85,24 @@ static mrcc_Error SetAttributes(gsw_CcAttributes * attrib, short type, gsw_CcTyp
  */
 static int getColor(gsw_CcAttribType attributeIndex, gsw_CcType ccType, std::string input, gsw_CcColor *colorOut)
 {
+	// Static storage replaces the previous one-shot malloc loop (which was
+	// never freed and guarded by a non-atomic flag). C++11 static init is
+	// thread-safe, so concurrent first calls cannot double-populate.
+	static gsw_CcColor ccColorStorage[GSW_CC_COLOR_MAX];
 	static gsw_CcColor* ccColorCaps[GSW_CC_COLOR_MAX];
-	static bool flagForMalloc = false;
+	static const bool ccColorCapsInit = []{
+		for (int i = 0; i < GSW_CC_COLOR_MAX; i++)
+		{
+			ccColorCaps[i] = &ccColorStorage[i];
+		}
+		return true;
+	}();
+	(void)ccColorCapsInit;
 	unsigned int ccSizeOfCaps = 0;
 	MW_LOG_TRACE("input: %s", input.c_str());
 
 	if (!input.empty() && colorOut)
 	{
-		if (!flagForMalloc)
-		{
-			flagForMalloc = true;
-			for (int i = 0; i < GSW_CC_COLOR_MAX; i++)
-			{
-				ccColorCaps[i] = (gsw_CcColor*) malloc(sizeof(gsw_CcColor));
-				memset(ccColorCaps[i], 0, sizeof(gsw_CcColor));
-			}
-		}
 		GetCapability(attributeIndex, ccType, (void**) &ccColorCaps, &ccSizeOfCaps);
 
 		bool found = false;

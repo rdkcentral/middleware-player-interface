@@ -584,14 +584,10 @@ gst_subtecsink_render (GstBaseSink * sink, GstBuffer * buffer)
   {
       auto inputData = static_cast<uint8_t*>(map.data);
       auto inputSize = static_cast<uint32_t>(map.size);
-      std::string instr(const_cast<const char*>(reinterpret_cast<char *>(map.data)), map.size);
 
       GST_TRACE("%s unpacking GstBuffer size: %d\n", __func__, inputSize);
 
-      for (std::uint32_t i = 0; i < inputSize; i++)
-      {
-          dataBuffer.push_back(inputData[i]);
-      }
+      dataBuffer.assign(inputData, inputData + inputSize);
 
       gst_buffer_unmap(buffer, &map);
   }
