@@ -44,7 +44,7 @@ class FireboltInterface{
 
         bool mIsConnected = false;
 
-        unsigned int mListenerId;
+        unsigned int mListenerId = 0;
 
         FireboltInterface();
 

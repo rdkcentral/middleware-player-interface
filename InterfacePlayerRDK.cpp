@@ -4944,7 +4944,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			}
 			else
 			{
-				busEvent.dbg_info[0] = '\0';
+				busEvent.dbg_info.clear();
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
 			g_clear_error(&error);
@@ -4962,7 +4962,7 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 			}
 			else
 			{
-				busEvent.dbg_info[0] = '\0';
+				busEvent.dbg_info.clear();
 			}
 			pInterfacePlayerRDK->busMessageCallback(std::move(busEvent));
 			g_clear_error(&error);
