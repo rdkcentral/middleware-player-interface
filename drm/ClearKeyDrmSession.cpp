@@ -442,6 +442,17 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 					// Skip the clear byte range from source buffer.
 					iCurrSource += nBytesClear;
 
+					// Bounds-check the subsample ranges against the mapped buffer
+					// and the pbData scratch (sized to bufferMap.size). A corrupt
+					// subsample table must not read/write out of bounds.
+					if ((uint64_t)iCurrSource + nBytesEncrypted > bufferMap.size
+							|| (uint64_t)cbData + nBytesEncrypted > bufferMap.size)
+					{
+						MW_LOG_ERR("ClearKeySession: ERROR : subsample range exceeds buffer size %zu", bufferMap.size);
+						cbData = 0;
+						break;
+					}
+
 					// Copy cipher bytes from f_pbData to target buffer.
 					memcpy(pbCurrTarget, (uint8_t*) bufferMap.data + iCurrSource, nBytesEncrypted);
 
@@ -486,6 +497,17 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 						}
 						// Skip the clear byte range from target buffer.
 						pbCurrTarget += nBytesClear;
+
+						// Bounds-check write target and pbData source before copying
+						// decrypted bytes back (corrupt subsample tables must not
+						// write/read out of bounds).
+						if ((uint8_t*)pbCurrTarget + nBytesEncrypted > (uint8_t*)bufferMap.data + bufferMap.size
+								|| (uint64_t)iCurrSource + nBytesEncrypted > cbData)
+						{
+							MW_LOG_ERR("ClearKeySession: ERROR : subsample copy-back range exceeds buffer");
+							retVal = 1;
+							break;
+						}
 						memcpy(pbCurrTarget, pbData + iCurrSource, nBytesEncrypted);
 
 						// Adjust current pointer of target buffer.
