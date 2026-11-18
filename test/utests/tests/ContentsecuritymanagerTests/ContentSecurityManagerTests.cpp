@@ -1609,12 +1609,12 @@ TEST(ContentSecurityManager_EdgeCases, MaxInt64Values) {
     std::cout << "[ContentSecurityManager_EdgeCases] MaxInt64Values - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t maxValue = INT64_MAX;
+    std::string maxValue = std::to_string(INT64_MAX);
     
     EXPECT_NO_THROW({
         manager.UpdateSessionState(maxValue, true);
-        manager.setVideoWindowSize(maxValue, maxValue, maxValue);
-        manager.setPlaybackSpeedState(maxValue, maxValue, maxValue);
+        manager.setVideoWindowSize(maxValue, INT64_MAX, INT64_MAX);
+        manager.setPlaybackSpeedState(maxValue, INT64_MAX, INT64_MAX);
         manager.ReleaseSession(maxValue);
     });
     
@@ -1644,12 +1644,12 @@ TEST(ContentSecurityManager_EdgeCases, MinInt64Values) {
     std::cout << "[ContentSecurityManager_EdgeCases] MinInt64Values - START" << std::endl;
     
     TestableContentSecurityManager manager;
-    int64_t minValue = INT64_MIN;
+    std::string minValue = std::to_string(INT64_MIN);
     
     EXPECT_NO_THROW({
         manager.UpdateSessionState(minValue, false);
-        manager.setVideoWindowSize(minValue, minValue, minValue);
-        manager.setPlaybackSpeedState(minValue, minValue, minValue);
+        manager.setVideoWindowSize(minValue, INT64_MIN, INT64_MIN);
+        manager.setPlaybackSpeedState(minValue, INT64_MIN, INT64_MIN);
         manager.ReleaseSession(minValue);
     });
     
@@ -1747,8 +1747,8 @@ TEST(ContentSecurityManager_SetDrmSessionState, BoundaryValues) {
     
     TestableContentSecurityManager manager;
     
-    EXPECT_FALSE(manager.SetDrmSessionState(INT64_MAX, true));
-    EXPECT_FALSE(manager.SetDrmSessionState(INT64_MIN, false));
+    EXPECT_FALSE(manager.SetDrmSessionState(std::to_string(INT64_MAX), true));
+    EXPECT_FALSE(manager.SetDrmSessionState(std::to_string(INT64_MIN), false));
     EXPECT_FALSE(manager.SetDrmSessionState("0", true));
     EXPECT_FALSE(manager.SetDrmSessionState("-1", false));
     
@@ -1849,8 +1849,8 @@ TEST(ContentSecurityManager_CloseDrmSession, BoundaryValues) {
     TestableContentSecurityManager manager;
     
     EXPECT_NO_THROW({
-        manager.CloseDrmSession(INT64_MAX);
-        manager.CloseDrmSession(INT64_MIN);
+        manager.CloseDrmSession(std::to_string(INT64_MAX));
+        manager.CloseDrmSession(std::to_string(INT64_MIN));
         manager.CloseDrmSession("0");
         manager.CloseDrmSession("-12345");
     });
