@@ -2,7 +2,7 @@ name: L1 tests
 
 on:
   pull_request:
-    branches: [ develop , main , feature/dev_sprint_pli ]
+    branches: [ develop , main , feature/dev_sprint_pli , feature/RDKEMW-28873 ]
     paths: ['**/*.c', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.h', '**/*.hpp', '**/*.sh']
   workflow_dispatch:
 
