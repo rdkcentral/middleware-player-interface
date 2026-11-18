@@ -317,7 +317,7 @@ trickTeardown(false), mFirstFrameRequired(false), mResumeInjector(false), Pipeli
 	stringMetrics["action"] = "constructor";
 
 	
-	telemetry.send(TELEMETRY_EVENT_INITIALIZED, intMetrics, stringMetrics, floatMetrics);
+	telemetry.send(TELEMETRY_EVENT_INITIALIZED_INFO, intMetrics, stringMetrics, floatMetrics);
 #endif
 }
 
