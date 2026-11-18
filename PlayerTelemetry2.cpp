@@ -1,7 +1,10 @@
 #include "PlayerTelemetry2.hpp"
 #include <fstream>
+#include <mutex>
 
 #include <telemetry_busmessage_sender.h>
+
+static std::mutex gTelemetryInitMutex;
 
 Player_TelemetryInitializer::Player_TelemetryInitializer()
 : m_Initialized(false) // Initialize 'initialized' to false
@@ -10,23 +13,40 @@ Player_TelemetryInitializer::Player_TelemetryInitializer()
 
 void Player_TelemetryInitializer::Init()
 {
-    if(false == m_Initialized)
+    std::lock_guard<std::mutex> lock(gTelemetryInitMutex);
+    if(m_Initialized)
+    {
+        return;
+    }
+
+    T2ERROR t2Error = t2_init((char *)"mwplayer");
+    if(T2ERROR_SUCCESS == t2Error)
     {
         m_Initialized = true;
-        t2_init((char *)"mwplayer");
         MW_LOG_MIL("t2_init done ");
+    }
+    else
+    {
+        // Stays uninitialized so the next Init() call retries t2_init.
+        MW_LOG_ERR("t2_init failed: %d", t2Error);
     }
 }
 
 bool Player_TelemetryInitializer::isInitialized() const
 {
+    std::lock_guard<std::mutex> lock(gTelemetryInitMutex);
     return m_Initialized;
 }
 
 Player_TelemetryInitializer::~Player_TelemetryInitializer()
 {
-    t2_uninit();
-    MW_LOG_MIL("t2_uninit done ");
+    std::lock_guard<std::mutex> lock(gTelemetryInitMutex);
+    if(m_Initialized)
+    {
+        t2_uninit();
+        m_Initialized = false;
+        MW_LOG_MIL("t2_uninit done ");
+    }
 }
 
 Player_TelemetryInitializer PlayerTelemetry2::mInitializer;
