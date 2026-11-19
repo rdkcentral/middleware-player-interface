@@ -478,9 +478,9 @@ bool OCDMSessionAdapter::verifyOutputProtection()
 /**
  * @fn getUsableKeys
  * @brief Get the list of usable key IDs from the DRM session
- * @retval Snapshot copy of usable key IDs, taken under m_usableKeysMutex
+ * @retval Reference to vector of usable key IDs
  */
-std::vector<std::vector<uint8_t>> OCDMSessionAdapter::getUsableKeys() const
+const std::vector<std::vector<uint8_t>>& OCDMSessionAdapter::getUsableKeys() const
 {
 	std::lock_guard<std::mutex> lock(m_usableKeysMutex);
 	return m_usableKeys;

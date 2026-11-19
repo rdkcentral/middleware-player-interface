@@ -34,7 +34,6 @@
 #include "PlayerCCManager.h"
 #include "PlayerSubtecCCManager.h"
 #include "PlayerRialtoCCManager.h"
-#include "PlayerDirectRialtoCCManager.h"
 
 
 #define CHAR_CODE_1 49
@@ -824,10 +823,9 @@ bool PlayerCCManagerBase::IsOOBCCRenderingSupported()
 PlayerCCManagerBase *PlayerCCManager::mInstance = NULL;
 
 /**
- * @brief Determines which CC manager subclass to instantiate.
+ * @brief Indicates whether mInstance should be a Rialto or a Subtec class.
  */
-PlayerCCManager::CCManagerType PlayerCCManager::mCCManagerType =
-	PlayerCCManager::CCManagerType::SubtecCCManager;
+bool PlayerCCManager::mIsRialto = false;
 
 /**
  *  @brief Get the singleton instance
@@ -837,12 +835,7 @@ PlayerCCManagerBase *PlayerCCManager::GetInstance()
 	if (mInstance == NULL)
 	{
 #if defined(SUBTITLE_SUPPORTED)
-		if (mCCManagerType == CCManagerType::DirectRialtoCCManager)
-		{
-			MW_LOG_INFO("PlayerCCManager::Creating DirectRialto CC manager");
-			mInstance = new PlayerDirectRialtoCCManager();
-		}
-		else if (mCCManagerType == CCManagerType::RialtoCCManager)
+		if (mIsRialto)
 		{
 			MW_LOG_INFO("PlayerCCManager::Creating Rialto CC manager");
 			mInstance = new PlayerRialtoCCManager();
@@ -861,28 +854,13 @@ PlayerCCManagerBase *PlayerCCManager::GetInstance()
 }
 
 /**
- *  @brief Check whether the singleton has already been created
- */
-bool PlayerCCManager::HasInstance()
-{
-	return mInstance != NULL;
-}
-
-/**
  *  @brief Reset the state.
  */
 void PlayerCCManagerBase::ResetState()
 {
 	MW_LOG_INFO("PlayerCCManagerBase::Resetting");
 	Stop();
-	ResetTrackState();
-}
 
-/**
- *  @brief Reset the cached track/rendering fields without stopping.
- */
-void PlayerCCManagerBase::ResetTrackState()
-{
 	mOptions = "";
 	mTrack = "";
 	mTrackFormat = eCLOSEDCAPTION_FORMAT_DEFAULT;
@@ -893,30 +871,18 @@ void PlayerCCManagerBase::ResetTrackState()
 }
 
 /**
- *  @brief Set the CC manager variant
+ *  @brief Set the variant required
  */
-void PlayerCCManager::SetRialto(bool bIsRialto, bool bIsDirectRialto)
+void PlayerCCManager::SetRialto(bool bIsRialto)
 {
-	CCManagerType newType = CCManagerType::SubtecCCManager;
-
-	if (bIsDirectRialto)
-	{
-		newType = CCManagerType::DirectRialtoCCManager;
-	}
-	else if (bIsRialto)
-	{
-		newType = CCManagerType::RialtoCCManager;
-	}
-
 	if (mInstance == NULL)
 	{
-		MW_LOG_INFO("PlayerCCManager::CCManagerType:%d", static_cast<int>(newType));
-		mCCManagerType = newType;
+		MW_LOG_INFO("PlayerCCManager::IsRialto:%d", bIsRialto);
+		mIsRialto = bIsRialto;
 	}
-	else if (mCCManagerType != newType)
+	else if (mIsRialto != bIsRialto)
 	{
-		MW_LOG_ERR("PlayerCCManager::CCManagerType:%d while incompatible singleton instance exists",
-			static_cast<int>(newType));
+		MW_LOG_ERR("PlayerCCManager::IsRialto:%d while incompatible singleton instance exists", bIsRialto);
 	}
 }
 
