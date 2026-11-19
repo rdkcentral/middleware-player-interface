@@ -88,7 +88,7 @@ private:
 	 * @fn EnsureInitialized
 	 * @return void
 	 */
-	void EnsureInitialized() override;
+	bool EnsureInitialized() override;
 
 	/**
 	 * @fn EnsureHALInitialized
@@ -107,7 +107,7 @@ private:
 	 * @fn EnsureRendererCommsInitialized
 	 * @return void
 	 */
-	void EnsureRendererCommsInitialized() override;
+	bool EnsureRendererCommsInitialized() override;
 
 	/**
 	 * @fn SetDigitalChannel
