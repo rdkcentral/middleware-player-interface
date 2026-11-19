@@ -138,6 +138,21 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 			(void)opencdm_session_close(m_pOpenCDMSession);
 			(void)opencdm_destruct_session(m_pOpenCDMSession);
 			m_pOpenCDMSession = nullptr;
+
+			// Drop state that belonged to the destroyed session
+			m_eKeyState = KEY_INIT;
+			m_keyStatus = InternalError;
+			m_keyStateIndeterminate = false;
+			m_keyStored.clear();
+			m_challenge.clear();
+			m_destUrl.clear();
+			{
+				std::lock_guard<std::mutex> lock(m_usableKeysMutex);
+				m_usableKeys.clear();
+			}
+			m_challengeReady.reset();
+			m_keyStatusReady.reset();
+			m_keyStatusWait.reset();
 		}
 
 		memset(&m_OCDMSessionCallbacks, 0, sizeof(m_OCDMSessionCallbacks));
@@ -343,6 +358,7 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 		{
 			MW_LOG_ERR("Cannot update key: OCDM session is null");
 			m_eKeyState = KEY_ERROR;
+			m_keyStatusWait.signal();
 			return retValue;
 		}
 		MW_LOG_INFO("Calling opencdm_session_update, key length=%u", keyMessageLength);
