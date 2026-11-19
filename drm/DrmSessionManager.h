@@ -441,7 +441,7 @@ public:
 	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int &err );
 	/**
 	 * @fn waitForKeyReady
-	 * @brief Wait for a session key to become ready, giving up early on key error or clearSessionData()
+	 * @brief Wait for a session key to become ready, giving up early on key error, clearSessionData() or clearDrmSession(true)
 	 * @param[in] session DRM session to wait on; caller holds the slot's sessionMutex
 	 * @param[in] timeoutMs maximum wait in milliseconds
 	 * @return true if the key became ready

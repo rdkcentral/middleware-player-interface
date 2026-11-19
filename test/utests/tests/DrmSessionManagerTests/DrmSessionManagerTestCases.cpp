@@ -1529,6 +1529,50 @@ TEST_F(DrmSessionManagerTeardownTests, ClearSessionDataDuringKeyWait_AbortsWaitA
 }
 
 /**
+ * @brief clearDrmSession(true) (AAMP Stop/tune path) during a key wait also makes the
+ *        wait give up and deletes the session only after the waiter has left.
+ */
+TEST_F(DrmSessionManagerTeardownTests, ForceClearDrmSessionDuringKeyWait_AbortsWait)
+{
+	InstallPendingSession();
+	std::atomic<KeyState> result{KEY_INIT};
+	int selectedSlot = -1;
+	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+
+	auto start = std::chrono::steady_clock::now();
+	mDrmSessionManager->clearDrmSession(true);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	waiter.join();
+
+	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_TRUE(mWaitState.destroyed);
+	EXPECT_FALSE(mWaitState.destroyedDuringWait);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
+}
+
+/**
+ * @brief clearDrmSession(false) only clears failed slots and must not cut short a healthy key wait.
+ */
+TEST_F(DrmSessionManagerTeardownTests, NonForceClearDrmSession_DoesNotAbortKeyWait)
+{
+	SetKeyProcessTimeout(350);
+	InstallPendingSession();
+	std::atomic<KeyState> result{KEY_INIT};
+	int selectedSlot = -1;
+	auto start = std::chrono::steady_clock::now();
+	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+	mDrmSessionManager->clearDrmSession(false);
+	waiter.join();
+	auto elapsed = std::chrono::steady_clock::now() - start;
+
+	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_GE(elapsed, std::chrono::milliseconds(340));
+}
+
+/**
  * @brief A key that becomes ready after several wait slices is still reused.
  */
 TEST_F(DrmSessionManagerTeardownTests, KeyReadyAfterSeveralSlices_ReusesSession)

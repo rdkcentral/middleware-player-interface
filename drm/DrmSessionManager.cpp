@@ -141,7 +141,7 @@ void DrmSessionManager::clearSessionData()
 }
 
 /**
- * @brief Wait for a session key to become ready, giving up early on key error or clearSessionData()
+ * @brief Wait for a session key to become ready, giving up early on key error or a session clear
  */
 bool DrmSessionManager::waitForKeyReady(DrmSession *session, uint32_t timeoutMs)
 {
@@ -241,6 +241,11 @@ bool DrmSessionManager::getFailedKeyIdStatus(int sessionIndex)
  */
 void DrmSessionManager::clearDrmSession(bool forceClearSession)
 {
+	if (forceClearSession)
+	{
+		/* Makes any key wait in getDrmSession() give up, so the slot's sessionMutex is released promptly */
+		mSessionTeardownCount++;
+	}
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
 		// Clear the session data if license key acquisition failed or if forceClearSession is true in the case of LicenseCaching is false.
@@ -263,6 +268,10 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 			}
 		}
+	}
+	if (forceClearSession)
+	{
+		mSessionTeardownCount--;
 	}
 }
 
