@@ -43,55 +43,176 @@ static const char *T2ErrorToString(T2ERROR err)
     }
 }
 
-Player_TelemetryInitializer::Player_TelemetryInitializer()
-: m_Initialized(false), m_InitOnce()
+PlayerTelemetryWorker::PlayerTelemetryWorker(Sender sender, Hook init, Hook uninit, size_t maxQueueSize,
+                                             std::chrono::milliseconds slowCallThreshold, unsigned maxSlowCalls,
+                                             std::chrono::milliseconds cooldown, std::chrono::milliseconds drainTimeout)
+    : mSender(std::move(sender)), mInit(std::move(init)), mUninit(std::move(uninit)), mMaxQueueSize(maxQueueSize),
+      mSlowCallThreshold(slowCallThreshold), mMaxSlowCalls(maxSlowCalls), mCooldown(cooldown),
+      mDrainTimeout(drainTimeout)
 {
+    mThread = std::thread(&PlayerTelemetryWorker::run, this);
 }
 
-bool Player_TelemetryInitializer::Init()
+PlayerTelemetryWorker::~PlayerTelemetryWorker()
 {
-    std::call_once(m_InitOnce, [this]() {
-        // t2_init() returns void and only records the component name; the T2 bus
-        // connection is made lazily by the first t2_event_*() call, so connection
-        // errors are only reported through the T2ERROR returned by those calls.
-        t2_init((char *)PLAYER_T2_COMPONENT_NAME);
-        m_Initialized = true;
-        MW_LOG_MIL("t2_init called for component '%s'", PLAYER_T2_COMPONENT_NAME);
-    });
-    return m_Initialized;
-}
-
-bool Player_TelemetryInitializer::isInitialized() const
-{
-    return m_Initialized;
-}
-
-void Player_TelemetryInitializer::OnEventResult(const std::string &markerName, int result)
-{
-    T2ERROR err = (T2ERROR)result;
-    if (T2ERROR_SUCCESS == err)
     {
-        return;
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStop = true;
+        mDrainDeadline = std::chrono::steady_clock::now() + mDrainTimeout;
     }
-    MW_LOG_ERR("T2 event %s failed: %s (%d)", markerName.c_str(), T2ErrorToString(err), (int)err);
-    if (T2ERROR_COMPONENT_NULL == err)
+    mCv.notify_all();
+    if (mThread.joinable())
     {
-        // The library has no component name, so t2_init() did not take effect.
-        MW_LOG_ERR("t2_init('%s') is not in effect; telemetry disabled", PLAYER_T2_COMPONENT_NAME);
-        m_Initialized = false;
+        mThread.join();
     }
 }
 
-Player_TelemetryInitializer::~Player_TelemetryInitializer()
+bool PlayerTelemetryWorker::enqueue(Item item)
 {
-    if (m_Initialized)
     {
-        t2_uninit();
-        m_Initialized = false;
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (mStop)
+        {
+            return false;
+        }
+        if (mDisabled)
+        {
+            if (std::chrono::steady_clock::now() - mDisabledAt < mCooldown)
+            {
+                ++mDroppedWhileDisabled;
+                return false;
+            }
+            // Cooldown elapsed: half-open, allow sending again and reset the slow-call count
+            MW_LOG_MIL("[M] Telemetry re-enabled after cooldown; %zu markers dropped while disabled",
+                       mDroppedWhileDisabled);
+            mDisabled = false;
+            mDroppedWhileDisabled = 0;
+            mSlowCalls = 0;
+        }
+        if (mQueue.size() >= mMaxQueueSize)
+        {
+            MW_LOG_WARN("[M] Telemetry queue full, dropping marker %s", item.marker.c_str());
+            return false;
+        }
+        mQueue.push_back(std::move(item));
+    }
+    mCv.notify_one();
+    return true;
+}
+
+bool PlayerTelemetryWorker::isDisabled() const
+{
+    std::lock_guard<std::mutex> lock(mMutex);
+    return mDisabled;
+}
+
+void PlayerTelemetryWorker::run()
+{
+    if (mInit)
+    {
+        mInit();
+    }
+    std::unique_lock<std::mutex> lock(mMutex);
+    while (true)
+    {
+        mCv.wait(lock, [this] { return mStop || !mQueue.empty(); });
+        // On shutdown, deliver markers already accepted, but never past the drain deadline
+        if (mStop && !mQueue.empty() && std::chrono::steady_clock::now() >= mDrainDeadline)
+        {
+            MW_LOG_WARN("[M] Telemetry drain timeout on shutdown; dropping %zu queued markers", mQueue.size());
+            mQueue.clear();
+        }
+        if (mQueue.empty())
+        {
+            break;
+        }
+        Item item = std::move(mQueue.front());
+        mQueue.pop_front();
+        lock.unlock();
+
+        const auto start = std::chrono::steady_clock::now();
+        mSender(item);
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+
+        lock.lock();
+        if (elapsed > mSlowCallThreshold)
+        {
+            MW_LOG_WARN("[M] Telemetry marker %s took %lld ms", item.marker.c_str(),
+                        static_cast<long long>(elapsed.count()));
+            if (++mSlowCalls >= mMaxSlowCalls)
+            {
+                MW_LOG_ERR("[M] Telemetry disabled for %lld s after %u consecutive slow calls; dropping %zu queued markers",
+                           static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(mCooldown).count()),
+                           mSlowCalls, mQueue.size());
+                mDisabled = true;
+                mDisabledAt = std::chrono::steady_clock::now();
+                mQueue.clear();
+            }
+        }
+        else
+        {
+            mSlowCalls = 0;
+        }
+    }
+    lock.unlock();
+    if (mUninit)
+    {
+        mUninit();
     }
 }
 
-Player_TelemetryInitializer PlayerTelemetry2::mInitializer;
+namespace
+{
+// Cleared when a t2_event_*() call reports that t2_init() did not take effect.
+std::atomic<bool> gTelemetryUsable{true};
+
+PlayerTelemetryWorker &getTelemetryWorker()
+{
+    static PlayerTelemetryWorker worker(
+        [](const PlayerTelemetryWorker::Item &item)
+        {
+            char *marker = const_cast<char *>(item.marker.c_str());
+            T2ERROR t2Error = item.isEvent ? t2_event_d(marker, 1)
+                                           : t2_event_s(marker, const_cast<char *>(item.value.c_str()));
+            if (T2ERROR_SUCCESS != t2Error)
+            {
+                MW_LOG_ERR("[M] T2 event %s failed: %s (%d)", item.marker.c_str(), T2ErrorToString(t2Error), (int)t2Error);
+                if (T2ERROR_COMPONENT_NULL == t2Error)
+                {
+                    // The library has no component name, so t2_init() did not take effect.
+                    MW_LOG_ERR("t2_init('%s') is not in effect; telemetry disabled", PLAYER_T2_COMPONENT_NAME);
+                    gTelemetryUsable = false;
+                }
+                return false;
+            }
+            return true;
+        },
+        []()
+        {
+            // t2_init() returns void and only records the component name; the T2 bus
+            // connection is made lazily by the first t2_event_*() call, so connection
+            // errors are only reported through the T2ERROR returned by those calls.
+            t2_init(const_cast<char *>(PLAYER_T2_COMPONENT_NAME));
+            MW_LOG_MIL("t2_init called for component '%s'", PLAYER_T2_COMPONENT_NAME);
+        },
+        []()
+        {
+            t2_uninit();
+            MW_LOG_MIL("t2_uninit done");
+        });
+    return worker;
+}
+
+bool enqueueTelemetry(PlayerTelemetryWorker::Item item)
+{
+    if (!gTelemetryUsable)
+    {
+        return false;
+    }
+    return getTelemetryWorker().enqueue(std::move(item));
+}
+} // namespace
 
 PlayerTelemetry2::PlayerTelemetry2() : PlayerTelemetry2("")
 {
@@ -99,17 +220,13 @@ PlayerTelemetry2::PlayerTelemetry2() : PlayerTelemetry2("")
 
 PlayerTelemetry2::PlayerTelemetry2(const std::string &appName) : appName(appName)
 {
-    if (!mInitializer.Init())
-    {
-        MW_LOG_ERR("Telemetry initialization failed; markers will not be sent");
-    }
 }
 
 bool PlayerTelemetry2::send(const std::string &markerName, const std::map<std::string, int>& intData, const std::map<std::string, std::string>& stringData, const std::map<std::string, float>& floatData)
 {
-    if (!mInitializer.isInitialized())
+    if (!gTelemetryUsable)
     {
-        MW_LOG_ERR("[M] Telemetry not initialized, dropping marker %s", markerName.c_str());
+        MW_LOG_ERR("[M] Telemetry not usable, dropping marker %s", markerName.c_str());
         return false;
     }
 
@@ -155,26 +272,17 @@ bool PlayerTelemetry2::send(const std::string &markerName, const std::map<std::s
 
 bool PlayerTelemetry2::send(const std::string &markerName, const char *data)
 {
-    if (!mInitializer.isInitialized() || NULL == data)
+    if (NULL == data)
     {
         return false;
     }
 
     MW_LOG_INFO("[S] Marker Name: %s value: %s", markerName.c_str(), data);
-    T2ERROR t2Error = t2_event_s((char *)markerName.c_str(), (char *)data);
-    mInitializer.OnEventResult(markerName, t2Error);
-    return (T2ERROR_SUCCESS == t2Error);
+    return enqueueTelemetry({markerName, data, false});
 }
 
 bool PlayerTelemetry2::sendEvent(const std::string &eventName)
 {
-    if (!mInitializer.isInitialized())
-    {
-        return false;
-    }
-
     MW_LOG_MIL("[TELEMETRY] event=%s", eventName.c_str());
-    T2ERROR t2Error = t2_event_d((char *)eventName.c_str(), 1);
-    mInitializer.OnEventResult(eventName, t2Error);
-    return (T2ERROR_SUCCESS == t2Error);
+    return enqueueTelemetry({eventName, "", true});
 }
