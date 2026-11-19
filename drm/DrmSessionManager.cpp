@@ -162,6 +162,8 @@ bool DrmSessionManager::waitForKeyReady(DrmSession *session, uint32_t timeoutMs,
 		}
 		remainingMs -= sliceMs;
 	} while ((remainingMs > 0) && (session->getState() <= KEY_READY));
+	/* Teardown may have started during the last slice or alongside a key error */
+	aborted = (mSessionTeardownCount.load() > 0);
 	return false;
 }
 
@@ -555,7 +557,13 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	mCustomData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
 	if (code == KEY_READY)
 	{
-		return getSlotSession(selectedSlot);
+		DrmSession *session = getSlotSession(selectedSlot);
+		if (session == nullptr)
+		{
+			MW_LOG_WARN("DRM session at slot %d was cleared before it could be reused", selectedSlot);
+			err = MW_DRM_SELF_ABORT;
+		}
+		return session;
 	}
 
 	if ((code != KEY_INIT) || (selectedSlot == INVALID_SESSION_SLOT))

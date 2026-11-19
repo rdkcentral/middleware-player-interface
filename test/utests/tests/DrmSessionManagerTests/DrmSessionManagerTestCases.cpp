@@ -1392,6 +1392,7 @@ struct KeyWaitState
 	KeyState state = KEY_PENDING;
 	int waitCalls = 0;
 	bool inWait = false;
+	bool enteredWait = false;
 	bool destroyed = false;
 	bool destroyedDuringWait = false;
 
@@ -1407,7 +1408,13 @@ struct KeyWaitState
 	bool WaitUntilInWait(std::chrono::milliseconds timeout)
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		return cv.wait_for(lock, timeout, [this] { return inWait; });
+		return cv.wait_for(lock, timeout, [this] { return enteredWait; });
+	}
+
+	bool WaitForWaitCalls(int count, std::chrono::milliseconds timeout)
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		return cv.wait_for(lock, timeout, [this, count] { return waitCalls >= count; });
 	}
 };
 
@@ -1440,6 +1447,7 @@ public:
 		std::unique_lock<std::mutex> lock(shared.mutex);
 		shared.waitCalls++;
 		shared.inWait = true;
+		shared.enteredWait = true;
 		shared.cv.notify_all();
 		bool reached = shared.cv.wait_for(lock, std::chrono::milliseconds(timeout),
 			[&shared, state] { return shared.state != KEY_PENDING || shared.destroyed; }) && (shared.state == state);
@@ -1449,6 +1457,25 @@ public:
 
 private:
 	KeyWaitState &mState;
+};
+
+/**
+ * @brief Joins a test worker thread on every exit path, so a failed ASSERT cannot std::terminate the binary.
+ */
+class ScopedJoin
+{
+public:
+	explicit ScopedJoin(std::thread &thread) : mThread(thread) {}
+	~ScopedJoin()
+	{
+		if (mThread.joinable())
+		{
+			mThread.join();
+		}
+	}
+
+private:
+	std::thread &mThread;
 };
 
 /**
@@ -1516,6 +1543,7 @@ TEST_F(DrmSessionManagerTeardownTests, ClearSessionDataDuringKeyWait_AbortsWaitA
 	std::atomic<KeyState> result{KEY_INIT};
 	int selectedSlot = -1;
 	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
 	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
 
 	auto start = std::chrono::steady_clock::now();
@@ -1543,6 +1571,7 @@ TEST_F(DrmSessionManagerTeardownTests, ForceClearDrmSessionDuringKeyWait_AbortsW
 	std::atomic<KeyState> result{KEY_INIT};
 	int selectedSlot = -1;
 	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
 	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
 
 	auto start = std::chrono::steady_clock::now();
@@ -1556,6 +1585,7 @@ TEST_F(DrmSessionManagerTeardownTests, ForceClearDrmSessionDuringKeyWait_AbortsW
 	EXPECT_TRUE(mWaitState.destroyed);
 	EXPECT_FALSE(mWaitState.destroyedDuringWait);
 	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
+	EXPECT_FALSE(mDrmSessionManager->getFailedKeyIdStatus(0)) << "an interrupted wait must not mark the key as failed";
 }
 
 /**
@@ -1569,6 +1599,7 @@ TEST_F(DrmSessionManagerTeardownTests, NonForceClearDrmSession_DoesNotAbortKeyWa
 	int selectedSlot = -1;
 	auto start = std::chrono::steady_clock::now();
 	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
 	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
 	mDrmSessionManager->clearDrmSession(false);
 	waiter.join();
@@ -1585,9 +1616,10 @@ TEST_F(DrmSessionManagerTeardownTests, KeyReadyAfterSeveralSlices_ReusesSession)
 {
 	KeyWaitDrmSession *session = InstallPendingSession();
 	std::thread licence([&] {
-		std::this_thread::sleep_for(std::chrono::milliseconds(250));
+		mWaitState.WaitForWaitCalls(2, std::chrono::seconds(4));
 		mWaitState.SetState(KEY_READY);
 	});
+	ScopedJoin joinLicence(licence);
 	int selectedSlot = -1;
 	KeyState result = CallGetDrmSession(selectedSlot);
 	licence.join();
@@ -1606,9 +1638,10 @@ TEST_F(DrmSessionManagerTeardownTests, KeyErrorDuringWait_ReturnsEarly)
 {
 	InstallPendingSession();
 	std::thread licence([&] {
-		std::this_thread::sleep_for(std::chrono::milliseconds(150));
+		mWaitState.WaitForWaitCalls(1, std::chrono::seconds(4));
 		mWaitState.SetState(KEY_ERROR);
 	});
+	ScopedJoin joinLicence(licence);
 	auto start = std::chrono::steady_clock::now();
 	int selectedSlot = -1;
 	KeyState result = CallGetDrmSession(selectedSlot);
