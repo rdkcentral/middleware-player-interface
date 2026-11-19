@@ -1395,6 +1395,7 @@ struct KeyWaitState
 	bool enteredWait = false;
 	bool destroyed = false;
 	bool destroyedDuringWait = false;
+	bool aborted = false;
 
 	void SetState(KeyState newState)
 	{
@@ -1434,7 +1435,17 @@ public:
 	}
 	void generateDRMSession(const uint8_t *, uint32_t, std::string &) override {}
 	DrmData* generateKeyRequest(std::string &, uint32_t) override { return nullptr; }
-	int processDRMKey(DrmData *, uint32_t) override { return 0; }
+	int processDRMKey(DrmData *, uint32_t timeout) override
+	{
+		KeyWaitState &shared = mState;
+		std::unique_lock<std::mutex> lock(shared.mutex);
+		shared.inWait = true;
+		shared.enteredWait = true;
+		shared.cv.notify_all();
+		shared.cv.wait_for(lock, std::chrono::milliseconds(timeout), [&shared] { return shared.aborted; });
+		shared.inWait = false;
+		return shared.aborted ? -1 : 0;
+	}
 	void clearDecryptContext() override {}
 	KeyState getState() override
 	{
@@ -1453,6 +1464,16 @@ public:
 			[&shared, state] { return shared.state != KEY_PENDING || shared.destroyed; }) && (shared.state == state);
 		shared.inWait = false;
 		return reached;
+	}
+
+protected:
+	void abortKeyWait() override
+	{
+		{
+			std::lock_guard<std::mutex> lock(mState.mutex);
+			mState.aborted = true;
+		}
+		mState.cv.notify_all();
 	}
 
 private:
@@ -1705,4 +1726,43 @@ TEST_F(DrmSessionManagerTeardownTests, ClearSessionData_ResetsAllSlots)
 		EXPECT_TRUE(mDrmSessionManager->drmSessionContexts[i].data.empty());
 	}
 	EXPECT_EQ(mWaitState.waitCalls, 0);
+}
+
+/**
+ * @brief RDKEMW-27872: clearing a slot while processDRMKey() waits for the key (license
+ *        being applied, session held with AcquireForUse) aborts the key wait instead of
+ *        PrepareForDestruction() timing out and freeing the session under the caller.
+ */
+TEST_F(DrmSessionManagerTeardownTests, ClearDuringProcessDRMKey_AbortsKeyWaitBeforeDelete)
+{
+	KeyWaitDrmSession *session = InstallPendingSession();
+	ASSERT_TRUE(session->AcquireForUse());
+	std::atomic<int> rc{1};
+	std::thread licence([&] {
+		rc = session->processDRMKey(nullptr, 5000);
+		session->ReleaseAfterUse();
+	});
+	ScopedJoin joinLicence(licence);
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+
+	auto start = std::chrono::steady_clock::now();
+	mDrmSessionManager->clearSessionData();
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	licence.join();
+
+	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+	EXPECT_EQ(rc.load(), -1);
+	EXPECT_TRUE(mWaitState.destroyed);
+	EXPECT_FALSE(mWaitState.destroyedDuringWait);
+}
+
+/**
+ * @brief A session marked for destruction refuses new users.
+ */
+TEST_F(DrmSessionManagerTeardownTests, PrepareForDestruction_RejectsNewUse)
+{
+	KeyWaitDrmSession *session = InstallPendingSession();
+	session->PrepareForDestruction(0);
+	EXPECT_FALSE(session->AcquireForUse());
+	EXPECT_TRUE(mWaitState.aborted);
 }
