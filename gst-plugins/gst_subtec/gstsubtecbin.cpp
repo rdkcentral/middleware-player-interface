@@ -254,14 +254,26 @@ type_found (GstElement * typefind, guint probability,
       {
         subtecbin->demux = gst_element_factory_create(factory, NULL);        
 
-        GstPad *demux_pad = gst_element_get_static_pad(subtecbin->demux, "src");
-        GstCaps *demux_caps = gst_pad_get_pad_template_caps(demux_pad);
+        GstPad *demux_pad = subtecbin->demux ? gst_element_get_static_pad(subtecbin->demux, "src") : NULL;
+        GstCaps *demux_caps = demux_pad ? gst_pad_get_pad_template_caps(demux_pad) : NULL;
+        if (demux_pad)
+        {
+          gst_object_unref(demux_pad);
+        }
 
         GST_DEBUG_OBJECT(subtecbin, "seek allowed caps %" GST_PTR_FORMAT, demux_caps);
         auto ttml_formatter_factory = gst_element_factory_find("vipertransform");
-        if (gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
+        if (ttml_formatter_factory != NULL)
         {
-          subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+          if (demux_caps && gst_element_factory_can_sink_all_caps(ttml_formatter_factory, demux_caps))
+          {
+            subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
+          }
+          gst_object_unref(ttml_formatter_factory);
+        }
+        if (demux_caps)
+        {
+          gst_caps_unref(demux_caps);
         }
       }
     }
