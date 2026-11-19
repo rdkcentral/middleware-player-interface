@@ -1440,6 +1440,7 @@ public:
 		KeyWaitState &shared = mState;
 		std::unique_lock<std::mutex> lock(shared.mutex);
 		shared.inWait = true;
+		shared.enteredWait = true;
 		shared.cv.notify_all();
 		shared.cv.wait_for(lock, std::chrono::milliseconds(timeout), [&shared] { return shared.aborted; });
 		shared.inWait = false;
@@ -1741,6 +1742,7 @@ TEST_F(DrmSessionManagerTeardownTests, ClearDuringProcessDRMKey_AbortsKeyWaitBef
 		rc = session->processDRMKey(nullptr, 5000);
 		session->ReleaseAfterUse();
 	});
+	ScopedJoin joinLicence(licence);
 	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
 
 	auto start = std::chrono::steady_clock::now();

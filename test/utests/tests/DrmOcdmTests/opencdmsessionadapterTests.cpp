@@ -34,6 +34,8 @@
 #include <cstring>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include <chrono>
 #include "opencdmsessionadapter.h"
 #include "MockOpenCdm.h"
@@ -2151,16 +2153,64 @@ TEST_F(OCDMErrorMessageCallbackTests, AbsentReceiverStillTransitionsState)
 }
 
 /**
- * @brief RDKEMW-27872: PrepareForDestruction() makes an in-flight processDRMKey() key wait
- *        return at once with KEY_ERROR instead of running to its timeout, and later
- *        waitForState() calls fail immediately.
+ * @brief Exposes the key state so tests can put the adapter in KEY_READY.
  */
-TEST(OCDMSessionAdapter, PrepareForDestruction_AbortsProcessDRMKeyWait)
+class KeyStateOCDMSessionAdapter : public OCDMSessionAdapter
 {
+public:
+    using OCDMSessionAdapter::OCDMSessionAdapter;
+    void SetKeyState(KeyState state) { m_eKeyState = state; }
+};
+
+/**
+ * @brief Installs an opencdm mock whose session update reports when processDRMKey()
+ *        has handed the license to OCDM and is about to block on the key status.
+ */
+class OpenCdmUpdateProbe
+{
+public:
+    void Install()
+    {
+        g_mockopencdm = new testing::NiceMock<MockOpenCdm>();
+        ON_CALL(*g_mockopencdm, opencdm_session_update(testing::_, testing::_, testing::_))
+            .WillByDefault(testing::Invoke([this](struct OpenCDMSession*, const uint8_t*, const uint16_t) {
+                {
+                    std::lock_guard<std::mutex> lock(mMutex);
+                    mUpdated = true;
+                }
+                mCv.notify_all();
+                return ERROR_NONE;
+            }));
+    }
+    ~OpenCdmUpdateProbe()
+    {
+        delete g_mockopencdm;
+        g_mockopencdm = nullptr;
+    }
+    bool WaitForUpdate()
+    {
+        std::unique_lock<std::mutex> lock(mMutex);
+        return mCv.wait_for(lock, std::chrono::seconds(2), [this] { return mUpdated; });
+    }
+
+private:
+    std::mutex mMutex;
+    std::condition_variable mCv;
+    bool mUpdated = false;
+};
+
+/**
+ * @brief RDKEMW-27872: PrepareForDestruction() wakes a processDRMKey() call that is blocked
+ *        on the key status, which then returns -1 with KEY_ERROR instead of running to its timeout.
+ */
+TEST(OCDMSessionAdapter, PrepareForDestruction_AbortsBlockedProcessDRMKey)
+{
+    OpenCdmUpdateProbe probe;
     DrmInfo drmInfo;
     auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
     TestDrmCallbacks drmCallbacks;
     OCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+    probe.Install();
     std::vector<uint8_t> keyData(16, 0x01);
     DrmData key(reinterpret_cast<const char*>(keyData.data()), keyData.size());
 
@@ -2171,15 +2221,55 @@ TEST(OCDMSessionAdapter, PrepareForDestruction_AbortsProcessDRMKeyWait)
         rc = adapter.processDRMKey(&key, 5000);
         adapter.ReleaseAfterUse();
     });
+    bool updated = probe.WaitForUpdate();
+    // Give processDRMKey() time to block on the key status so the wake-up path is exercised.
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     adapter.PrepareForDestruction(5000);
     licence.join();
     auto elapsed = std::chrono::steady_clock::now() - start;
 
+    EXPECT_TRUE(updated);
     EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
     EXPECT_EQ(rc.load(), -1);
     EXPECT_EQ(adapter.getState(), KEY_ERROR);
+}
 
-    start = std::chrono::steady_clock::now();
+/**
+ * @brief A waitForState() caller already blocked on the key is woken by PrepareForDestruction() and fails.
+ */
+TEST(OCDMSessionAdapter, PrepareForDestruction_WakesBlockedWaitForState)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    TestDrmCallbacks drmCallbacks;
+    OCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+
+    std::atomic<int> result{-1};
+    auto start = std::chrono::steady_clock::now();
+    std::thread waiter([&] { result = adapter.waitForState(KEY_READY, 5000) ? 1 : 0; });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    adapter.PrepareForDestruction(0);
+    waiter.join();
+
+    EXPECT_EQ(result.load(), 0);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(1000));
+}
+
+/**
+ * @brief A session that is already KEY_READY must not report a successful wait once it is being destroyed.
+ */
+TEST(OCDMSessionAdapter, PrepareForDestruction_ReadySessionWaitForStateFails)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    TestDrmCallbacks drmCallbacks;
+    KeyStateOCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+    adapter.SetKeyState(KEY_READY);
+    ASSERT_TRUE(adapter.waitForState(KEY_READY, 0));
+
+    adapter.PrepareForDestruction(0);
+
+    auto start = std::chrono::steady_clock::now();
     EXPECT_FALSE(adapter.waitForState(KEY_READY, 5000));
     EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(100));
 }

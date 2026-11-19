@@ -423,10 +423,13 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 
 bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 {
+	if (m_keyWaitAborted) {
+		return false;
+	}
 	if (m_eKeyState == state) {
 		return true;
 	}
-	if (m_keyWaitAborted || !m_keyStatusWait.wait(timeout)) {
+	if (!m_keyStatusWait.wait(timeout)) {
 		return false;
 	}
 	return !m_keyWaitAborted && m_eKeyState == state;
