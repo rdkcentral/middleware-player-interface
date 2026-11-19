@@ -1515,10 +1515,14 @@ protected:
 		return session;
 	}
 
+	std::atomic<int> mLastErr{0};
+
 	KeyState CallGetDrmSession(int &selectedSlot)
 	{
 		int err = 0;
-		return mDrmSessionManager->getDrmSession(err, mHelper, selectedSlot, nullptr);
+		KeyState state = mDrmSessionManager->getDrmSession(err, mHelper, selectedSlot, nullptr);
+		mLastErr = err;
+		return state;
 	}
 };
 
@@ -1541,6 +1545,7 @@ TEST_F(DrmSessionManagerTeardownTests, ClearSessionDataDuringKeyWait_AbortsWaitA
 
 	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
 	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_EQ(mLastErr.load(), MW_DRM_SELF_ABORT) << "Stop must not be reported to the app as a DRM error";
 	EXPECT_EQ(selectedSlot, 0);
 	EXPECT_TRUE(mWaitState.destroyed);
 	EXPECT_FALSE(mWaitState.destroyedDuringWait);
@@ -1567,6 +1572,7 @@ TEST_F(DrmSessionManagerTeardownTests, ForceClearDrmSessionDuringKeyWait_AbortsW
 
 	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
 	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_EQ(mLastErr.load(), MW_DRM_SELF_ABORT);
 	EXPECT_TRUE(mWaitState.destroyed);
 	EXPECT_FALSE(mWaitState.destroyedDuringWait);
 	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
@@ -1647,6 +1653,7 @@ TEST_F(DrmSessionManagerTeardownTests, KeyNeverReady_WaitsFullTimeout)
 	auto elapsed = std::chrono::steady_clock::now() - start;
 
 	EXPECT_EQ(result, KEY_ERROR);
+	EXPECT_NE(mLastErr.load(), MW_DRM_SELF_ABORT);
 	EXPECT_GE(elapsed, std::chrono::milliseconds(340));
 	EXPECT_GE(mWaitState.waitCalls, 4);
 }
@@ -1662,7 +1669,7 @@ TEST_F(DrmSessionManagerTeardownTests, InitializeDrmSession_ClearedSlot_ReturnsE
 	KeyState result = mDrmSessionManager->initializeDrmSession(mHelper, 0, err);
 
 	EXPECT_EQ(result, KEY_ERROR);
-	EXPECT_EQ(err, MW_DRM_INIT_FAILED);
+	EXPECT_EQ(err, MW_DRM_SELF_ABORT);
 }
 
 /**

@@ -143,14 +143,16 @@ void DrmSessionManager::clearSessionData()
 /**
  * @brief Wait for a session key to become ready, giving up early on key error or a session clear
  */
-bool DrmSessionManager::waitForKeyReady(DrmSession *session, uint32_t timeoutMs)
+bool DrmSessionManager::waitForKeyReady(DrmSession *session, uint32_t timeoutMs, bool &aborted)
 {
+	aborted = false;
 	uint32_t remainingMs = timeoutMs;
 	do
 	{
 		if (mSessionTeardownCount.load() > 0)
 		{
 			MW_LOG_WARN("DRM key wait aborted: session data is being cleared");
+			aborted = true;
 			return false;
 		}
 		const uint32_t sliceMs = std::min(remainingMs, DRM_KEY_WAIT_SLICE_MS);
@@ -669,6 +671,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	if (drmSessionContexts[selectedSlot].drmSession == NULL)
 	{
 		MW_LOG_WARN("DRM session at slot %d was cleared during license acquisition", selectedSlot);
+		err = MW_DRM_SELF_ABORT;
 		return nullptr;
 	}
 	if (localSession.isSessionValid())
@@ -975,10 +978,17 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				}
 				else if (existingState <= KEY_READY)
 				{
-					if (waitForKeyReady(drmSessionContexts[sessionSlot].drmSession, drmHelper->keyProcessTimeout()))
+					bool keyWaitAborted = false;
+					if (waitForKeyReady(drmSessionContexts[sessionSlot].drmSession, drmHelper->keyProcessTimeout(), keyWaitAborted))
 					{
 						MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 						return KEY_READY;
+					}
+					if (keyWaitAborted)
+					{
+						/* Stop/teardown in progress: not a key failure, so no error is reported to the app */
+						err = MW_DRM_SELF_ABORT;
+						return KEY_ERROR;
 					}
 					MW_LOG_WARN("key was never ready for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
 					// CID-164094 : Added the mutex lock due to overriding the isFailedKeyEntries variable
@@ -1059,8 +1069,8 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
 	if (drmSessionContexts[sessionSlot].drmSession == NULL)
 	{
-		MW_LOG_ERR("DRM session at slot %d was cleared before initialization", sessionSlot);
-		err = MW_DRM_INIT_FAILED;
+		MW_LOG_WARN("DRM session at slot %d was cleared before initialization", sessionSlot);
+		err = MW_DRM_SELF_ABORT;
 		return KEY_ERROR;
 	}
 	MW_LOG_INFO("DRM session Custom Data - %s ", mCustomData.empty()?"NULL":mCustomData.c_str());
