@@ -28,6 +28,7 @@
 #include <iostream>
 #include "DrmHelper.h"
 #include <inttypes.h>
+#include <memory>
 #include "PlayerUtils.h"
 #include "PlayerLogManager.h"
 #include "ContentSecurityManager.h"
@@ -114,9 +115,15 @@ void DrmSessionManager::clearSessionData()
 			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
 			 * (called from a GStreamer pipeline thread via a cached raw pointer)
 			 * has completed, before freeing the object. */
-			drmSessionContexts[i].drmSession->PrepareForDestruction();
-			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
-			drmSessionContexts[i] = DrmSessionContext();
+			if (drmSessionContexts[i].drmSession->PrepareForDestruction())
+			{
+				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+				drmSessionContexts[i] = DrmSessionContext();
+			}
+			else
+			{
+				MW_LOG_ERR("DrmSessionManager::clearSessionData : slot %d not drained; skipping delete to avoid use-after-free", i);
+			}
 		}
 
 		{
@@ -216,8 +223,14 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 			{
 				MW_LOG_WARN("DrmSessionManager:: Clearing failed Session Data Slot : %d", i);
 				/* DELIA-70726 fix: see clearSessionData() for rationale. */
-				drmSessionContexts[i].drmSession->PrepareForDestruction();
-				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+				if (drmSessionContexts[i].drmSession->PrepareForDestruction())
+				{
+					MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+				}
+				else
+				{
+					MW_LOG_ERR("DrmSessionManager::clearDrmSession : slot %d not drained; skipping delete to avoid use-after-free", i);
+				}
 			}
 		}
 	}
@@ -949,7 +962,14 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 		 * call already in flight against this session finishes, so the delete
 		 * below cannot race with OCDMSessionAdapter::verifyOutputProtection()/
 		 * decrypt() running on the old pipeline's multiqueue thread. */
-		drmSessionContexts[sessionSlot].drmSession->PrepareForDestruction();
+		if (!drmSessionContexts[sessionSlot].drmSession->PrepareForDestruction())
+		{
+			// PLI-025: Never delete/reuse slot while in-flight ops are still active.
+			MW_LOG_ERR("Unable to replace DRM session in slot %d: previous session still has active operations", sessionSlot);
+			std::lock_guard<std::mutex> failedKeyGuard(cachedKeyMutex);
+			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+			return KEY_ERROR;
+		}
 		MW_SAFE_DELETE(drmSessionContexts[sessionSlot].drmSession);
 	}
         this->ProfileUpdateCb();
