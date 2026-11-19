@@ -139,6 +139,16 @@ public:
 	 */
 	void PrepareForDestruction(uint32_t timeoutMs = 3000);
 
+protected:
+	/**
+	 * @fn abortKeyWait
+	 * @brief Called by PrepareForDestruction() so that a key wait in processDRMKey()
+	 *        or waitForState() returns at once instead of running to its timeout.
+	 */
+	virtual void abortKeyWait() {}
+
+public:
+
 
 	/**
 	 * @brief Create drm session with given init data

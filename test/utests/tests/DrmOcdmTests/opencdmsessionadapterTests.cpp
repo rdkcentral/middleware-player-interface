@@ -33,6 +33,7 @@
 #include <vector>
 #include <cstring>
 #include <thread>
+#include <atomic>
 #include <chrono>
 #include "opencdmsessionadapter.h"
 #include "MockOpenCdm.h"
@@ -2147,4 +2148,38 @@ TEST_F(OCDMErrorMessageCallbackTests, AbsentReceiverStillTransitionsState)
     EXPECT_NO_THROW(m_callbacks->error_message_callback(m_session, m_userData, "no receiver"));
 
     EXPECT_EQ(adapter.getState(), KEY_ERROR);
+}
+
+/**
+ * @brief RDKEMW-27872: PrepareForDestruction() makes an in-flight processDRMKey() key wait
+ *        return at once with KEY_ERROR instead of running to its timeout, and later
+ *        waitForState() calls fail immediately.
+ */
+TEST(OCDMSessionAdapter, PrepareForDestruction_AbortsProcessDRMKeyWait)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    TestDrmCallbacks drmCallbacks;
+    OCDMSessionAdapter adapter(drmHelper, &drmCallbacks);
+    std::vector<uint8_t> keyData(16, 0x01);
+    DrmData key(reinterpret_cast<const char*>(keyData.data()), keyData.size());
+
+    ASSERT_TRUE(adapter.AcquireForUse());
+    std::atomic<int> rc{1};
+    auto start = std::chrono::steady_clock::now();
+    std::thread licence([&] {
+        rc = adapter.processDRMKey(&key, 5000);
+        adapter.ReleaseAfterUse();
+    });
+    adapter.PrepareForDestruction(5000);
+    licence.join();
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+    EXPECT_EQ(rc.load(), -1);
+    EXPECT_EQ(adapter.getState(), KEY_ERROR);
+
+    start = std::chrono::steady_clock::now();
+    EXPECT_FALSE(adapter.waitForState(KEY_READY, 5000));
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(100));
 }

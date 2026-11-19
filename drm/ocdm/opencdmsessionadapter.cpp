@@ -330,8 +330,14 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 	}
 
 	if (status == OpenCDMError::ERROR_NONE) {
-		if (m_keyStatusReady.wait(timeout) == true) {
+		if (!m_keyWaitAborted && m_keyStatusReady.wait(timeout) == true) {
 			MW_LOG_WARN("Key Status updated");
+		}
+		if (m_keyWaitAborted) {
+			MW_LOG_WARN("processKey: key wait aborted, session is being destroyed");
+			m_eKeyState = KEY_ERROR;
+			m_keyStatusWait.signal();
+			return retValue;
 		}
 		// The key could be signalled ready before the session is even created, so we need to check we didn't miss it
 		if (m_keyStateIndeterminate) {
@@ -420,10 +426,10 @@ bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 	if (m_eKeyState == state) {
 		return true;
 	}
-	if (!m_keyStatusWait.wait(timeout)) {
+	if (m_keyWaitAborted || !m_keyStatusWait.wait(timeout)) {
 		return false;
 	}
-	return m_eKeyState == state;
+	return !m_keyWaitAborted && m_eKeyState == state;
 }
 
 

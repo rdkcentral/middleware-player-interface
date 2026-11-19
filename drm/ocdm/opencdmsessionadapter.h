@@ -32,6 +32,7 @@
 #include "open_cdm.h"
 #include "open_cdm_adapter.h"
 #include <condition_variable>
+#include <atomic>
 #include "DrmCallbacks.h"
 
 using namespace std;
@@ -113,6 +114,7 @@ protected:
 	Event m_challengeReady;
 	Event m_keyStatusReady;
 	Event m_keyStatusWait;
+	std::atomic<bool> m_keyWaitAborted{false};
 	string m_sessionID;
 
 	std::vector<uint8_t> m_keyId;
@@ -121,6 +123,12 @@ protected:
 	DrmCallbacks *m_drmCallbacks;
 
 	bool verifyOutputProtection();
+	void abortKeyWait() override
+	{
+		m_keyWaitAborted = true;
+		m_keyStatusReady.signal();
+		m_keyStatusWait.signal();
+	}
 public:
 	void processOCDMChallenge(const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize);
 	void keysUpdatedOCDM();
