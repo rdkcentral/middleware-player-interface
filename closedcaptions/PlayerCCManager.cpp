@@ -853,6 +853,11 @@ bool PlayerCCManagerBase::IsOOBCCRenderingSupported()
 PlayerCCManagerBase *PlayerCCManager::mInstance = NULL;
 
 /**
+ * @brief Guards creation and destruction of the singleton
+ */
+static std::mutex sInstanceMutex;
+
+/**
  * @brief Determines which CC manager subclass to instantiate.
  */
 PlayerCCManager::CCManagerType PlayerCCManager::mCCManagerType =
@@ -863,32 +868,30 @@ PlayerCCManager::CCManagerType PlayerCCManager::mCCManagerType =
  */
 PlayerCCManagerBase *PlayerCCManager::GetInstance()
 {
-	static std::once_flag initFlag;
-	std::call_once(initFlag, []() {
-		if (mInstance == NULL)
-		{
+	std::lock_guard<std::mutex> lock(sInstanceMutex);
+	if (mInstance == NULL)
+	{
 #if defined(SUBTITLE_SUPPORTED)
-			if (mCCManagerType == CCManagerType::DirectRialtoCCManager)
-			{
-				MW_LOG_INFO("PlayerCCManager::Creating DirectRialto CC manager");
-				mInstance = new PlayerDirectRialtoCCManager();
-			}
-			else if (mCCManagerType == CCManagerType::RialtoCCManager)
-			{
-				MW_LOG_INFO("PlayerCCManager::Creating Rialto CC manager");
-				mInstance = new PlayerRialtoCCManager();
-			}
-			else
-			{
-				MW_LOG_INFO("PlayerCCManager::Creating Subtec CC manager");
-				mInstance = new PlayerSubtecCCManager();
-			}
-#else
-			MW_LOG_WARN("No CC support on simulators. Creating a dummy instance!");
-			mInstance = new PlayerFakeCCManager();
-#endif
+		if (mCCManagerType == CCManagerType::DirectRialtoCCManager)
+		{
+			MW_LOG_INFO("PlayerCCManager::Creating DirectRialto CC manager");
+			mInstance = new PlayerDirectRialtoCCManager();
 		}
-	});
+		else if (mCCManagerType == CCManagerType::RialtoCCManager)
+		{
+			MW_LOG_INFO("PlayerCCManager::Creating Rialto CC manager");
+			mInstance = new PlayerRialtoCCManager();
+		}
+		else
+		{
+			MW_LOG_INFO("PlayerCCManager::Creating Subtec CC manager");
+			mInstance = new PlayerSubtecCCManager();
+		}
+#else
+		MW_LOG_WARN("No CC support on simulators. Creating a dummy instance!");
+		mInstance = new PlayerFakeCCManager();
+#endif
+	}
 	return mInstance;
 }
 
@@ -957,6 +960,7 @@ void PlayerCCManager::SetRialto(bool bIsRialto, bool bIsDirectRialto)
  */
 void PlayerCCManager::DestroyInstance()
 {
+	std::lock_guard<std::mutex> lock(sInstanceMutex);
 	if (mInstance)
 	{
 		delete mInstance;
