@@ -666,7 +666,6 @@ int PlayerCCManagerBase::SetTrack(const std::string &track, const CCFormat forma
 	if (!EnsureRendererCommsInitialized())
 	{
 		MW_LOG_WARN("PlayerCCManagerBase::SetTrack() - renderer initialization failed");
-		return -1;
 	}
 	int ret = -1;
 	unsigned int trackNum = 0;
@@ -900,6 +899,7 @@ PlayerCCManagerBase *PlayerCCManager::GetInstance()
  */
 bool PlayerCCManager::HasInstance()
 {
+	std::lock_guard<std::mutex> lock(sInstanceMutex);
 	return mInstance != NULL;
 }
 
@@ -943,6 +943,7 @@ void PlayerCCManager::SetRialto(bool bIsRialto, bool bIsDirectRialto)
 		newType = CCManagerType::RialtoCCManager;
 	}
 
+	std::lock_guard<std::mutex> lock(sInstanceMutex);
 	if (mInstance == NULL)
 	{
 		MW_LOG_INFO("PlayerCCManager::CCManagerType:%d", static_cast<int>(newType));
