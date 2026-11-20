@@ -2278,7 +2278,7 @@ TEST(InterfacePlayerPriv, DestructorCalledOnStackObject_start) {
  * | 07 | Verify bufferUnderrun is initialized to false. | stream.bufferUnderrun = uninitialized | stream.bufferUnderrun equals false. | Should Pass |
  * | 08 | Verify eosReached is initialized to false. | stream.eosReached = uninitialized | stream.eosReached equals false. | Should Pass |
  * | 09 | Verify sourceConfigured is initialized to false. | stream.sourceConfigured = uninitialized | stream.sourceConfigured equals false. | Should Pass |
- * | 10 | Verify locking and unlocking sourceLock succeed. | pthread_mutex_lock(&stream.sourceLock), pthread_mutex_unlock(&stream.sourceLock) | Both lock and unlock return 0. | Should Pass |
+ * | 10 | Verify locking and unlocking sourceLock succeed. | std::lock_guard<std::mutex> | Lock acquired and released successfully. | Should Pass |
  * | 11 | Verify timeScale is initialized to 1u. | stream.timeScale = uninitialized | stream.timeScale equals 1u. | Should Pass |
  * | 12 | Verify trackId is initialized to -1. | stream.trackId = uninitialized | stream.trackId equals -1. | Should Pass |
  * | 13 | Verify firstBufferProcessed is initialized to false. | stream.firstBufferProcessed = uninitialized | stream.firstBufferProcessed equals false. | Should Pass |
@@ -2325,12 +2325,7 @@ TEST(gst_media_stream, DefaultConstructionPositiveTest) {
         EXPECT_FALSE(stream.sourceConfigured);
 
         // Check sourceLock by attempting to lock and unlock
-        int lockResult = pthread_mutex_lock(&stream.sourceLock);
-        std::cout << "Locking sourceLock returned: " << lockResult << std::endl;
-        EXPECT_EQ(lockResult, 0);
-        int unlockResult = pthread_mutex_unlock(&stream.sourceLock);
-        std::cout << "Unlocking sourceLock returned: " << unlockResult << std::endl;
-        EXPECT_EQ(unlockResult, 0);
+        std::lock_guard<std::mutex> sourceLock(stream.sourceLock);
 
         // Check timeScale
         std::cout << "timeScale value: " << stream.timeScale << std::endl;

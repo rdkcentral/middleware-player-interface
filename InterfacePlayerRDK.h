@@ -329,7 +329,7 @@ class InterfacePlayerRDK
         	std::function<void(const unsigned char *, int, int, int)> gstCbExportYUVFrame;
         	pthread_mutex_t mProtectionLock;
         	bool mFirstFrameRequired;
-        	bool mPauseInjector;
+		std::atomic<bool> mPauseInjector;
         	bool mResumeInjector;
         	bool PipelineSetToReady;				/**< To indicate the pipeline is set to ready forcefully */
         	std::mutex mSourceSetupMutex;			/**< Protects the source setup state>*/

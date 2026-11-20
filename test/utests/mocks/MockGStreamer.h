@@ -77,6 +77,8 @@ public:
 	MOCK_METHOD(gboolean, gst_buffer_copy_into, (GstBuffer *dest, GstBuffer *src, GstBufferCopyFlags flags, gsize offset, gsize size));
 	MOCK_METHOD(GstFlowReturn, gst_app_src_push_buffer, (GstAppSrc *appsrc, GstBuffer *buffer));
 	MOCK_METHOD(GstBuffer *, gst_buffer_new_wrapped, (gpointer data, gsize size));
+	MOCK_METHOD(GstBuffer *, gst_buffer_new_wrapped_full, (GstMemoryFlags flags, gpointer data,
+		gsize maxsize, gsize offset, gsize size, gpointer user_data, GDestroyNotify notify));
 	MOCK_METHOD(GstEvent *, gst_event_new_protection, (const gchar *system_id, GstBuffer *data, const gchar *origin));
 	MOCK_METHOD(guint64, gst_app_src_get_current_level_bytes, (GstAppSrc *appsrc));
 	MOCK_METHOD(GstStructure *, gst_structure_new, ());
