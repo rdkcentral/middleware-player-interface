@@ -23,6 +23,7 @@
  */
 
 #include "_base64.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -42,6 +43,10 @@ char *base64_Encode(const unsigned char *src, size_t len)
 	if( !len )
 	{
 		return strdup("");
+	}
+	if( len > SIZE_MAX / 4 * 3 )
+	{
+		return NULL;
 	}
 	const unsigned char *fin = &src[len];
 	const static char *encode = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; // base64

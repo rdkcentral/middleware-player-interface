@@ -95,3 +95,73 @@ TEST_F(OCDMSessionAdapterTests, generateDRMSession)
 
 	m_ocdmsessionadapter->generateDRMSession(initData, f_cbInitData, customData);
 }
+
+// a second generateDRMSession() must tear down the old session and drop its state.
+TEST_F(OCDMSessionAdapterTests, generateDRMSessionRecreateClosesOldSessionAndResetsState)
+{
+	uint8_t initData[] = {0, 1, 2, 3};
+	std::string customData = "Custom Data";
+	OpenCDMSession *oldSession = reinterpret_cast<OpenCDMSession *>(0x1111);
+	OpenCDMSession *newSession = reinterpret_cast<OpenCDMSession *>(0x2222);
+	const uint8_t challenge[] = {'c', 'h', 'a', 'l'};
+	const uint8_t key[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+
+	{
+		::testing::InSequence seq;
+		EXPECT_CALL(*g_mockopencdm, opencdm_construct_session(_, _, _, _, _, _, _, _, _, _))
+			.WillOnce(::testing::DoAll(::testing::SetArgPointee<9>(oldSession), Return(ERROR_NONE)));
+		EXPECT_CALL(*g_mockopencdm, opencdm_session_close(oldSession)).Times(1).WillOnce(Return(ERROR_NONE));
+		EXPECT_CALL(*g_mockopencdm, opencdm_destruct_session(oldSession)).Times(1).WillOnce(Return(ERROR_NONE));
+		EXPECT_CALL(*g_mockopencdm, opencdm_construct_session(_, _, _, _, _, _, _, _, _, _))
+			.WillOnce(::testing::DoAll(::testing::SetArgPointee<9>(newSession), Return(ERROR_NONE)));
+		// Closed by the adapter destructor in TearDown().
+		EXPECT_CALL(*g_mockopencdm, opencdm_session_close(newSession)).Times(1).WillOnce(Return(ERROR_NONE));
+		EXPECT_CALL(*g_mockopencdm, opencdm_destruct_session(newSession)).Times(1).WillOnce(Return(ERROR_NONE));
+	}
+
+	m_ocdmsessionadapter->generateDRMSession(initData, sizeof(initData), customData);
+
+	// Seed state that belongs to the old session.
+	m_ocdmsessionadapter->processOCDMChallenge("http://old", challenge, sizeof(challenge));
+	m_ocdmsessionadapter->keyUpdateOCDM(key, sizeof(key));
+	m_ocdmsessionadapter->keysUpdatedOCDM();
+	ASSERT_EQ(1u, m_ocdmsessionadapter->getUsableKeys().size());
+
+	m_ocdmsessionadapter->generateDRMSession(initData, sizeof(initData), customData);
+
+	EXPECT_EQ(KEY_INIT, m_ocdmsessionadapter->getState());
+	EXPECT_TRUE(m_ocdmsessionadapter->getUsableKeys().empty());
+
+	// The old challenge signal must not be consumed by the replacement session.
+	std::string url;
+	DrmData *request = m_ocdmsessionadapter->generateKeyRequest(url, 10);
+	EXPECT_EQ(nullptr, request);
+	delete request;
+}
+
+// if the replacement session cannot be constructed, the old one is still released once.
+TEST_F(OCDMSessionAdapterTests, generateDRMSessionRecreateFailureReportsCreateFailed)
+{
+	uint8_t initData[] = {0, 1, 2, 3};
+	std::string customData = "Custom Data";
+	OpenCDMSession *oldSession = reinterpret_cast<OpenCDMSession *>(0x1111);
+	const uint8_t key[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+
+	{
+		::testing::InSequence seq;
+		EXPECT_CALL(*g_mockopencdm, opencdm_construct_session(_, _, _, _, _, _, _, _, _, _))
+			.WillOnce(::testing::DoAll(::testing::SetArgPointee<9>(oldSession), Return(ERROR_NONE)));
+		EXPECT_CALL(*g_mockopencdm, opencdm_session_close(oldSession)).Times(1).WillOnce(Return(ERROR_NONE));
+		EXPECT_CALL(*g_mockopencdm, opencdm_destruct_session(oldSession)).Times(1).WillOnce(Return(ERROR_NONE));
+		EXPECT_CALL(*g_mockopencdm, opencdm_construct_session(_, _, _, _, _, _, _, _, _, _))
+			.WillOnce(Return(ERROR_UNKNOWN));
+	}
+
+	m_ocdmsessionadapter->generateDRMSession(initData, sizeof(initData), customData);
+	m_ocdmsessionadapter->keyUpdateOCDM(key, sizeof(key));
+
+	m_ocdmsessionadapter->generateDRMSession(initData, sizeof(initData), customData);
+
+	EXPECT_EQ(KEY_ERROR_SESSION_CREATE_FAILED, m_ocdmsessionadapter->getState());
+	EXPECT_TRUE(m_ocdmsessionadapter->getUsableKeys().empty());
+}
