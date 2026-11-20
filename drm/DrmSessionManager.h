@@ -184,6 +184,7 @@ private:
 	SessionMgrState sessionMgrState;
 	std::mutex accessTokenMutex;
 	std::mutex mDrmSessionLock;
+	std::atomic<int> mSessionTeardownCount;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
 	DrmSessionCreator m_sessionCreator;
@@ -438,6 +439,20 @@ public:
 	 * @fn initializeDrmSession
 	 */
 	KeyState initializeDrmSession(DrmHelperPtr drmHelper, int sessionSlot,  int &err );
+	/**
+	 * @fn waitForKeyReady
+	 * @brief Wait for a session key to become ready, giving up early on key error, clearSessionData() or clearDrmSession(true)
+	 * @param[in] session DRM session to wait on; caller holds the slot's sessionMutex
+	 * @param[in] timeoutMs maximum wait in milliseconds
+	 * @param[out] aborted true if the wait was cut short by a session clear
+	 * @return true if the key became ready
+	 */
+	bool waitForKeyReady(DrmSession *session, uint32_t timeoutMs, bool &aborted);
+	/**
+	 * @fn getSlotSession
+	 * @return drmSession of the slot read under its sessionMutex, or nullptr if the slot was cleared
+	 */
+	DrmSession* getSlotSession(int sessionSlot);
 	/**
 	 * @fn notifyCleanup
 	 */

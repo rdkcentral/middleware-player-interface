@@ -19,6 +19,11 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <vector>
 #include <memory>
 #include "DrmSessionManager.h"
@@ -1375,3 +1380,329 @@ TEST_F(DrmSessionManagerComplexTests, DrmSessionCreator_ReturnsNull_ReportsInitF
 	EXPECT_EQ(err, MW_DRM_INIT_FAILED);
 }
 
+
+/**
+ * @brief State shared between a KeyWaitDrmSession and the test.
+ *        Lives outside the session so it stays valid after the session is deleted.
+ */
+struct KeyWaitState
+{
+	std::mutex mutex;
+	std::condition_variable cv;
+	KeyState state = KEY_PENDING;
+	int waitCalls = 0;
+	bool inWait = false;
+	bool enteredWait = false;
+	bool destroyed = false;
+	bool destroyedDuringWait = false;
+
+	void SetState(KeyState newState)
+	{
+		{
+			std::lock_guard<std::mutex> lock(mutex);
+			state = newState;
+		}
+		cv.notify_all();
+	}
+
+	bool WaitUntilInWait(std::chrono::milliseconds timeout)
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		return cv.wait_for(lock, timeout, [this] { return enteredWait; });
+	}
+
+	bool WaitForWaitCalls(int count, std::chrono::milliseconds timeout)
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		return cv.wait_for(lock, timeout, [this, count] { return waitCalls >= count; });
+	}
+};
+
+/**
+ * @brief DrmSession whose waitForState() blocks for the requested time unless the
+ *        key state changes, like OCDMSessionAdapter waiting for a license.
+ */
+class KeyWaitDrmSession : public DrmSession
+{
+public:
+	explicit KeyWaitDrmSession(KeyWaitState &state) : DrmSession("com.widevine.alpha"), mState(state) {}
+	~KeyWaitDrmSession() override
+	{
+		std::lock_guard<std::mutex> lock(mState.mutex);
+		mState.destroyed = true;
+		mState.destroyedDuringWait = mState.inWait;
+	}
+	void generateDRMSession(const uint8_t *, uint32_t, std::string &) override {}
+	DrmData* generateKeyRequest(std::string &, uint32_t) override { return nullptr; }
+	int processDRMKey(DrmData *, uint32_t) override { return 0; }
+	void clearDecryptContext() override {}
+	KeyState getState() override
+	{
+		std::lock_guard<std::mutex> lock(mState.mutex);
+		return mState.state;
+	}
+	bool waitForState(KeyState state, const uint32_t timeout) override
+	{
+		KeyWaitState &shared = mState;
+		std::unique_lock<std::mutex> lock(shared.mutex);
+		shared.waitCalls++;
+		shared.inWait = true;
+		shared.enteredWait = true;
+		shared.cv.notify_all();
+		bool reached = shared.cv.wait_for(lock, std::chrono::milliseconds(timeout),
+			[&shared, state] { return shared.state != KEY_PENDING || shared.destroyed; }) && (shared.state == state);
+		shared.inWait = false;
+		return reached;
+	}
+
+private:
+	KeyWaitState &mState;
+};
+
+/**
+ * @brief Joins a test worker thread on every exit path, so a failed ASSERT cannot std::terminate the binary.
+ */
+class ScopedJoin
+{
+public:
+	explicit ScopedJoin(std::thread &thread) : mThread(thread) {}
+	~ScopedJoin()
+	{
+		if (mThread.joinable())
+		{
+			mThread.join();
+		}
+	}
+
+private:
+	std::thread &mThread;
+};
+
+/**
+ * @brief Fixture for RDKEMW-27871: clearSessionData() racing a key wait in getDrmSession().
+ */
+class DrmSessionManagerTeardownTests : public DrmSessionManagerComplexTests
+{
+protected:
+	const std::vector<uint8_t> mKeyId = {0x01, 0x02, 0x03, 0x04};
+	std::shared_ptr<MockDrmHelper> mHelper;
+	KeyWaitState mWaitState;
+
+	void SetUp() override
+	{
+		DrmSessionManagerComplexTests::SetUp();
+		mDrmSessionManager->RegisterProfilingUpdateCb([]() {});
+		mHelper = CreateMockDrmHelper("com.widevine.alpha");
+		ON_CALL(*mHelper, getKey(_)).WillByDefault(Invoke([this](std::vector<uint8_t> &key) { key = mKeyId; }));
+		SetKeyProcessTimeout(5000);
+	}
+
+	void TearDown() override
+	{
+		mDrmSessionManager->clearSessionData();
+		DrmSessionManagerComplexTests::TearDown();
+	}
+
+	void SetKeyProcessTimeout(uint32_t timeoutMs)
+	{
+		ON_CALL(*mHelper, keyProcessTimeout()).WillByDefault(Return(timeoutMs));
+	}
+
+	/** Puts a session with a pending key for mKeyId in slot 0, as left by an in-flight license request. */
+	KeyWaitDrmSession* InstallPendingSession()
+	{
+		KeyIdEntries entries;
+		KeyIdEntry entry;
+		entry.keyId = mKeyId;
+		entries.data.push_back(entry);
+		mDrmSessionManager->AddKeyIdEntryToCache(0, entries);
+		auto *session = new KeyWaitDrmSession(mWaitState);
+		mDrmSessionManager->drmSessionContexts[0].drmSession = session;
+		mDrmSessionManager->drmSessionContexts[0].data = mKeyId;
+		return session;
+	}
+
+	std::atomic<int> mLastErr{0};
+
+	KeyState CallGetDrmSession(int &selectedSlot)
+	{
+		int err = 0;
+		KeyState state = mDrmSessionManager->getDrmSession(err, mHelper, selectedSlot, nullptr);
+		mLastErr = err;
+		return state;
+	}
+};
+
+/**
+ * @brief clearSessionData() during a key wait must not delete the session under the
+ *        waiter, and must make the wait give up instead of blocking for keyProcessTimeout.
+ */
+TEST_F(DrmSessionManagerTeardownTests, ClearSessionDataDuringKeyWait_AbortsWaitAndDeletesAfterWaiter)
+{
+	InstallPendingSession();
+	std::atomic<KeyState> result{KEY_INIT};
+	int selectedSlot = -1;
+	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+
+	auto start = std::chrono::steady_clock::now();
+	mDrmSessionManager->clearSessionData();
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	waiter.join();
+
+	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_EQ(mLastErr.load(), MW_DRM_SELF_ABORT) << "Stop must not be reported to the app as a DRM error";
+	EXPECT_EQ(selectedSlot, 0);
+	EXPECT_TRUE(mWaitState.destroyed);
+	EXPECT_FALSE(mWaitState.destroyedDuringWait);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
+	EXPECT_TRUE(mDrmSessionManager->drmSessionContexts[0].data.empty());
+}
+
+/**
+ * @brief clearDrmSession(true) (AAMP Stop/tune path) during a key wait also makes the
+ *        wait give up and deletes the session only after the waiter has left.
+ */
+TEST_F(DrmSessionManagerTeardownTests, ForceClearDrmSessionDuringKeyWait_AbortsWait)
+{
+	InstallPendingSession();
+	std::atomic<KeyState> result{KEY_INIT};
+	int selectedSlot = -1;
+	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+
+	auto start = std::chrono::steady_clock::now();
+	mDrmSessionManager->clearDrmSession(true);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	waiter.join();
+
+	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_EQ(mLastErr.load(), MW_DRM_SELF_ABORT);
+	EXPECT_TRUE(mWaitState.destroyed);
+	EXPECT_FALSE(mWaitState.destroyedDuringWait);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, nullptr);
+	EXPECT_FALSE(mDrmSessionManager->getFailedKeyIdStatus(0)) << "an interrupted wait must not mark the key as failed";
+}
+
+/**
+ * @brief clearDrmSession(false) only clears failed slots and must not cut short a healthy key wait.
+ */
+TEST_F(DrmSessionManagerTeardownTests, NonForceClearDrmSession_DoesNotAbortKeyWait)
+{
+	SetKeyProcessTimeout(350);
+	InstallPendingSession();
+	std::atomic<KeyState> result{KEY_INIT};
+	int selectedSlot = -1;
+	auto start = std::chrono::steady_clock::now();
+	std::thread waiter([&] { result = CallGetDrmSession(selectedSlot); });
+	ScopedJoin joinWaiter(waiter);
+	ASSERT_TRUE(mWaitState.WaitUntilInWait(std::chrono::seconds(2)));
+	mDrmSessionManager->clearDrmSession(false);
+	waiter.join();
+	auto elapsed = std::chrono::steady_clock::now() - start;
+
+	EXPECT_EQ(result.load(), KEY_ERROR);
+	EXPECT_GE(elapsed, std::chrono::milliseconds(340));
+}
+
+/**
+ * @brief A key that becomes ready after several wait slices is still reused.
+ */
+TEST_F(DrmSessionManagerTeardownTests, KeyReadyAfterSeveralSlices_ReusesSession)
+{
+	KeyWaitDrmSession *session = InstallPendingSession();
+	std::thread licence([&] {
+		mWaitState.WaitForWaitCalls(2, std::chrono::seconds(4));
+		mWaitState.SetState(KEY_READY);
+	});
+	ScopedJoin joinLicence(licence);
+	int selectedSlot = -1;
+	KeyState result = CallGetDrmSession(selectedSlot);
+	licence.join();
+
+	EXPECT_EQ(result, KEY_READY);
+	EXPECT_EQ(selectedSlot, 0);
+	EXPECT_GE(mWaitState.waitCalls, 2);
+	EXPECT_EQ(mDrmSessionManager->drmSessionContexts[0].drmSession, session);
+	EXPECT_FALSE(mWaitState.destroyed);
+}
+
+/**
+ * @brief A key error during the wait ends it without waiting for keyProcessTimeout.
+ */
+TEST_F(DrmSessionManagerTeardownTests, KeyErrorDuringWait_ReturnsEarly)
+{
+	InstallPendingSession();
+	std::thread licence([&] {
+		mWaitState.WaitForWaitCalls(1, std::chrono::seconds(4));
+		mWaitState.SetState(KEY_ERROR);
+	});
+	ScopedJoin joinLicence(licence);
+	auto start = std::chrono::steady_clock::now();
+	int selectedSlot = -1;
+	KeyState result = CallGetDrmSession(selectedSlot);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	licence.join();
+
+	EXPECT_EQ(result, KEY_ERROR);
+	EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
+	EXPECT_FALSE(mWaitState.destroyed);
+}
+
+/**
+ * @brief Without a teardown, a key that never becomes ready still waits for the full keyProcessTimeout.
+ */
+TEST_F(DrmSessionManagerTeardownTests, KeyNeverReady_WaitsFullTimeout)
+{
+	SetKeyProcessTimeout(350);
+	InstallPendingSession();
+	auto start = std::chrono::steady_clock::now();
+	int selectedSlot = -1;
+	KeyState result = CallGetDrmSession(selectedSlot);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+
+	EXPECT_EQ(result, KEY_ERROR);
+	EXPECT_NE(mLastErr.load(), MW_DRM_SELF_ABORT);
+	EXPECT_GE(elapsed, std::chrono::milliseconds(340));
+	EXPECT_GE(mWaitState.waitCalls, 4);
+}
+
+/**
+ * @brief initializeDrmSession() on a slot emptied by clearSessionData() fails cleanly instead of crashing.
+ */
+TEST_F(DrmSessionManagerTeardownTests, InitializeDrmSession_ClearedSlot_ReturnsError)
+{
+	InstallPendingSession();
+	mDrmSessionManager->clearSessionData();
+	int err = 0;
+	KeyState result = mDrmSessionManager->initializeDrmSession(mHelper, 0, err);
+
+	EXPECT_EQ(result, KEY_ERROR);
+	EXPECT_EQ(err, MW_DRM_SELF_ABORT);
+}
+
+/**
+ * @brief clearSessionData() deletes every session and resets slot data and cached key IDs.
+ */
+TEST_F(DrmSessionManagerTeardownTests, ClearSessionData_ResetsAllSlots)
+{
+	KeyWaitState otherState;
+	InstallPendingSession();
+	mDrmSessionManager->drmSessionContexts[2].drmSession = new KeyWaitDrmSession(otherState);
+	mDrmSessionManager->drmSessionContexts[2].data = {0x09};
+
+	mDrmSessionManager->clearSessionData();
+
+	EXPECT_TRUE(mWaitState.destroyed);
+	EXPECT_TRUE(otherState.destroyed);
+	for (int i = 0; i < maxDrmSessions; ++i)
+	{
+		EXPECT_EQ(mDrmSessionManager->drmSessionContexts[i].drmSession, nullptr);
+		EXPECT_TRUE(mDrmSessionManager->drmSessionContexts[i].data.empty());
+	}
+	EXPECT_EQ(mWaitState.waitCalls, 0);
+}
