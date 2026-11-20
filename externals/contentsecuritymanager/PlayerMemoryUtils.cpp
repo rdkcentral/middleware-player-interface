@@ -29,6 +29,22 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+/**
+ * @brief Secure memory clearing helper - prevents compiler optimization
+ * Uses volatile pointer to ensure memset is not optimized away
+ */
+static void secure_memzero(void *ptr, size_t size)
+{
+	if (ptr && size > 0)
+	{
+		volatile unsigned char *vptr = (volatile unsigned char *)ptr;
+		for (size_t i = 0; i < size; i++)
+		{
+			vptr[i] = 0;
+		}
+	}
+}
 /**
  * @brief Creates shared memory and provides the key
  */
@@ -104,7 +120,17 @@ void * player_CreateSharedMem( size_t shmLen, key_t & shmKey)
 void player_CleanUpSharedMem(void* shmPointer, key_t shmKey, size_t shmLen)
 {
 	if( NULL != shmPointer && (void*)-1 != shmPointer)
-	{ // detach shared memory
+	{
+		// Clamp to the real segment size; callers may pass a larger shmLen
+		struct shmid_ds segInfo;
+		int lookupId = shmget(shmKey, 0, SHM_ACCESS_PERMISSION);
+		if( lookupId != -1 && 0 == shmctl(lookupId, IPC_STAT, &segInfo) )
+		{
+			size_t segSize = (size_t)segInfo.shm_segsz;
+			secure_memzero(shmPointer, (shmLen < segSize) ? shmLen : segSize);
+		}
+
+		// detach shared memory
 		if( -1 == shmdt(shmPointer) )
 		{
 			MW_LOG_ERR("shmdt failure %d for key %u", errno, shmKey);
