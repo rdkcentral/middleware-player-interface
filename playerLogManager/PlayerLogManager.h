@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cstdint>
+#include <atomic>
 
 void PIStartTuneProfile();
 void PIStopTuneProfile();
@@ -94,7 +95,7 @@ class PlayerLogManager
 {
 public :
 	static MW_LogLevel mwLoglevel;
-	static bool locked;
+	static std::atomic<bool> locked;
 	static bool disableLogRedirection;		/**<  disables log re-direction to journal or ethan log apis and uses vprintf - used by simulators */
 	static bool enableEthanLogRedirection;  /**<  Enables Ethan log redirection which uses Ethan lib for logging */
 

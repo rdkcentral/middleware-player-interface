@@ -134,7 +134,7 @@ void DrmSessionManager::clearSessionData()
  */
 void DrmSessionManager::setSessionMgrState(SessionMgrState state)
 {
-	sessionMgrState = state;
+	sessionMgrState.store(state);
 }
 
 /**
@@ -142,7 +142,16 @@ void DrmSessionManager::setSessionMgrState(SessionMgrState state)
  */
 SessionMgrState DrmSessionManager::getSessionMgrState()
 {
-	return sessionMgrState;
+	return sessionMgrState.load();
+}
+
+/**
+ * @brief Returns a copy of mContentSecurityManagerSession taken under mSecSessionMutex.
+ */
+ContentSecurityManagerSession DrmSessionManager::getContentSecuritySessionSnapshot() const
+{
+	std::lock_guard<std::mutex> guard(mSecSessionMutex);
+	return mContentSecurityManagerSession;
 }
 
 /**
@@ -171,6 +180,7 @@ void DrmSessionManager::clearFailedKeyIds()
  */
 void DrmSessionManager::clearAccessToken()
 {
+	std::lock_guard<std::mutex> guard(accessTokenMutex);
 	if(accessToken)
 	{
 		free(accessToken);
@@ -226,7 +236,7 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 
 void DrmSessionManager::setVideoWindowSize(int width, int height)
 {
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	MW_LOG_WARN("In DrmSessionManager:: setting video window size w:%d x h:%d mMaxDRMSessions=%d sessionID=[%" PRId64 "]",width,height,mMaxDRMSessions,localSession.getSessionID());
 	if(localSession.isSessionValid())
 	{
@@ -242,7 +252,7 @@ void DrmSessionManager::setVideoMute(bool live, double currentLatency, bool live
 	MW_LOG_WARN("Video mute status (new): %d, state changed: %.1s, pos: %f", isVideoOnMute, (isVideoOnMute == mIsVideoOnMute) ? "N":"Y", positionMs);
 
 	mIsVideoOnMute.store(isVideoOnMute);
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), !mIsVideoOnMute.load());
@@ -262,7 +272,7 @@ void DrmSessionManager::setVideoMute(bool live, double currentLatency, bool live
 void DrmSessionManager::hideWatermarkOnDetach(void)
 {
 	MW_LOG_WARN("Clearing first frame flag and de-activating watermark.");
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
@@ -274,7 +284,7 @@ void DrmSessionManager::hideWatermarkOnDetach(void)
 void DrmSessionManager::setPlaybackSpeedState(bool live, double currentLatency, bool livepoint , double liveOffsetMs, int speed, double positionMs, bool firstFrameSeen)
 {
 	bool isVideoOnMute=mIsVideoOnMute.load();
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	MW_LOG_WARN("In DrmSessionManager::after calling setPlaybackSpeedState speed=%d position=%f sessionID=[%" PRId64 "], mute: %d",speed, positionMs, localSession.getSessionID(), isVideoOnMute);
 	mCurrentSpeed.store(speed);
 	if(firstFrameSeen)
@@ -554,7 +564,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	 * (RDKEMW-24407). Keep a DrmHelper copy for the potential retry, since
 	 * AcquireLicenseCb consumes drmHelper.
 	 */
-	bool reusingPooledSession = mContentSecurityManagerSession.isSessionValid();
+	bool reusingPooledSession = getContentSecuritySessionSnapshot().isSessionValid();
 	auto licenseRetryHelper = drmHelper;
 	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
 	if (code != KEY_READY && reusingPooledSession &&
@@ -568,15 +578,17 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		 * retry; the original failure handling below still applies if the retry
 		 * also fails.
 		 */
-		const auto &localSession = mContentSecurityManagerSession;
+		const auto localSession = getContentSecuritySessionSnapshot();
 		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
 		const int64_t staleSessionId = localSession.getSessionID();
 		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
 		{
 			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
 					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
-			mContentSecurityManagerSession.setSessionInvalid();
-			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
+			{
+				std::lock_guard<std::mutex> guard(mSecSessionMutex);
+				mContentSecurityManagerSession.setSessionInvalid();
+			}
 		}
 		PI_PROFILE_SCOPE("drm_license_acquire");
     code =this->AcquireLicenseCb(responseCode, std::move(licenseRetryHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
@@ -612,7 +624,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	}
 
 	// License acquisition was done, so mContentSecurityManagerSession will be populated now
-	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	const auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if (localSession.isSessionValid())
 	{
 		MW_LOG_WARN(" Setting sessionId[%" PRId64 "] to current drmSession", localSession.getSessionID());
@@ -900,10 +912,13 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				{
 					MW_LOG_INFO("Found drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 					auto slotSession = drmSessionContexts[sessionSlot].drmSession->getSecManagerSession();
-					if (slotSession.isSessionValid() && (!mContentSecurityManagerSession.isSessionValid()))
+					if (slotSession.isSessionValid() && (!getContentSecuritySessionSnapshot().isSessionValid()))
 					{
 						// Set the drmSession's ID as mContentSecurityManagerSession so that this code will not be repeated for multiple calls for createDrmSession
-						mContentSecurityManagerSession = slotSession;
+						{
+							std::lock_guard<std::mutex> guard(mSecSessionMutex);
+							mContentSecurityManagerSession = slotSession;
+						}
 						bool videoMuteState = mIsVideoOnMute.load();
 						MW_LOG_WARN("Activating re-used DRM, sessionId[%" PRId64 "], with video mute = %d", slotSession.getSessionID(), videoMuteState);
 						ContentSecurityManager::GetInstance()->UpdateSessionState(slotSession.getSessionID(), true);
@@ -1029,14 +1044,17 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
  */
 void DrmSessionManager::notifyCleanup()
 {
-	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	auto localSession = getContentSecuritySessionSnapshot(); //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if(localSession.isSessionValid())
 	{
 		// Set current session to inactive
 		MW_LOG_WARN("De-activate DRM session [%" PRId64 "] and watermark", localSession.getSessionID() );
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
 		// Reset the session ID, the session ID is preserved within DrmSession instances
-		mContentSecurityManagerSession.setSessionInvalid();	//note this doesn't necessarily close the session as the session ID is also saved in the slot
+		{
+			std::lock_guard<std::mutex> guard(mSecSessionMutex);
+			mContentSecurityManagerSession.setSessionInvalid();	//note this doesn't necessarily close the session as the session ID is also saved in the slot
+		}
 		mCurrentSpeed.store(0);
 		mFirstFrameSeen.store(false);
 	}

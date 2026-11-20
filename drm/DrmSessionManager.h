@@ -172,6 +172,7 @@ public:
 	configs *m_drmConfigParam;
 	PlayerSecInterface *playerSecInstance;/** PlayerSecInterface instance **/
 	ContentSecurityManagerSession mContentSecurityManagerSession;
+	mutable std::mutex mSecSessionMutex;	/**< Guards mContentSecurityManagerSession; leaf lock, never held while calling out */
     std::atomic<bool> mFirstFrameSeen;
 	std::atomic<bool> mIsVideoOnMute;
 	std::atomic<int> mCurrentSpeed;
@@ -181,8 +182,9 @@ protected:
 private:
 	char* accessToken;
 	int accessTokenLen;
-	SessionMgrState sessionMgrState;
+	std::atomic<SessionMgrState> sessionMgrState;
 	std::mutex accessTokenMutex;
+	ContentSecurityManagerSession getContentSecuritySessionSnapshot() const;
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;

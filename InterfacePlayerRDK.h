@@ -179,7 +179,7 @@ class InterfacePlayerRDK
 {
 	private:
 		bool trickTeardown;
-		std::mutex mMutex;
+		std::mutex mMutex;	/**< Serializes concurrent Stop() calls only; it guards no other state. */
 		mutable std::mutex mDrmSystemMutex;
 		std::map<std::string, int> configMap;
 

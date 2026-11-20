@@ -78,7 +78,7 @@ static const char *mLogLevelStr[mLOGLEVEL_ERROR+1] =
 };
 
 MW_LogLevel PlayerLogManager::mwLoglevel = mLOGLEVEL_WARN;
-bool PlayerLogManager::locked = false;
+std::atomic<bool> PlayerLogManager::locked{false};
 bool PlayerLogManager::disableLogRedirection = false;
 bool PlayerLogManager::enableEthanLogRedirection = false;
 

@@ -3635,10 +3635,10 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	}
 
 	bool segmentEventSent = false;
-	bool isFirstBuffer = stream->resetPosition;
 	// Make sure source element is present before data is injected
 	// If format is FORMAT_INVALID, we don't know what we are doing here
 	pthread_mutex_lock(&stream->sourceLock);
+	bool isFirstBuffer = stream->resetPosition;
 
 	if (!stream->sourceConfigured && stream->format != GST_FORMAT_INVALID)
 	{
@@ -3812,6 +3812,7 @@ void InterfacePlayerRDK::PauseInjector()
 {
 	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
 	mPauseInjector = true;
+	mSourceSetupCV.notify_all();
 }
 
 void InterfacePlayerRDK::ResumeInjector()
