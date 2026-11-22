@@ -52,7 +52,7 @@ constexpr const char* kTuneErrorInjectionFile = "/tmp/readvariable";
 
 // Add near existing injection constants in anonymous namespace
 constexpr const char* kFirstFrameTimeoutInjectionFile = "/tmp/firstframe-timeout-ms";
-constexpr int kDefaultFirstFrameTimeoutMs = 3000;
+constexpr int kDefaultFirstFrameTimeoutMs = 7000;
 constexpr int kMinFirstFrameTimeoutMs = 50; // optional lower guard
 
 static int GetFirstFrameTimeoutMs()
@@ -844,22 +844,6 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		}
 		else
 		{
-#ifdef PLAYER_TELEMETRY_SUPPORT
-			{
-				std::map<std::string, int> intMetrics;
-				std::map<std::string, std::string> stringMetrics;
-				std::map<std::string, float> floatMetrics;
-
-				intMetrics["mediaFormat"] = (int)m_gstConfigParam->media;
-				intMetrics["maxBufferingTimeoutMs"] = DEFAULT_BUFFERING_MAX_MS;
-				intMetrics["framesToQueue"] = (int)m_gstConfigParam->framesToQueue;
-				intMetrics["isRialto"] = interfacePlayerPriv->gstPrivateContext->usingRialtoSink ? 1 : 0;
-				stringMetrics["state"] = "started";
-
-				PlayerTelemetry2 telemetry;
-				telemetry.send(TELEMETRY_EVENT_BUFFERING_STARTED, intMetrics, stringMetrics, floatMetrics);
-			}
-#endif
 		}
 		interfacePlayerPriv->gstPrivateContext->pendingPlayState = false;
 		interfacePlayerPriv->gstPrivateContext->paused = false;
@@ -1665,22 +1649,6 @@ static GstStateChangeReturn SetStateWithWarnings(GstElement *element, GstState t
 				{
 
 
-#ifdef PLAYER_TELEMETRY_SUPPORT
-				std::map<std::string, int> i;
-				std::map<std::string, std::string> s;
-				std::map<std::string, float> f;
-
-				s["elem"] = SafeName(element);
-				s["cur"]  = gst_element_state_get_name(current);
-				s["pen"]  = gst_element_state_get_name(pending);
-
-				/** GstState is an enum; transmit numeric value (stable for decoding on the backend)  */
-				i["tgt"]  = static_cast<int>(targetState);
-
-				 PlayerTelemetry2 telemetry;
-				 telemetry.send("MW_PIPELINE_STATE_CHANGE_FAILURE", i, s, f);
-
-#endif
 				MW_LOG_ERR("InterfacePlayerRDK: %s is in FAILURE state : current %s  pending %s", SafeName(element).c_str(),gst_element_state_get_name(current), gst_element_state_get_name(pending));
 				LogStatus(element);
 				break;
@@ -3720,21 +3688,6 @@ bool InterfacePlayerRDK::StopBuffering(bool forceStop, bool &isPlaying)
 				if (current == GST_STATE_PLAYING)
 				{
 					sendEndEvent = true;
-#ifdef PLAYER_TELEMETRY_SUPPORT
-					{
-						std::map<std::string, int> intMetrics;
-						std::map<std::string, std::string> stringMetrics;
-						std::map<std::string, float> floatMetrics;
-
-						intMetrics["frames"] = frames;
-						intMetrics["forceStop"] = forceStop ? 1 : 0;
-						stringMetrics["state"] = "ended";
-						stringMetrics["source"] = "stopBuffering";
-
-						PlayerTelemetry2 telemetry;
-						telemetry.send(TELEMETRY_EVENT_BUFFERING_ENDED, intMetrics, stringMetrics, floatMetrics);
-					}
-#endif
 				}
 			}
 		}
@@ -4300,23 +4253,6 @@ static GstState validateStateWithMsTimeout( InterfacePlayerRDK *pInterfacePlayer
 
 	MW_LOG_ERR("validateStateWithMsTimeout - PIPELINE gst_element_get_state - FAILURE : State = %d, Pending = %d",
 			   gst_current, gst_pending);
-#ifdef PLAYER_TELEMETRY_SUPPORT
-	if ((gst_current == GST_STATE_PAUSED) && (gst_pending == GST_STATE_PLAYING))
-	{
-		std::map<std::string, int> intMetrics;
-		std::map<std::string, std::string> stringMetrics;
-		std::map<std::string, float> floatMetrics;
-
-		intMetrics["currentState"] = static_cast<int>(gst_current);
-		intMetrics["pendingState"] = static_cast<int>(gst_pending);
-		intMetrics["targetState"] = static_cast<int>(stateToValidate);
-		stringMetrics["api"] = "validateStateWithMsTimeout";
-		stringMetrics["error"] = "paused_to_playing_timeout";
-
-		PlayerTelemetry2 telemetry;
-		telemetry.send("MW_VALIDATE_STATE_TIMEOUT", intMetrics, stringMetrics, floatMetrics);
-	}
-#endif
 	return gst_current;
 }
 
