@@ -55,6 +55,10 @@ GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 	return NULL;
 }
 
+/* Fallback map data returned for any buffer not registered via MockGstBufferSetMapData(). */
+const guint8 *g_mockGstMapData = NULL;
+gsize g_mockGstMapSize = 0;
+
 #define MOCK_GST_MAX_MAPPED_BUFFERS 8
 
 static struct
@@ -100,8 +104,13 @@ gboolean gst_buffer_map(GstBuffer *buffer, GstMapInfo *info, GstMapFlags flags)
 		{
 			info->data = mockMappedBuffers[i].data;
 			info->size = mockMappedBuffers[i].size;
-			break;
+			return TRUE;
 		}
+	}
+	if (g_mockGstMapData)
+	{
+		info->data = (guint8 *)g_mockGstMapData;
+		info->size = g_mockGstMapSize;
 	}
 	return TRUE;
 }
