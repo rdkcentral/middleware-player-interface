@@ -28,6 +28,13 @@ GType _gst_caps_type = 0;
 GType _gst_buffer_type = 0;
 
 
+/* Test hooks: record the arguments of the most recent time code meta request. */
+guint g_mockTimeCodeMetaCount = 0;
+guint g_mockTimeCodeHours = 0;
+guint g_mockTimeCodeMinutes = 0;
+guint g_mockTimeCodeSeconds = 0;
+guint g_mockTimeCodeFrames = 0;
+
 GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 																GstBuffer * buffer,
 																guint fps_n,
@@ -40,6 +47,11 @@ GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 																guint frames,
 																guint field_count)
 {
+	g_mockTimeCodeMetaCount++;
+	g_mockTimeCodeHours = hours;
+	g_mockTimeCodeMinutes = minutes;
+	g_mockTimeCodeSeconds = seconds;
+	g_mockTimeCodeFrames = frames;
 	return NULL;
 }
 

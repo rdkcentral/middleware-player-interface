@@ -31,6 +31,48 @@
 #include <iomanip>
 #include <algorithm>
 #include <cstdint>
+
+void PIStartTuneProfile();
+void PIStopTuneProfile();
+bool PIIsTuneProfileActive();
+bool PIIsProfileAlwaysOn();
+void PISetProfileAlwaysOn(bool alwaysOn);
+
+#ifdef ENABLE_RDKPERF
+#include <optional>
+#include <rdk_perf.h>
+/**
+ * @brief Scoped RDKPerf timer, recorded only while a tune is being profiled
+ *        or when PLAYER_RDKPERF_ALWAYS=1 is set in the environment.
+ */
+class PIProfileScope
+{
+public:
+	PIProfileScope(const char* name, bool active)
+	{
+		if (active || PIIsProfileAlwaysOn())
+		{
+			mPerf.emplace(name);
+		}
+	}
+	explicit PIProfileScope(const char* name) : PIProfileScope(name, PIIsTuneProfileActive())
+	{
+	}
+	PIProfileScope(const PIProfileScope&) = delete;
+	PIProfileScope& operator=(const PIProfileScope&) = delete;
+
+private:
+	std::optional<RDKPerf> mPerf;
+};
+#define PI_PROFILE_CONCAT_(a, b) a##b
+#define PI_PROFILE_CONCAT(a, b) PI_PROFILE_CONCAT_(a, b)
+#define PI_PROFILE_SCOPE(name) PIProfileScope PI_PROFILE_CONCAT(piProfileScope, __LINE__)(name)
+#define PI_PROFILE_SCOPE_IF(name, active) PIProfileScope PI_PROFILE_CONCAT(piProfileScope, __LINE__)((name), (active))
+#else
+#define PI_PROFILE_SCOPE(name) do {} while (0)
+#define PI_PROFILE_SCOPE_IF(name, active) do {} while (0)
+#endif
+
 /**
  * @brief Log level's of Middleware
  */
