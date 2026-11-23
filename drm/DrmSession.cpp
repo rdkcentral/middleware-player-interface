@@ -81,8 +81,12 @@ void DrmSession::ReleaseAfterUse()
  */
 void DrmSession::PrepareForDestruction(uint32_t timeoutMs)
 {
+	{
+		std::lock_guard<std::mutex> markLock(mLifecycleMutex);
+		mMarkedForDestruction = true;
+	}
+	abortKeyWait();
 	std::unique_lock<std::mutex> lock(mLifecycleMutex);
-	mMarkedForDestruction = true;
 	if (mActiveOperations > 0)
 	{
 		MW_LOG_WARN("DrmSession::PrepareForDestruction : waiting for %d in-flight decrypt operation(s) to complete before delete", mActiveOperations);
