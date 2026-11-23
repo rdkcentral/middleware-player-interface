@@ -35,24 +35,21 @@ int PlayerRialtoCCManager::Initialize(void * handle)
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Initialize(%p) called", handle);
 
-	// Held for the whole handle-assignment + configuration sequence so a
-	// concurrent Initialize()/SetTrack() call can't interleave and configure
-	// the wrong handle (or leave this handle unconfigured).
-	std::lock_guard<std::mutex> lock(mControlMutex);
-	const bool changedHandle = (handle != mSubtitleControlHandle);
+	bool changedHandle = (handle != mSubtitleControlHandle);
+
 	mSubtitleControlHandle = handle;
 
-	if (mTrack.empty())
+	if (GetTrack().empty())
 	{
 		// Apps expect to render default CC as CC1, so set that here in case
 		// they do not explicitly call SetTrack().
 		MW_LOG_INFO("PlayerRialtoCCManager::Setting default to \"CC1\"");
-		(void) SetTrackLocked("CC1", eCLOSEDCAPTION_FORMAT_DEFAULT);
+		(void) SetTrack("CC1");
 	}
 	else if (changedHandle)
 	{
 		// Configure the new handle.
-		(void) SetTrackLocked(mTrack, mTrackFormat);
+		(void) SetTrack(GetTrack(), mTrackFormat);
 	}
 
 	return 0;
@@ -76,14 +73,7 @@ int PlayerRialtoCCManager::GetId()
 void PlayerRialtoCCManager::ResetState()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::Resetting");
-	// Stop() -> StopRendering() re-enters mControlMutex; call it before
-	// taking the lock to avoid deadlocking on this non-recursive mutex.
-	Stop();
-	std::lock_guard<std::mutex> lock(mControlMutex);
-	// Reset the cached track/rendering fields under the same lock that
-	// SetTrack()/Initialize() use to access them, avoiding a race with a
-	// concurrent call to either.
-	ResetTrackState();
+	PlayerCCManagerBase::ResetState();
 	mSubtitleControlHandle = nullptr;
 }
 
@@ -116,39 +106,16 @@ void PlayerRialtoCCManager::Release(int id)
 }
 
 /**
- *  @brief Clear mSubtitleControlHandle if it currently equals handle
- */
-void PlayerRialtoCCManager::InvalidateHandle(void *handle)
-{
-	// Holding mControlMutex blocks until any SetTrack() / StartRendering() /
-	// StopRendering() call already in progress on the old handle has
-	// returned, so the caller can safely destroy the handle owner once this
-	// call returns.
-	std::lock_guard<std::mutex> lock(mControlMutex);
-	if (handle != nullptr && mSubtitleControlHandle == handle)
-	{
-		mSubtitleControlHandle = nullptr;
-		MW_LOG_WARN("PlayerRialtoCCManager::handle:%p invalidated ahead of Release()", handle);
-	}
-}
-
-/**
  *  @brief Set CC track
  */
 int PlayerRialtoCCManager::SetTrack(const std::string &track, const CCFormat format)
 {
-	// mTrack/mTrackFormat are shared with Initialize() and ResetState(), so
-	// they must be updated under the same lock as mSubtitleControlHandle.
-	std::lock_guard<std::mutex> lock(mControlMutex);
-	return SetTrackLocked(track, format);
-}
-
-int PlayerRialtoCCManager::SetTrackLocked(const std::string &track, const CCFormat format)
-{
-	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
-
-	mTrack       = track;	// For PlayerCCManager::GetTrack()
+	// Cache the original track string and the format so the prefix (if any)
+	// can be re-applied correctly from the cached values.
+	mTrack = track;	// For PlayerCCManager::GetTrack()
 	mTrackFormat = format;
+
+	MW_LOG_INFO("PlayerRialtoCCManager::set track \"%s\"", track.c_str());
 
 	if (nullptr != mSubtitleControlHandle)
 	{
@@ -187,7 +154,6 @@ void PlayerRialtoCCManager::StartRendering()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::unmuting");
 
-	std::lock_guard<std::mutex> lock(mControlMutex);
 	if (nullptr != mSubtitleControlHandle)
 	{
 		g_object_set(mSubtitleControlHandle, "mute", FALSE, NULL);
@@ -206,7 +172,6 @@ void PlayerRialtoCCManager::StopRendering()
 {
 	MW_LOG_INFO("PlayerRialtoCCManager::muting");
 
-	std::lock_guard<std::mutex> lock(mControlMutex);
 	if (nullptr != mSubtitleControlHandle)
 	{
 		g_object_set(mSubtitleControlHandle, "mute", TRUE, NULL);

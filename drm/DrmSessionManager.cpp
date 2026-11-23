@@ -50,14 +50,13 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(nullptr),
 		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
-		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -954,15 +953,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	if (m_sessionCreator)
-	{
-		auto owned = m_sessionCreator(drmHelper, Instance);
-		drmSessionContexts[sessionSlot].drmSession = owned.release();
-	}
-	else
-	{
-		drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
-	}
+	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -975,15 +966,16 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			drmSessionContexts[sessionSlot].drmSession->setOutputProtection(true);
 			drmHelper->setOutputProtectionFlag(true);
 		}
-		// setKeyId() is a no-op default on DrmSession, so it's safe to call
-		// for every backend (OpenCDM, Direct-Rialto, etc.), not just OpenCDM.
-		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
 	}
 	else
 	{
 		MW_LOG_WARN("Unable to Get DrmSession for DrmSystemId %s", systemId.c_str());
 		err = MW_DRM_INIT_FAILED ;
 	}
+
+#if defined(USE_OPENCDM_ADAPTER)
+	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
+#endif
 
 	return code;
 }

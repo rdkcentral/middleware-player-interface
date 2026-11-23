@@ -32,22 +32,12 @@
 #include <string>
 #include <atomic>
 #include <utility>
-#include <memory>
 #include "DrmHelper.h"
 
 #include "PlayerSecInterface.h"
 #include "ContentSecurityManagerSession.h"
 
 #include <functional>
-
-/**
- * @brief Factory callable type for creating DRM sessions.
- *
- * Stored per-player in DrmSessionManager to support creator injection
- * (e.g. the direct-Rialto path).
- */
-using DrmSessionCreator =
-	std::function<std::unique_ptr<DrmSession>(DrmHelperPtr, DrmCallbacks*)>;
 
 
 #define VIDEO_SESSION 0
@@ -186,7 +176,6 @@ private:
 	std::mutex mDrmSessionLock;
 	bool mEnableAccessAttributes;
 	int mMaxDRMSessions;
-	DrmSessionCreator m_sessionCreator;
 	std::function<void(uint32_t, uint32_t, const std::string&)> mPlayerSendWatermarkSessionUpdateEventCB;
 	/**     
 	 * @brief Copy constructor disabled
@@ -232,13 +221,11 @@ public:
 	
 	/**
 	 *  @fn DrmSessionManager
-	 *  @brief creator defaults to null (no injection) rather than being a
-	 *         separate overload: a distinct 3-arg symbol would let a
-	 *         prebuilt binary compiled before m_sessionCreator existed link
-	 *         successfully against this header's larger layout and silently
-	 *         heap-corrupt on construction, instead of failing to compile.
 	 */
-	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator = nullptr);
+	DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback);
+
+	void initializeDrmSessions();
+
 	/**
 	 *  @fn watermarkSessionHandlerWrapper
 	 *  @brief Wrapper function to handle session watermark.
@@ -530,12 +517,12 @@ public:
         /**
 	 * @brief Configuration parameters needed from Player
 	 */
-	void UpdateDRMConfig(
+        void UpdateDRMConfig(
                        bool useSecManager,
                        bool enablePROutputProtection,
                        bool propagateURIParam,
                        bool isFakeTune,
-                       bool wideVineKIDWorkaround);
+		       bool wideVineKIDWorkaround);
 
 
 };
