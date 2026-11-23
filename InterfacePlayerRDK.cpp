@@ -33,6 +33,7 @@
 #include <inttypes.h>
 #include "TextStyleAttributes.h"
 #include <memory>
+#include <utility>
 #include <gst/gst.h>
 #ifdef USE_EXTERNAL_STATS
 #include "player-xternal-stats.h"
@@ -326,10 +327,10 @@ GstPlayerPriv::~GstPlayerPriv()
 {
 	g_clear_object(&pipeline);
 	g_clear_object(&bus);
-	g_clear_object(&video_dec);
-	g_clear_object(&audio_dec);
-	g_clear_object(&video_sink);
-	g_clear_object(&audio_sink);
+	ReplaceElement(&GstPlayerPriv::video_dec, nullptr);
+	ReplaceElement(&GstPlayerPriv::audio_dec, nullptr);
+	ReplaceElement(&GstPlayerPriv::video_sink, nullptr);
+	ReplaceElement(&GstPlayerPriv::audio_sink, nullptr);
 	g_clear_object(&subtitle_sink);
 	g_clear_object(&task_pool);
 	for (int i = 0; i < GST_TRACK_COUNT; i++)
@@ -337,6 +338,34 @@ GstPlayerPriv::~GstPlayerPriv()
 		g_clear_object(&protectionEvent[i]);
 	}
 	g_clear_object(&positionQuery);
+}
+
+GstPlayerPriv::ElementRef GstPlayerPriv::RefElement(GstElement *GstPlayerPriv::*member)
+{
+	std::lock_guard<std::mutex> lock(elementMutex);
+	GstElement *element = this->*member;
+	if (element)
+	{
+		gst_object_ref(element);
+	}
+	return ElementRef(element, &gst_object_unref);
+}
+
+void GstPlayerPriv::ReplaceElement(GstElement *GstPlayerPriv::*member, GstElement *element)
+{
+	if (element)
+	{
+		gst_object_ref(element);
+	}
+	{
+		std::lock_guard<std::mutex> lock(elementMutex);
+		std::swap(this->*member, element);
+	}
+	// Finalization can invoke callbacks; release the old object outside the lock.
+	if (element)
+	{
+		gst_object_unref(element);
+	}
 }
 
 /**
@@ -699,8 +728,8 @@ void InterfacePlayerRDK::ConfigurePipeline(StreamCodecInfo&& codecInfo,
 		if( !interfacePlayerPriv->gstPrivateContext->subtitle_sink ) MW_LOG_WARN( "subtitle_sink==NULL" );
 		gst_structure_set(
 						  contextStructure,
-						  "video-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->video_sink)?0x1u:0x0u,
-						  "audio-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->audio_sink)?0x1u:0x0u,
+						  "video-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink))?0x1u:0x0u,
+						  "audio-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_sink))?0x1u:0x0u,
 						  "text-streams", G_TYPE_UINT, (interfacePlayerPriv->gstPrivateContext->subtitle_sink)?0x1u:0x0u,
 					  "enable-live-latency", G_TYPE_BOOLEAN, (gboolean)enableLiveLatency,
 						  NULL );
@@ -1679,13 +1708,13 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	pthread_mutex_unlock(&stream->sourceLock);
 	if (mediaType == eGST_MEDIATYPE_VIDEO)
 	{
-		g_clear_object(&interfacePlayerPriv->gstPrivateContext->video_dec);
-		g_clear_object(&interfacePlayerPriv->gstPrivateContext->video_sink);
+		interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_dec, nullptr);
+		interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_sink, nullptr);
 	}
 	else if (mediaType == eGST_MEDIATYPE_AUDIO)
 	{
-		g_clear_object(&interfacePlayerPriv->gstPrivateContext->audio_dec);
-		g_clear_object(&interfacePlayerPriv->gstPrivateContext->audio_sink);
+		interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_dec, nullptr);
+		interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_sink, nullptr);
 	}
 	else if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 	{
@@ -2008,11 +2037,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 		return false;
 	}
 	bool bAsyncModify = false;
+	auto audioSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_sink);
 	if (!interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
 	{
-		bAsyncModify = interfacePlayerPriv->socInterface->DisableAsyncAudio(interfacePlayerPriv->gstPrivateContext->audio_sink, rate, isAppSeek);
+		bAsyncModify = interfacePlayerPriv->socInterface->DisableAsyncAudio(audioSink.get(), rate, isAppSeek);
 		// Send EOS to audio sink to prevent flush getting blocked waiting for preroll
-		if (interfacePlayerPriv->gstPrivateContext->audio_sink)
+		if (audioSink)
 		{
 			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
 		}
@@ -2043,11 +2073,12 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	else
 	{
 		/* pipeline may enter paused state even when audio decoder is not ready, check again */
-		if (interfacePlayerPriv->gstPrivateContext->audio_dec)
+		auto audioDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_dec);
+		if (audioDecoder)
 		{
 			{
 				PI_PLAYER_PROFILE_SCOPE("gst_audio_decoder_get_state_for_flush");
-				ret = gst_element_get_state(interfacePlayerPriv->gstPrivateContext->audio_dec, &aud_current, &aud_pending, 0);
+				ret = gst_element_get_state(audioDecoder.get(), &aud_current, &aud_pending, 0);
 			}
 			if ((aud_current != GST_STATE_PLAYING && aud_current != GST_STATE_PAUSED) || ret == GST_STATE_CHANGE_FAILURE)
 			{
@@ -2112,7 +2143,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 	}
 
 	if ((interfacePlayerPriv->gstPrivateContext->usingRialtoSink) &&
-		(interfacePlayerPriv->gstPrivateContext->audio_sink) &&
+		(audioSink) &&
 		(rate != GST_NORMAL_PLAY_RATE))
 	{
 		/*
@@ -2125,7 +2156,7 @@ bool InterfacePlayerRDK::Flush(double position, int rate, bool shouldTearDown, b
 
 	if(bAsyncModify)
 	{
-		interfacePlayerPriv->socInterface->SetSinkAsync(interfacePlayerPriv->gstPrivateContext->audio_sink, (gboolean)TRUE);
+		interfacePlayerPriv->socInterface->SetSinkAsync(audioSink.get(), (gboolean)TRUE);
 	}
 	interfacePlayerPriv->gstPrivateContext->eosSignalled = false;
 	interfacePlayerPriv->gstPrivateContext->numberOfVideoBuffersSent = 0;
@@ -2259,8 +2290,9 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		int MaxGstVideoBufBytes = m_gstConfigParam->videoBufBytes;
 		MW_LOG_INFO("Setting gst Video buffer max bytes to %d", MaxGstVideoBufBytes);
 		g_object_set(source, "max-bytes", (guint64)MaxGstVideoBufBytes, NULL);			/* Sets the maximum video buffer bytes as per configuration*/
+		auto videoSink = privatePlayer->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
 		if( privatePlayer->gstPrivateContext->usingRialtoSink &&
-		   !privatePlayer->socInterface->IsVideoMaster(privatePlayer->gstPrivateContext->video_sink) )
+		   !privatePlayer->socInterface->IsVideoMaster(videoSink.get()) )
 		{
 			// This property is required so that the segment event sent via gst_app_src_push_sample
 			MW_LOG_INFO("Setting handle-segment-change to 1");
@@ -2909,7 +2941,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 					MW_LOG_INFO("setting has-drm=false for clear HLS/TS playback");
 					g_object_set(vidsink, "has-drm", FALSE, NULL);
 				}
-				interfacePlayerPriv->gstPrivateContext->video_sink = GST_ELEMENT(gst_object_ref(vidsink));
+				interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_sink, vidsink);
 
                                 // RDKEMW-18286: Set show-video-window=FALSE at sink creation time.
                                 // This is the EARLIEST possible point. The Rialto delegate will queue
@@ -2941,7 +2973,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 			{
 				MW_LOG_INFO("Created rialtomseaudiosink : %s",GST_ELEMENT_NAME(audSink));
 				g_object_set(stream->sinkbin, "audio-sink", audSink, NULL);
-				interfacePlayerPriv->gstPrivateContext->audio_sink = GST_ELEMENT(gst_object_ref(audSink));
+				interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_sink, audSink);
 			}
 			else
 			{
@@ -2969,9 +3001,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				g_object_set (G_OBJECT(appsink), "emit-signals", TRUE, "sync", TRUE, NULL);
 				privatePlayer->SignalConnect(appsink, "new-sample", G_CALLBACK (InterfacePlayerRDK_OnVideoSample), this);
 				g_object_set(stream->sinkbin, "video-sink", appsink, NULL);
-				GstObject **oldobj = (GstObject **)&interfacePlayerPriv->gstPrivateContext->video_sink;
-				GstObject *newobj = (GstObject *)appsink;
-				gst_object_replace( oldobj, newobj );
+				interfacePlayerPriv->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_sink, appsink);
 			}
 		}
 #endif
@@ -3215,7 +3245,6 @@ void InterfacePlayerRDK::ResetFirstFrame(void)
 GstPlaybackQualityStruct* InterfacePlayerRDK::GetVideoPlaybackQuality(void)
 {
 	GstStructure *stats = nullptr;
-	GstElement *element;
 	GstState current{};
 	GstState pending{};
 	constexpr GstClockTime timeout = 0;
@@ -3224,17 +3253,12 @@ GstPlaybackQualityStruct* InterfacePlayerRDK::GetVideoPlaybackQuality(void)
 	{
 		if(current == GST_STATE_PLAYING || current == GST_STATE_PAUSED)
 		{
-			if((interfacePlayerPriv->socInterface->IsPlaybackQualityFromSink()))
-			{
-				element = interfacePlayerPriv->gstPrivateContext->video_sink;
-			}
-			else
-			{
-				element = interfacePlayerPriv->gstPrivateContext->video_dec;
-			}
+			auto element = interfacePlayerPriv->gstPrivateContext->RefElement(
+				interfacePlayerPriv->socInterface->IsPlaybackQualityFromSink()
+					? &GstPlayerPriv::video_sink : &GstPlayerPriv::video_dec);
 			if( element )
 			{
-				g_object_get( G_OBJECT(element), "stats", &stats, NULL );
+				g_object_get( G_OBJECT(element.get()), "stats", &stats, NULL );
 				if ( stats )
 				{
 					const GValue *value;
@@ -3452,13 +3476,14 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 	snprintf(interfacePlayerPriv->gstPrivateContext->videoRectangle, sizeof(interfacePlayerPriv->gstPrivateContext->videoRectangle), "%d,%d,%d,%d", x,y,w,h);
 	interfacePlayerPriv->gstPrivateContext->videoRectangleWidth  = w;
 	interfacePlayerPriv->gstPrivateContext->videoRectangleHeight = h;
+	auto videoSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
 	MW_LOG_MIL("Rect %s, video_sink =%p",
-			   interfacePlayerPriv->gstPrivateContext->videoRectangle, interfacePlayerPriv->gstPrivateContext->video_sink);
+			   interfacePlayerPriv->gstPrivateContext->videoRectangle, videoSink.get());
 	if (m_gstConfigParam->enableRectPropertyCfg)
 	{
-		if (interfacePlayerPriv->gstPrivateContext->video_sink)
+		if (videoSink)
 		{
-			g_object_set(interfacePlayerPriv->gstPrivateContext->video_sink, "rectangle", interfacePlayerPriv->gstPrivateContext->videoRectangle, NULL);
+			g_object_set(videoSink.get(), "rectangle", interfacePlayerPriv->gstPrivateContext->videoRectangle, NULL);
 		}
 		else
 		{
@@ -3477,10 +3502,11 @@ void InterfacePlayerRDK::SetVideoRectangle(int x, int y, int w, int h)
 bool InterfacePlayerRDK::StopBuffering(bool forceStop, bool &isPlaying)
 {
 	bool sendEndEvent = false;
-	if (interfacePlayerPriv->gstPrivateContext->video_dec)
+	auto videoDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_dec);
+	if (videoDecoder)
 	{
 		int frames = -1;
-		g_object_get(interfacePlayerPriv->gstPrivateContext->video_dec,"queued_frames",(uint*)&frames,NULL);
+		g_object_get(videoDecoder.get(),"queued_frames",(uint*)&frames,NULL);
 		bool stopBuffering = forceStop;
 		if( !stopBuffering )
 		{
@@ -3536,11 +3562,12 @@ unsigned long InterfacePlayerRDK::GetCCDecoderHandle()
 	}
 	else
 	{
-		if(interfacePlayerPriv->gstPrivateContext->video_dec != NULL)
+		auto videoDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_dec);
+		if(videoDecoder)
 		{
-			interfacePlayerPriv->socInterface->GetCCDecoderHandle(&dec_handle, interfacePlayerPriv->gstPrivateContext->video_dec);
+			interfacePlayerPriv->socInterface->GetCCDecoderHandle(&dec_handle, videoDecoder.get());
 		}
-		MW_LOG_INFO("CC Decoder handle received %p for video_dec %p", dec_handle, interfacePlayerPriv->gstPrivateContext->video_dec);
+		MW_LOG_INFO("CC Decoder handle received %p for video_dec %p", dec_handle, videoDecoder.get());
 	}
 	return (unsigned long)dec_handle;
 }
@@ -3660,7 +3687,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 		// included to fix av sync / trickmode speed issues
 		// Also add check for trick-play on 1st frame.
-		if( interfacePlayerPriv->gstPrivateContext->video_sink &&
+		if( interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink) &&
 			sendNewSegmentEvent == true)
 		{
 			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, 0);
@@ -3847,9 +3874,10 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 		if( (GstMediaType)mediaType == eGST_MEDIATYPE_VIDEO )
 		{
 			bool isVideoMaster = true;
-			if (socInterface && gstPrivateContext->video_sink)
+			auto videoSink = gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
+			if (socInterface && videoSink)
 			{
-				isVideoMaster = socInterface->IsVideoMaster(gstPrivateContext->video_sink);
+				isVideoMaster = socInterface->IsVideoMaster(videoSink.get());
 			}
 			else
 			{
@@ -4668,7 +4696,9 @@ bool InterfacePlayerRDK::CreatePipeline(const char *pipelineName, int PipelinePr
 long long InterfacePlayerRDK::GetVideoPTS(void)
 {
 	long long currentPTS = 0;
-	currentPTS = interfacePlayerPriv->socInterface->GetVideoPts(interfacePlayerPriv->gstPrivateContext->video_sink, interfacePlayerPriv->gstPrivateContext->video_dec, interfacePlayerPriv->gstPrivateContext->using_westerossink);
+	auto videoSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
+	auto videoDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_dec);
+	currentPTS = interfacePlayerPriv->socInterface->GetVideoPts(videoSink.get(), videoDecoder.get(), interfacePlayerPriv->gstPrivateContext->using_westerossink);
 	if (currentPTS == -1)
 	{
 		/* The 'video-pts' property is not supported on this platform.
@@ -4982,7 +5012,8 @@ static gboolean bus_message(GstBus * bus, GstMessage * msg, InterfacePlayerRDK *
 
 			if(isPlaybinStateChangeEvent && privatePlayer->gstPrivateContext->pauseOnStartPlayback && (new_state == GST_STATE_PAUSED))
 			{
-				GstElement *video_sink = privatePlayer->gstPrivateContext->video_sink;
+				auto videoSink = privatePlayer->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
+				GstElement *video_sink = videoSink.get();
 				const char *frame_step_on_preroll_prop = "frame-step-on-preroll";
 				privatePlayer->gstPrivateContext->pauseOnStartPlayback = false;
 
@@ -5244,7 +5275,9 @@ bool InterfacePlayerRDK::SetPlayBackRate(double rate)
 			sources.push_back(interfacePlayerPriv->gstPrivateContext->stream[iTrack].source);
 		}
 	}
-	ret = interfacePlayerPriv->socInterface->SetPlaybackRate(sources, interfacePlayerPriv->gstPrivateContext->pipeline, rate, interfacePlayerPriv->gstPrivateContext->video_dec,interfacePlayerPriv->gstPrivateContext->audio_dec);
+	auto videoDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_dec);
+	auto audioDecoder = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_dec);
+	ret = interfacePlayerPriv->socInterface->SetPlaybackRate(sources, interfacePlayerPriv->gstPrivateContext->pipeline, rate, videoDecoder.get(), audioDecoder.get());
 	return ret;
 }
 
@@ -5263,12 +5296,13 @@ void InterfacePlayerRDK::SetVolumeOrMuteUnMute(void)
 {
 	const std::lock_guard<std::mutex> lock(interfacePlayerPriv->gstPrivateContext->volumeMuteMutex);
 	GstElement *gSource = nullptr;
+	auto audioSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_sink);
 	const char *mutePropertyName = nullptr;
 	const char *volumePropertyName = nullptr;
 	bool isSinkBinVolume = false;
 	if (interfacePlayerPriv->gstPrivateContext->usingRialtoSink)
 	{
-		gSource = interfacePlayerPriv->gstPrivateContext->audio_sink;
+		gSource = audioSink.get();
 		mutePropertyName = "mute";
 		volumePropertyName = "volume";
 	}
@@ -5283,7 +5317,7 @@ void InterfacePlayerRDK::SetVolumeOrMuteUnMute(void)
 		}
 		if (nullptr == gSource)
 		{
-			gSource = interfacePlayerPriv->gstPrivateContext->audio_sink;
+			gSource = audioSink.get();
 		}
 	}
 	MW_LOG_MIL("volume == %lf muted == %s", interfacePlayerPriv->gstPrivateContext->audioVolume,interfacePlayerPriv->gstPrivateContext->audioMuted ? "true" : "false");
@@ -5364,9 +5398,10 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
 		if (wasBufferingInProgress)
 		{
 			int frames = -1;
-			if (privatePlayer->gstPrivateContext->video_dec)
+			auto videoDecoder = privatePlayer->gstPrivateContext->RefElement(&GstPlayerPriv::video_dec);
+			if (videoDecoder)
 			{
-				g_object_get(privatePlayer->gstPrivateContext->video_dec,"queued_frames",(uint*)&frames,NULL);
+				g_object_get(videoDecoder.get(),"queued_frames",(uint*)&frames,NULL);
 				MW_LOG_DEBUG("queued_frames: %d", frames);
 			}
 			GstMediaFormat mediaFormatRet;
@@ -5458,12 +5493,13 @@ static gboolean buffering_timeout(InterfacePlayerRDK *pInterfacePlayerRDK, std::
  */
 void InterfacePlayerRDK::SetVideoZoom(int zoom_mode)
 {
-	MW_LOG_MIL(" SetVideoZoom :: ZoomMode %d, video_sink =%p",zoom_mode, interfacePlayerPriv->gstPrivateContext->video_sink);
+	auto videoSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
+	MW_LOG_MIL(" SetVideoZoom :: ZoomMode %d, video_sink =%p",zoom_mode, videoSink.get());
 
 	interfacePlayerPriv->gstPrivateContext->zoom = static_cast<GstVideoZoomMode>(zoom_mode);
-	if ((interfacePlayerPriv->gstPrivateContext->video_sink) && (!interfacePlayerPriv->gstPrivateContext->usingRialtoSink))
+	if ((videoSink) && (!interfacePlayerPriv->gstPrivateContext->usingRialtoSink))
 	{
-		g_object_set(interfacePlayerPriv->gstPrivateContext->video_sink, "zoom-mode", zoom_mode, NULL);
+		g_object_set(videoSink.get(), "zoom-mode", zoom_mode, NULL);
 	}
 	else
 	{
@@ -5476,11 +5512,12 @@ void InterfacePlayerRDK::SetVideoZoom(int zoom_mode)
  */
 void InterfacePlayerRDK::SetVideoMute(bool muted)
 {
-	MW_LOG_INFO("muted=%d video_sink =%p", muted, interfacePlayerPriv->gstPrivateContext->video_sink);
+	auto videoSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::video_sink);
+	MW_LOG_INFO("muted=%d video_sink =%p", muted, videoSink.get());
 	interfacePlayerPriv->gstPrivateContext->videoMuted = muted;
-	if (interfacePlayerPriv->gstPrivateContext->video_sink)
+	if (videoSink)
 	{
-		g_object_set(interfacePlayerPriv->gstPrivateContext->video_sink, "show-video-window", !interfacePlayerPriv->gstPrivateContext->videoMuted, NULL);	/* videoMuted to true implies setting the 'show-video-window' to false */
+		g_object_set(videoSink.get(), "show-video-window", !interfacePlayerPriv->gstPrivateContext->videoMuted, NULL);	/* videoMuted to true implies setting the 'show-video-window' to false */
 	}
 	else
 	{
@@ -5601,9 +5638,9 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 					 g_object_get(pInterfacePlayerRDK->privateContext->pipeline, "video-sink", &videoSink, NULL); - reports NULL
 					 note: alternate "window-set" works as well
 					 */
-					gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_sink, msg->src);
+					privatePlayer->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_sink, GST_ELEMENT(msg->src));
 					privatePlayer->socInterface->DiscoverVideoSinkProperties(
-						privatePlayer->gstPrivateContext->video_sink);
+						GST_ELEMENT(msg->src));
 
 					if (privatePlayer->gstPrivateContext->usingRialtoSink)
 					{
@@ -5639,14 +5676,17 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 				{
 					if((gst_StartsWith(GST_OBJECT_NAME(msg->src), "rialtomseaudiosink")))
 					{
-						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->audio_sink, msg->src);
+						privatePlayer->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_sink, GST_ELEMENT(msg->src));
 						pInterfacePlayerRDK->SetVolumeOrMuteUnMute();
 					}
 					else
 					{
-						bool status = privatePlayer->socInterface->ConfigureAudioSink(&privatePlayer->gstPrivateContext->audio_sink, msg->src, pInterfacePlayerRDK->m_gstConfigParam->audioDecoderStreamSync);
+						GstElement *configuredSink = nullptr;
+						bool status = privatePlayer->socInterface->ConfigureAudioSink(&configuredSink, msg->src, pInterfacePlayerRDK->m_gstConfigParam->audioDecoderStreamSync);
+						GstPlayerPriv::ElementRef audioSink(configuredSink, &gst_object_unref);
 						if(status)
 						{
+							privatePlayer->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_sink, audioSink.get());
 							pInterfacePlayerRDK->SetVolumeOrMuteUnMute();
 						}
 					}
@@ -5659,18 +5699,18 @@ static GstBusSyncReply bus_sync_handler(GstBus * bus, GstMessage * msg, Interfac
 				{
 					if (GstPlayer_isVideoDecoder(GST_OBJECT_NAME(msg->src), pInterfacePlayerRDK))
 					{ // video
-						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->video_dec, msg->src);
-						type_check_instance("bus_sync_handle: video_dec ", privatePlayer->gstPrivateContext->video_dec);
+						privatePlayer->gstPrivateContext->ReplaceElement(&GstPlayerPriv::video_dec, GST_ELEMENT(msg->src));
+						type_check_instance("bus_sync_handle: video_dec ", GST_ELEMENT(msg->src));
 						privatePlayer->socInterface->DiscoverVideoDecoderProperties(
-							privatePlayer->gstPrivateContext->video_dec);
-						privatePlayer->SignalConnect(privatePlayer->gstPrivateContext->video_dec, "first-video-frame-callback",
+							GST_ELEMENT(msg->src));
+						privatePlayer->SignalConnect(msg->src, "first-video-frame-callback",
 									G_CALLBACK(GstPlayer_OnFirstVideoFrameCallback), pInterfacePlayerRDK);
 						privatePlayer->socInterface->SetDecodeError(msg->src);
 					}
 					else
 					{ // audio
-						gst_object_replace((GstObject **)&privatePlayer->gstPrivateContext->audio_dec, msg->src);
-						type_check_instance("bus_sync_handle: audio_dec ", privatePlayer->gstPrivateContext->audio_dec);
+						privatePlayer->gstPrivateContext->ReplaceElement(&GstPlayerPriv::audio_dec, GST_ELEMENT(msg->src));
+						type_check_instance("bus_sync_handle: audio_dec ", GST_ELEMENT(msg->src));
 
 						if(privatePlayer->socInterface->HasFirstAudioFrameCallback())
 						{
@@ -6109,7 +6149,8 @@ double InterfacePlayerRDK::FlushTrack(int mediaType, double pos, double audioDel
 
 	if(eGST_MEDIATYPE_AUDIO == type)
 	{
-		interfacePlayerPriv->socInterface->SetSeamlessSwitch(this->interfacePlayerPriv->gstPrivateContext->audio_sink, TRUE);
+		auto audioSink = interfacePlayerPriv->gstPrivateContext->RefElement(&GstPlayerPriv::audio_sink);
+		interfacePlayerPriv->socInterface->SetSeamlessSwitch(audioSink.get(), TRUE);
 		interfacePlayerPriv->gstPrivateContext->filterAudioDemuxBuffers = true;
 		pos = pos + audioDelta;
 

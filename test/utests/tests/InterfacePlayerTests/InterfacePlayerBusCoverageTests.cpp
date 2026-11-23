@@ -114,6 +114,11 @@ public:
 	bool ConfigureAudioSink(GstElement **audio_sink, GstObject *src, bool decStreamSync) override
 	{
 		configureAudioSinkCalls++;
+		if (configureAudioSinkResult)
+		{
+			gst_object_ref(src);
+			*audio_sink = GST_ELEMENT(src);
+		}
 		return configureAudioSinkResult;
 	}
 	bool IsAudioOrVideoDecoder(const char *name) override
