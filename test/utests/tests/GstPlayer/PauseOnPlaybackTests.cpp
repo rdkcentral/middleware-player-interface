@@ -47,10 +47,11 @@ protected:
 	void SetUp() override
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();//new MockGStreamer();
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new NiceMock<MockGLib>();
 		g_mockGstHandlerControl = new MockGstHandlerControl();
 		g_mockPlayerScheduler = new MockPlayerScheduler();
-	mInterfaceGstPlayer = new InterfacePlayerRDK();
+	        mInterfaceGstPlayer = new InterfacePlayerRDK();
 
 		//init callback to avoid bad_function_call error
 		mInterfaceGstPlayer->TearDownCallback([this](bool status, int mediaType) {
@@ -74,20 +75,20 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGLib;
-		g_mockGLib = nullptr;
-
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
-
 		delete mInterfaceGstPlayer;
 		mInterfaceGstPlayer = nullptr;
 
 		delete g_mockGstHandlerControl;
 		g_mockGstHandlerControl = nullptr;
 
-	    delete g_mockPlayerScheduler;
-	    g_mockPlayerScheduler = nullptr;
+		delete g_mockPlayerScheduler;
+		g_mockPlayerScheduler = nullptr;
+
+		delete g_mockGLib;
+		g_mockGLib = nullptr;
+
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
 	}
 
 public:

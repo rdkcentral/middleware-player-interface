@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <cstdarg>
 #include <cstring>
+#include <cstdlib>
 #include <atomic>
 #include "PlayerLogManager.h"
 #include "PlayerUtils.h"
@@ -85,6 +86,47 @@ static std::hash<std::thread::id> std_thread_hasher;
 
 // Sequential log counter for tracking missing log lines
 static std::atomic<uint32_t> gMwLogCounter(0);
+static std::atomic<uint32_t> gActiveTuneProfileCount(0);
+
+void PIStartTuneProfile()
+{
+	gActiveTuneProfileCount.fetch_add(1, std::memory_order_acq_rel);
+}
+
+void PIStopTuneProfile()
+{
+	uint32_t activeCount = gActiveTuneProfileCount.load(std::memory_order_acquire);
+	while (activeCount > 0 && !gActiveTuneProfileCount.compare_exchange_weak(
+		activeCount, activeCount - 1, std::memory_order_acq_rel))
+	{
+	}
+}
+
+bool PIIsTuneProfileActive()
+{
+	return gActiveTuneProfileCount.load(std::memory_order_acquire) > 0;
+}
+
+static std::atomic<bool>& ProfileAlwaysOnFlag()
+{
+	static std::atomic<bool> alwaysOn([]()
+	{
+		const char* env = getenv("PLAYER_RDKPERF_ALWAYS");
+		return (env != nullptr) && (strcmp(env, "1") == 0);
+	}());
+	return alwaysOn;
+}
+
+bool PIIsProfileAlwaysOn()
+{
+	return ProfileAlwaysOnFlag().load(std::memory_order_acquire);
+}
+
+void PISetProfileAlwaysOn(bool alwaysOn)
+{
+	ProfileAlwaysOnFlag().store(alwaysOn, std::memory_order_release);
+}
+
 std::size_t GetPlayerPrintableThreadID( void )
 {
 	return std_thread_hasher( std::this_thread::get_id() );
@@ -183,11 +225,12 @@ void DumpBinaryBlob(const unsigned char *ptr, size_t len)
 	int fit = FIT_CHARS;
 	while (ptr < fin)
 	{
-		unsigned char c = *ptr++;
+		unsigned char c = *ptr;
 		if (c >= ' ' && c < 128)
 		{ // printable ascii
 			*dst++ = c;
 			fit--;
+			ptr++;
 		}
 		else if( fit>=4 )
 		{
@@ -195,6 +238,7 @@ void DumpBinaryBlob(const unsigned char *ptr, size_t len)
 			WRITE_HASCII( dst, c );
 			*dst++ = ']';
 			fit -= 4;
+			ptr++;
 		}
 		else
 		{

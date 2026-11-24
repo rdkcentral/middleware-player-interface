@@ -25,7 +25,7 @@
 TtmlSubtecParser::TtmlSubtecParser(SubtitleMimeType type, int width, int height) : SubtitleParser(type, width, height), m_channel(nullptr)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::TtmlSubtecParser\n" );
+	MW_LOG_TRACE( "TtmlSubtecParser::TtmlSubtecParser" );
 #endif
 	m_channel = SubtecChannel::SubtecChannelFactory(SubtecChannel::ChannelType::TTML);
 	if (!m_channel->InitComms())
@@ -52,7 +52,7 @@ TtmlSubtecParser::TtmlSubtecParser(SubtitleMimeType type, int width, int height)
 bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::init(startPosSeconds=%.3fs,basePTS=%llu\n", startPosSeconds, basePTS );
+	MW_LOG_TRACE( "TtmlSubtecParser::init(startPosSeconds=%.3fs,basePTS=%llu", startPosSeconds, basePTS );
 #endif
 	MW_LOG_INFO("startPosSeconds %.3fs basePTS=%llu", startPosSeconds, basePTS);
 	m_channel->SendTimestampPacket(static_cast<uint64_t>(startPosSeconds * 1000.0));
@@ -71,7 +71,7 @@ bool TtmlSubtecParser::init(double startPosSeconds, unsigned long long basePTS)
 void TtmlSubtecParser::updateTimestamp(unsigned long long positionMs)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::updateTimestamp(positionMs=%llu\n", positionMs );
+	MW_LOG_TRACE( "TtmlSubtecParser::updateTimestamp(positionMs=%llu", positionMs );
 #endif
 	m_channel->SendTimestampPacket(positionMs);
 }
@@ -79,7 +79,7 @@ void TtmlSubtecParser::updateTimestamp(unsigned long long positionMs)
 void TtmlSubtecParser::reset()
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::reset\n" );
+	MW_LOG_TRACE( "TtmlSubtecParser::reset" );
 #endif
 	m_channel->SendResetChannelPacket();
 }
@@ -121,7 +121,7 @@ static std::int64_t parseFirstBegin(std::stringstream &ss)
 bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double position, double duration)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::processData(bufferLen=%zu,position=%f,duration=%f)\n", bufferLen, position, duration );
+	MW_LOG_TRACE( "TtmlSubtecParser::processData(bufferLen=%zu,position=%f,duration=%f)", bufferLen, position, duration );
 #endif
 
 	PlayerIsoBmffBuffer isobuf;
@@ -196,7 +196,7 @@ bool TtmlSubtecParser::processData(const char* buffer, size_t bufferLen, double 
 void TtmlSubtecParser::mute(bool mute)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::mute(mute=%d)\n", mute );
+	MW_LOG_TRACE( "TtmlSubtecParser::mute(mute=%d)", mute );
 #endif
 	if (mute)
 	{
@@ -211,7 +211,7 @@ void TtmlSubtecParser::mute(bool mute)
 void TtmlSubtecParser::pause(bool pause)
 {
 #ifdef TTML_DEBUG
-	printf( "TtmlSubtecParser::pause(pause=%d)\n", pause );
+	MW_LOG_TRACE( "TtmlSubtecParser::pause(pause=%d)", pause );
 #endif
 	if (pause)
 	{

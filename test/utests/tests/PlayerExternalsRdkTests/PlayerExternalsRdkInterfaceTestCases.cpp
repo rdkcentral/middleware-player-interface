@@ -20,7 +20,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "PlayerLogManager.h"
+#include <atomic>
 #include <memory>
+#include <thread>
 
 // Include the fake implementation to get the class definition and enums
 #include "../../fakes/FakePlayerExternalsRdkInterface.cpp"
@@ -84,6 +86,51 @@ TEST_F(PlayerExternalsRdkInterfaceTests, OnResolutionPostChange_ValidHDResolutio
 
 	// Verify the resolution was stored correctly
 	VerifyResolution(width, height);
+}
+
+TEST_F(PlayerExternalsRdkInterfaceTests, ConcurrentResolutionUpdatesReturnConsistentDimensions)
+{
+	constexpr int iterations = 100000;
+	std::atomic<bool> start{false};
+	std::atomic<bool> inconsistentResolution{false};
+	mPlayerExternalsRdk->SetResolution(1920, 1080);
+
+	auto writer = [this, &start](int width, int height) {
+		while (!start.load(std::memory_order_acquire))
+		{
+		}
+		for (int iteration = 0; iteration < iterations; ++iteration)
+		{
+			mPlayerExternalsRdk->SetResolution(width, height);
+		}
+	};
+
+	std::thread hdWriter(writer, 1920, 1080);
+	std::thread uhdWriter(writer, 3840, 2160);
+	std::thread reader([this, &start, &inconsistentResolution] {
+		while (!start.load(std::memory_order_acquire))
+		{
+		}
+		for (int iteration = 0; iteration < iterations; ++iteration)
+		{
+			int width = 0;
+			int height = 0;
+			mPlayerExternalsRdk->GetDisplayResolution(width, height);
+			if (!((width == 1920 && height == 1080) ||
+			      (width == 3840 && height == 2160)))
+			{
+				inconsistentResolution.store(true, std::memory_order_relaxed);
+				break;
+			}
+		}
+	});
+
+	start.store(true, std::memory_order_release);
+	hdWriter.join();
+	uhdWriter.join();
+	reader.join();
+
+	EXPECT_FALSE(inconsistentResolution.load(std::memory_order_relaxed));
 }
 
 /**

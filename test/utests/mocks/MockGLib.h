@@ -31,9 +31,11 @@ class MockGLib
 public:
 	MOCK_METHOD(GParamSpec*, g_object_class_find_property, (GObjectClass* oclass, const gchar* property_name));
 	MOCK_METHOD(guint, g_timeout_add, (guint interval, GSourceFunc function, gpointer data));
+	MOCK_METHOD(guint, g_timeout_add_full, (gint priority, guint interval, GSourceFunc function, gpointer data, GDestroyNotify notify));
+	MOCK_METHOD(guint, g_idle_add_full, (gint priority, GSourceFunc function, gpointer data, GDestroyNotify notify));
 	MOCK_METHOD(gboolean, g_source_remove, (guint tag));
 	MOCK_METHOD(gpointer, g_malloc, (gsize n_bytes));
-	MOCK_METHOD(void, freeMemory, (gpointer mem));
+	MOCK_METHOD(void, mock_g_free, (gpointer mem));
 	MOCK_METHOD(gpointer, g_realloc, (gpointer mem, gsize n_bytes));
 
 	MOCK_METHOD(void, g_object_set, (gpointer object, const gchar *property_name, int value));

@@ -88,29 +88,6 @@ protected:
 
 public:
 	/**
-	 * @fn DrmSession
-	 * @param keySystem : DRM key system uuid
-	 */
-	DrmSession(const string &keySystem);
-
-	/**
-		 * @brief Copy constructor disabled
-		 *
-		 */
-	DrmSession(const DrmSession&) = delete;
-
-	/**
-	 * @fn ~DrmSession
-	 */
-	virtual ~DrmSession();
-
-	/**
-	 * @brief assignment operator disabled
-	 *
-	 */
-	DrmSession& operator=(const DrmSession&) = delete;
-
-	/**
 	 * @fn AcquireForUse
 	 * @brief Must be called by any external caller (e.g. the GStreamer
 	 *        decryptor element) before invoking decrypt() on a DrmSession
@@ -174,7 +151,7 @@ public:
 	 * @param caps : Caps of the media that is currently being decrypted
 	 * @retval Returns status of decrypt request.
 	 */
-	virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
+        virtual int decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuffer* buffer, unsigned subSampleCount, GstBuffer* subSamplesBuffer, GstCaps* caps = NULL);
 
 	/**
 	 * @fn decrypt
@@ -210,18 +187,30 @@ public:
 
 	/**
 	 * @brief Get the list of usable key IDs from the DRM session
-	 * @retval Snapshot copy of usable key IDs, taken under the session's
-	 *         internal lock where applicable. Callers receive their own
-	 *         independent copy and need not hold any external lock.
+	 * @retval Reference to vector of usable key IDs
+	 * @note Default implementation returns the reference to an empty vector
 	 */
-	virtual std::vector<std::vector<uint8_t>> getUsableKeys() const { return {}; }
+	virtual const std::vector<std::vector<uint8_t>>& getUsableKeys() const;
 
 	/**
-	 * @brief Return the Rialto media key session ID, or -1 if not applicable.
+	 * @fn DrmSession
+	 * @param keySystem : DRM key system uuid
 	 */
-	virtual int32_t getMediaKeySessionId() const { return -1; }
-
-	virtual void setKeyId(const std::vector<uint8_t>& keyId) {};
+	DrmSession(const string &keySystem);
+	/**     
+     	 * @brief Copy constructor disabled
+     	 *
+     	 */
+	DrmSession(const DrmSession&) = delete;
+	/**
+ 	 * @brief assignment operator disabled
+ 	 *
+ 	 */
+	DrmSession& operator=(const DrmSession&) = delete;
+	/**
+	 * @fn ~DrmSession
+	 */
+	virtual ~DrmSession();
 
 	/**
 	 * @fn getKeySystem
@@ -235,6 +224,9 @@ public:
 	 * @retval void
 	 */
 	void setOutputProtection(bool bValue) { m_OutputProtectionEnabled = bValue;}
+#if defined(USE_OPENCDM_ADAPTER)
+	virtual void setKeyId(const std::vector<uint8_t>& keyId) {};
+#endif
 	void setSecManagerSession(ContentSecurityManagerSession session){mContentSecurityManagerSession=session;}
 	ContentSecurityManagerSession getSecManagerSession() const { return mContentSecurityManagerSession;}
 };
