@@ -25,6 +25,7 @@
 #include <gst/gst.h>
 #include <cstdio>
 #ifdef DRM_BUILD_PROFILE
+#include "gstdrmmultidecryptor.h"
 #include "gstplayreadydecryptor.h"
 #include "gstwidevinedecryptor.h"
 #include "gstclearkeydecryptor.h"
@@ -41,6 +42,16 @@ static gboolean plugin_init(GstPlugin * plugin)
 {
 	gboolean ret =  false;
 #ifdef DRM_BUILD_PROFILE
+    ret = gst_element_register(plugin, GstPluginNameMULTI, GST_RANK_PRIMARY + 120, GST_TYPE_DRM_MULTI_DECRYPTOR );
+    if(ret)
+    {
+        printf("player plugin_init registered %s element\n", GstPluginNameMULTI);
+    }
+    else
+    {
+        printf("player plugin_init FAILED to register %s element\n", GstPluginNameMULTI);
+    }
+
 	ret = gst_element_register(plugin, GstPluginNamePR,
 			GST_RANK_PRIMARY, GST_TYPE_PLAYREADYDECRYPTOR );
 	if(ret)
