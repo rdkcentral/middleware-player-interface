@@ -3307,6 +3307,20 @@ long long InterfacePlayerRDK::GetPositionMilliseconds(void)
 		MW_LOG_INFO("Pipeline is in %s state %s target state, paused=%d returning position as %lld", gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState), gst_element_state_get_name(GST_STATE_TARGET(interfacePlayerPriv->gstPrivateContext->pipeline)), interfacePlayerPriv->gstPrivateContext->paused, rc);
 		return rc;
 	}
+	// Immediately after a flushing seek (segmentStart == -1), upstream elements (e.g. appsrc) can
+	// already report the new segment while the pipeline is still asynchronously completing its
+	// transition to PLAYING. Querying the sink for position in that window can return a stale,
+	// pre-flush value that gets combined with the freshly queried segment.start and produces a
+	// bogus position (seen e.g. during trickplay rate changes). Until the pipeline genuinely
+	// reaches PLAYING, report the new segment's start (0) and defer resolving segmentStart so it
+	// is re-queried once the position is trustworthy.
+	if (interfacePlayerPriv->gstPrivateContext->segmentStart == -1 &&
+		interfacePlayerPriv->gstPrivateContext->pipelineState != GST_STATE_PLAYING &&
+		!(interfacePlayerPriv->gstPrivateContext->pipelineState == GST_STATE_PAUSED && interfacePlayerPriv->gstPrivateContext->paused))
+	{
+		MW_LOG_INFO("InterfacePlayerRDK: Pipeline in %s state (not yet PLAYING) after flush; deferring segment.start resolution, returning position as %lld", gst_element_state_get_name(interfacePlayerPriv->gstPrivateContext->pipelineState), rc);
+		return rc;
+	}
 	gst_media_stream* video = &interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_VIDEO];
 	// segment.start needs to be queried
 	if (interfacePlayerPriv->gstPrivateContext->segmentStart == -1)
