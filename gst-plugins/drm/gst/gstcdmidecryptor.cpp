@@ -136,11 +136,11 @@ G_DEFINE_TYPE_WITH_CODE (GstCDMIDecryptor, gst_cdmidecryptor, GST_TYPE_BASE_TRAN
 // stubs to avoid strange ubuntu-specific SegFault while running L2 Plugin tests
 static void gst_cdmidecryptor_class_init( GstCDMIDecryptorClass * klass)
 {
-	printf( "gst_cdmidecryptor_class_init\n" );
+	GST_INFO( "gst_cdmidecryptor_class_init" );
 }
 static void gst_cdmidecryptor_init( GstCDMIDecryptor *cdmidecryptor)
 {
-	printf( "gst_cdmidecryptor_init\n" );
+	GST_INFO( "gst_cdmidecryptor_init" );
 }
 #else
 /* prototypes */

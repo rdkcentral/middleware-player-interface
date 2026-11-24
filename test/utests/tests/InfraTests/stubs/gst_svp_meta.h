@@ -2,7 +2,7 @@
  * If not stated otherwise in this file or this component's license file the
  * following copyright and licenses apply:
  *
- * Copyright 2026 RDK Management
+ * Copyright 2025 RDK Management
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,18 @@
  */
 
 /**
- * @file PlayerDirectRialtoCCManagerTests.cpp
- * @brief Test runner for PlayerDirectRialtoCCManager unit tests.
+ * @file gst_svp_meta.h
+ * @brief Minimal unit-test stub for the external SVP header.
+ *
+ * AmlogicSocInterface.cpp includes this header unconditionally but only uses
+ * the gst_svp_ext_* entry points under #ifdef USE_SVP.  The unit-test build
+ * does not define USE_SVP and does not link gst-svp-ext, so an empty header
+ * is sufficient to satisfy the include.
  */
 
-#include <gtest/gtest.h>
+#ifndef GST_SVP_META_H
+#define GST_SVP_META_H
 
-int main(int argc, char **argv)
-{
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
-}
+#include <gst/gst.h>
+
+#endif /* GST_SVP_META_H */

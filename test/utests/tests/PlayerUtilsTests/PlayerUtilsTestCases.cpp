@@ -401,3 +401,40 @@ TEST_F(PlayerUtilsTests, RawKeyToKeyId_ByteOrder_PreservedCorrectly)
 	EXPECT_EQ(result[6], '7');
 	EXPECT_EQ(result[7], '8');
 }
+
+TEST_F(PlayerUtilsTests, ResolveURL_AbsoluteUriIsUnchanged)
+{
+	std::string resolved;
+	ResolveURL(resolved, "https://example.com/path/master.m3u8", "https://cdn.example.com/segment.ts", false);
+	EXPECT_EQ(resolved, "https://cdn.example.com/segment.ts");
+}
+
+TEST_F(PlayerUtilsTests, ResolveURL_RelativeUriUsesBasePathAndQuery)
+{
+	std::string resolved;
+	ResolveURL(resolved, "https://example.com/path/master.m3u8?token=abc", "segment.ts", true);
+	EXPECT_EQ(resolved, "https://example.com/path/segment.ts?token=abc");
+}
+
+TEST_F(PlayerUtilsTests, ResolveURL_RootRelativeUriUsesHost)
+{
+	std::string resolved;
+	ResolveURL(resolved, "https://example.com/path/master.m3u8", "/segment.ts", false);
+	EXPECT_EQ(resolved, "https://example.com/segment.ts");
+}
+
+TEST_F(PlayerUtilsTests, ResolveURL_UriQueryOverridesBaseQuery)
+{
+	std::string resolved;
+	ResolveURL(resolved, "https://example.com/path/master.m3u8?token=abc", "segment.ts?quality=low", true);
+	EXPECT_EQ(resolved, "https://example.com/path/segment.ts?quality=low");
+}
+
+TEST_F(PlayerUtilsTests, GetThreadID_ThreadOverloadIsStable)
+{
+	std::thread worker([] {});
+	const std::size_t threadId = GetThreadID(worker);
+
+	EXPECT_EQ(GetThreadID(worker), threadId);
+	worker.join();
+}
