@@ -942,11 +942,24 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 			}
 		}
 
-		cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
+		if (cdmidecryptor->sessionManager->laprofileBeginCb)
+		{
+			cdmidecryptor->sessionManager->laprofileBeginCb(cdmidecryptor->mediaType);
+		}
+
 		g_mutex_lock(&cdmidecryptor->mutex);
 		GST_DEBUG_OBJECT(cdmidecryptor, "\n acquired lock for mutex\n");
-		std::shared_ptr<void> e = cdmidecryptor->sessionManager->DrmMetaDataCb();
-                int err = -1;
+               	std::shared_ptr<void> e;
+		if (cdmidecryptor->sessionManager->DrmMetaDataCb)
+		{
+			e = cdmidecryptor->sessionManager->DrmMetaDataCb();
+		}
+		else
+		{
+			GST_ERROR_OBJECT(cdmidecryptor, "DrmMetaDataCb is not registered\n");
+		}
+
+		int err = -1;
 		int responseCode =-1;
 		if (cdmidecryptor->sessionManager->m_drmConfigParam->mIsWVKIDWorkaround){
 			cdmidecryptor->drmSession =	cdmidecryptor->sessionManager->createDrmSession(responseCode, err,
@@ -959,7 +972,7 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 						reinterpret_cast<const unsigned char *>(mapInfo.data),
 						mapInfo.size, (int)cdmidecryptor->mediaType, cdmidecryptor->player, e.get(), nullptr, false);
 		}
-		if(err != -1)
+		if(err != -1 && cdmidecryptor->sessionManager->setfailureCb)
                 {
                        cdmidecryptor->sessionManager->setfailureCb(e.get(),err);
                 }
@@ -981,7 +994,10 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 		 */
 		if(SessionMgrState::eSESSIONMGR_ACTIVE == cdmidecryptor->sessionManager->getSessionMgrState())
 		{
-			cdmidecryptor->sessionManager->laprofileErrorCb(e.get());
+			if (cdmidecryptor->sessionManager->laprofileErrorCb)
+			{
+				cdmidecryptor->sessionManager->laprofileErrorCb(e.get());
+			}
 			GST_ERROR_OBJECT(cdmidecryptor,"Failed to create DRM Session\n");
 		}
 			result = TRUE;
@@ -989,7 +1005,11 @@ static gboolean gst_cdmidecryptor_sink_event(GstBaseTransform * trans,
 	else
 		{
 			cdmidecryptor->streamReceived = TRUE;
-			cdmidecryptor->sessionManager->laprofileEndCb(cdmidecryptor->mediaType);
+			if (cdmidecryptor->sessionManager->laprofileEndCb)
+			{
+				cdmidecryptor->sessionManager->laprofileEndCb(cdmidecryptor->mediaType);
+			}
+
 			if (!cdmidecryptor->firstsegprocessed)
 			{
 
