@@ -36,7 +36,7 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
         //Remove pointers to expired instances
         {
                 std::vector<std::string> keysToRemove;
-                for (auto i : instances)
+                for (const auto &i : instances)
                 {
                         if(i.second.expired())
                         {
@@ -47,7 +47,7 @@ std::shared_ptr<ContentSecurityManagerSession::SessionManager> ContentSecurityMa
                 {
                         std::stringstream ss;
                         ss<<"ContentSecurityManagerSession: "<<keysToRemove.size()<<" expired (";
-                        for(auto key:keysToRemove)
+                        for(const auto &key:keysToRemove)
                         {
                                 ss<<key<<",";
                                 instances.erase(key);
