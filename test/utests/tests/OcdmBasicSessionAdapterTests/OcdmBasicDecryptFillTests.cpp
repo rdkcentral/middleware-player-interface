@@ -63,7 +63,7 @@ protected:
 		ON_CALL(*mDrmHelper, ocdmSystemId()).WillByDefault(testing::ReturnRef(mSystemId));
 		ON_CALL(*mDrmHelper, getMemorySystem()).WillByDefault(Return(nullptr));
 		ON_CALL(*g_mockOpenCdmSessionAdapter, getUsableKeys())
-			.WillByDefault(testing::ReturnRef(mUsableKeys));
+			.WillByDefault(testing::Return(mUsableKeys));
 
 		mAdapter = new OCDMBasicSessionAdapter(mDrmHelper, nullptr);
 	}

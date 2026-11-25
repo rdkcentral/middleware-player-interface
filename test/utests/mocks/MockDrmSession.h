@@ -43,9 +43,7 @@ public:
 	MOCK_METHOD(int, decrypt, (const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *payloadData, uint32_t payloadDataSize, uint8_t **ppOpaqueData), (override));
 	MOCK_METHOD(KeyState, getState, (), (override));
 	MOCK_METHOD(void, clearDecryptContext, (), (override));
-#if defined(USE_OPENCDM_ADAPTER)
 	MOCK_METHOD(void, setKeyId, (const std::vector<uint8_t>& keyId), (override));
-#endif
 };
 extern MockDrmSession *g_mockDrmSession;
 
