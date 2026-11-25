@@ -79,3 +79,44 @@ endif()
 target_link_libraries(${EXEC_NAME} fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})
+
+find_package(WPEFrameworkCore QUIET)
+find_package(WPEFrameworkWebSocket QUIET)
+if (WPEFrameworkCore_FOUND AND WPEFrameworkWebSocket_FOUND)
+    add_executable(SecManagerThunderStringIdTests
+        PlayerContentSecurityRun.cpp
+        SecManagerThunderTests.cpp
+        ${PLAYER_SOURCES}
+        ${PLAYER_ROOT}/externals/contentsecuritymanager/SecManagerThunder.cpp
+        ${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp
+        ${PLAYER_ROOT}/baseConversion/_base64.cpp)
+    target_compile_definitions(SecManagerThunderStringIdTests PRIVATE USE_SECMANAGER)
+    target_compile_options(SecManagerThunderStringIdTests PRIVATE -Werror=format)
+    target_link_libraries(SecManagerThunderStringIdTests PRIVATE
+        WPEFrameworkCore::CompileSettings WPEFrameworkCore::WPEFrameworkCore
+        WPEFrameworkWebSocket::WPEFrameworkWebSocket
+        fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS}
+        ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+    set_target_properties(SecManagerThunderStringIdTests PROPERTIES FOLDER "utests")
+    player_utest_run_add(SecManagerThunderStringIdTests)
+
+    add_executable(SecManagerThunderStartupTests
+        PlayerContentSecurityRun.cpp
+        SecManagerThunderTests.cpp
+        ${PLAYER_SOURCES}
+        ${PLAYER_ROOT}/externals/contentsecuritymanager/SecManagerThunder.cpp
+        ${PLAYER_ROOT}/externals/PlayerExternalUtils.cpp
+        ${PLAYER_ROOT}/baseConversion/_base64.cpp)
+    target_compile_definitions(SecManagerThunderStartupTests PRIVATE
+        USE_SECMANAGER SECMANAGER_THUNDER_STARTUP_ONLY)
+    target_compile_options(SecManagerThunderStartupTests PRIVATE -Werror=format)
+    target_link_libraries(SecManagerThunderStartupTests PRIVATE
+        WPEFrameworkCore::CompileSettings WPEFrameworkCore::WPEFrameworkCore
+        WPEFrameworkWebSocket::WPEFrameworkWebSocket
+        fakes -pthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS}
+        ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES})
+    set_target_properties(SecManagerThunderStartupTests PROPERTIES FOLDER "utests")
+    player_utest_run_add(SecManagerThunderStartupTests)
+else()
+    message(STATUS "Thunder SDK not found; skipping SecManagerThunderStringIdTests and SecManagerThunderStartupTests")
+endif()

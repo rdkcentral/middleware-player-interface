@@ -51,6 +51,19 @@ namespace WPEFramework {
 namespace Core {
 namespace JSON {
 
+class Variant
+{
+public:
+	enum class type
+	{
+		EMPTY,
+		BOOLEAN,
+		NUMBER,
+		STRING,
+		OBJECT
+	};
+};
+
 class IElement
 {
 };
@@ -136,6 +149,23 @@ public:
 		int64_t Number() const { return mType == Type::Number ? mNumber : 0; }
 		double Floating() const { return mType == Type::Floating ? mFloating : 0.0; }
 		std::string String() const { return mType == Type::String ? mString : std::string(); }
+		WPEFramework::Core::JSON::Variant::type Content() const
+		{
+			switch (mType)
+			{
+				case Type::Boolean:
+					return WPEFramework::Core::JSON::Variant::type::BOOLEAN;
+				case Type::Number:
+				case Type::Floating:
+					return WPEFramework::Core::JSON::Variant::type::NUMBER;
+				case Type::String:
+					return WPEFramework::Core::JSON::Variant::type::STRING;
+				case Type::Object:
+					return WPEFramework::Core::JSON::Variant::type::OBJECT;
+				default:
+					return WPEFramework::Core::JSON::Variant::type::EMPTY;
+			}
+		}
 		VariantContainer Object() const
 		{
 			return (mType == Type::Object && mObject) ? *mObject : VariantContainer();

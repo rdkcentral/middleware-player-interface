@@ -50,13 +50,14 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(nullptr),
-		cachedKeyIDs(nullptr), accessToken(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(const std::string&, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(NULL),
+		cachedKeyIDs(NULL), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
+		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -226,7 +227,7 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 void DrmSessionManager::setVideoWindowSize(int width, int height)
 {
 	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
-	MW_LOG_WARN("In DrmSessionManager:: setting video window size w:%d x h:%d mMaxDRMSessions=%d sessionID=[%" PRId64 "]",width,height,mMaxDRMSessions,localSession.getSessionID());
+	MW_LOG_WARN("In DrmSessionManager:: setting video window size w:%d x h:%d mMaxDRMSessions=%d sessionID=[%s]",width,height,mMaxDRMSessions,localSession.getSessionID().c_str());
 	if(localSession.isSessionValid())
 	{
 		MW_LOG_WARN("In DrmSessionManager:: valid session ID. Calling setVideoWindowSize().");
@@ -274,7 +275,7 @@ void DrmSessionManager::setPlaybackSpeedState(bool live, double currentLatency, 
 {
 	bool isVideoOnMute=mIsVideoOnMute.load();
 	auto localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
-	MW_LOG_WARN("In DrmSessionManager::after calling setPlaybackSpeedState speed=%d position=%f sessionID=[%" PRId64 "], mute: %d",speed, positionMs, localSession.getSessionID(), isVideoOnMute);
+	MW_LOG_WARN("In DrmSessionManager::after calling setPlaybackSpeedState speed=%d position=%f sessionID=[%s], mute: %d",speed, positionMs, localSession.getSessionID().c_str(), isVideoOnMute);
 	mCurrentSpeed.store(speed);
 	if(firstFrameSeen)
 	{
@@ -312,7 +313,7 @@ void DrmSessionManager::setPlaybackSpeedState(bool live, double currentLatency, 
 	{
 		bool firstFrameSeenCopy=mFirstFrameSeen.load();
 		isVideoOnMute=mIsVideoOnMute.load();
-		MW_LOG_INFO("Not calling ContentSecurityManager::setPlaybackSpeedState(), sessionID=[%" PRId64 "], mIsVideoOnMute=%d, firstFrameSeen=%d", localSession.getSessionID(), isVideoOnMute, firstFrameSeenCopy);
+		MW_LOG_INFO("Not calling ContentSecurityManager::setPlaybackSpeedState(), sessionID=[%s], mIsVideoOnMute=%d, firstFrameSeen=%d", localSession.getSessionID().c_str(), isVideoOnMute, firstFrameSeenCopy);
 	}
 }
 
@@ -569,11 +570,11 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		 */
 		const auto &localSession = mContentSecurityManagerSession;
 		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
-		const int64_t staleSessionId = localSession.getSessionID();
+		const std::string staleSessionId = localSession.getSessionID();
 		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
 		{
-			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
-					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
+			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%s] and retrying with fresh session",
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId.c_str());
 			mContentSecurityManagerSession.setSessionInvalid();
 			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
 		}
@@ -614,7 +615,7 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
 	if (localSession.isSessionValid())
 	{
-		MW_LOG_WARN(" Setting sessionId[%" PRId64 "] to current drmSession", localSession.getSessionID());
+		MW_LOG_WARN(" Setting sessionId[%s] to current drmSession", localSession.getSessionID().c_str());
 		drmSessionContexts[selectedSlot].drmSession->setSecManagerSession(localSession);
 	}
 
@@ -904,7 +905,7 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 						// Set the drmSession's ID as mContentSecurityManagerSession so that this code will not be repeated for multiple calls for createDrmSession
 						mContentSecurityManagerSession = slotSession;
 						bool videoMuteState = mIsVideoOnMute.load();
-						MW_LOG_WARN("Activating re-used DRM, sessionId[%" PRId64 "], with video mute = %d", slotSession.getSessionID(), videoMuteState);
+						MW_LOG_WARN("Activating re-used DRM, sessionId[%s], with video mute = %d", slotSession.getSessionID().c_str(), videoMuteState);
 						ContentSecurityManager::GetInstance()->UpdateSessionState(slotSession.getSessionID(), true);
 					}
 					return KEY_READY;
@@ -953,7 +954,16 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			m_sessionCreator(drmHelper, Instance).release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -974,7 +984,10 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
 
 #if defined(USE_OPENCDM_ADAPTER)
-	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
+	if (drmSessionContexts[sessionSlot].drmSession != nullptr)
+	{
+		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
+	}
 #endif
 
 	return code;
@@ -1025,7 +1038,7 @@ void DrmSessionManager::notifyCleanup()
 	if(localSession.isSessionValid())
 	{
 		// Set current session to inactive
-		MW_LOG_WARN("De-activate DRM session [%" PRId64 "] and watermark", localSession.getSessionID() );
+		MW_LOG_WARN("De-activate DRM session [%s] and watermark", localSession.getSessionID().c_str() );
 		ContentSecurityManager::GetInstance()->UpdateSessionState(localSession.getSessionID(), false);
 		// Reset the session ID, the session ID is preserved within DrmSession instances
 		mContentSecurityManagerSession.setSessionInvalid();	//note this doesn't necessarily close the session as the session ID is also saved in the slot
@@ -1063,11 +1076,11 @@ void DrmSessionManager::registerCallback()
 {
 	auto instance = this;
 
-	 std::function<void(uint32_t, uint32_t, const std::string&)> watermarkCallBack =
-	[instance](uint32_t sessionHandle, uint32_t status, const std::string& system)
+	 std::function<void(const std::string&, uint32_t, const std::string&)> watermarkCallBack =
+	[instance](const std::string& sessionHandle, uint32_t status, const std::string& system)
        	{
-            MW_LOG_INFO("[DrmSessionManager] Received WM callback: handle=%u, status=%u, system=%s",
-                        sessionHandle, status, system.c_str());
+            MW_LOG_INFO("[SessionIdString] MPI received WM callback: sessionHandle='%s', status=%u, system=%s",
+                        sessionHandle.c_str(), status, system.c_str());
 
             if (instance && instance->mPlayerSendWatermarkSessionUpdateEventCB)
             {
@@ -1083,7 +1096,7 @@ void DrmSessionManager::registerCallback()
             }
 	};
 	ContentSecurityManager::setWatermarkSessionEvent_CB(watermarkCallBack);
-	MW_LOG_INFO("WatermarkSessionEvent Callback registered");
+	MW_LOG_DEBUG("[SessionIdString] MPI registered watermark callback with string sessionHandle");
 }
 
 /**
@@ -1093,10 +1106,12 @@ void DrmSessionManager::registerCallback()
  * @param[in] systemData system data
  * @retval void
  */
-void DrmSessionManager::watermarkSessionHandlerWrapper(uint32_t sessionHandle, uint32_t status, const std::string &systemData)
+void DrmSessionManager::watermarkSessionHandlerWrapper(const std::string& sessionHandle, uint32_t status, const std::string &systemData)
 {
 	if(NULL != mPlayerSendWatermarkSessionUpdateEventCB)
 	{
+		MW_LOG_DEBUG("[SessionIdString] MPI forwarding wrapped watermark callback sessionHandle='%s' status=%u system=%s",
+			sessionHandle.c_str(), status, systemData.c_str());
 		mPlayerSendWatermarkSessionUpdateEventCB( sessionHandle, status, systemData);
 	}
 }
