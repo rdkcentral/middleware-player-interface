@@ -164,7 +164,7 @@ protected:
 	bool mSuspended;			/**< Suspend gate, guarded by mQMutex; may be released from any thread */
 	bool mExecuting;			/**< True while a task is executing, guarded by mQMutex */
 	int mNextTaskId;			/**< counter that holds ID value of next task to be scheduled */
-	int mCurrentTaskId;			/**< ID of current executed task, guarded by mQMutex */
+	std::atomic<int> mCurrentTaskId;	/**< ID of current executed task */
 	bool mLockOut;				/**< flag indicates if the queue is locked out or not */
 };
 
