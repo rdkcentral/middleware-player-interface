@@ -94,6 +94,11 @@ struct MediaCodecInfo
 	GstStreamOutputFormat mCodecFormat; // GST_FORMAT_VIDEO_ES_H264, etc
 	std::vector<uint8_t> mCodecData; // codec private data, e.g. avcC box
 	bool mIsEncrypted;
+	// True when NAL units are length-prefixed (AVCC/HVCC, e.g. avcC/hvcC
+	// sample entries per ISO/IEC 14496-15); false for Annex-B (start-code
+	// delimited) bitstreams such as HLS-TS ES output. Meaningless for
+	// non-NAL-unit codecs (audio/subtitle), where it stays false.
+	bool mNaluLengthPrefixed;
 	union
 	{
 		struct
@@ -116,7 +121,7 @@ struct MediaCodecInfo
 	 *       Uniform initialization is preferred for C++ types as it's type-safe, clearer in intent,
 	 *       and works correctly with all C++ types including those with constructors.
 	 */
-	MediaCodecInfo() : mCodecFormat(GST_FORMAT_INVALID), mIsEncrypted(false), mCodecData(), mInfo{0}
+	MediaCodecInfo() : mCodecFormat(GST_FORMAT_INVALID), mIsEncrypted(false), mNaluLengthPrefixed(false), mCodecData(), mInfo{0}
 	{
 	}
 
@@ -128,7 +133,7 @@ struct MediaCodecInfo
 	 *       Uniform initialization is preferred for C++ types as it's type-safe, clearer in intent,
 	 *       and works correctly with all C++ types including those with constructors.
 	 */
-	MediaCodecInfo(GstStreamOutputFormat format) : mCodecFormat(format), mIsEncrypted(false), mCodecData(), mInfo{0}
+	MediaCodecInfo(GstStreamOutputFormat format) : mCodecFormat(format), mIsEncrypted(false), mNaluLengthPrefixed(false), mCodecData(), mInfo{0}
 	{
 	}
 
@@ -144,6 +149,7 @@ struct MediaCodecInfo
         : mCodecFormat(exchange(other.mCodecFormat, GST_FORMAT_INVALID))
         , mCodecData(exchange(other.mCodecData, {}))
         , mIsEncrypted(exchange(other.mIsEncrypted, false))
+        , mNaluLengthPrefixed(exchange(other.mNaluLengthPrefixed, false))
         , mInfo(exchange(other.mInfo, {})) // POD union - exchange with zero-initialized union
     {
     }
@@ -160,6 +166,7 @@ struct MediaCodecInfo
 			mCodecFormat = exchange(other.mCodecFormat, GST_FORMAT_INVALID);
 			mCodecData = exchange(other.mCodecData, {});
 			mIsEncrypted = exchange(other.mIsEncrypted, false);
+			mNaluLengthPrefixed = exchange(other.mNaluLengthPrefixed, false);
 			mInfo = exchange(other.mInfo, {}); // POD union - exchange with zero-initialized union
 		}
 		return *this;
