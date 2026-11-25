@@ -983,6 +983,8 @@ TEST_F(InterfacePlayerGapFillTests, EndOfStreamReached_TrickModeSignalsAudioAndS
 	mPlayerContext->rate = 4; // trickmode
 	GstElement subtitleSrc{};
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = &subtitleSrc;
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&subtitleSrc)).WillOnce(Return(&subtitleSrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&subtitleSrc));
 	mInterfaceGstPlayer->EndOfStreamReached(eGST_MEDIATYPE_VIDEO, shouldHaltBuffering);
 	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].eosReached);
 	EXPECT_TRUE(shouldHaltBuffering);
@@ -996,6 +998,8 @@ TEST_F(InterfacePlayerGapFillTests, EndOfStreamReached_NormalRateAudioEosCascade
 	GstElement subtitleSrc{};
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].eosReached = true;
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = &subtitleSrc;
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&subtitleSrc)).WillOnce(Return(&subtitleSrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&subtitleSrc));
 	mInterfaceGstPlayer->EndOfStreamReached(eGST_MEDIATYPE_VIDEO, shouldHaltBuffering);
 	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached);
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = nullptr;

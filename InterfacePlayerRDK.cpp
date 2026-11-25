@@ -1119,22 +1119,33 @@ static void type_check_instance( const char * str, GstElement * elem);
  * @brief Signal EOS to the appsrc associated with the supplied media stream
  * @param[in] media_stream the media stream to inject EOS into
  */
-static void GstPlayer_SignalEOS(gst_media_stream& stream, bool profileActive)
+static bool GstPlayer_SignalEOS(gst_media_stream& stream, bool profileActive)
 {
 	(void)profileActive;
+	GstElement *source = nullptr;
+	pthread_mutex_lock(&stream.sourceLock);
 	if (stream.source)
+	{
+		source = GST_ELEMENT(gst_object_ref(stream.source));
+	}
+	pthread_mutex_unlock(&stream.sourceLock);
+
+	if (source)
 	{
 		GstFlowReturn ret;
 		{
 			PI_PROFILE_SCOPE_IF("gst_app_src_end_of_stream", profileActive);
-			ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(stream.source));
+			ret = gst_app_src_end_of_stream(GST_APP_SRC_CAST(source));
 		}
 		//GST_FLOW_OK is expected in PAUSED or PLAYING states; GST_FLOW_FLUSHING is expected in other states.
 		if (ret != GST_FLOW_OK)
 		{
 			MW_LOG_WARN("gst_app_src_push_buffer  error: %d", ret);
 		}
+		gst_object_unref(source);
+		return true;
 	}
+	return false;
 }
 
 static void GstPlayer_SignalEOS(gst_media_stream* stream, bool profileActive)
@@ -4273,7 +4284,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 				ret = true;
 
 				//If we have an audio discontinuity, signal subtec as well
-				if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
+				if (type == eGST_MEDIATYPE_AUDIO)
 				{
 					GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 				}
@@ -4289,7 +4300,7 @@ bool InterfacePlayerRDK::CheckDiscontinuity(int mediaType, int streamFormat , bo
 	
 
 			//If we have an audio discontinuity, signal subtec as well
-			if ((type == eGST_MEDIATYPE_AUDIO) && (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
+			if (type == eGST_MEDIATYPE_AUDIO)
 			{
 				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 			}
@@ -5871,19 +5882,17 @@ void InterfacePlayerRDK::EndOfStreamReached(int mediaType, bool &shouldHaltBuffe
 		if (GST_NORMAL_PLAY_RATE != interfacePlayerPriv->gstPrivateContext->rate)
 		{
 			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO], PI_PLAYER_PROFILE_ACTIVE());
-			if (interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source)
-			{
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
-			}
+			GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
 		}
 		else
 		{
 			if ((interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_AUDIO].eosReached) &&
-				(!interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached) &&
-				(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].source))
+				(!interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached))
 			{
-				interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached = true;
-				GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE());
+				if (GstPlayer_SignalEOS(interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE], PI_PLAYER_PROFILE_ACTIVE()))
+				{
+					interfacePlayerPriv->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE].eosReached = true;
+				}
 			}
 		}
 
