@@ -32,12 +32,16 @@
 #include <string>
 #include <atomic>
 #include <utility>
+#include <memory>
 #include "DrmHelper.h"
 
 #include "PlayerSecInterface.h"
 #include "ContentSecurityManagerSession.h"
 
 #include <functional>
+
+using DrmSessionCreator =
+	std::function<std::unique_ptr<DrmSession>(DrmHelperPtr, DrmCallbacks*)>;
 
 
 #define VIDEO_SESSION 0

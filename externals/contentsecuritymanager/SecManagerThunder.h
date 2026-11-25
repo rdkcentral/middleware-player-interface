@@ -177,7 +177,7 @@ protected:
 	/**
 	 *   @fn GetWaterMarkPalette
 	 */
-	void GetWaterMarkPalette(const std::string& sessionId, int graphicId);
+	void GetWaterMarkPalette(const std::string& sessionId, int graphicId, std::uint64_t generation);
 	/**
 	 *   @fn ModifyWatermarkPalette
 	 */

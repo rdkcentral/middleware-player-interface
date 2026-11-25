@@ -1049,7 +1049,7 @@ bool SecManagerThunder::IsWatermarkOpCurrent(int graphicId, std::uint64_t genera
 /**
  * @brief GetWaterMarkPalette
  */
-void SecManagerThunder::GetWaterMarkPalette(const std::string& sessionId, int graphicId)
+void SecManagerThunder::GetWaterMarkPalette(const std::string& sessionId, int graphicId, std::uint64_t generation)
 {
 	if (sessionId.empty())
 	{

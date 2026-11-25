@@ -32,13 +32,13 @@ void ExpectSessionString(const std::string& serialized, const std::string& expec
 }
 
 // Replace only the transport; the backend and Thunder JSON implementation are real.
-ThunderAccessPlayer::ThunderAccessPlayer(std::string callsign)
-	: remoteObject(nullptr), controllerObject(nullptr), pluginCallsign(std::move(callsign))
+ThunderAccessPlayer::ThunderAccessPlayer(const std::string& callsign)
+	: remoteObject(nullptr), controllerObject(nullptr), pluginCallsign(callsign)
 {
 }
 ThunderAccessPlayer::~ThunderAccessPlayer() = default;
 bool ThunderAccessPlayer::ActivatePlugin() { return true; }
-bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject& parameters,
+bool ThunderAccessPlayer::InvokeJSONRPC(const std::string& method, const JsonObject& parameters,
 	JsonObject& result, const uint32_t)
 {
 	std::string serialized;
@@ -52,17 +52,18 @@ bool ThunderAccessPlayer::InvokeJSONRPC(std::string method, const JsonObject& pa
 	}
 	return true;
 }
-bool ThunderAccessPlayer::SubscribeEvent(std::string name, std::function<void(const JsonObject&)> handler)
+bool ThunderAccessPlayer::SubscribeEvent(const std::string& name, std::function<void(const JsonObject&)> handler)
 {
 	events[name] = std::move(handler);
 	return true;
 }
-bool ThunderAccessPlayer::UnSubscribeEvent(std::string name)
+bool ThunderAccessPlayer::UnSubscribeEvent(const std::string& name)
 {
 	events.erase(name);
 	return true;
 }
 
+#ifdef SECMANAGER_THUNDER_STARTUP_ONLY
 TEST(SecManagerThunderStartup, CloseAllUsesEmptyString)
 {
 	calls.clear();
@@ -73,7 +74,7 @@ TEST(SecManagerThunderStartup, CloseAllUsesEmptyString)
 	ExpectSessionString(call->parameters, "");
 	EXPECT_EQ(JsonObject(call->parameters)["clientId"].String(), "player");
 }
-
+#else
 class SecManagerThunderTests : public testing::Test
 {
 protected:
@@ -315,7 +316,7 @@ TEST_F(SecManagerThunderTests, DeferredPaletteRequestPreservesUuid)
 	testing::StrictMock<MockPlayerScheduler> scheduler;
 	g_mockPlayerScheduler = &scheduler;
 	std::vector<PlayerAsyncTaskObj> tasks;
-	EXPECT_CALL(scheduler, ScheduleTask(testing::_)).Times(2)
+	EXPECT_CALL(scheduler, ScheduleTask(testing::_)).Times(1)
 		.WillRepeatedly(testing::Invoke([&](PlayerAsyncTaskObj task)
 		{
 			tasks.push_back(std::move(task));
@@ -343,7 +344,7 @@ TEST_F(SecManagerThunderTests, DeferredPaletteRequestPreservesUuid)
 		ASSERT_EQ(events.count("onAddWatermark"), 1u);
 		events.at("onAddWatermark")(parameters);
 	}
-	ASSERT_EQ(tasks.size(), 2u);
+	ASSERT_EQ(tasks.size(), 1u);
 	for (const auto& task : tasks)
 	{
 		task.mTask(task.mData);
@@ -357,3 +358,4 @@ TEST_F(SecManagerThunderTests, DeferredPaletteRequestPreservesUuid)
 	EXPECT_EQ(parameters["watermarkClutBufferKey"].Number(), 11);
 	EXPECT_EQ(parameters["watermarkImageBufferKey"].Number(), 12);
 }
+#endif

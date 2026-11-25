@@ -57,6 +57,7 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
+		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -569,11 +570,11 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		 */
 		const auto &localSession = mContentSecurityManagerSession;
 		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
-		const int64_t staleSessionId = localSession.getSessionID();
+		const std::string staleSessionId = localSession.getSessionID();
 		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
 		{
-			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
-					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
+			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%s] and retrying with fresh session",
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId.c_str());
 			mContentSecurityManagerSession.setSessionInvalid();
 			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
 		}
@@ -953,7 +954,16 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			m_sessionCreator(drmHelper, Instance).release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession =
+			DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -974,7 +984,10 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
 
 #if defined(USE_OPENCDM_ADAPTER)
-	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
+	if (drmSessionContexts[sessionSlot].drmSession != nullptr)
+	{
+		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
+	}
 #endif
 
 	return code;

@@ -28,6 +28,7 @@
 #include "MockOpenCdmSessionAdapter.h"
 #include "DrmCallbacks.h"
 #include "MockDrmSessionFactory.h"
+#include "MockDrmSession.h"
 #include "DrmHelper.h"
 #include "WidevineDrmHelper.h"
 #include "DrmInfo.h"
