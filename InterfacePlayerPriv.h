@@ -24,6 +24,7 @@
 #include <string.h>
 #include <vector>
 #include <mutex>
+#include <memory>
 #include <PlayerLogManager.h>
 #include "PlayerScheduler.h"
 #include <gst/app/gstappsrc.h>
@@ -156,6 +157,20 @@ struct gst_media_stream
 };
 
 /**
+ * @struct PlayerTimerContext
+ * @brief State shared between a player and the GLib timer sources it creates.
+ *        Every source holds a reference, so the context outlives the player.
+ *        Timer callbacks only access the player while holding mutex, and only
+ *        if player is set and the source's generation is still current.
+ */
+struct PlayerTimerContext
+{
+	std::recursive_mutex mutex;                 /**< Held while a timer callback accesses the player */
+	InterfacePlayerRDK *player = nullptr;       /**< Cleared when the player is destroyed */
+	std::atomic<unsigned> generation{0};        /**< Incremented by Stop() to invalidate outstanding timers */
+};
+
+/**
  * @struct GstPlayerPriv
  * @brief Holds private variables of InterfacePlayerRDK
  */
@@ -172,9 +187,9 @@ struct GstPlayerPriv
 	gint n_audio;                            /**< Number of audio tracks. */
 	gint current_audio;                      /**< Offset of current audio track. */
 	std::mutex TaskControlMutex; /**< For scheduling/de-scheduling or resetting async tasks/variables and timers */
+	std::shared_ptr<PlayerTimerContext> timerContext; /**< Shared with GLib timer sources, see PlayerTimerContext */
 	GstTaskControlData firstProgressCallbackIdleTask;
 	guint periodicProgressCallbackIdleTaskId; /**< ID of timed handler created for notifying progress events. */
-	guint firstFrameTimeoutTimerId;
 	#ifdef ENABLE_RDKPERF
 	std::mutex configureToFirstFrameProfileMutex;
 	std::chrono::steady_clock::time_point configureToFirstFrameStart;
@@ -282,6 +297,8 @@ public:
 	bool usingRialtoSink;                                                            /**< true if rialto sink is used for video and audio sinks */
 	bool usingClosedCaptionsControl;                                                 /**< true if subtitle sink being used for CC control */
 	char videoRectangle[VIDEO_COORDINATES_SIZE];
+	int videoRectangleWidth;                                                             /**< Cached width parsed from videoRectangle; 0 when unset/invalid */
+	int videoRectangleHeight;                                                            /**< Cached height parsed from videoRectangle; 0 when unset/invalid */
 	bool pauseOnStartPlayback;                                                               /**< true if should start playback paused */
 	std::atomic<bool> eosSignalled;                                                  /**< Indicates if EOS has signaled */
 	gboolean buffering_enabled;                                                              /**< enable buffering based on multiqueue */
@@ -331,6 +348,14 @@ public:
 	GstHandlerControl aSyncControl;
 	GstHandlerControl syncControl;
 	GstHandlerControl callbackControl;
+	GstHandlerControl bufferingTimeoutControl;
+	std::mutex bufferingTimeoutMutex;
+
+	/* Prevent a new tune from reconfiguring the shared pipeline while a prior
+	 * teardown is still releasing its decoder and sink resources. */
+	std::mutex mTeardownMutex;
+	std::condition_variable mTeardownCV;
+	bool mTeardownInProgress = false;
 
 	bool filterAudioDemuxBuffers; /**< flag to filter audio demux buffers */
 	double seekPosition;              /**< the position to seek the pipeline to in seconds */

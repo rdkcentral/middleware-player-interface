@@ -38,6 +38,7 @@ include_directories(${LIBCJSON_INCLUDE_DIRS})
 
 
 set(TEST_SOURCES GstHandlerControlTests.cpp
+  GstHandlerControlFillTests.cpp
   GstHandlerControlPlayerTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/GstHandlerControl.cpp ${PLAYER_ROOT}/playerLogManager/PlayerLogManager.cpp)
