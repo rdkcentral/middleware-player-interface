@@ -948,7 +948,7 @@ TEST_F(SecManagerThunderTests, GetWaterMarkPaletteSendsId)
 	ok["success"] = false;
 	g_FakeThunder.responses.push_back({true, ok});
 	mSec->SetCurrentWatermarkOperation(6, 1);
-	mSec->GetWaterMarkPalette(100, 6, 1);
+	mSec->GetWaterMarkPalette("100", 6, 1);
 	EXPECT_EQ(LastCall()->method, "getPalettedWatermark");
 	EXPECT_EQ(LastCall()->param["id"].Number(), 6);
 }
