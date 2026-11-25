@@ -72,6 +72,7 @@ protected:
 		ON_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), _)).WillByDefault(Return(&gst_element_bin));
 		ON_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillByDefault(Return(TRUE));
 		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
+		ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::Invoke([](gpointer object) { return object; }));
 		g_mockGLib = new NiceMock<MockGLib>();
 
 		ConstructAMPGstPlayer();
@@ -386,22 +387,42 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 	mPlayerContext->buffering_in_progress = true;
 	stream->sinkbin = &gst_sinkbin;
 
+	auto expectSourceLockAvailable = [stream]() {
+		int result = pthread_mutex_trylock(&stream->sourceLock);
+		EXPECT_EQ(result, 0);
+		if (result == 0)
+		{
+			pthread_mutex_unlock(&stream->sourceLock);
+		}
+	};
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _, _, 0))
-    .WillOnce(DoAll(
-        SetArgPointee<1>(GST_STATE_PLAYING),
-        SetArgPointee<2>(GST_STATE_NULL),
-        Return(GST_STATE_CHANGE_SUCCESS)));
+		.WillOnce(::testing::Invoke([&](GstElement*, GstState* state, GstState* pending, GstClockTime) {
+			expectSourceLockAvailable();
+			*state = GST_STATE_PLAYING;
+			*pending = GST_STATE_NULL;
+			return GST_STATE_CHANGE_SUCCESS;
+		}));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_sinkbin, GST_STATE_NULL))
-    .WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+		.WillOnce(::testing::Invoke([&](GstElement*, GstState) {
+			expectSourceLockAvailable();
+			return GST_STATE_CHANGE_SUCCESS;
+		}));
 
 	EXPECT_CALL(*g_mockGStreamer,
             gst_element_get_state(&gst_sinkbin, _, _, 100 * GST_MSECOND))
-    .WillOnce(DoAll(
-        SetArgPointee<1>(GST_STATE_NULL),
-        SetArgPointee<2>(GST_STATE_VOID_PENDING),
-        Return(GST_STATE_CHANGE_SUCCESS)));
+		.WillOnce(::testing::Invoke([&](GstElement*, GstState* state, GstState* pending, GstClockTime) {
+			expectSourceLockAvailable();
+			*state = GST_STATE_NULL;
+			*pending = GST_STATE_VOID_PENDING;
+			return GST_STATE_CHANGE_SUCCESS;
+		}));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&gst_pipeline), &gst_sinkbin))
+		.WillOnce(::testing::Invoke([&](GstBin*, GstElement*) {
+			expectSourceLockAvailable();
+			return TRUE;
+		}));
 
 
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
@@ -1135,6 +1156,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_PendingSeek)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->pendingSeek = true;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 	mPlayerConfigParams->enableGstPosQuery = TRUE;
 	mPlayerConfigParams->enablePTSReStamp = TRUE;
 	mPlayerConfigParams->vodTrickModeFPS = 24;
@@ -1159,6 +1181,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_NoPendingSeek)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->pendingSeek = false;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 
 	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
 
@@ -1176,6 +1199,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventOtherTrack)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->format = GST_FORMAT_ISO_BMFF;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 	mPlayerContext->protectionEvent[mediaType] = nullptr;
 	mPlayerContext->protectionEvent[eGST_MEDIATYPE_AUDIO] = reinterpret_cast<GstEvent*>(0x1234);
 
@@ -1184,7 +1208,7 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventOtherTrack)
 		.WillRepeatedly(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_,_))
 		.WillRepeatedly(Return(TRUE));
-	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(4);
 
 	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
 
@@ -1201,18 +1225,24 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventSameTrack)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->format = GST_FORMAT_ISO_BMFF;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 	mPlayerContext->protectionEvent[mediaType] = reinterpret_cast<GstEvent*>(0x1234);
+	mPlayerContext->isMp4DemuxPlayback = true;
 
 	GstPad pad = {};
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(GST_ELEMENT(stream->source), StrEq("src")))
 		.WillRepeatedly(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_,_))
-		.WillRepeatedly(Return(FALSE));
+		.WillOnce(::testing::Invoke([&](GstPad*, GstEvent*) {
+			mInterfaceGstPlayer->ClearProtectionEvent();
+			return FALSE;
+		}));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
 
 	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
 
 	EXPECT_FALSE(stream->resetPosition);
+	EXPECT_EQ(mPlayerContext->protectionEvent[mediaType], nullptr);
 }
 
 TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampFalse)
@@ -1225,6 +1255,7 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampFalse)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->format = GST_FORMAT_ISO_BMFF;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 	mPlayerConfigParams->enablePTSReStamp = false;
 	mPlayerContext->rate = 2.0;
 	mPlayerConfigParams->vodTrickModeFPS = 30;
@@ -1235,7 +1266,7 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampFalse)
 		.WillRepeatedly(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_, _))
 		.WillRepeatedly(Return(TRUE));
-	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
 
 	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len);
 
@@ -1252,6 +1283,7 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampTrue)
 	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
 	stream->format = GST_FORMAT_ISO_BMFF;
 	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = true;
 	mPlayerConfigParams->enablePTSReStamp = true;
 	mPlayerContext->rate = 1.0;
 	mPlayerConfigParams->vodTrickModeFPS = 30;
@@ -1262,7 +1294,7 @@ TEST_F(InterfacePlayerTests, SendQtDemuxOverrideEvent_EnablePTSReStampTrue)
 		.WillRepeatedly(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_, _))
 		.WillRepeatedly(Return(FALSE));
-	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(2);
 
 	gboolean result = mInterfacePrivatePlayer->SendQtDemuxOverrideEvent(mediaType, pts, mPlayerConfigParams->enablePTSReStamp , mPlayerConfigParams->vodTrickModeFPS , ptr, len);
 
@@ -2224,6 +2256,8 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_CapsNull)
 	GstClockTime startPts = 1000;
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
+	mPlayerContext->stream[mediaType].sourceConfigured = true;
 	mPlayerContext->usingRialtoSink = true;
 
 	// gst_app_src_get_caps returns NULL - segment cannot be pushed
@@ -2247,6 +2281,8 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleSuccess)
 	GstClockTime startPts = 1000;
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
+	mPlayerContext->stream[mediaType].sourceConfigured = true;
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};
@@ -2274,6 +2310,8 @@ TEST_F(InterfacePlayerTests, SendNewSegmentEvent_RialtoSink_PushSampleFailure)
 	GstClockTime startPts = 1000;
 	GstClockTime stopPts = 2000;
 	mPlayerContext->stream[mediaType].format = GST_FORMAT_ISO_BMFF;
+	mPlayerContext->stream[mediaType].source = &gst_element_pipeline;
+	mPlayerContext->stream[mediaType].sourceConfigured = true;
 	mPlayerContext->usingRialtoSink = true;
 
 	GstCaps fakeCaps = {};

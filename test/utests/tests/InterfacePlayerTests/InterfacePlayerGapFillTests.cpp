@@ -123,6 +123,7 @@ protected:
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
 		g_mockGLib = new NiceMock<MockGLib>();
 		g_mockGstHandlerControl = new NiceMock<MockGstHandlerControl>();
+		ON_CALL(*g_mockGStreamer, gst_object_ref(_)).WillByDefault(::testing::Invoke([](gpointer object) { return object; }));
 		ON_CALL(*g_mockGstHandlerControl, isEnabled()).WillByDefault(Return(true));
 
 		ConstructAMPGstPlayer();
