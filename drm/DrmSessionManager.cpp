@@ -31,6 +31,9 @@
 #include "PlayerUtils.h"
 #include "PlayerLogManager.h"
 #include "ContentSecurityManager.h"
+#include <algorithm>
+
+static constexpr uint32_t DRM_KEY_WAIT_SLICE_MS = 100;
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
 #define SESSION_TOKEN_URL "http://localhost:50050/authService/getSessionToken"
@@ -56,6 +59,7 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
+		,mSessionTeardownCount(0)
 		,mMaxDRMSessions(maxDrmSessions)
 		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
@@ -107,15 +111,21 @@ void DrmSessionManager::UpdateDRMConfig(
 void DrmSessionManager::clearSessionData()
 {
 	MW_LOG_WARN(" DrmSessionManager:: Clearing session data");
+	/* Makes any key wait in getDrmSession() give up, so the slot's sessionMutex is released promptly */
+	mSessionTeardownCount++;
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
-		if (drmSessionContexts != NULL && drmSessionContexts[i].drmSession != NULL)
+		if (drmSessionContexts != NULL)
 		{
-			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
-			 * (called from a GStreamer pipeline thread via a cached raw pointer)
-			 * has completed, before freeing the object. */
-			drmSessionContexts[i].drmSession->PrepareForDestruction();
-			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+			std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
+			if (drmSessionContexts[i].drmSession != NULL)
+			{
+				/* DELIA-70726 fix: block until any in-flight decrypt() on this session
+				 * (called from a GStreamer pipeline thread via a cached raw pointer)
+				 * has completed, before freeing the object. */
+				drmSessionContexts[i].drmSession->PrepareForDestruction();
+				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+			}
 			drmSessionContexts[i] = DrmSessionContext();
 		}
 
@@ -127,6 +137,43 @@ void DrmSessionManager::clearSessionData()
 			}
 		}
 	}
+	mSessionTeardownCount--;
+}
+
+/**
+ * @brief Wait for a session key to become ready, giving up early on key error or a session clear
+ */
+bool DrmSessionManager::waitForKeyReady(DrmSession *session, uint32_t timeoutMs, bool &aborted)
+{
+	aborted = false;
+	uint32_t remainingMs = timeoutMs;
+	do
+	{
+		if (mSessionTeardownCount.load() > 0)
+		{
+			MW_LOG_WARN("DRM key wait aborted: session data is being cleared");
+			aborted = true;
+			return false;
+		}
+		const uint32_t sliceMs = std::min(remainingMs, DRM_KEY_WAIT_SLICE_MS);
+		if (session->waitForState(KEY_READY, sliceMs))
+		{
+			return true;
+		}
+		remainingMs -= sliceMs;
+	} while ((remainingMs > 0) && (session->getState() <= KEY_READY));
+	/* Teardown may have started during the last slice or alongside a key error */
+	aborted = (mSessionTeardownCount.load() > 0);
+	return false;
+}
+
+/**
+ * @brief Read the drmSession of a slot under its sessionMutex
+ */
+DrmSession* DrmSessionManager::getSlotSession(int sessionSlot)
+{
+	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
+	return drmSessionContexts[sessionSlot].drmSession;
 }
 
 /**
@@ -198,6 +245,11 @@ bool DrmSessionManager::getFailedKeyIdStatus(int sessionIndex)
  */
 void DrmSessionManager::clearDrmSession(bool forceClearSession)
 {
+	if (forceClearSession)
+	{
+		/* Makes any key wait in getDrmSession() give up, so the slot's sessionMutex is released promptly */
+		mSessionTeardownCount++;
+	}
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
 		// Clear the session data if license key acquisition failed or if forceClearSession is true in the case of LicenseCaching is false.
@@ -220,6 +272,10 @@ void DrmSessionManager::clearDrmSession(bool forceClearSession)
 				MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
 			}
 		}
+	}
+	if (forceClearSession)
+	{
+		mSessionTeardownCount--;
 	}
 }
 
@@ -501,7 +557,13 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	mCustomData = ContentUpdateCb(drmHelper, streamType, keyId, isContentProcess);
 	if (code == KEY_READY)
 	{
-		return drmSessionContexts[selectedSlot].drmSession;
+		DrmSession *session = getSlotSession(selectedSlot);
+		if (session == nullptr)
+		{
+			MW_LOG_WARN("DRM session at slot %d was cleared before it could be reused", selectedSlot);
+			err = MW_DRM_SELF_ABORT;
+		}
+		return session;
 	}
 
 	if ((code != KEY_INIT) || (selectedSlot == INVALID_SESSION_SLOT))
@@ -613,6 +675,13 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 
 	// License acquisition was done, so mContentSecurityManagerSession will be populated now
 	const auto &localSession = mContentSecurityManagerSession; //Remove potential isSessionValid(), getSessionID() race by using a local copy
+	std::lock_guard<std::mutex> sessionGuard(drmSessionContexts[selectedSlot].sessionMutex);
+	if (drmSessionContexts[selectedSlot].drmSession == NULL)
+	{
+		MW_LOG_WARN("DRM session at slot %d was cleared during license acquisition", selectedSlot);
+		err = MW_DRM_SELF_ABORT;
+		return nullptr;
+	}
 	if (localSession.isSessionValid())
 	{
 		MW_LOG_WARN(" Setting sessionId[%" PRId64 "] to current drmSession", localSession.getSessionID());
@@ -917,10 +986,17 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 				}
 				else if (existingState <= KEY_READY)
 				{
-					if (drmSessionContexts[sessionSlot].drmSession->waitForState(KEY_READY, drmHelper->keyProcessTimeout()))
+					bool keyWaitAborted = false;
+					if (waitForKeyReady(drmSessionContexts[sessionSlot].drmSession, drmHelper->keyProcessTimeout(), keyWaitAborted))
 					{
 						MW_LOG_WARN("Waited for drm session READY with same keyID %s - Reusing drm session", keyIdDebugStr.c_str());
 						return KEY_READY;
+					}
+					if (keyWaitAborted)
+					{
+						/* Stop/teardown in progress: not a key failure, so no error is reported to the app */
+						err = MW_DRM_SELF_ABORT;
+						return KEY_ERROR;
 					}
 					MW_LOG_WARN("key was never ready for %s ", drmSessionContexts[sessionSlot].drmSession->getKeySystem().c_str());
 					// CID-164094 : Added the mutex lock due to overriding the isFailedKeyEntries variable
@@ -999,6 +1075,12 @@ KeyState DrmSessionManager::initializeDrmSession(std::shared_ptr<DrmHelper> drmH
 	drmHelper->createInitData(drmInitData);
 
 	std::lock_guard<std::mutex> guard(drmSessionContexts[sessionSlot].sessionMutex);
+	if (drmSessionContexts[sessionSlot].drmSession == NULL)
+	{
+		MW_LOG_WARN("DRM session at slot %d was cleared before initialization", sessionSlot);
+		err = MW_DRM_SELF_ABORT;
+		return KEY_ERROR;
+	}
 	MW_LOG_INFO("DRM session Custom Data - %s ", mCustomData.empty()?"NULL":mCustomData.c_str());
 	drmSessionContexts[sessionSlot].drmSession->generateDRMSession(drmInitData.data(), (uint32_t)drmInitData.size(), mCustomData);
 
