@@ -52,7 +52,7 @@ private:
 	class SessionManager
 	{
 		private:
-		int64_t mID;	//set once undermutex in constructor
+		int64_t mID = -1;	//set once undermutex in constructor
 		std::atomic<std::size_t> mInputSummaryHash;	//can be changed by setInputSummaryHash
 		SessionManager(int64_t sessionID, std::size_t inputSummaryHash);
 

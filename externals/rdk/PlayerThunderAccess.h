@@ -309,7 +309,7 @@ private:
 
     std::list<std::string> mRegisteredEvents;
 
-    bool mEventSubscribed;
+    bool mEventSubscribed = false;
 
     int videoInputPort;
 
