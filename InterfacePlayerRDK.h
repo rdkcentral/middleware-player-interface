@@ -483,6 +483,18 @@ class InterfacePlayerRDK
         	 */
         	bool WaitForSourceSetup(int mediaType);
         	/**
+        	 * @brief Updates the source-configured state under mSourceSetupMutex and wakes any waiters.
+        	 * @param[in] mediaType The type of media stream.
+        	 * @param[in] configured New configured state.
+        	 */
+        	void SetSourceConfigured(int mediaType, bool configured);
+        	/**
+        	 * @brief Reads the source-configured state under mSourceSetupMutex.
+        	 * @param[in] mediaType The type of media stream.
+        	 * @return True if the source is configured.
+        	 */
+        	bool IsSourceConfigured(int mediaType);
+        	/**
         	 * @brief Send media sample to downstream elements.
         	 * @param[in] type The media type.
         	 * @param[in] sample The media sample. Ownership is transferred

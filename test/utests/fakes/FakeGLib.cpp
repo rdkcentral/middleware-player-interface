@@ -109,7 +109,8 @@ void g_object_get(gpointer object, const gchar *first_property_name, ...)
             {
                 g_mockGLib->g_object_get(object, property_name, va_arg(args_list, uint*));
             }
-            else if ((strcmp(property_name, "videodecoder") == 0))
+            else if ((strcmp(property_name, "videodecoder") == 0) ||
+                     (strcmp(property_name, "source") == 0))
             {
                 g_mockGLib->g_object_get(object, property_name, va_arg(args_list, gpointer*));
             }

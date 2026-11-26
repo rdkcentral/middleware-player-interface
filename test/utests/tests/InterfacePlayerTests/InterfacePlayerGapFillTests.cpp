@@ -1206,9 +1206,15 @@ TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_SucceedsAndAssignsEleme
 	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(_)).WillRepeatedly(Return(&subtitlebin));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_link(_, _)).WillRepeatedly(Return(TRUE));
 	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.WillOnce([&](GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+			return TRUE;
+		});
 	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
 	EXPECT_NE(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin, nullptr);
 	EXPECT_NE(mPlayerContext->subtitle_sink, nullptr);
+	EXPECT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
 	// restore to avoid g_clear_object on stack objects
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin = nullptr;
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = nullptr;
@@ -1223,6 +1229,7 @@ TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_LinkFailsLeavesNull)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_link(_, _)).WillOnce(Return(FALSE));
 	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin, nullptr);
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
 }
 
 TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_BinAddFailsLeavesNull)
@@ -1234,6 +1241,24 @@ TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_BinAddFailsLeavesNull)
 	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillOnce(Return(FALSE));
 	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin, nullptr);
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+}
+
+TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_StateSyncFailureDoesNotPublishReadiness)
+{
+	GstElement appsrc{}, subtitlebin{};
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(_, _)).WillRepeatedly(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(_)).WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(_, _)).WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.WillOnce(Return(FALSE));
+
+	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = nullptr;
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin = nullptr;
+	mPlayerContext->subtitle_sink = nullptr;
 }
 
 /* ------------------------------------------------------------------------- */

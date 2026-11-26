@@ -137,6 +137,24 @@ public:
 			.WillOnce(Return(&query));
 	}
 
+	GCallback ConnectCCSourceNotification(GstElement *appsrc, GstElement *subtitlebin)
+	{
+		GCallback callback = nullptr;
+		EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(_, _))
+			.WillRepeatedly(Return(appsrc));
+		EXPECT_CALL(*g_mockGStreamer, gst_bin_new(_)).WillOnce(Return(subtitlebin));
+		EXPECT_CALL(*g_mockGStreamer, gst_element_link(_, _)).WillOnce(Return(TRUE));
+		EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(subtitlebin))
+			.WillOnce(Return(TRUE));
+		EXPECT_CALL(*g_mockGLib, g_signal_connect_data(_, _, _, _, _, _))
+			.WillRepeatedly(Return(1));
+		EXPECT_CALL(*g_mockGLib, g_signal_connect_data(subtitlebin, StrEq("deep-notify::source"),
+			_, mInterfaceGstPlayer, _, _))
+			.WillOnce(DoAll(SaveArg<2>(&callback), Return(1)));
+		mInterfaceGstPlayer->SetupClosedCaptionControlStream();
+		return callback;
+	}
+
 };
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
@@ -995,7 +1013,7 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
@@ -1122,7 +1140,7 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
@@ -2158,6 +2176,250 @@ TEST_F(InterfacePlayerTests, WaitForSourceSetup_PauseInjector)
 
 	EXPECT_FALSE(result);
 	EXPECT_FALSE(stream->sourceConfigured);
+}
+
+TEST_F(InterfacePlayerTests, WaitForSourceSetup_WokenBySetSourceConfigured)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	mInterfaceGstPlayer->SetSourceConfigured(mediaType, false);
+
+	std::thread setupThread([&]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		mInterfaceGstPlayer->SetSourceConfigured(mediaType, true);
+	});
+
+	auto start = std::chrono::steady_clock::now();
+	bool result = mInterfaceGstPlayer->WaitForSourceSetup(mediaType);
+	auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+	setupThread.join();
+
+	EXPECT_TRUE(result);
+	EXPECT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+	EXPECT_LT(elapsedMs, 900);
+}
+
+TEST_F(InterfacePlayerTests, WaitForSourceSetup_WokenByPauseInjector)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	mInterfaceGstPlayer->SetSourceConfigured(mediaType, false);
+
+	std::thread pauseThread([&]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		mInterfaceGstPlayer->PauseInjector();
+	});
+
+	auto start = std::chrono::steady_clock::now();
+	bool result = mInterfaceGstPlayer->WaitForSourceSetup(mediaType);
+	auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+	pauseThread.join();
+
+	EXPECT_FALSE(result);
+	EXPECT_LT(elapsedMs, 900);
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_RejectsMissingOrUnconfiguredSourceWithInvalidFormat)
+{
+	const GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_INVALID;
+	stream->resetPosition = false;
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, _)).Times(0);
+
+	struct SourceState
+	{
+		GstElement* source;
+		bool configured;
+	};
+	const SourceState states[] = {
+		{nullptr, false},
+		{nullptr, true},
+		{&gst_element_bin, false}
+	};
+	for (const auto& state : states)
+	{
+		SCOPED_TRACE(::testing::Message() << "source=" << state.source << " configured=" << state.configured);
+		stream->source = state.source;
+		mInterfaceGstPlayer->SetSourceConfigured(mediaType, state.configured);
+		MediaSample sample(std::vector<uint8_t>{1}, 0.0, 0.0, 1.0);
+		bool discontinuity = false;
+		bool notifyFirstBufferProcessed = false;
+		bool sendNewSegmentEvent = true;
+		bool resetTrickUTC = false;
+		bool firstBufferPushed = false;
+
+		EXPECT_FALSE(mInterfaceGstPlayer->SendHelper(mediaType, std::move(sample), false,
+			discontinuity, notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed));
+		EXPECT_TRUE(sendNewSegmentEvent);
+		EXPECT_FALSE(firstBufferPushed);
+		EXPECT_EQ(mPlayerContext->numberOfVideoBuffersSent, 0);
+
+		int lockStatus = pthread_mutex_trylock(&stream->sourceLock);
+		EXPECT_EQ(lockStatus, 0);
+		if (lockStatus == 0)
+		{
+			pthread_mutex_unlock(&stream->sourceLock);
+		}
+	}
+	stream->source = nullptr;
+}
+
+TEST_F(InterfacePlayerTests, SourceNotification_RemovalInvalidatesPublishedSourceWithoutSourceLock)
+{
+	GstElement appsrc{}, subtitlebin{}, invalidSource{};
+	GCallback callback = ConnectCCSourceNotification(&appsrc, &subtitlebin);
+	ASSERT_NE(callback, nullptr);
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	auto* stream = &mPlayerContext->stream[mediaType];
+	ASSERT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+	GParamSpec property{};
+	property.name = const_cast<gchar*>("source");
+	auto notify = reinterpret_cast<void (*)(GObject*, GObject*, GParamSpec*, void*)>(callback);
+
+	for (GstElement *removedSource : {static_cast<GstElement*>(nullptr), &invalidSource})
+	{
+		stream->source = &appsrc;
+		mInterfaceGstPlayer->SetSourceConfigured(mediaType, true);
+		EXPECT_CALL(*g_mockGLib, g_object_get(&subtitlebin, StrEq("source"), ::testing::A<gpointer*>()))
+			.WillOnce(SetArgPointee<2>(static_cast<gpointer>(removedSource)));
+		pthread_mutex_lock(&stream->sourceLock);
+		notify(G_OBJECT(&subtitlebin), G_OBJECT(&subtitlebin), &property, mInterfaceGstPlayer);
+		pthread_mutex_unlock(&stream->sourceLock);
+		EXPECT_EQ(stream->source, nullptr);
+		EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+	}
+}
+
+TEST_F(InterfacePlayerTests, SourceNotification_PublishesReadinessAfterInitialization)
+{
+	GstElement appsrc{}, subtitlebin{};
+	GCallback callback = ConnectCCSourceNotification(&appsrc, &subtitlebin);
+	ASSERT_NE(callback, nullptr);
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	EXPECT_CALL(*g_mockGLib, g_type_check_instance_is_a(_, _)).WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGLib, g_object_get(&subtitlebin, StrEq("source"), ::testing::A<gpointer*>()))
+		.WillOnce(SetArgPointee<2>(static_cast<gpointer>(&appsrc)));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_stream_type(_, _))
+		.WillOnce([&](GstAppSrc*, GstAppStreamType) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+		});
+	GParamSpec property{};
+	property.name = const_cast<gchar*>("source");
+	auto notify = reinterpret_cast<void (*)(GObject*, GObject*, GParamSpec*, void*)>(callback);
+	notify(G_OBJECT(&subtitlebin), G_OBJECT(&subtitlebin), &property, mInterfaceGstPlayer);
+	EXPECT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+	EXPECT_EQ(mPlayerContext->stream[mediaType].source, &appsrc);
+}
+
+TEST_F(InterfacePlayerTests, SourceNotification_RemovalDuringInitializationDoesNotRepublishReadiness)
+{
+	GstElement appsrc{}, subtitlebin{};
+	GCallback callback = ConnectCCSourceNotification(&appsrc, &subtitlebin);
+	ASSERT_NE(callback, nullptr);
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	GParamSpec property{};
+	property.name = const_cast<gchar*>("source");
+	auto notify = reinterpret_cast<void (*)(GObject*, GObject*, GParamSpec*, void*)>(callback);
+	EXPECT_CALL(*g_mockGLib, g_type_check_instance_is_a(_, _)).WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGLib, g_object_get(&subtitlebin, StrEq("source"), ::testing::A<gpointer*>()))
+		.WillOnce(SetArgPointee<2>(static_cast<gpointer>(&appsrc)))
+		.WillOnce(SetArgPointee<2>(static_cast<gpointer>(nullptr)));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_stream_type(_, _))
+		.WillOnce([&](GstAppSrc*, GstAppStreamType) {
+			notify(G_OBJECT(&subtitlebin), G_OBJECT(&subtitlebin), &property, mInterfaceGstPlayer);
+		});
+	notify(G_OBJECT(&subtitlebin), G_OBJECT(&subtitlebin), &property, mInterfaceGstPlayer);
+	EXPECT_EQ(mPlayerContext->stream[mediaType].source, nullptr);
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+}
+
+TEST_F(InterfacePlayerTests, SetupStream_SubtecReadinessPublishedOnlyAfterStateSync)
+{
+	GstElement appsrc{}, subtecbin{};
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = false;
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	mPlayerContext->stream[mediaType].format = GST_FORMAT_SUBTITLE_WEBVTT;
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("subtecbin"), _))
+		.WillOnce(Return(&subtecbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), _))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link_many(&appsrc, &subtecbin))
+		.WillOnce([&](GstElement*, GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+			return TRUE;
+		});
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_))
+		.Times(2)
+		.WillRepeatedly([&](GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+			return TRUE;
+		});
+
+	EXPECT_EQ(mInterfaceGstPlayer->SetupStream(mediaType, mInterfaceGstPlayer, ""), 0);
+	EXPECT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+	EXPECT_EQ(mPlayerContext->stream[mediaType].source, &appsrc);
+	EXPECT_EQ(mPlayerContext->stream[mediaType].sinkbin, &subtecbin);
+}
+
+TEST_F(InterfacePlayerTests, SetupStream_SubtecStateSyncFailureDoesNotPublishReadiness)
+{
+	GstElement appsrc{}, subtecbin{};
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = false;
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	mPlayerContext->stream[mediaType].format = GST_FORMAT_SUBTITLE_WEBVTT;
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("subtecbin"), _))
+		.WillOnce(Return(&subtecbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), _))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link_many(&appsrc, &subtecbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(FALSE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->SetupStream(mediaType, mInterfaceGstPlayer, ""), -1);
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
+}
+
+TEST_F(InterfacePlayerTests, SendHelper_RetainsSourceDuringRemovalInEventDelivery)
+{
+	GstElement appsrc{}, subtitlebin{};
+	GstPad pad{};
+	GCallback callback = ConnectCCSourceNotification(&appsrc, &subtitlebin);
+	ASSERT_NE(callback, nullptr);
+	GParamSpec property{};
+	property.name = const_cast<gchar*>("source");
+	auto notify = reinterpret_cast<void (*)(GObject*, GObject*, GParamSpec*, void*)>(callback);
+	const GstMediaType mediaType = eGST_MEDIATYPE_SUBTITLE;
+	auto* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_ISO_BMFF;
+	stream->resetPosition = true;
+	mPlayerContext->isMp4DemuxPlayback = true;
+	mPlayerContext->video_sink = &gst_element_bin;
+	mInterfaceGstPlayer->SetSourceConfigured(mediaType, true);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&appsrc)).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(AnyNumber());
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&appsrc)).Times(2);
+	EXPECT_CALL(*g_mockGLib, g_object_get(&subtitlebin, StrEq("source"), ::testing::A<gpointer*>()))
+		.WillOnce(SetArgPointee<2>(static_cast<gpointer>(nullptr)));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&appsrc, StrEq("src")))
+		.WillOnce([&](GstElement*, const gchar*) {
+			notify(G_OBJECT(&subtitlebin), G_OBJECT(&subtitlebin), &property, mInterfaceGstPlayer);
+			return &pad;
+		})
+		.WillOnce(Return(&pad));
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_push_buffer(_, _)).Times(0);
+	MediaSample sample(std::vector<uint8_t>{1}, 0.0, 0.0, 1.0);
+	bool discontinuity = false;
+	bool notifyFirstBufferProcessed = false;
+	bool sendNewSegmentEvent = true;
+	bool resetTrickUTC = false;
+	bool firstBufferPushed = false;
+
+	EXPECT_FALSE(mInterfaceGstPlayer->SendHelper(mediaType, std::move(sample), false,
+		discontinuity, notifyFirstBufferProcessed, sendNewSegmentEvent, resetTrickUTC, firstBufferPushed));
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(mediaType));
 }
 
 TEST_F(InterfacePlayerTests, HandleVideoBufferSent_SubsequentBuffer)
@@ -3313,16 +3575,26 @@ TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoMP4SetupAndTearDo
 	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &subtitlebin))
 		.WillOnce(Return(TRUE));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
-		.WillOnce(Return(TRUE));
+		.WillOnce([&](GstElement*, GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+			return TRUE;
+		});
 	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
-		.WillOnce(Return(TRUE));
+		.WillOnce([&](GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+			return TRUE;
+		});
 	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
-		.WillOnce(Return(TRUE));
+		.WillOnce([&](GstElement*) {
+			EXPECT_FALSE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
+			return TRUE;
+		});
 
 	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), 0);
 	EXPECT_EQ(stream->source, &appsrc);
 	EXPECT_EQ(stream->sinkbin, &subtitlebin);
 	EXPECT_EQ(mPlayerContext->subtitle_sink, &textsink);
+	EXPECT_TRUE(mInterfaceGstPlayer->IsSourceConfigured(eGST_MEDIATYPE_SUBTITLE));
 
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&appsrc, _, _, 0))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
