@@ -29,6 +29,7 @@
 #include "DrmHelper.h"
 #include <inttypes.h>
 #include "PlayerUtils.h"
+#include "PlayerLogManager.h"
 #include "ContentSecurityManager.h"
 #define DRM_METADATA_TAG_START "<ckm:policy xmlns:ckm=\"urn:ccp:ckm\">"
 #define DRM_METADATA_TAG_END "</ckm:policy>"
@@ -36,6 +37,7 @@
 
 #define INVALID_SESSION_SLOT -1
 #define DEFAULT_CDM_WAIT_TIMEOUT_MS 2000
+
 
 /**
  * @brief KeyIdEntries constructor.
@@ -48,13 +50,14 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(NULL),
-		cachedKeyIDs(NULL), accessToken(NULL),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
+		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
+		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -62,8 +65,8 @@ DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::func
 		,mFirstFrameSeen(false)
 		,mPlayerSendWatermarkSessionUpdateEventCB(std::move(watermarkSessionUpdateCallback))
 {
-	drmSessionContexts	= new DrmSessionContext[mMaxDRMSessions];
-	cachedKeyIDs		= new KeyIdEntries[mMaxDRMSessions];
+	drmSessionContexts	= std::make_unique<DrmSessionContext[]>(mMaxDRMSessions);
+	cachedKeyIDs		= std::make_unique<KeyIdEntries[]>(mMaxDRMSessions);
 	m_drmConfigParam = new configs();
 	playerSecInstance = new PlayerSecInterface();
 
@@ -79,8 +82,6 @@ DrmSessionManager::~DrmSessionManager()
 {
 	clearAccessToken();
 	clearSessionData();
-	MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-	MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 	MW_SAFE_DELETE(playerSecInstance);
 	MW_SAFE_DELETE(m_drmConfigParam);
 	ContentSecurityManager::setWatermarkSessionEvent_CB(nullptr);
@@ -482,7 +483,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 	/**
 	 * Create drm session without primaryKeyId markup OR retrieve old DRM session.
 	 */
-	code = getDrmSession(err, drmHelper, selectedSlot,  Instance);
+	{
+		PI_PROFILE_SCOPE("drm_session_lookup");
+		code = getDrmSession(err, drmHelper, selectedSlot, Instance);
+	}
 	/**
 	 * KEY_READY code indicates that a previously created session is being reused.
 	 */
@@ -505,7 +509,10 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		MW_LOG_WARN(" Unable to get DrmSession : Key State %d ", code);
 		return nullptr;
 	}
-	code = initializeDrmSession(drmHelper, selectedSlot,  err);
+	{
+		PI_PROFILE_SCOPE("drm_session_init");
+		code = initializeDrmSession(drmHelper, selectedSlot, err);
+	}
 	if (code != KEY_INIT)
 	{
 		MW_LOG_WARN(" Unable to initialize DrmSession : Key State %d, err code: %d", code, err);
@@ -527,7 +534,54 @@ DrmSession* DrmSessionManager::createDrmSession(int &responseCode, int &err, std
 		}
 		return nullptr;
 	}
-	code =this->AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+
+	if (!AcquireLicenseCb)
+	{
+		MW_LOG_WARN("AcquireLicenseCb not registered - cannot acquire license");
+		err = MW_DRM_INIT_FAILED;
+		std::lock_guard<std::mutex> guard(cachedKeyMutex);
+		if (cachedKeyIDs)
+		{
+			cachedKeyIDs[selectedSlot].isFailedKeyEntries = true;
+		}
+		return nullptr;
+	}
+	/*
+	 * Capture whether this license request will run on a pooled (re-used)
+	 * SecManager session before the call is made. A pooled session may still be
+	 * bound to input data from previous content; a license delivered on it can
+	 * leave the required keyIds unusable even though the call reported success
+	 * (RDKEMW-24407). Keep a DrmHelper copy for the potential retry, since
+	 * AcquireLicenseCb consumes drmHelper.
+	 */
+	bool reusingPooledSession = mContentSecurityManagerSession.isSessionValid();
+	auto licenseRetryHelper = drmHelper;
+	code = AcquireLicenseCb(responseCode, std::move(drmHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+	if (code != KEY_READY && reusingPooledSession &&
+			sessionMgrState != SessionMgrState::eSESSIONMGR_INACTIVE)
+	{
+		/*
+		 * The license ran against a pooled SecManager session and did not yield
+		 * usable keys. Detach the stale session so it is never picked again and
+		 * release it server-side, then retry the license once via a fresh
+		 * session (openDrmSession/openPlaybackSession path). Bounded to a single
+		 * retry; the original failure handling below still applies if the retry
+		 * also fails.
+		 */
+		const auto &localSession = mContentSecurityManagerSession;
+		//Read the ID once under the session mutex so validity and ID are taken from the same snapshot
+		const int64_t staleSessionId = localSession.getSessionID();
+		if (staleSessionId != CONTENT_SECURITY_MGR_INVALID_SESSION_ID)
+		{
+			MW_LOG_ERR("License on pooled SecManager session failed (Key State %d) for keyId %s slot %d, releasing stale sessionId[%" PRId64 "] and retrying with fresh session",
+					code, PlayerLogManager::getHexDebugStr(keyId).c_str(), selectedSlot, staleSessionId);
+			mContentSecurityManagerSession.setSessionInvalid();
+			ContentSecurityManager::GetInstance()->ReleaseSession(staleSessionId);
+		}
+		PI_PROFILE_SCOPE("drm_license_acquire");
+    code =this->AcquireLicenseCb(responseCode, std::move(licenseRetryHelper), selectedSlot, cdmError,  (GstMediaType)streamType, metaDataPtr, false);
+
+	}
 	if (code != KEY_READY)
 	{
 		MW_LOG_WARN(" Unable to get Ready Status DrmSession : Key State %d ", code);
@@ -900,7 +954,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		auto owned = m_sessionCreator(drmHelper, Instance);
+		drmSessionContexts[sessionSlot].drmSession = owned.release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -913,16 +975,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			drmSessionContexts[sessionSlot].drmSession->setOutputProtection(true);
 			drmHelper->setOutputProtectionFlag(true);
 		}
+		// setKeyId() is a no-op default on DrmSession, so it's safe to call
+		// for every backend (OpenCDM, Direct-Rialto, etc.), not just OpenCDM.
+		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
 	}
 	else
 	{
 		MW_LOG_WARN("Unable to Get DrmSession for DrmSystemId %s", systemId.c_str());
 		err = MW_DRM_INIT_FAILED ;
 	}
-
-#if defined(USE_OPENCDM_ADAPTER)
-	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
-#endif
 
 	return code;
 }
@@ -990,15 +1051,15 @@ void DrmSessionManager::UpdateMaxDRMSessions(int maxSessions)
 {
 	if (mMaxDRMSessions != maxSessions)
 	{
+		auto newDrmSessionContexts = std::make_unique<DrmSessionContext[]>(maxSessions);
+		auto newCachedKeyIDs = std::make_unique<KeyIdEntries[]>(maxSessions);
+
 		// Clean up the current sessions
 		clearSessionData();
-		MW_SAFE_DELETE_ARRAY(drmSessionContexts);
-		MW_SAFE_DELETE_ARRAY(cachedKeyIDs);
 
-		//Update to new session count
+		drmSessionContexts = std::move(newDrmSessionContexts);
+		cachedKeyIDs = std::move(newCachedKeyIDs);
 		mMaxDRMSessions = maxSessions;
-		drmSessionContexts      = new DrmSessionContext[mMaxDRMSessions];
-		cachedKeyIDs            = new KeyIdEntries[mMaxDRMSessions];
 		MW_LOG_INFO("Updated DrmSessionManager MaxSession to:%d", mMaxDRMSessions);
 	}
 }

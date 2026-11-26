@@ -58,6 +58,7 @@ protected:
 	{
 		g_mockPlayerUtils = new MockPlayerUtils();
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new MockGLib();
 		g_mockGstHandlerControl= new MockGstHandlerControl();
 	}
@@ -123,6 +124,9 @@ public:
 
 	void DestroyAMPGstPlayer()
 	{
+		::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
+
 		if (isPipelineSetup)
 		{
 			// AAMPGstPlayer::DestroyPipeline()
@@ -253,9 +257,9 @@ public:
 		EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 			.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
 
-		mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264,
+		mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264,
 										GST_FORMAT_AUDIO_ES_AAC,
-										GST_FORMAT_SUBTITLE_TTML,
+										GST_FORMAT_SUBTITLE_TTML},
 										setup->bESChangeStatus,
 										  setup->setReadyAfterPipelineCreation,
 										  true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
@@ -493,7 +497,6 @@ TEST_F(GstPlayerTests, TimerAdd)
 	int repeatTimeout = 100;
 	guint taskId = 0;
 	GstElement dummyelement;
-	mInterfaceGstPlayer = new InterfacePlayerRDK();
 	ConstructAMPGstPlayer();
 
 	// Expectations
@@ -550,6 +553,8 @@ TEST_F(GstPlayerTests, TimerRemove)
 	EXPECT_CALL(*g_mockGLib, g_source_remove(_)) .WillOnce(Return(TRUE));
 	mInterfaceGstPlayer->TimerRemove(taskId, "TimerRemove");
 	EXPECT_EQ(0,taskId);
+
+	DestroyAMPGstPlayer();
 }
 
 
@@ -687,3 +692,4 @@ TEST_F(GstPlayerTests, MonitorAV )
 	}
 	DestroyAMPGstPlayer();
 }
+

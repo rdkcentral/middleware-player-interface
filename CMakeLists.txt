@@ -95,6 +95,15 @@ endif()
 
 # Option for building pi-cli
 option(BUILD_PICLI "Build the pi-cli test project" OFF)
+option(ENABLE_RDKPERF "Enable RDKPerf API timing" OFF)
+if(ENABLE_RDKPERF)
+	find_path(RDKPERF_INCLUDE_DIR rdk_perf.h PATH_SUFFIXES rdkperf)
+	find_library(RDKPERF_LIBRARY rdkperf)
+	if(NOT RDKPERF_INCLUDE_DIR OR NOT RDKPERF_LIBRARY)
+		message(FATAL_ERROR "ENABLE_RDKPERF=ON but rdkperf was not found (rdk_perf.h: ${RDKPERF_INCLUDE_DIR}, librdkperf: ${RDKPERF_LIBRARY}). Install rdkperf or configure with -DENABLE_RDKPERF=OFF.")
+	endif()
+	message(STATUS "RDKPerf enabled: ${RDKPERF_LIBRARY}")
+endif()
 
 if(COVERAGE_ENABLED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
@@ -206,7 +215,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 else()
 	set(LIBPLAYERGSTINTERFACE_DEPENDS ${OS_LD_FLAGS} ${UUID_LINK_LIBRARIES} ${LIBCJSON_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${CURL_LINK_LIBRARIES} ${LIBDASH_LINK_LIBRARIES} ${LibXml2_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${OPENSSL_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} -ldl)
 endif()
-
 set(LIBPLAYERGSTINTERFACE_HEADERS
 	closedcaptions/CCTrackInfo.h
 	GstUtils.h
@@ -274,6 +282,7 @@ install(FILES closedcaptions/CCTrackInfo.h
 	subtec/libsubtec/SubtecPacket.hpp
 	playerisobmff/playerisobmffbuffer.h
 	playerisobmff/playerisobmffbox.h
+	closedcaptions/direct-rialto/IDirectRialtoCC.h
 	DESTINATION include)
 
 # Install the generated version header
@@ -476,7 +485,7 @@ if (CMAKE_SUBTITLE_SUPPORT)
 		)
 
 
-	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp)
+	set(LIBPLAYERGSTINTERFACE_SOURCES ${LIBPLAYERGSTINTERFACE_SOURCES} closedcaptions/subtec/PlayerSubtecCCManager.cpp closedcaptions/rialto/PlayerRialtoCCManager.cpp closedcaptions/direct-rialto/PlayerDirectRialtoCCManager.cpp)
 endif()
 add_library(playergstinterface SHARED ${SOURCES} ${LIBPLAYERGSTINTERFACE_HEADERS} ${LIBPLAYERGSTINTERFACE_SOURCES} ${LIBPLAYERGSTINTERFACE_DRM_SOURCES} ${LIBPLAYERGSTINTERFACE_HELP_SOURCES})
 
@@ -490,6 +499,7 @@ target_include_directories(playergstinterface PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/playerjsonobject
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions
 	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/subtec
+	${CMAKE_CURRENT_SOURCE_DIR}/closedcaptions/direct-rialto
 	${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 
 if (CMAKE_SUBTITLE_SUPPORT)
@@ -509,6 +519,12 @@ target_link_libraries(playergstinterface ${LIBPLAYERGSTINTERFACE_DEPENDS})
 target_link_libraries(playergstinterface ${GST_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES})
 
 target_link_libraries(playergstinterface ${GSTREAMERVIDEO_LINK_LIBRARIES})
+
+if(ENABLE_RDKPERF)
+	target_compile_definitions(playergstinterface PRIVATE ENABLE_RDKPERF)
+	target_include_directories(playergstinterface PRIVATE ${RDKPERF_INCLUDE_DIR})
+	target_link_libraries(playergstinterface ${RDKPERF_LIBRARY})
+endif()
 
 set_target_properties(playergstinterface PROPERTIES COMPILE_FLAGS "${LIBPLAYERGSTINTERFACE_DEFINES} ${OS_CXX_FLAGS}")
 

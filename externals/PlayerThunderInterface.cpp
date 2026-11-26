@@ -74,7 +74,7 @@ public:
      *   @retval true on success
      *   @retval false on failure
      */
-    bool UnSubscribeEvent (std::string eventName) override {return false;}
+    bool UnSubscribeEvent (const std::string& eventName) override {return false;}
 
     /**
      *   @fn SetVideoRectangle
@@ -88,7 +88,7 @@ public:
      *   @retval true if success
      *   @retval false if failure
      */
-    bool SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim) override {return false;}
+    bool SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim) override {return false;}
 
     /**
      *   @fn SetPreferredAudioLanguages_OTA
@@ -114,12 +114,12 @@ public:
      *   @param  videoInputType string video input type
      *   @param port port number
      */
-    void StartHelperVideoin(int port, std::string videoInputType) override{}
+    void StartHelperVideoin(int port, const std::string& videoInputType) override{}
     /**
      *   @fn StopHelper
      *   @param  videoInputType string video input type
      */
-    void StopHelperVideoin(std::string videoInputType) override {}
+    void StopHelperVideoin(const std::string& videoInputType) override {}
 
     /**
      *   @fn RegisterEventOnVideoStreamInfoUpdateHdmiin
@@ -141,7 +141,7 @@ public:
      *   @param preferredRenditionString player's preferred rendition
      *   @param atsc_preferredRenditionString ATSC preferred rendition
      */
-    void StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString) override {}
+    void StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString) override {}
 
     /**
      *   @fn StopOta
@@ -158,7 +158,7 @@ public:
      * @param audData vector to be filled with audio data
      * @return string of current track pk
      */
-    std::string GetAudioTracksOta(std::vector<PlayerAudioData> audData) override
+    std::string GetAudioTracksOta(std::vector<PlayerAudioData>& audData) override
     {
         std::string ret = "";
         return ret;
@@ -181,7 +181,7 @@ public:
      * @param txtData vector to be filled with text data
      * @return true if successful, false if failed
      */
-    bool GetTextTracksOta(std::vector<PlayerTextData> txtData) override {return false;}
+    bool GetTextTracksOta(std::vector<PlayerTextData>& txtData) override {return false;}
 
     /**
      * @fn DisableContentRestrictionsOta
@@ -211,7 +211,7 @@ public:
      * @param onPlayerErrorHandlerCb player error handler callback
      * @return true if successful, false if failed
      */
-    bool StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) override {return false;}
+    bool StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb) override {return false;}
 
     /**
      * @fn StopRmf
@@ -271,7 +271,7 @@ public:
      * @param metaData metaData
      * @return true if successful, false if failed
      */
-    bool PersistentStoreSaveWatermark(const char* base64Image, std::string metaData) override {return false;}
+    bool PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData) override {return false;}
 
     /**
      * @fn PersistentStoreLoadWatermark
@@ -310,12 +310,12 @@ bool PlayerThunderInterface::ActivatePlugin()
     return m_pThunderAccess->ActivatePlugin();
 }
 
-bool PlayerThunderInterface::UnSubscribeEvent(std::string eventName)
+bool PlayerThunderInterface::UnSubscribeEvent(const std::string& eventName)
 {
     return m_pThunderAccess->UnSubscribeEvent(std::move(eventName));
 }
 
-bool PlayerThunderInterface::SetVideoRectangle(int x, int y, int w, int h, std::string videoInputType, PlayerThunderAccessShim shim)
+bool PlayerThunderInterface::SetVideoRectangle(int x, int y, int w, int h, const std::string& videoInputType, PlayerThunderAccessShim shim)
 {
     return m_pThunderAccess->SetVideoRectangle(x, y, w, h, std::move(videoInputType), shim);
 }
@@ -331,12 +331,12 @@ void PlayerThunderInterface::UnRegisterAllEventsVideoin()
     m_pThunderAccess->UnRegisterAllEventsVideoin();
 }
 
-void PlayerThunderInterface::StartHelperVideoin(int port, std::string videoInputType)
+void PlayerThunderInterface::StartHelperVideoin(int port, const std::string& videoInputType)
 {
     m_pThunderAccess->StartHelperVideoin(port, std::move(videoInputType));
 }
 
-void PlayerThunderInterface::StopHelperVideoin(std::string videoInputType)
+void PlayerThunderInterface::StopHelperVideoin(const std::string& videoInputType)
 {
     m_pThunderAccess->StopHelperVideoin(std::move(videoInputType));
 }
@@ -356,7 +356,7 @@ void PlayerThunderInterface::ReleaseOta()
     m_pThunderAccess->ReleaseOta();
 }
 
-void PlayerThunderInterface::StartOta(std::string url, std::string waylandDisplay, std::string preferredLanguagesString, std::string atsc_preferredLanguagesString, std::string preferredRenditionString, std::string atsc_preferredRenditionString)
+void PlayerThunderInterface::StartOta(const std::string& url, const std::string& waylandDisplay, const std::string& preferredLanguagesString, const std::string& atsc_preferredLanguagesString, const std::string& preferredRenditionString, const std::string& atsc_preferredRenditionString)
 {
     m_pThunderAccess->StartOta(std::move(url), std::move(waylandDisplay), std::move(preferredLanguagesString), std::move(atsc_preferredLanguagesString), std::move(preferredRenditionString), std::move(atsc_preferredRenditionString));
 }
@@ -371,9 +371,9 @@ void PlayerThunderInterface::SetPreferredAudioLanguages(PlayerPreferredAudioData
     m_pThunderAccess->SetPreferredAudioLanguages(std::move(data), shim);
 }
 
-std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData> audData)
+std::string PlayerThunderInterface::GetAudioTracksOta(std::vector<PlayerAudioData>& audData)
 {
-    return m_pThunderAccess->GetAudioTracksOta(std::move(audData));
+    return m_pThunderAccess->GetAudioTracksOta(audData);
 }
 
 std::string PlayerThunderInterface::SetAudioTrackOta(int index, int primaryKey)
@@ -381,9 +381,9 @@ std::string PlayerThunderInterface::SetAudioTrackOta(int index, int primaryKey)
     return m_pThunderAccess->SetAudioTrackOta(index, primaryKey);
 }
 
-bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData> txtData)
+bool PlayerThunderInterface::GetTextTracksOta(std::vector<PlayerTextData>& txtData)
 {
-    return m_pThunderAccess->GetTextTracksOta(std::move(txtData));
+    return m_pThunderAccess->GetTextTracksOta(txtData);
 }
 
 void PlayerThunderInterface::DisableContentRestrictionsOta(long grace, long time, bool eventChange)
@@ -401,7 +401,7 @@ bool PlayerThunderInterface::InitRmf()
     return m_pThunderAccess->InitRmf();
 }
 
-bool PlayerThunderInterface::StartRmf(std::string url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
+bool PlayerThunderInterface::StartRmf(const std::string& url, std::function<void(std::string)> onPlayerStatusHandlerCb, std::function<void(std::string)> onPlayerErrorHandlerCb)
 {
     return m_pThunderAccess->StartRmf(std::move(url), std::move(onPlayerStatusHandlerCb), std::move(onPlayerErrorHandlerCb));
 }
@@ -441,7 +441,7 @@ std::string PlayerThunderInterface::GetMetaDataWatermark()
     return m_pThunderAccess->GetMetaDataWatermark();
 }
 
-bool PlayerThunderInterface::PersistentStoreSaveWatermark(const char* base64Image, std::string metaData)
+bool PlayerThunderInterface::PersistentStoreSaveWatermark(const char* base64Image, const std::string& metaData)
 {
     return m_pThunderAccess->PersistentStoreSaveWatermark(base64Image, std::move(metaData));
 }

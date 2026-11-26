@@ -31,14 +31,11 @@
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::StrEq;
-using ::testing::Eq;
 using ::testing::_;
-using ::testing::Address;
 using ::testing::DoAll;
 using ::testing::SetArgPointee;
 using ::testing::NotNull;
 using ::testing::SaveArgPointee;
-using ::testing::SaveArg;
 using ::testing::Pointer;
 
 class PauseOnPlaybackTests : public ::testing::Test
@@ -50,10 +47,11 @@ protected:
 	void SetUp() override
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();//new MockGStreamer();
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new NiceMock<MockGLib>();
 		g_mockGstHandlerControl = new MockGstHandlerControl();
 		g_mockPlayerScheduler = new MockPlayerScheduler();
-	mInterfaceGstPlayer = new InterfacePlayerRDK();
+	        mInterfaceGstPlayer = new InterfacePlayerRDK();
 
 		//init callback to avoid bad_function_call error
 		mInterfaceGstPlayer->TearDownCallback([this](bool status, int mediaType) {
@@ -77,20 +75,20 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGLib;
-		g_mockGLib = nullptr;
-
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
-
 		delete mInterfaceGstPlayer;
 		mInterfaceGstPlayer = nullptr;
 
 		delete g_mockGstHandlerControl;
 		g_mockGstHandlerControl = nullptr;
 
-	    delete g_mockPlayerScheduler;
-	    g_mockPlayerScheduler = nullptr;
+		delete g_mockPlayerScheduler;
+		g_mockPlayerScheduler = nullptr;
+
+		delete g_mockGLib;
+		g_mockGLib = nullptr;
+
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
 	}
 
 public:
@@ -141,7 +139,7 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigurePauseOnPlayback)
 	// Enable PauseOnPlayback
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 }
 
 // Test configuration of pipeline with PauseOnPlayback not enabled
@@ -176,7 +174,7 @@ TEST_F(PauseOnPlaybackTests, EnteredPausedSteHandler_ConfigureNormalPlayback)
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_element_pipeline, GST_STATE_PLAYING))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 }
 
 // Test bus_message callback when PauseOnPlayback has been enabled, and sink
@@ -233,7 +231,7 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
     ASSERT_TRUE(bus_sync_func != nullptr);
     ASSERT_TRUE(bus_message_func != nullptr);
@@ -333,7 +331,7 @@ TEST_F(PauseOnPlaybackTests, bus_message_FrameStepPropertyNotAvailable)
 
 	mInterfaceGstPlayer->SetPauseOnStartPlayback(true);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_VIDEO_ES_H264, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_SUBTITLE_WEBVTT}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
     ASSERT_TRUE(bus_sync_func != nullptr);
     ASSERT_TRUE(bus_message_func != nullptr);

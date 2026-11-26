@@ -39,6 +39,9 @@ include_directories(${PLAYER_ROOT}/../test/gstTestHarness)
 message(GSTREAMER_INCLUDE_DIRS=${GSTREAMER_INCLUDE_DIRS})
 
 set(TEST_SOURCES InterfacePlayerFunctionTests.cpp
+		InterfacePlayerGapFillTests.cpp
+		InterfacePlayerCallbackCoverageTests.cpp
+		InterfacePlayerBusCoverageTests.cpp
 		InterfacePlayerTests.cpp)
 
 set(PLAYER_SOURCES ${PLAYER_ROOT}/InterfacePlayerRDK.cpp
@@ -70,3 +73,16 @@ endif()
 target_link_libraries(${EXEC_NAME} fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
 
 player_utest_run_add(${EXEC_NAME})
+
+# Same player sources built with ENABLE_RDKPERF against the recording rdk_perf.h stub
+set(RDKPERF_EXEC_NAME InterfacePlayerRdkPerfTest)
+add_executable(${RDKPERF_EXEC_NAME}
+               ${TEST_SOURCES}
+               InterfacePlayerRdkPerfTests.cpp
+               ${PLAYER_SOURCES}
+               ${FAKE_SOURCES})
+target_compile_definitions(${RDKPERF_EXEC_NAME} PRIVATE ENABLE_RDKPERF)
+target_include_directories(${RDKPERF_EXEC_NAME} BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../PlayerLogManagerTests/rdkperf_stub)
+set_target_properties(${RDKPERF_EXEC_NAME} PROPERTIES FOLDER "utests")
+target_link_libraries(${RDKPERF_EXEC_NAME} fakes -lpthread ${GLIB_LINK_LIBRARIES} ${OS_LD_FLAGS} ${GMOCK_LINK_LIBRARIES} ${GTEST_LINK_LIBRARIES} ${GSTREAMERBASE_LINK_LIBRARIES} ${GSTREAMER_LINK_LIBRARIES})
+player_utest_run_add(${RDKPERF_EXEC_NAME})

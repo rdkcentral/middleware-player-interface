@@ -25,10 +25,10 @@
 #include "MockGStreamer.h"
 #include "MockGLib.h"
 #include "MockGstHandlerControl.h"
-#include "MockPlayerScheduler.h"
 #include "MockGstUtils.h"
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
+#include <thread>
 
 
 
@@ -56,6 +56,7 @@ class InterfacePlayerTests : public ::testing::Test
 protected:
 	bool isPipelineSetup = false;
 	GstElement gst_element_pipeline = {.object = {.name = (gchar *)"Pipeline"}};
+	GstElement gst_element_bin = {.object = {.name = (gchar *)"playbin"}};
 	GstBus bus = {};
 	GstQuery query = {};
 	InterfacePlayerRDK *mInterfaceGstPlayer;
@@ -68,8 +69,10 @@ protected:
 	void SetUp() override
 	{
 		g_mockGStreamer = new NiceMock<MockGStreamer>();
+		ON_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), _)).WillByDefault(Return(&gst_element_bin));
+		ON_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillByDefault(Return(TRUE));
+		ON_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(_)).WillByDefault(Return(TRUE));
 		g_mockGLib = new NiceMock<MockGLib>();
-		g_mockPlayerScheduler = new NiceMock<MockPlayerScheduler>();	
 
 		ConstructAMPGstPlayer();
 		PlayerLogManager::lockLogLevel(false);
@@ -79,16 +82,22 @@ protected:
 
 	void TearDown() override
 	{
-		delete g_mockGStreamer;
-		g_mockGStreamer = nullptr;
+		if (g_mockGLib)
+		{
+			::testing::Mock::VerifyAndClearExpectations(g_mockGLib);
+		}
+		if (g_mockGStreamer)
+		{
+			::testing::Mock::VerifyAndClearExpectations(g_mockGStreamer);
+		}
 
 		DestroyAMPGstPlayer();
 
+		delete g_mockGStreamer;
+		g_mockGStreamer = nullptr;
+
 		delete g_mockGLib;
 		g_mockGLib = nullptr;
-
-		delete g_mockPlayerScheduler;
-		g_mockPlayerScheduler = nullptr;
 	}
 
 public:
@@ -118,18 +127,28 @@ public:
 		mInterfaceGstPlayer = nullptr;
 	}
 
+	void ExpectPipelineCreation()
+	{
+		EXPECT_CALL(*g_mockGStreamer, gst_pipeline_new(StrEq("testPipeline")))
+			.WillOnce(Return(&gst_element_pipeline));
+		EXPECT_CALL(*g_mockGStreamer, gst_pipeline_get_bus(GST_PIPELINE(&gst_element_pipeline)))
+			.WillOnce(Return(&bus));
+		EXPECT_CALL(*g_mockGStreamer, gst_query_new_position(GST_FORMAT_TIME))
+			.WillOnce(Return(&query));
+	}
+
 };
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerConfigParams->useWesterosSink = true;
 	EXPECT_EQ(mPlayerContext->using_westerossink, false);
 
 	mPlayerConfigParams->useRialtoSink = true;
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, false);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 	EXPECT_EQ(mPlayerContext->using_westerossink, true);
 	EXPECT_EQ(mPlayerContext->usingRialtoSink, true);
 
@@ -137,19 +156,60 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithWesterosAndRealtoSink)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithSubtitlesEnabled)
 {
-	g_mockGStreamer = nullptr;
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	ExpectPipelineCreation();
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_INVALID, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, true, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].format, GST_FORMAT_INVALID);
 }
 
+TEST_F(InterfacePlayerTests, ConfigurePipeline_WithEncryptedCodecInfo)
+{
+	ExpectPipelineCreation();
+	MediaCodecInfo videoCodecInfo(GST_FORMAT_VIDEO_ES_H264);
+	videoCodecInfo.mIsEncrypted = true;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+}
+
+// Validate that an encryption-only change does not configure or count a track when its format is invalid.
+TEST_F(InterfacePlayerTests, ConfigurePipeline_IgnoresEncryptionChangeForInvalidFormat)
+{
+	delete g_mockGStreamer;
+	g_mockGStreamer = nullptr;
+	mPlayerContext->NumberOfTracks = 0;
+	MediaCodecInfo videoCodecInfo(GST_FORMAT_INVALID);
+	videoCodecInfo.mIsEncrypted = true;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{std::move(videoCodecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted);
+}
+
+// A manifest may not reveal the video format (muxed HLS/TS, or audio remapped to the video slot).
+// The track must still be set up on first configuration so the source exists and injection can start;
+// the real caps arrive later from the demuxer via SetStreamCaps().
+TEST_F(InterfacePlayerTests, ConfigurePipeline_ConfiguresTrackWithUnknownFormatOnInitialSetup)
+{
+	ExpectPipelineCreation();
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->rate = 1.0;
+
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_UNKNOWN, GST_FORMAT_AUDIO_ES_AAC, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, GST_FORMAT_UNKNOWN);
+}
+
 TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 {
-	g_mockGStreamer = nullptr;
-	mPlayerContext->buffering_enabled = true;
+	ExpectPipelineCreation();
+	mPlayerConfigParams->gstreamerBufferingBeforePlay = true;
 	mPlayerContext->rate = GST_NORMAL_PLAY_RATE;
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_MPEGTS, GST_FORMAT_INVALID, GST_FORMAT_INVALID}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->buffering_in_progress, true);
 	EXPECT_EQ(mPlayerContext->buffering_target_state, GST_STATE_PLAYING);
@@ -158,13 +218,13 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_WithBufferingEnabled)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 2);
 	EXPECT_EQ(cbResponse, 5); //callback was called
@@ -172,14 +232,14 @@ TEST_F(InterfacePlayerTests, ConfigurePipeline_StreamConfiguration)
 
 TEST_F(InterfacePlayerTests, ConfigurePipeline_ESChange)
 {
-	g_mockGStreamer = nullptr;
+	ExpectPipelineCreation();
 	mPlayerContext->NumberOfTracks = 0;
 	mPlayerContext->rate = 1.0;
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].format = GST_FORMAT_AUDIO_ES_AC3;
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 0);
 
-	mInterfaceGstPlayer->ConfigurePipeline(GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+	mInterfaceGstPlayer->ConfigurePipeline(StreamCodecInfo{GST_FORMAT_ISO_BMFF, GST_FORMAT_AUDIO_ES_AC3, GST_FORMAT_SUBTITLE_MP4}, true, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
 
 	EXPECT_EQ(mPlayerContext->NumberOfTracks, 1);
 	EXPECT_EQ(cbResponse, 5);
@@ -208,11 +268,11 @@ TEST_F(InterfacePlayerTests, SetPreferredDRM)
 {
 	const char* testDrmID1 = "Widevine";
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID1);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 	//null check
 	const char* testDrmID2 = NULL;
 	mInterfaceGstPlayer->SetPreferredDRM(testDrmID2);
-	EXPECT_STREQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
+	EXPECT_EQ(mInterfaceGstPlayer->mDrmSystem, testDrmID1);
 }
 
 TEST_F(InterfacePlayerTests, GstSetSeekPosition)
@@ -316,6 +376,9 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 
 	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_VIDEO];
 	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mCodecFormat = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mCodecData = {0x01, 0x02};
+	stream->codecInfo.mIsEncrypted = true;
 	stream->eosReached = true;
 	stream->bufferUnderrun = true;
 
@@ -324,14 +387,28 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_successvideo)
 	stream->sinkbin = &gst_sinkbin;
 
 
-	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _,_,0))
-		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _, _, 0))
+    .WillOnce(DoAll(
+        SetArgPointee<1>(GST_STATE_PLAYING),
+        SetArgPointee<2>(GST_STATE_NULL),
+        Return(GST_STATE_CHANGE_SUCCESS)));
+
 	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_sinkbin, GST_STATE_NULL))
-		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+    .WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+
+	EXPECT_CALL(*g_mockGStreamer,
+            gst_element_get_state(&gst_sinkbin, _, _, 100 * GST_MSECOND))
+    .WillOnce(DoAll(
+        SetArgPointee<1>(GST_STATE_NULL),
+        SetArgPointee<2>(GST_STATE_VOID_PENDING),
+        Return(GST_STATE_CHANGE_SUCCESS)));
 
 
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
 	EXPECT_EQ(stream->format, GST_FORMAT_INVALID);
+	EXPECT_EQ(stream->codecInfo.mCodecFormat, GST_FORMAT_INVALID);
+	EXPECT_TRUE(stream->codecInfo.mCodecData.empty());
+	EXPECT_FALSE(stream->codecInfo.mIsEncrypted);
 	EXPECT_EQ(stream->bufferUnderrun, false);
 	EXPECT_EQ(stream->eosReached, false);
 	EXPECT_EQ(mPlayerContext->buffering_in_progress, false);
@@ -369,7 +446,11 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_misc)
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_AUDIO);
 	stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
 	stream->format = GST_FORMAT_VIDEO_ES_H264; //dummy value
+	stream->codecInfo.mCodecFormat = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo.mIsEncrypted = true;
 	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_SUBTITLE);
+	EXPECT_EQ(stream->codecInfo.mCodecFormat, GST_FORMAT_INVALID);
+	EXPECT_FALSE(stream->codecInfo.mIsEncrypted);
 }
 
 TEST_F(InterfacePlayerTests, GstStopTestTrue)
@@ -387,15 +468,20 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->firstFrameCallbackIdleTaskPending = true;
+	mPlayerContext->firstFrameCallbackIdleTaskId = 500;
 
 	mPlayerConfigParams->eosInjectionMode = GstEOS_INJECTION_MODE_STOP_ONLY;
 
 	//Expect_Calls
 	EXPECT_CALL(*g_mockGStreamer, gst_bus_remove_watch(mPlayerContext->bus)).Times(2);
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->bus));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(100));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(500));
 	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(mPlayerContext->pipeline));
 	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_element_pipeline, _,_,0))
 		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
@@ -406,6 +492,7 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	mInterfaceGstPlayer->Stop(true);
 	EXPECT_EQ(mPlayerContext->syncControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->aSyncControl.isEnabled(),false);
+	EXPECT_EQ(mPlayerContext->bufferingTimeoutControl.isEnabled(),false);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskID,0);
 	EXPECT_EQ(mPlayerContext->firstProgressCallbackIdleTask.taskIsPending,false);
 	EXPECT_EQ(mPlayerContext->bufferingTimeoutTimerId,PLAYER_TASK_ID_INVALID);
@@ -414,6 +501,120 @@ TEST_F(InterfacePlayerTests, GstStopTestTrue)
 	EXPECT_EQ(mPlayerContext->eosCallbackIdleTaskPending,false);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskId,PLAYER_TASK_ID_INVALID);
 	EXPECT_EQ(mPlayerContext->firstFrameCallbackIdleTaskPending,false);
+}
+
+/* GLib timer source added by the player, captured so that tests can dispatch it as GLib would */
+struct CapturedTimerSource
+{
+	GSourceFunc dispatch = nullptr;
+	gpointer data = nullptr;
+	GDestroyNotify release = nullptr;
+};
+
+static void StartProgressTimer(InterfacePlayerRDK *player, guint sourceId, CapturedTimerSource &source)
+{
+	EXPECT_CALL(*g_mockGLib, g_timeout_add_full(_, _, _, _, _))
+		.WillOnce(DoAll(SaveArg<2>(&source.dispatch), SaveArg<3>(&source.data), SaveArg<4>(&source.release), Return(sourceId)));
+	/* IdleCallback returns straight away unless its handler control is enabled */
+	NiceMock<MockGstHandlerControl> handlerControl;
+	ON_CALL(handlerControl, isEnabled()).WillByDefault(Return(true));
+	g_mockGstHandlerControl = &handlerControl;
+	InterfacePlayerRDK::IdleCallback(player);
+	g_mockGstHandlerControl = nullptr;
+	ASSERT_NE(source.dispatch, nullptr);
+	ASSERT_NE(source.release, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackDispatchedAfterDestructionDoesNotAccessPlayer)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	/* g_source_remove() cannot stop a dispatch that GLib has already started */
+	EXPECT_CALL(*g_mockGLib, g_source_remove(10)).WillOnce(Return(TRUE));
+	DestroyAMPGstPlayer();
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	EXPECT_EQ(progressCount, 0);
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, DestructionDetachesPlayerFromTimerContext)
+{
+	std::shared_ptr<PlayerTimerContext> context = mPlayerContext->timerContext;
+	EXPECT_EQ(context->player, mInterfaceGstPlayer);
+
+	DestroyAMPGstPlayer();
+	EXPECT_EQ(context->player, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackDispatchedAfterStopDoesNotRun)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_CALL(*g_mockGLib, g_source_remove(10)).WillOnce(Return(TRUE));
+	mInterfaceGstPlayer->Stop(false);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	EXPECT_EQ(progressCount, 0);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, TimerAddedAfterStopRuns)
+{
+	int progressCount = 0;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&progressCount]() { progressCount++; };
+	mInterfaceGstPlayer->Stop(false);
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(progressCount, 1);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, TimerCallbackCallsApplicationWithoutTimerLock)
+{
+	std::shared_ptr<PlayerTimerContext> context = mPlayerContext->timerContext;
+	int progressCount = 0;
+	bool lockedDuringCallback = true;
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [&]()
+	{
+		progressCount++;
+		/* Teardown on another thread must not be blocked while the application is called */
+		std::thread([&]()
+		{
+			std::unique_lock<std::recursive_mutex> lock(context->mutex, std::try_to_lock);
+			lockedDuringCallback = !lock.owns_lock();
+		}).join();
+	};
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(progressCount, 1);
+	EXPECT_FALSE(lockedDuringCallback);
+	DestroyAMPGstPlayer();
+	source.release(source.data);
+}
+
+TEST_F(InterfacePlayerTests, PlayerDestroyedByApplicationDuringTimerCallback)
+{
+	mInterfaceGstPlayer->callbackMap[InterfaceCB::progressCb] = [this]() { DestroyAMPGstPlayer(); };
+	CapturedTimerSource source;
+	StartProgressTimer(mInterfaceGstPlayer, 10, source);
+
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_CONTINUE);
+	EXPECT_EQ(mInterfaceGstPlayer, nullptr);
+	EXPECT_EQ(source.dispatch(source.data), G_SOURCE_REMOVE);
+	source.release(source.data);
 }
 
 
@@ -613,6 +814,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun = true;
 	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].bufferUnderrun = true;
 	mPlayerContext->eosCallbackIdleTaskPending = true;
+	mPlayerContext->eosCallbackIdleTaskId = 400;
 	mPlayerContext->ptsCheckForEosOnUnderflowIdleTaskId = 300;
 	mPlayerContext->bufferingTimeoutTimerId = 200;
 	mPlayerContext->rate = rate;
@@ -634,6 +836,7 @@ TEST_F(InterfacePlayerTests, GstFlush_Success)
 
 	EXPECT_CALL(*g_mockGLib, g_source_remove(200));
 	EXPECT_CALL(*g_mockGLib, g_source_remove(300));
+	EXPECT_CALL(*g_mockGLib, g_source_remove(400));
 
 	EXPECT_TRUE(mInterfaceGstPlayer->Flush(position, rate, shouldTearDown, isAppSeek));
 	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].bufferUnderrun);
@@ -795,6 +998,105 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 	EXPECT_TRUE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
+}
+
+// Validate that encrypted elementary stream caps include the original media type and configured DRM system.
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStreamCaps)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	GstStructure structure = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo = MediaCodecInfo(stream->format);
+	stream->codecInfo.mIsEncrypted = true;
+	mPlayerConfigParams->videoBufBytes = 500;
+	mInterfaceGstPlayer->SetPreferredDRM("urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed");
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_VIDEO_ES_H264)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(&caps, 0)).WillOnce(Return(&structure));
+	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&structure, StrEq("original-media-type"))).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&structure, StrEq("protection-system"))).Times(1);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
+}
+
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedContainerCapsRemainUnchanged)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_MPEGTS;
+	stream->codecInfo = MediaCodecInfo(stream->format);
+	stream->codecInfo.mIsEncrypted = true;
+	mPlayerConfigParams->videoBufBytes = 500;
+	mInterfaceGstPlayer->SetPreferredDRM("urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed");
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_MPEGTS)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
+}
+
+// Validate that encrypted elementary stream caps remain unchanged when no DRM system is configured.
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_EncryptedElementaryStreamCapsWithoutDrmSystemRemainUnchanged)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo = MediaCodecInfo(stream->format);
+	stream->codecInfo.mIsEncrypted = true;
+	mPlayerConfigParams->videoBufBytes = 500;
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_VIDEO_ES_H264)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
+}
+
+TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_ClearElementaryStreamCaps)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+
+	void* playerInstance = mInterfaceGstPlayer;
+	void* source = reinterpret_cast<void*>(0x1234);
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	GstCaps caps = {};
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	stream->codecInfo = MediaCodecInfo(stream->format);
+	stream->codecInfo.mIsEncrypted = false;
+	mPlayerConfigParams->videoBufBytes = 500;
+
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_VIDEO_ES_H264)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+
+	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
+
+	delete g_mockGstUtils;
+	g_mockGstUtils = nullptr;
 }
 
 TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
@@ -1584,8 +1886,7 @@ TEST_F(InterfacePlayerTests, GstGetVideoSize_ValidRectangle)
 {
 	int width = 0;
 	int height = 0;
-	std::string videoRectangle = "10,20,1920,1080";
-	strncpy(mPlayerContext->videoRectangle, videoRectangle.c_str(), sizeof(mPlayerContext->videoRectangle) - 1);
+	mInterfaceGstPlayer->SetVideoRectangle(10, 20, 1920, 1080);
 
 	mInterfaceGstPlayer->GetVideoSize(width, height);
 
@@ -2427,7 +2728,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskNotPending)
 	GstTaskControlData taskDetails("TestTask");
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 				.WillOnce(Return(1));
 
 
@@ -2458,7 +2759,7 @@ TEST_F(InterfacePlayerTests, IdleTaskAdd_TaskFailedToAdd)
 	BackgroundTask funcPtr = [](void* data) -> int { return 0;};
 
 	// Simulate failure to add task
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 				.WillOnce(Return(0));
 
 	bool result = mInterfaceGstPlayer->IdleTaskAdd(taskDetails, funcPtr);
@@ -2551,7 +2852,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_VideoType_FirstFrameNotReceived)
 		audio = false;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_)).Times(3)
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _)).Times(3)
 		.WillOnce(Return(1)).WillOnce(Return(0)).WillOnce(Return(0));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2584,7 +2885,7 @@ TEST_F(InterfacePlayerTests, NotifyFirstFrame_AudioType_FirstFrameNotReceived)
 		audio = true;
 	});
 
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillRepeatedly(Return(1));
 
 	mInterfaceGstPlayer->NotifyFirstFrame(mediaType);
@@ -2780,8 +3081,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_TaskSchedulingFailed)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return an invalid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// Mock g_idle_add_full to return an invalid task ID
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillOnce(Return(PLAYER_TASK_ID_INVALID));
 
 	// Call the method
@@ -2799,8 +3100,8 @@ TEST_F(InterfacePlayerTests, NotifyEOS_FirstCall)
 	mPlayerContext->eosCallbackIdleTaskPending = false;
 	mPlayerContext->eosCallbackIdleTaskId = PLAYER_TASK_ID_INVALID;
 
-	// Mock the scheduler to return a valid task ID
-	EXPECT_CALL(*g_mockPlayerScheduler, ScheduleTask(_))
+	// Mock g_idle_add_full to return a valid task ID
+	EXPECT_CALL(*g_mockGLib, g_idle_add_full(_, _, _, _))
 		.WillOnce(Return(1234));
 
 	mInterfaceGstPlayer->NotifyEOS();
@@ -2918,13 +3219,347 @@ TEST_F(InterfacePlayerTests, EndOfStreamReached_FirstBufferProcessedTrue_TrickMo
 	EXPECT_TRUE(shouldHaltBuffering);
 }
 
-TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success) //failure case todo
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_Success)
 {
 	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
 	std::string manifestUrl = "http://example.com/manifest.mpd";
+	GstElement playbin = {.object = {.name = (gchar *)"playbin"}};
+	mPlayerContext->pipeline = &gst_element_pipeline;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(&playbin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&gst_element_pipeline), &playbin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&playbin))
+		.WillOnce(Return(TRUE));
 	int retvalue = mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl);
 
 	EXPECT_EQ(retvalue, 0);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_FailsWhenPlaybinCreationFails)
+{
+	GstMediaType streamId = eGST_MEDIATYPE_VIDEO;
+	std::string manifestUrl = "http://example.com/manifest.mpd";
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("playbin"), nullptr))
+		.WillOnce(Return(nullptr));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(streamId, manifestUrl), -1);
+	EXPECT_EQ(mPlayerContext->stream[streamId].sinkbin, nullptr);
+}
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSubtitleSinkCreationFailed)
+{
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].format = GST_FORMAT_SUBTITLE_MP4;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(nullptr));
+
+	int retvalue = mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, "");
+
+	EXPECT_EQ(retvalue, -1);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source, nullptr);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin, nullptr);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoMP4SetupAndTearDownSuccess)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement mp4transform = {.object = {.name = (gchar *)"subtecmp4transform"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_MP4;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("subtecmp4transform"), NULL))
+		.WillOnce(Return(&mp4transform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), &mp4transform))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), &vipertransform))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&mp4transform, &vipertransform))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&mp4transform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), 0);
+	EXPECT_EQ(stream->source, &appsrc);
+	EXPECT_EQ(stream->sinkbin, &subtitlebin);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, &textsink);
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&appsrc, _, _, 0))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&appsrc, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&subtitlebin, _, _, 0))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&subtitlebin, _, _, 100 * GST_MSECOND))
+		.WillOnce(DoAll(SetArgPointee<1>(GST_STATE_NULL), SetArgPointee<2>(GST_STATE_VOID_PENDING), Return(GST_STATE_CHANGE_SUCCESS)));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+
+	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_SUBTITLE);
+
+	EXPECT_EQ(stream->format, GST_FORMAT_INVALID);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoMP4InternalLinkFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement mp4transform = {.object = {.name = (gchar *)"subtecmp4transform"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_MP4;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("subtecmp4transform"), NULL))
+		.WillOnce(Return(&mp4transform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(3)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&mp4transform, &vipertransform))
+		.WillOnce(Return(FALSE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoPipelineLinkFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement mp4transform = {.object = {.name = (gchar *)"subtecmp4transform"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_MP4;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("subtecmp4transform"), NULL))
+		.WillOnce(Return(&mp4transform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(3)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&mp4transform, &vipertransform))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&mp4transform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSourceSyncFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_WEBVTT;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&vipertransform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.Times(0);
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, _, _, 0))
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&appsrc, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_FALSE(stream->sourceConfigured);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
+}
+
+TEST_F(InterfacePlayerTests, InterfacePlayer_SetupStream_RialtoSinkbinSyncFailure)
+{
+	GstElement pipeline = {.object = {.name = (gchar *)"pipeline"}};
+	GstElement appsrc = {.object = {.name = (gchar *)"appsrc"}};
+	GstElement subtitlebin = {.object = {.name = (gchar *)"subtitlebin"}};
+	GstElement vipertransform = {.object = {.name = (gchar *)"vipertransform"}};
+	GstElement textsink = {.object = {.name = (gchar *)"rialtomsesubtitlesink"}};
+	GstPad targetPad = {.object = {.name = (gchar *)"target"}};
+	GstPad ghostPad = {.object = {.name = (gchar *)"sink"}};
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE];
+
+	mPlayerConfigParams->gstreamerSubsEnabled = true;
+	mPlayerContext->usingRialtoSink = true;
+	mPlayerContext->pipeline = &pipeline;
+	stream->format = GST_FORMAT_SUBTITLE_WEBVTT;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("rialtomsesubtitlesink"), NULL))
+		.WillOnce(Return(&textsink));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("vipertransform"), NULL))
+		.WillOnce(Return(&vipertransform));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(StrEq("subtitlebin")))
+		.WillOnce(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&subtitlebin), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&vipertransform, &textsink))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_static_pad(&vipertransform, StrEq("sink")))
+		.WillOnce(Return(&targetPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_ghost_pad_new(StrEq("sink"), &targetPad))
+		.WillOnce(Return(&ghostPad));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_add_pad(&subtitlebin, &ghostPad))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(StrEq("appsrc"), NULL))
+		.WillOnce(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(GST_BIN(&pipeline), _))
+		.Times(2)
+		.WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(&appsrc, &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&appsrc))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_sync_state_with_parent(&subtitlebin))
+		.WillOnce(Return(FALSE));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(_, _, _, 0))
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&subtitlebin, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&appsrc, GST_STATE_NULL))
+		.WillOnce(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &subtitlebin))
+		.WillOnce(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&pipeline), &appsrc))
+		.WillOnce(Return(TRUE));
+
+	EXPECT_EQ(mInterfaceGstPlayer->InterfacePlayer_SetupStream(eGST_MEDIATYPE_SUBTITLE, ""), -1);
+	EXPECT_EQ(stream->source, nullptr);
+	EXPECT_EQ(stream->sinkbin, nullptr);
+	EXPECT_FALSE(stream->sourceConfigured);
+	EXPECT_EQ(mPlayerContext->subtitle_sink, nullptr);
 }
 
 TEST_F(InterfacePlayerTests, DisableDecoderHandleNotified)
@@ -3106,12 +3741,29 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_ValidVideoCodecFormat)
 	delete g_mockGstUtils;
 }
 
+TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedContainerCapsRemainUnchanged)
+{
+	g_mockGstUtils = new StrictMock<MockGstUtils>();
+	MediaCodecInfo codecInfo;
+	codecInfo.mCodecFormat = GST_FORMAT_ISO_BMFF;
+	codecInfo.mIsEncrypted = true;
+	GstCaps caps;
+	EXPECT_CALL(*g_mockGstUtils, GetCaps(GST_FORMAT_ISO_BMFF)).WillOnce(Return(&caps));
+	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(_, _)).Times(0);
+	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
+
+	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_VIDEO, std::move(codecInfo));
+
+	delete g_mockGstUtils;
+}
+
 /**
  * SetStreamCaps Tests with encrypted audio codec format
  */
 TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedAudioCodecFormat)
 {
 	g_mockGstUtils = new StrictMock<MockGstUtils>();
+	mInterfaceGstPlayer->SetPreferredDRM("urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed");
 	MediaCodecInfo codecInfo;
 	codecInfo.mCodecFormat = GST_FORMAT_AUDIO_ES_AAC_RAW;
 	codecInfo.mCodecData = std::vector<uint8_t>{0x00, 0x00, 0x00, 0x01};
@@ -3125,11 +3777,218 @@ TEST_F(InterfacePlayerTests, SetStreamCaps_EncryptedAudioCodecFormat)
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_get_structure(&caps, 0)).WillRepeatedly(Return(&s));
 	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&s, StrEq("codec_data"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&s, StrEq("original-media-type"))).Times(1);
+	EXPECT_CALL(*g_mockGStreamer, gst_structure_set(&s, StrEq("protection-system"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_caps_set_simple(&caps, StrEq("channels"))).Times(1);
 	EXPECT_CALL(*g_mockGStreamer, gst_app_src_set_caps(_, &caps)).Times(1);
 
 	mInterfaceGstPlayer->SetStreamCaps(eGST_MEDIATYPE_AUDIO, std::move(codecInfo));
 
 	delete g_mockGstUtils;
+}
+
+/*
+ * shouldReconfigure truth table (all 10 reachable rows are covered below)
+ *
+ * Formula:
+ *   shouldReconfigure = (F && (V || I)) || (E && V)
+ *
+ * Symbols:
+ *   F = format changed (stream->format != newFormat)
+ *   I = initial UNKNOWN setup only (stream INVALID and newFormat UNKNOWN)
+ *   V = valid new format (newFormat is neither INVALID nor UNKNOWN)
+ *   E = encryption changed
+ *
+ * Reachable rows and expected result:
+ * +------+---+---+---+---+-------------------+
+ * | Row  | F | I | V | E | shouldReconfigure |
+ * +------+---+---+---+---+-------------------+
+ * | R1   | 1 | 1 | 0 | 0 |         1         |
+ * | R2   | 1 | 1 | 0 | 1 |         1         |
+ * | R3   | 1 | 0 | 1 | 0 |         1         |
+ * | R4   | 1 | 0 | 1 | 1 |         1         |
+ * | R5   | 1 | 0 | 0 | 0 |         0         |
+ * | R6   | 1 | 0 | 0 | 1 |         0         |
+ * | R7   | 0 | 0 | 1 | 0 |         0         |
+ * | R8   | 0 | 0 | 1 | 1 |         1         |
+ * | R9   | 0 | 0 | 0 | 0 |         0         |
+ * | R10  | 0 | 0 | 0 | 1 |         0         |
+ * +------+---+---+---+---+-------------------+
+ *
+ * Unreachable by definition:
+ * - I=1 with F=0 (INVALID cannot equal UNKNOWN)
+ * - I=1 with V=1 (UNKNOWN is not a valid format)
+ */
+// Define test parameters for the decision matrix
+struct ShouldReconfigureTestParams {
+	std::string testName;  // e.g., "R1", "R2", etc.
+	GstStreamOutputFormat initialFormat;
+	GstStreamOutputFormat newFormat;
+	bool initiallyEncrypted;
+	bool newEncrypted;
+	int expectedTrackCount;
+	GstStreamOutputFormat expectedFinalFormat;
+	bool expectedEncrypted;
+};
+
+class ConfigurePipelineShouldReconfigureTest : public InterfacePlayerTests,
+	public ::testing::WithParamInterface<ShouldReconfigureTestParams> {
+};
+
+INSTANTIATE_TEST_SUITE_P(
+	DecisionMatrix,
+	ConfigurePipelineShouldReconfigureTest,
+	::testing::Values(
+		// R1: F=1, I=1, V=0, E=0 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R1_FormatChangeInvalidToUnknown_NoEncryption",
+			GST_FORMAT_INVALID,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			1,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R2: F=1, I=1, V=0, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R2_FormatChangeInvalidToUnknown_WithEncryption",
+			GST_FORMAT_INVALID,
+			GST_FORMAT_UNKNOWN,
+			false,
+			true,
+			1,
+			GST_FORMAT_UNKNOWN,
+			true
+		},
+		// R3: F=1, I=0, V=1, E=0 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R3_ValidFormatChange_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false,
+			false,
+			1,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false
+		},
+		// R4: F=1, I=0, V=1, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R4_ValidFormatChange_WithEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			false,
+			true,
+			1,
+			GST_FORMAT_VIDEO_ES_HEVC,
+			true
+		},
+		// R5: F=1, I=0, V=0, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R5_NoValidFormatChange_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			0,
+			GST_FORMAT_VIDEO_ES_H264,
+			false
+		},
+		// R5 additional: UNKNOWN -> INVALID transition
+		ShouldReconfigureTestParams{
+			"R5_UnknownToInvalid_NoEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_INVALID,
+			false,
+			false,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R6: F=1, I=0, V=0, E=1 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R6_NoValidFormatChange_WithEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_INVALID,
+			false,
+			true,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R7: F=0, I=0, V=1, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R7_NoFormatChange_SameFormat_NoEncryption",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_H264,
+			false,
+			false,
+			0,
+			GST_FORMAT_VIDEO_ES_H264,
+			false
+		},
+		// R8: F=0, I=0, V=1, E=1 -> shouldReconfigure=true
+		ShouldReconfigureTestParams{
+			"R8_NoFormatChange_EncryptionChange",
+			GST_FORMAT_VIDEO_ES_H264,
+			GST_FORMAT_VIDEO_ES_H264,
+			false,
+			true,
+			1,
+			GST_FORMAT_VIDEO_ES_H264,
+			true
+		},
+		// R9: F=0, I=0, V=0, E=0 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R9_NoFormatChange_UnknownFormat_NoEncryption",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_UNKNOWN,
+			false,
+			false,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		},
+		// R10: F=0, I=0, V=0, E=1 -> shouldReconfigure=false
+		ShouldReconfigureTestParams{
+			"R10_NoFormatChange_UnknownFormat_EncryptionChange",
+			GST_FORMAT_UNKNOWN,
+			GST_FORMAT_UNKNOWN,
+			false,
+			true,
+			0,
+			GST_FORMAT_UNKNOWN,
+			false
+		}
+	),
+	[](const ::testing::TestParamInfo<ShouldReconfigureTestParams>& info) {
+		return info.param.testName;
+	}
+);
+
+TEST_P(ConfigurePipelineShouldReconfigureTest, ConfigurePipeline_ShouldReconfigureDecisionMatrix)
+{
+	auto param = GetParam();
+	ExpectPipelineCreation();
+
+	mPlayerContext->NumberOfTracks = 0;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = param.initialFormat;
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted = param.initiallyEncrypted;
+
+	// Build the codec info based on parameters
+	MediaCodecInfo codecInfo;
+	codecInfo.mCodecFormat = param.newFormat;
+	codecInfo.mIsEncrypted = param.newEncrypted;
+
+	mInterfaceGstPlayer->ConfigurePipeline(
+		StreamCodecInfo{std::move(codecInfo), GST_FORMAT_INVALID, GST_FORMAT_INVALID},
+		false, false, false, 0, GST_NORMAL_PLAY_RATE, "testPipeline", 0, false, "testManifest", false);
+
+	EXPECT_EQ(mPlayerContext->NumberOfTracks, param.expectedTrackCount);
+	EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format, param.expectedFinalFormat);
+	if (param.expectedTrackCount > 0) {
+		EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted, param.expectedEncrypted);
+	} else {
+		EXPECT_EQ(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].codecInfo.mIsEncrypted, param.initiallyEncrypted);
+	}
 }
 

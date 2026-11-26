@@ -42,6 +42,8 @@
 
 #include <sys/time.h>
 #include <set>
+#include <thread>
+#include <chrono>
 #define LICENSE_RENEWAL_MESSAGE_TYPE "1"
 
 /**
@@ -145,6 +147,8 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		};
 
 		m_OCDMSessionCallbacks.error_message_callback = [](OpenCDMSession* session, void* userData, const char message[]) {
+			OCDMSessionAdapter* userSession = reinterpret_cast<OCDMSessionAdapter*>(userData);
+			userSession->errorMessageOCDM(message);
 		};
 
 		m_OCDMSessionCallbacks.keys_updated_callback = [](const OpenCDMSession* session, void* userData) {
@@ -250,6 +254,22 @@ void OCDMSessionAdapter::keysUpdatedOCDM() {
 	m_keyStatusReady.signal();
 }
 
+void OCDMSessionAdapter::errorMessageOCDM(const char message[]) {
+	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int) m_keyStatus, (int) m_eKeyState);
+
+	// Key updates have already turned a ready session's status into InternalError (e.g. Rialto server crash);
+	// without this the session manager would keep reusing the dead KEY_READY session.
+	if (m_eKeyState == KEY_READY && m_keyStatus == InternalError)
+	{
+		m_eKeyState = KEY_ERROR;
+	}
+
+	if (m_drmCallbacks)
+	{
+		m_drmCallbacks->DrmSessionError(this, (message != nullptr) ? message : "");
+	}
+}
+
 
 DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_t timeout)
 {
@@ -351,10 +371,17 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 				}
 			} 
 
-			// wait for 5sec for all the logs to be flushed
-			sleep(5);
-			// Now kill self
-			processHandler.SelfKill();
+			// Defer the self-kill by 5sec on a worker thread so the killed
+			// OCDM process can restart and logs can flush, without blocking
+			// this decrypt/key path which would otherwise stall playback.
+			m_eKeyState = KEY_ERROR;
+			std::thread([]()
+			{
+				std::this_thread::sleep_for(std::chrono::seconds(5));
+				// Now kill self
+				ProcessHandler handler;
+				handler.SelfKill();
+			}).detach();
 		}
 		else {
 #ifdef USE_THUNDER_OCDM_API_0_2
@@ -451,9 +478,9 @@ bool OCDMSessionAdapter::verifyOutputProtection()
 /**
  * @fn getUsableKeys
  * @brief Get the list of usable key IDs from the DRM session
- * @retval Reference to vector of usable key IDs
+ * @retval Snapshot copy of usable key IDs, taken under m_usableKeysMutex
  */
-const std::vector<std::vector<uint8_t>>& OCDMSessionAdapter::getUsableKeys() const
+std::vector<std::vector<uint8_t>> OCDMSessionAdapter::getUsableKeys() const
 {
 	std::lock_guard<std::mutex> lock(m_usableKeysMutex);
 	return m_usableKeys;

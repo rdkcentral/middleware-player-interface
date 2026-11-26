@@ -48,6 +48,9 @@ public:
 	 */
 	void Release(int iID) override;
 
+	/// @copydoc PlayerCCManagerBase::InvalidateHandle
+	void InvalidateHandle(void *handle) override;
+
 	/**
 	 * @fn GetId
 	 * @return int -  unique ID
@@ -118,7 +121,21 @@ private:
 	 */
 	void ResetState() override;
 
+	/// SetTrack() body, assuming mControlMutex is already held. Used by
+	/// SetTrack() itself and by Initialize(), so handle assignment and
+	/// configuration happen as one atomic critical section.
+	int SetTrackLocked(const std::string &track, const CCFormat format);
+
 private:
+	/// Guards mSubtitleControlHandle and SetTrack()'s writes / Initialize()'s
+	/// reads of the inherited mTrack / mTrackFormat cache. InvalidateHandle()
+	/// also takes this lock, so any SetTrack() / StartRendering() /
+	/// StopRendering() call already in progress on the old handle completes
+	/// before InvalidateHandle() clears the pointer and returns - preventing
+	/// use-after-free when the handle owner is destroyed concurrently.
+	mutable std::mutex mControlMutex;
+
+	/// GstElement* decoder handle. Guarded by mControlMutex.
 	void *mSubtitleControlHandle{nullptr};
 
 	std::mutex mIdLock{};
