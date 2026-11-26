@@ -132,6 +132,29 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 	}
 	else
 	{
+		// PLI-005: Defensive recreate handling for existing OCDM session. 
+		if (m_pOpenCDMSession)
+		{
+			(void)opencdm_session_close(m_pOpenCDMSession);
+			(void)opencdm_destruct_session(m_pOpenCDMSession);
+			m_pOpenCDMSession = nullptr;
+
+			// Drop state that belonged to the destroyed session
+			m_eKeyState = KEY_INIT;
+			m_keyStatus = InternalError;
+			m_keyStateIndeterminate = false;
+			m_keyStored.clear();
+			m_challenge.clear();
+			m_destUrl.clear();
+			{
+				std::lock_guard<std::mutex> lock(m_usableKeysMutex);
+				m_usableKeys.clear();
+			}
+			m_challengeReady.reset();
+			m_keyStatusReady.reset();
+			m_keyStatusWait.reset();
+		}
+
 		memset(&m_OCDMSessionCallbacks, 0, sizeof(m_OCDMSessionCallbacks));
 		timeBeforeCallback = GetCurrentTimeMS();
 		m_OCDMSessionCallbacks.process_challenge_callback = [](OpenCDMSession* session, void* userData, const char destUrl[], const uint8_t challenge[], const uint16_t challengeSize) {
@@ -171,6 +194,18 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 		if (ocdmRet != ERROR_NONE)
 		{
 			MW_LOG_ERR("Error constructing OCDM session. OCDM err=0x%x", ocdmRet);
+			// PLI-005: Cleanup partial session state on create failure. 
+			if (m_pOpenCDMSession)
+			{
+				(void)opencdm_session_close(m_pOpenCDMSession);
+				(void)opencdm_destruct_session(m_pOpenCDMSession);
+				m_pOpenCDMSession = nullptr;
+			}
+			m_eKeyState = KEY_ERROR_SESSION_CREATE_FAILED;
+		}
+		else if (m_pOpenCDMSession == nullptr)
+		{
+			MW_LOG_ERR("OCDM session construction reported success but returned null session");
 			m_eKeyState = KEY_ERROR_SESSION_CREATE_FAILED;
 		}
 	}
@@ -318,6 +353,14 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 
 	if (keyMessage)
 	{
+		// PLI-005: Guard critical update path against null OCDM session.
+		if (m_pOpenCDMSession == nullptr)
+		{
+			MW_LOG_ERR("Cannot update key: OCDM session is null");
+			m_eKeyState = KEY_ERROR;
+			m_keyStatusWait.signal();
+			return retValue;
+		}
 		MW_LOG_INFO("Calling opencdm_session_update, key length=%u", keyMessageLength);
 		status = opencdm_session_update(m_pOpenCDMSession, keyMessage, keyMessageLength);
 	}
@@ -335,6 +378,14 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 		}
 		// The key could be signalled ready before the session is even created, so we need to check we didn't miss it
 		if (m_keyStateIndeterminate) {
+			if (m_pOpenCDMSession == nullptr || m_keyStored.empty())
+			{
+				MW_LOG_ERR("Key state indeterminate but OCDM session/key data not available");
+				m_eKeyState = KEY_ERROR;
+				m_keyStateIndeterminate = false;
+				m_keyStatusWait.signal();
+				return retValue;
+			}
 			m_keyStatus = opencdm_session_status(m_pOpenCDMSession, m_keyStored.data(), m_keyStored.size());
 			m_keyStateIndeterminate = false;
 			MW_LOG_WARN("Key arrived early, new state is %d", m_keyStatus);
@@ -440,8 +491,17 @@ void OCDMSessionAdapter:: clearDecryptContext()
 	std::lock_guard<std::mutex> guard(decryptMutex);
 
 	if (m_pOpenCDMSession) {
-		opencdm_session_close(m_pOpenCDMSession);
-		opencdm_destruct_session(m_pOpenCDMSession);
+		// PLI-005: Validate and log close/destruct errors in destroy path.
+		OpenCDMError closeStatus = opencdm_session_close(m_pOpenCDMSession);
+		if (closeStatus != OpenCDMError::ERROR_NONE)
+		{
+			MW_LOG_WARN("opencdm_session_close failed with error 0x%x", closeStatus);
+		}
+		OpenCDMError destructStatus = opencdm_destruct_session(m_pOpenCDMSession);
+		if (destructStatus != OpenCDMError::ERROR_NONE)
+		{
+			MW_LOG_WARN("opencdm_destruct_session failed with error 0x%x", destructStatus);
+		}
 		m_pOpenCDMSession = NULL;
 	}
 

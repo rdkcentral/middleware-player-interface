@@ -78,6 +78,12 @@ public:
 		signalled = true;
 		condition.notify_all();
 	}
+
+	inline void reset()
+	{
+		std::unique_lock<std::mutex> _lock(lock);
+		signalled = false;
+	}
 };
 
 /**
