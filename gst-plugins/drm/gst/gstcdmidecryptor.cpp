@@ -501,6 +501,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 	GstBuffer* keyIDBuffer = NULL;
 	GstBuffer* subsamplesBuffer = NULL;
 	GstMapInfo subSamplesMap;
+	gboolean subSamplesMapped = FALSE;
 	GstProtectionMeta* protectionMeta = NULL;
 	gboolean mutexLocked = FALSE;
 	int errorCode;
@@ -667,7 +668,8 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 			goto free_resources;
 		}
 		subsamplesBuffer = gst_value_get_buffer(value);
-		if (!gst_buffer_map(subsamplesBuffer, &subSamplesMap, GST_MAP_READ))
+		subSamplesMapped = gst_buffer_map(subsamplesBuffer, &subSamplesMap, GST_MAP_READ);
+		if (!subSamplesMapped)
 		{
 			GST_ERROR_OBJECT(cdmidecryptor,
 					"Failed to map subsample buffer");
@@ -782,7 +784,7 @@ static GstFlowReturn gst_cdmidecryptor_transform_ip(
 		cdmidecryptor->firstsegprocessed = true;
 	}
 
-	if (subsamplesBuffer)
+	if (subSamplesMapped)
 		gst_buffer_unmap(subsamplesBuffer, &subSamplesMap);
 
 	if (protectionMeta)
