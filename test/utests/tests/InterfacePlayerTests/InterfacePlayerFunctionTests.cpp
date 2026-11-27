@@ -460,6 +460,45 @@ TEST_F(InterfacePlayerTests, TearDownStreamTest_failvideo)
 	EXPECT_EQ(stream->sinkbin, nullptr);
 }
 
+TEST_F(InterfacePlayerTests, TearDownStreamTest_PreservesReplacementPublishedDuringTeardown)
+{
+	GstElement gst_pipeline = {.object = {.name = (gchar *)"testpipeline"}};
+	GstElement gst_sinkbin = {.object = {.name = (gchar *)"testbin"}};
+	GstElement replacementSinkbin = {.object = {.name = (gchar *)"replacementbin"}};
+
+	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_VIDEO];
+	stream->format = GST_FORMAT_VIDEO_ES_H264;
+	mPlayerContext->pipeline = &gst_pipeline;
+	stream->sinkbin = &gst_sinkbin;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_get_state(&gst_sinkbin, _, _, _))
+		.WillRepeatedly(::testing::Invoke([](GstElement*, GstState* state, GstState* pending, GstClockTime) {
+			*state = GST_STATE_NULL;
+			*pending = GST_STATE_VOID_PENDING;
+			return GST_STATE_CHANGE_SUCCESS;
+		}));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_set_state(&gst_sinkbin, GST_STATE_NULL))
+		.WillRepeatedly(Return(GST_STATE_CHANGE_SUCCESS));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_remove(GST_BIN(&gst_pipeline), &gst_sinkbin))
+		.WillOnce(::testing::Invoke([&](GstBin*, GstElement*) {
+			// Simulate setup publishing a replacement while teardown is unlocked.
+			pthread_mutex_lock(&stream->sourceLock);
+			stream->sinkbin = &replacementSinkbin;
+			stream->format = GST_FORMAT_AUDIO_ES_AAC;
+			stream->sourceConfigured = true;
+			pthread_mutex_unlock(&stream->sourceLock);
+			return TRUE;
+		}));
+
+	mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
+
+	EXPECT_EQ(stream->sinkbin, &replacementSinkbin);
+	EXPECT_EQ(stream->format, GST_FORMAT_AUDIO_ES_AAC);
+	EXPECT_TRUE(stream->sourceConfigured);
+	stream->sinkbin = nullptr;
+	stream->sourceConfigured = false;
+}
+
 TEST_F(InterfacePlayerTests, TearDownStreamTest_misc)
 {
 	gst_media_stream* stream = &mPlayerContext->stream[eGST_MEDIATYPE_AUDIO];
@@ -1208,11 +1247,29 @@ TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventOtherTrack)
 		.WillRepeatedly(Return(&pad));
 	EXPECT_CALL(*g_mockGStreamer, gst_pad_push_event(_,_))
 		.WillRepeatedly(Return(TRUE));
-	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(4);
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_)).Times(3);
 
 	mInterfacePrivatePlayer->SendGstEvents(mediaType, pts,mPlayerConfigParams->enableGstPosQuery , mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
 
 	EXPECT_FALSE(stream->resetPosition);
+}
+
+TEST_F(InterfacePlayerTests, SendGstEvents_PendingSeekPreservedWhenSourceNotConfigured)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->pendingSeek = true;
+	stream->resetPosition = true;
+	stream->source = &gst_element_pipeline;
+	stream->sourceConfigured = false;
+	mPlayerContext->seekPosition = 10;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_element_seek_simple(_, _, _, _)).Times(0);
+
+	mInterfacePrivatePlayer->SendGstEvents(mediaType, 1000, mPlayerConfigParams->enableGstPosQuery, mPlayerConfigParams->enablePTSReStamp, mPlayerConfigParams->vodTrickModeFPS);
+
+	EXPECT_TRUE(stream->pendingSeek);
+	EXPECT_TRUE(stream->resetPosition);
 }
 
 TEST_F(InterfacePlayerTests, SendGstEvents_ProtectionEventSameTrack)
