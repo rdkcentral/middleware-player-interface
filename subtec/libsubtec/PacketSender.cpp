@@ -133,6 +133,10 @@ bool PacketSender::Init(const char *socket_path)
 
     if (!running)
     {
+        {
+            std::lock_guard<std::mutex> queueLock(mPktMutex);
+            packetQueueStates().setAcceptingPackets(this, true);
+        }
         mSocketPath = socket_path;
         ret = initSocket(socket_path) && initSenderTask();
         if (!ret) {
@@ -163,13 +167,6 @@ void PacketSender::SendPacket(PacketPtr && packet)
     }
 
     std::unique_lock<std::mutex> lock(mPktMutex);
-    // Block producers while the sender is active; drop when no sender is draining the queue
-    mCv.wait(lock, [this, packetSize] {
-        const PacketQueueState state = packetQueueStates().get(this);
-        return !state.acceptingPackets || !running ||
-            (mPacketQueue.size() < MAX_QUEUED_PACKETS &&
-                state.queuedBytes <= MAX_QUEUED_BYTES - packetSize);
-    });
     const PacketQueueState state = packetQueueStates().get(this);
     if (!state.acceptingPackets)
     {
@@ -271,7 +268,7 @@ void PacketSender::sendPacket(PacketPtr && pkt)
 	    MW_LOG_INFO("new socket buffer size %d", mSockBufSize);
 	}
     }
-    auto written = ::write(mSubtecSocketHandle, &buffer[0], size);
+    auto written = ::send(mSubtecSocketHandle, buffer.data(), size, MSG_DONTWAIT);
     MW_LOG_TRACE("PacketSender: Written %ld bytes with size %zu", static_cast<long>(written), size);
 
     //Socket reconnect in case packet write fails
@@ -317,7 +314,9 @@ bool PacketSender::initSenderTask()
         {
             std::lock_guard<std::mutex> lock(mPktMutex);
             running = false;
+            packetQueueStates().setAcceptingPackets(this, true);
         }
+        mCv.notify_all();
         MW_LOG_WARN("PacketSender: Error in initSenderTask: %s", e.what());
         return false;
     }
@@ -349,6 +348,11 @@ void PacketSender::closeSenderTask()
         mSendThread.join();
         MW_LOG_INFO("PacketSender: sender task stopped");
     }
+    {
+        std::lock_guard<std::mutex> lock(mPktMutex);
+        packetQueueStates().setAcceptingPackets(this, true);
+    }
+    mCv.notify_all();
 }
 
 bool PacketSender::initSocket(const char *socket_path)
