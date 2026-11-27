@@ -23,7 +23,7 @@
  *
  * Covers:
  *   - PacketSender::Instance()     : singleton, never null, identity
- *   - PacketSender::Init()         : returns false in test env (no socket)
+ *   - PacketSender::Init(path)     : connects to a local datagram receiver
  *   - PacketSender::Init(path)     : returns false for non-existent path
  *   - PacketSender::Close()        : safe to call, stops any running thread
  *   - PacketSender::Flush()        : safe to call in any state
@@ -32,9 +32,8 @@
  *   - PacketSender::senderTask()   : tested via thread + Close() to stop
  *   - runWorkerTask()              : tested via thread + Close() to stop
  *
- * NOTE: Init() returns false in this test environment because there is no
- * socket server listening at the configured socket path.  The tested paths
- * are for the graceful-degradation code, which is a valid production scenario.
+ * The default socket path has no test receiver, so Init() is expected to fail
+ * there. Lifecycle tests use a local datagram receiver instead.
  */
 
 #include <gtest/gtest.h>
@@ -43,8 +42,75 @@
 #include <chrono>
 #include <memory>
 #include <cstdint>
+#include <atomic>
+#include <cstdio>
+#include <sys/time.h>
 #include "PacketSender.hpp"
 #include "SubtecPacket.hpp"
+
+namespace
+{
+class LocalPacketSender : public PacketSender
+{
+};
+
+class SizedPacket : public Packet
+{
+public:
+    explicit SizedPacket(size_t size)
+    {
+        getBuffer().resize(size);
+    }
+};
+
+class LocalDatagramReceiver
+{
+public:
+    LocalDatagramReceiver()
+        : mSocket(::socket(AF_UNIX, SOCK_DGRAM, 0))
+    {
+        static unsigned int testId = 0;
+        std::snprintf(mPath, sizeof(mPath), "/tmp/packet-sender-test-%d-%u.sock",
+            static_cast<int>(::getpid()), testId++);
+        ::unlink(mPath);
+
+        sockaddr_un address{};
+        address.sun_family = AF_UNIX;
+        std::strncpy(address.sun_path, mPath, sizeof(address.sun_path) - 1);
+        timeval timeout{1, 0};
+        if (mSocket < 0 ||
+            ::bind(mSocket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+            ::setsockopt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
+        {
+            if (mSocket >= 0)
+            {
+                ::close(mSocket);
+                mSocket = -1;
+            }
+        }
+    }
+
+    ~LocalDatagramReceiver()
+    {
+        if (mSocket >= 0)
+        {
+            ::close(mSocket);
+        }
+        ::unlink(mPath);
+    }
+
+    bool IsValid() const { return mSocket >= 0; }
+    const char* Path() const { return mPath; }
+    ssize_t Receive(char* buffer, size_t size) const
+    {
+        return ::recv(mSocket, buffer, size, 0);
+    }
+
+private:
+    int mSocket;
+    char mPath[sizeof(sockaddr_un::sun_path)]{};
+};
+}
 
 // ===========================================================================
 // PacketSenderInstance tests
@@ -503,19 +569,16 @@ TEST(PacketSenderSendPacket, Stress100Packets)
 TEST(PacketSenderSenderTask, StartsAndStopsViaClose)
 {
     std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - START" << std::endl;
-    PacketSender* sender = PacketSender::Instance();
-    sender->Close();  // Ensure clean initial state
+    LocalPacketSender sender;
+    LocalDatagramReceiver receiver;
+    ASSERT_TRUE(receiver.IsValid());
+    ASSERT_TRUE(sender.Init(receiver.Path()));
 
-    std::thread t([sender]() {
-        sender->senderTask();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    sender->Close();   // Signal worker to exit
-
-    t.join();
-    std::cout << "  senderTask() thread started and stopped cleanly via Close()" << std::endl;
-    EXPECT_FALSE(sender->IsRunning());
+    const auto start = std::chrono::steady_clock::now();
+    sender.Close();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::seconds(1));
+    EXPECT_FALSE(sender.IsRunning());
     std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - PASS" << std::endl;
 }
 
@@ -529,25 +592,88 @@ TEST(PacketSenderSenderTask, StartsAndStopsViaClose)
 TEST(PacketSenderSenderTask, ProcessesEnqueuedPackets)
 {
     std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - START" << std::endl;
-    PacketSender* sender = PacketSender::Instance();
-    sender->Close();
+    LocalPacketSender sender;
+    LocalDatagramReceiver receiver;
+    ASSERT_TRUE(receiver.IsValid());
+    sender.SendPacket(std::make_unique<PausePacket>(1u, 1u));
+    ASSERT_TRUE(sender.Init(receiver.Path()));
 
-    std::thread t([sender]() {
-        sender->senderTask();
+    const auto start = std::chrono::steady_clock::now();
+    sender.Close();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::seconds(1));
+    EXPECT_FALSE(sender.IsRunning());
+
+    char buffer[128];
+    EXPECT_GT(receiver.Receive(buffer, sizeof(buffer)), 0);
+    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - PASS" << std::endl;
+}
+
+TEST(PacketSenderSendPacket, QueueCapacityIsBounded)
+{
+    LocalPacketSender sender;
+    LocalDatagramReceiver receiver;
+    ASSERT_TRUE(receiver.IsValid());
+
+    constexpr uint32_t queueCapacity = 1024;
+    for (uint32_t i = 0; i < queueCapacity + 1; ++i)
+    {
+        sender.SendPacket(std::make_unique<PausePacket>(1u, i));
+    }
+
+    std::atomic<uint32_t> received{0};
+    std::thread receiverThread([&] {
+        char buffer[128];
+        while (receiver.Receive(buffer, sizeof(buffer)) > 0)
+        {
+            ++received;
+        }
     });
 
-    // Enqueue some packets while thread is running
-    for (uint32_t i = 0; i < 5u; ++i)
+    if (!sender.Init(receiver.Path()))
     {
-        sender->SendPacket(std::make_unique<PausePacket>(1u, i));
+        sender.Close();
+        receiverThread.join();
+        FAIL() << "sender failed to initialize with the local receiver";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    sender->Close();
-    t.join();
 
-    std::cout << "  5 packets enqueued while senderTask() running, thread stopped cleanly" << std::endl;
-    EXPECT_FALSE(sender->IsRunning());
-    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - PASS" << std::endl;
+    sender.Close();
+    receiverThread.join();
+    EXPECT_EQ(received.load(), queueCapacity);
+}
+
+TEST(PacketSenderSendPacket, QueuedBytesAreBounded)
+{
+    LocalPacketSender sender;
+    LocalDatagramReceiver receiver;
+    ASSERT_TRUE(receiver.IsValid());
+
+    constexpr size_t packetSize = 100000;
+    constexpr uint32_t queueCapacity = (8 * 1024 * 1024) / packetSize;
+    for (uint32_t i = 0; i < queueCapacity + 1; ++i)
+    {
+        sender.SendPacket(std::make_unique<SizedPacket>(packetSize));
+    }
+
+    std::atomic<uint32_t> received{0};
+    std::thread receiverThread([&] {
+        char buffer[128];
+        while (receiver.Receive(buffer, sizeof(buffer)) > 0)
+        {
+            ++received;
+        }
+    });
+
+    if (!sender.Init(receiver.Path()))
+    {
+        sender.Close();
+        receiverThread.join();
+        FAIL() << "sender failed to initialize with the local receiver";
+    }
+
+    sender.Close();
+    receiverThread.join();
+    EXPECT_EQ(received.load(), queueCapacity);
 }
 
 // ===========================================================================

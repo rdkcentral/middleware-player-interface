@@ -32,6 +32,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <mutex>
+#include <memory>
+#include <unordered_map>
 #include "PlayerLogManager.h"
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 #define OPEN_SSL_CONTEXT mOpensslCtx
@@ -41,7 +43,41 @@
 #define AES_128_KEY_LEN_BYTES 16
 
 static std::mutex instanceLock;
-static std::mutex licenseAcquisitionThreadLock;
+
+namespace
+{
+class LicenseAcquisitionThreadLocks
+{
+public:
+	std::shared_ptr<std::mutex> get(const AesDec *instance)
+	{
+		std::lock_guard<std::mutex> lock(mMutex);
+		std::shared_ptr<std::mutex> instanceMutex = mLocks[instance].lock();
+		if (!instanceMutex)
+		{
+			instanceMutex = std::make_shared<std::mutex>();
+			mLocks[instance] = instanceMutex;
+		}
+		return instanceMutex;
+	}
+
+	void erase(const AesDec *instance)
+	{
+		std::lock_guard<std::mutex> lock(mMutex);
+		mLocks.erase(instance);
+	}
+
+private:
+	std::mutex mMutex;
+	std::unordered_map<const AesDec *, std::weak_ptr<std::mutex>> mLocks;
+};
+
+LicenseAcquisitionThreadLocks &licenseAcquisitionThreadLocks()
+{
+	static LicenseAcquisitionThreadLocks *locks = new LicenseAcquisitionThreadLocks;
+	return *locks;
+}
+}
 
 /**
  * @brief key acquisition thread
@@ -166,7 +202,8 @@ DRMState AesDec::GetState()
 DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWaitTime)
 {
 	DrmReturn err = eDRM_ERROR;
-	std::lock_guard<std::mutex> threadLock(licenseAcquisitionThreadLock);
+	std::shared_ptr<std::mutex> threadMutex = licenseAcquisitionThreadLocks().get(this);
+	std::lock_guard<std::mutex> threadLock(*threadMutex);
         std::unique_lock<std::mutex> lock(mMutex);
 
 	mAcquireKeyWaitTime = acquireKeyWaitTime;
@@ -184,11 +221,10 @@ DrmReturn AesDec::SetDecryptInfo(const struct DrmInfo *drmInfo, int acquireKeyWa
 			return eDRM_SUCCESS;
 		}
 	}
-	std::thread previousAcquisitionThread;
-	if (licenseAcquisitionThreadId.joinable())
+	// Join outside mMutex (the worker needs it); re-check since another caller may start a new worker meanwhile
+	while (licenseAcquisitionThreadId.joinable())
 	{
-		previousAcquisitionThread = std::move(licenseAcquisitionThreadId);
-		MW_LOG_WARN("PATCH_CONFIRM: AES joins the previous license thread outside mMutex");
+		std::thread previousAcquisitionThread = std::move(licenseAcquisitionThreadId);
 		lock.unlock();
 		previousAcquisitionThread.join();
 		lock.lock();
@@ -322,7 +358,8 @@ DrmReturn AesDec::Decrypt( int bucketTypeIn, void *encryptedDataPtr, size_t encr
 void AesDec::Release()
 {
 	DrmReturn err = eDRM_ERROR;
-	std::lock_guard<std::mutex> threadLock(licenseAcquisitionThreadLock);
+	std::shared_ptr<std::mutex> threadMutex = licenseAcquisitionThreadLocks().get(this);
+	std::lock_guard<std::mutex> threadLock(*threadMutex);
 	std::unique_lock<std::mutex> lock(mMutex);
 	//We wait for license acquisition to complete. Once license acquisition is complete
 	//the appropriate state will be set to mDrmState and hence RestoreKeyState will be a no-op.
@@ -330,10 +367,9 @@ void AesDec::Release()
 	{
 		WaitForKeyAcquireCompleteUnlocked(mAcquireKeyWaitTime, err, lock );
 	}
-	std::thread acquisitionThread;
-	if (licenseAcquisitionThreadId.joinable())
+	while (licenseAcquisitionThreadId.joinable())
 	{
-		acquisitionThread = std::move(licenseAcquisitionThreadId);
+		std::thread acquisitionThread = std::move(licenseAcquisitionThreadId);
 		lock.unlock();
 		acquisitionThread.join();
 		lock.lock();
@@ -424,6 +460,7 @@ AesDec::~AesDec()
 {
 	CancelKeyWait();
 	Release();
+	licenseAcquisitionThreadLocks().erase(this);
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	EVP_CIPHER_CTX_free(OPEN_SSL_CONTEXT);
 #else

@@ -34,6 +34,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdio.h>
+#include <chrono>
+#include <condition_variable>
+#include <future>
+#include <mutex>
+#include <thread>
 
 #define private public
 #include "Aes.h"
@@ -1037,6 +1042,108 @@ TEST(DrmAesDecTests, ValidDrmInfo_ZeroAcquireKeyWaitTime_ReturnsTimeout)
 
     std::cout << "Exiting ValidDrmInfo_ZeroAcquireKeyWaitTime_ReturnsTimeout test" << std::endl;
 }
+
+TEST(DrmAesDecTests, SetDecryptInfoJoinsWorkerWithoutBlockingOtherInstance)
+{
+    AesDec aesDec;
+    AesDec otherInstance;
+    DrmInfo drmInfo;
+    drmInfo.keyURI = "https://example.test/key";
+
+    std::mutex gateMutex;
+    std::condition_variable gateCondition;
+    bool callbackEntered = false;
+    bool releaseCallback = false;
+    unsigned int callbackCount = 0;
+
+    aesDec.RegisterGetCurlInitCb([](int& curlInstance) { curlInstance = 1; });
+    aesDec.RegisterTerminateCurlInstanceCb([](int) {});
+    aesDec.RegisterNotifyDrmErrorCb([](int) {});
+    aesDec.RegisterProfileUpdateCb([](bool, int) {});
+    aesDec.RegisterGetAccessKeyCb(
+        [&](std::string&, std::string&, int&, double&, unsigned int, bool& status, int& failure, char**) {
+            if (callbackCount++ == 0)
+            {
+                std::unique_lock<std::mutex> lock(gateMutex);
+                callbackEntered = true;
+                gateCondition.notify_all();
+                gateCondition.wait(lock, [&] { return releaseCallback; });
+                lock.unlock();
+                otherInstance.Release();
+            }
+            status = false;
+            failure = 0;
+        });
+
+    ASSERT_EQ(aesDec.SetDecryptInfo(&drmInfo, 1), eDRM_SUCCESS);
+    {
+        std::unique_lock<std::mutex> lock(gateMutex);
+        ASSERT_TRUE(gateCondition.wait_for(lock, std::chrono::seconds(1), [&] { return callbackEntered; }));
+    }
+
+    DrmInfo replacementInfo = drmInfo;
+    replacementInfo.keyURI = "https://example.test/replacement-key";
+    auto retune = std::async(std::launch::async, [&] {
+        return aesDec.SetDecryptInfo(&replacementInfo, 1);
+    });
+    EXPECT_EQ(retune.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+    {
+        std::lock_guard<std::mutex> lock(gateMutex);
+        releaseCallback = true;
+    }
+    gateCondition.notify_all();
+
+    ASSERT_EQ(retune.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+    EXPECT_EQ(retune.get(), eDRM_SUCCESS);
+    aesDec.Release();
+}
+
+TEST(DrmAesDecTests, ReleaseJoinsWorkerWithoutBlockingOtherInstance)
+{
+    AesDec aesDec;
+    AesDec otherInstance;
+    DrmInfo drmInfo;
+    drmInfo.keyURI = "https://example.test/key";
+
+    std::mutex gateMutex;
+    std::condition_variable gateCondition;
+    bool callbackEntered = false;
+    bool releaseCallback = false;
+
+    aesDec.RegisterGetCurlInitCb([](int& curlInstance) { curlInstance = 1; });
+    aesDec.RegisterTerminateCurlInstanceCb([](int) {});
+    aesDec.RegisterNotifyDrmErrorCb([](int) {});
+    aesDec.RegisterProfileUpdateCb([](bool, int) {});
+    aesDec.RegisterGetAccessKeyCb(
+        [&](std::string&, std::string&, int&, double&, unsigned int, bool& status, int& failure, char**) {
+            std::unique_lock<std::mutex> lock(gateMutex);
+            callbackEntered = true;
+            gateCondition.notify_all();
+            gateCondition.wait(lock, [&] { return releaseCallback; });
+            lock.unlock();
+            otherInstance.Release();
+            status = false;
+            failure = 0;
+        });
+
+    ASSERT_EQ(aesDec.SetDecryptInfo(&drmInfo, 1), eDRM_SUCCESS);
+    {
+        std::unique_lock<std::mutex> lock(gateMutex);
+        ASSERT_TRUE(gateCondition.wait_for(lock, std::chrono::seconds(1), [&] { return callbackEntered; }));
+    }
+
+    auto release = std::async(std::launch::async, [&] { aesDec.Release(); });
+    EXPECT_EQ(release.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+    {
+        std::lock_guard<std::mutex> lock(gateMutex);
+        releaseCallback = true;
+    }
+    gateCondition.notify_all();
+
+    ASSERT_EQ(release.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+    release.get();
+}
+
 #if 0 //no definition of AesDec::SetIV in the code base
 /**
  * @brief Verify that SetIV API succeeds with valid initialization vector input
