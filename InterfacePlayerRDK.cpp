@@ -3802,6 +3802,7 @@ void InterfacePlayerRDK::PauseInjector()
 {
 	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
 	mPauseInjector = true;
+	mSourceSetupCV.notify_all();
 }
 
 void InterfacePlayerRDK::ResumeInjector()
