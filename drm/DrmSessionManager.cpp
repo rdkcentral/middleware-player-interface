@@ -50,13 +50,14 @@ KeyIdEntries::KeyIdEntries() : creationTime(0), isFailedKeyEntries(false), isPri
 /**
  *  @brief DrmSessionManager constructor.
  */
-DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback) : drmSessionContexts(nullptr),
+DrmSessionManager::DrmSessionManager(int maxDrmSessions, void *player, std::function<void(uint32_t, uint32_t, const std::string&)> watermarkSessionUpdateCallback, DrmSessionCreator creator) : drmSessionContexts(nullptr),
 		cachedKeyIDs(nullptr), accessToken(NULL),
 		accessTokenLen(0), sessionMgrState(SessionMgrState::eSESSIONMGR_ACTIVE), accessTokenMutex(),
 		cachedKeyMutex()
 		,mEnableAccessAttributes(true)
 		,mDrmSessionLock()
 		,mMaxDRMSessions(maxDrmSessions)
+		,m_sessionCreator(std::move(creator))
 		,playerSecInstance(nullptr)
 		,mContentSecurityManagerSession()
 		,mIsVideoOnMute(false)
@@ -106,16 +107,24 @@ void DrmSessionManager::UpdateDRMConfig(
 void DrmSessionManager::clearSessionData()
 {
 	MW_LOG_WARN(" DrmSessionManager:: Clearing session data");
+	std::lock_guard<std::mutex> guard(mDrmSessionLock);
 	for(int i = 0 ; i < mMaxDRMSessions; i++)
 	{
-		if (drmSessionContexts != NULL && drmSessionContexts[i].drmSession != NULL)
+		if (drmSessionContexts != NULL)
 		{
-			/* DELIA-70726 fix: block until any in-flight decrypt() on this session
-			 * (called from a GStreamer pipeline thread via a cached raw pointer)
-			 * has completed, before freeing the object. */
-			drmSessionContexts[i].drmSession->PrepareForDestruction();
-			MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
-			drmSessionContexts[i] = DrmSessionContext();
+			{
+				std::lock_guard<std::mutex> sessionLock(drmSessionContexts[i].sessionMutex);
+				if (drmSessionContexts[i].drmSession != NULL)
+				{
+					/* DELIA-70726 fix: block until any in-flight decrypt() on this session
+					 * (called from a GStreamer pipeline thread via a cached raw pointer)
+					 * has completed, before freeing the object. */
+					drmSessionContexts[i].drmSession->PrepareForDestruction();
+					MW_SAFE_DELETE(drmSessionContexts[i].drmSession);
+					drmSessionContexts[i].drmSession = nullptr;
+				}
+				drmSessionContexts[i] = DrmSessionContext();
+			}
 		}
 
 		{
@@ -126,6 +135,7 @@ void DrmSessionManager::clearSessionData()
 			}
 		}
 	}
+	MW_LOG_WARN("DrmSessionManager:: clearSessionData complete");
 }
 
 /**
@@ -953,7 +963,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 	}
         this->ProfileUpdateCb();
 
-	drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	if (m_sessionCreator)
+	{
+		auto owned = m_sessionCreator(drmHelper, Instance);
+		drmSessionContexts[sessionSlot].drmSession = owned.release();
+	}
+	else
+	{
+		drmSessionContexts[sessionSlot].drmSession = DrmSessionFactory::GetDrmSession(drmHelper, Instance);
+	}
 	if (drmSessionContexts[sessionSlot].drmSession != NULL)
 	{
 		MW_LOG_INFO("Created new DrmSession for DrmSystemId %s", systemId.c_str());
@@ -966,16 +984,15 @@ KeyState DrmSessionManager::getDrmSession(int &err, std::shared_ptr<DrmHelper> d
 			drmSessionContexts[sessionSlot].drmSession->setOutputProtection(true);
 			drmHelper->setOutputProtectionFlag(true);
 		}
+		// setKeyId() is a no-op default on DrmSession, so it's safe to call
+		// for every backend (OpenCDM, Direct-Rialto, etc.), not just OpenCDM.
+		drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
 	}
 	else
 	{
 		MW_LOG_WARN("Unable to Get DrmSession for DrmSystemId %s", systemId.c_str());
 		err = MW_DRM_INIT_FAILED ;
 	}
-
-#if defined(USE_OPENCDM_ADAPTER)
-	drmSessionContexts[sessionSlot].drmSession->setKeyId(keyIdArray);
-#endif
 
 	return code;
 }
