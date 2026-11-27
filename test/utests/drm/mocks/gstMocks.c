@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <string.h>
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbytereader.h>
@@ -54,24 +55,62 @@ GstVideoTimeCodeMeta * gst_buffer_add_video_time_code_meta_full(
 	return NULL;
 }
 
-/* Test hooks: when g_mockGstMapData is set, gst_buffer_map() exposes that memory
- * (with g_mockGstMapSize bytes). Otherwise a zero-filled default block is returned,
- * so readers of GstMapInfo never see uninitialized data. */
+/* Fallback map data returned for any buffer not registered via MockGstBufferSetMapData(). */
 const guint8 *g_mockGstMapData = NULL;
 gsize g_mockGstMapSize = 0;
-static guint8 g_defaultGstMapData[2048];
+
+#define MOCK_GST_MAX_MAPPED_BUFFERS 8
+
+static struct
+{
+	GstBuffer *buffer;
+	guint8 *data;
+	gsize size;
+} mockMappedBuffers[MOCK_GST_MAX_MAPPED_BUFFERS];
+
+void MockGstBufferSetMapData(GstBuffer *buffer, guint8 *data, gsize size)
+{
+	int freeSlot = -1;
+	for (int i = 0; i < MOCK_GST_MAX_MAPPED_BUFFERS; i++)
+	{
+		if (mockMappedBuffers[i].buffer == buffer)
+		{
+			freeSlot = i;
+			break;
+		}
+		if (freeSlot < 0 && mockMappedBuffers[i].buffer == NULL)
+		{
+			freeSlot = i;
+		}
+	}
+	if (freeSlot >= 0)
+	{
+		mockMappedBuffers[freeSlot].buffer = buffer;
+		mockMappedBuffers[freeSlot].data = data;
+		mockMappedBuffers[freeSlot].size = size;
+	}
+}
+
+void MockGstBufferClearMapData(void)
+{
+	memset(mockMappedBuffers, 0, sizeof(mockMappedBuffers));
+}
 
 gboolean gst_buffer_map(GstBuffer *buffer, GstMapInfo *info, GstMapFlags flags)
 {
-	if (g_mockGstMapData != NULL)
+	for (int i = 0; i < MOCK_GST_MAX_MAPPED_BUFFERS; i++)
+	{
+		if (buffer && mockMappedBuffers[i].buffer == buffer)
+		{
+			info->data = mockMappedBuffers[i].data;
+			info->size = mockMappedBuffers[i].size;
+			return TRUE;
+		}
+	}
+	if (g_mockGstMapData)
 	{
 		info->data = (guint8 *)g_mockGstMapData;
 		info->size = g_mockGstMapSize;
-	}
-	else
-	{
-		info->data = g_defaultGstMapData;
-		info->size = sizeof(g_defaultGstMapData);
 	}
 	return TRUE;
 }
@@ -83,11 +122,19 @@ void gst_buffer_unmap(GstBuffer *buffer, GstMapInfo *info)
 GstByteReader *gst_byte_reader_new(const guint8 *data, guint size)
 {
 	static GstByteReader byte_reader;
+	byte_reader.data = data;
+	byte_reader.size = data ? size : 0;
+	byte_reader.byte = 0;
 	return &byte_reader;
 }
 
 gboolean gst_byte_reader_set_pos(GstByteReader *reader, guint pos)
 {
+	if (pos > reader->size)
+	{
+		return FALSE;
+	}
+	reader->byte = pos;
 	return TRUE;
 }
 
