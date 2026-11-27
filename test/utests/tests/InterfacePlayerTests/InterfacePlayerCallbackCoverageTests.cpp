@@ -353,7 +353,8 @@ TEST_F(InterfacePlayerCallbackCoverageTests, InitializeSourceForPlayer_ConnectsA
 	EXPECT_EQ(mSignalHandlers.count("need-data"), 1u);
 	EXPECT_EQ(mSignalHandlers.count("enough-data"), 1u);
 	EXPECT_EQ(mSignalHandlers.count("seek-data"), 1u);
-	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].sourceConfigured);
+	// Readiness is published by the caller once stream->source is installed.
+	EXPECT_FALSE(mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].sourceConfigured);
 }
 
 TEST_F(InterfacePlayerCallbackCoverageTests, NeedData_RegisteredVideoSource_InvokesNeedDataCb)

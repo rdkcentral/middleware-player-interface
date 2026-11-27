@@ -995,7 +995,8 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	// Readiness is published by the caller once stream->source is installed.
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
@@ -1122,7 +1123,8 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	// Readiness is published by the caller once stream->source is installed.
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
