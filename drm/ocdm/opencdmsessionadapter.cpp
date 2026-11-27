@@ -472,6 +472,12 @@ void OCDMSessionAdapter:: clearDecryptContext()
 
 	std::lock_guard<std::mutex> guard(decryptMutex);
 
+	// generateDRMSession() may have cleared the abort state while this call waited for the lock
+	m_abortWaits = true;
+	m_challengeReady.signal();
+	m_keyStatusReady.signal();
+	m_keyStatusWait.signal();
+
 	if (m_pOpenCDMSession) {
 		opencdm_session_close(m_pOpenCDMSession);
 		opencdm_destruct_session(m_pOpenCDMSession);
