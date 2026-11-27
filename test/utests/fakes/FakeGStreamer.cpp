@@ -54,7 +54,7 @@ GType gst_bin_get_type(void)
 GstMiniObject *gst_mini_object_ref(GstMiniObject *mini_object)
 {
 	TRACE_FUNC();
-	return NULL;
+	return mini_object;
 }
 
 void gst_mini_object_unref(GstMiniObject *mini_object)
