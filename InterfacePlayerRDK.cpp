@@ -2242,6 +2242,20 @@ static void gst_enough_data(GstElement *source, void *_this)
 		MW_LOG_ERR( "enough-data: null InterfacePlayerRDK instance, source=%p", (void*)source);
 	}
 }
+
+/**
+ * @brief Marks a stream's source as configured and wakes WaitForSourceSetup().
+ * Call only once stream->source is installed and ready for injection.
+ */
+static void PublishSourceConfigured(InterfacePlayerRDK *pInterfacePlayerRDK, gst_media_stream *stream)
+{
+	{
+		std::lock_guard<std::mutex> lock(pInterfacePlayerRDK->mSourceSetupMutex);
+		stream->sourceConfigured = true;
+	}
+	pInterfacePlayerRDK->mSourceSetupCV.notify_all();
+}
+
 void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * source, int type)
 {
 	InterfacePlayerRDK* _this = (InterfacePlayerRDK*)PlayerInstance;
@@ -2314,11 +2328,6 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		MW_LOG_WARN("Caps could not be established for source[type:%d], enabling typefind", mediaType);
 		g_object_set(source, "typefind", TRUE, NULL);
 	}
-	{
-		std::lock_guard<std::mutex> lock(_this->mSourceSetupMutex);
-		stream->sourceConfigured = true;
-	}
-	_this->mSourceSetupCV.notify_all();
 }
 
 static GstPadProbeReturn InterfacePlayerRDK_DemuxPadProbeCallback(GstPad * pad, GstPadProbeInfo * info, void* _this)
@@ -2492,6 +2501,7 @@ static void gst_found_source(GObject * object, GObject * orig, GParamSpec * pspe
 			return;
 		}
 		gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(stream->source), mediaType);
+		PublishSourceConfigured(pInterfacePlayerRDK, stream);
 	}
 }
 
@@ -2692,6 +2702,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 
 			// Set initial mute state, will be updated by PlayerCCManager
 			g_object_set(privatePlayer->gstPrivateContext->subtitle_sink, "mute", TRUE, NULL);
+			PublishSourceConfigured(pInterfacePlayerRDK, stream);
 		}
 	}
 
@@ -2834,6 +2845,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref_sink(textsink));
 				MW_LOG_MIL("using rialtomsesubtitlesink muted=%d sink=%p", interfacePlayerPriv->gstPrivateContext->subtitleMuted, interfacePlayerPriv->gstPrivateContext->subtitle_sink);
 				g_object_set(textsink, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
+				PublishSourceConfigured(pInterfacePlayerRDK, stream);
 				return 0;
 			}
 			else
@@ -2861,6 +2873,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				gst_element_sync_state_with_parent(stream->sinkbin);
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(stream->sinkbin));
 				interfacePlayerPriv->gstPrivateContext->setSubtitlePending = true;
+				PublishSourceConfigured(pInterfacePlayerRDK, stream);
 				return 0;
 			}
 		}
