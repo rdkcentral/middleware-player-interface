@@ -34,10 +34,58 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdio.h>
+#include <cstdlib>
+#include <chrono>
+#include <condition_variable>
+#include <cerrno>
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <sys/wait.h>
+#include <signal.h>
+#include <unistd.h>
 
 #define private public
 #include "Aes.h"
 #undef private
+
+namespace
+{
+bool runInSubprocessWithTimeout(const std::function<bool()> &test, std::chrono::milliseconds timeout)
+{
+    const pid_t child = fork();
+    if (child == 0)
+    {
+        _exit(test() ? EXIT_SUCCESS : EXIT_FAILURE);
+    }
+    if (child < 0)
+    {
+        return false;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    int status = 0;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const pid_t result = waitpid(child, &status, WNOHANG);
+        if (result == child)
+        {
+            return WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS;
+        }
+        if (result < 0 && errno != EINTR)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    kill(child, SIGKILL);
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR)
+    {
+    }
+    return false;
+}
+}
 
 class DrmAesDecTests : public ::testing::Test
 {
@@ -1037,6 +1085,127 @@ TEST(DrmAesDecTests, ValidDrmInfo_ZeroAcquireKeyWaitTime_ReturnsTimeout)
 
     std::cout << "Exiting ValidDrmInfo_ZeroAcquireKeyWaitTime_ReturnsTimeout test" << std::endl;
 }
+
+TEST(DrmAesDecTests, SetDecryptInfoJoinsWorkerWithoutBlockingOtherInstance)
+{
+    const bool completed = runInSubprocessWithTimeout([] {
+        AesDec aesDec;
+        AesDec otherInstance;
+        DrmInfo drmInfo;
+        drmInfo.keyURI = "https://example.test/key";
+
+        std::mutex gateMutex;
+        std::condition_variable gateCondition;
+        bool callbackEntered = false;
+        bool releaseCallback = false;
+        unsigned int callbackCount = 0;
+
+        aesDec.RegisterGetCurlInitCb([](int& curlInstance) { curlInstance = 1; });
+        aesDec.RegisterTerminateCurlInstanceCb([](int) {});
+        aesDec.RegisterNotifyDrmErrorCb([](int) {});
+        aesDec.RegisterProfileUpdateCb([](bool, int) {});
+        aesDec.RegisterGetAccessKeyCb(
+            [&](std::string&, std::string&, int&, double&, unsigned int, bool& status, int& failure, char**) {
+                if (callbackCount++ == 0)
+                {
+                    std::unique_lock<std::mutex> lock(gateMutex);
+                    callbackEntered = true;
+                    gateCondition.notify_all();
+                    gateCondition.wait(lock, [&] { return releaseCallback; });
+                    lock.unlock();
+                    otherInstance.Release();
+                }
+                status = false;
+                failure = 0;
+            });
+
+        if (aesDec.SetDecryptInfo(&drmInfo, 1) != eDRM_SUCCESS)
+        {
+            return false;
+        }
+        {
+            std::unique_lock<std::mutex> lock(gateMutex);
+            if (!gateCondition.wait_for(lock, std::chrono::seconds(1), [&] { return callbackEntered; }))
+            {
+                return false;
+            }
+        }
+
+        DrmInfo replacementInfo = drmInfo;
+        replacementInfo.keyURI = "https://example.test/replacement-key";
+        DrmReturn retuneResult = eDRM_ERROR;
+        std::thread retune([&] {
+            retuneResult = aesDec.SetDecryptInfo(&replacementInfo, 1);
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        {
+            std::lock_guard<std::mutex> lock(gateMutex);
+            releaseCallback = true;
+        }
+        gateCondition.notify_all();
+        retune.join();
+        aesDec.Release();
+        return retuneResult == eDRM_SUCCESS;
+    }, std::chrono::seconds(3));
+    EXPECT_TRUE(completed) << "SetDecryptInfo did not complete before the subprocess timeout";
+}
+
+TEST(DrmAesDecTests, ReleaseJoinsWorkerWithoutBlockingOtherInstance)
+{
+    const bool completed = runInSubprocessWithTimeout([] {
+        AesDec aesDec;
+        AesDec otherInstance;
+        DrmInfo drmInfo;
+        drmInfo.keyURI = "https://example.test/key";
+
+        std::mutex gateMutex;
+        std::condition_variable gateCondition;
+        bool callbackEntered = false;
+        bool releaseCallback = false;
+
+        aesDec.RegisterGetCurlInitCb([](int& curlInstance) { curlInstance = 1; });
+        aesDec.RegisterTerminateCurlInstanceCb([](int) {});
+        aesDec.RegisterNotifyDrmErrorCb([](int) {});
+        aesDec.RegisterProfileUpdateCb([](bool, int) {});
+        aesDec.RegisterGetAccessKeyCb(
+            [&](std::string&, std::string&, int&, double&, unsigned int, bool& status, int& failure, char**) {
+                std::unique_lock<std::mutex> lock(gateMutex);
+                callbackEntered = true;
+                gateCondition.notify_all();
+                gateCondition.wait(lock, [&] { return releaseCallback; });
+                lock.unlock();
+                otherInstance.Release();
+                status = false;
+                failure = 0;
+            });
+
+        if (aesDec.SetDecryptInfo(&drmInfo, 1) != eDRM_SUCCESS)
+        {
+            return false;
+        }
+        {
+            std::unique_lock<std::mutex> lock(gateMutex);
+            if (!gateCondition.wait_for(lock, std::chrono::seconds(1), [&] { return callbackEntered; }))
+            {
+                return false;
+            }
+        }
+
+        std::thread release([&] {
+            aesDec.Release();
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        {
+            std::lock_guard<std::mutex> lock(gateMutex);
+            releaseCallback = true;
+        }
+        gateCondition.notify_all();
+        release.join();
+        return true;
+    }, std::chrono::seconds(3));
+    EXPECT_TRUE(completed) << "Release did not complete before the subprocess timeout";
+}
+
 #if 0 //no definition of AesDec::SetIV in the code base
 /**
  * @brief Verify that SetIV API succeeds with valid initialization vector input

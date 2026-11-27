@@ -18,12 +18,68 @@
 */
 
 #include <chrono>
+#include <unordered_map>
 
 #include "SubtecPacket.hpp"
 #include "PacketSender.hpp"
 #include "PlayerLogManager.h" // Included for MW_LOG
 
 #define MAX_SNDBUF_SIZE (8*1024*1024)
+#define MAX_QUEUED_PACKETS 1024U
+#define MAX_QUEUED_BYTES (8*1024*1024)
+
+namespace
+{
+struct PacketQueueState
+{
+    size_t queuedBytes = 0;
+    bool acceptingPackets = true;
+};
+
+class PacketQueueStates
+{
+public:
+    PacketQueueState get(const PacketSender *sender)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        return mStates[sender];
+    }
+
+    void addBytes(const PacketSender *sender, size_t bytes)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStates[sender].queuedBytes += bytes;
+    }
+
+    void removeBytes(const PacketSender *sender, size_t bytes)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStates[sender].queuedBytes -= bytes;
+    }
+
+    void setAcceptingPackets(const PacketSender *sender, bool accepting)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStates[sender].acceptingPackets = accepting;
+    }
+
+    void clear(const PacketSender *sender)
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mStates.erase(sender);
+    }
+
+private:
+    std::mutex mMutex;
+    std::unordered_map<const PacketSender *, PacketQueueState> mStates;
+};
+
+PacketQueueStates &packetQueueStates()
+{
+    static PacketQueueStates *states = new PacketQueueStates;
+    return *states;
+}
+}
 
 void runWorkerTask(void *ctx)
 {
@@ -38,6 +94,7 @@ void runWorkerTask(void *ctx)
 
 PacketSender *PacketSender::Instance()
 {
+    packetQueueStates();
     static PacketSender instance;
     return &instance;
 }
@@ -45,14 +102,16 @@ PacketSender *PacketSender::Instance()
 PacketSender::~PacketSender()
 {
     PacketSender::Close();
+    packetQueueStates().clear(this);
 }
 
 void PacketSender::Close()
 {
+    std::lock_guard<std::mutex> lock(mStartMutex);
     closeSenderTask();
-    if (mSubtecSocketHandle)
+    if (mSubtecSocketHandle >= 0)
         ::close(mSubtecSocketHandle);
-    mSubtecSocketHandle = 0;
+    mSubtecSocketHandle = -1;
 }
 
 void PacketSender::Flush()
@@ -74,6 +133,10 @@ bool PacketSender::Init(const char *socket_path)
 
     if (!running)
     {
+        {
+            std::lock_guard<std::mutex> queueLock(mPktMutex);
+            packetQueueStates().setAcceptingPackets(this, true);
+        }
         mSocketPath = socket_path;
         ret = initSocket(socket_path) && initSenderTask();
         if (!ret) {
@@ -90,29 +153,80 @@ bool PacketSender::Init(const char *socket_path)
 
 void PacketSender::SendPacket(PacketPtr && packet)
 {
+    if (!packet)
+    {
+        MW_LOG_ERR("PacketSender: cannot queue a null packet");
+        return;
+    }
+
+    const size_t packetSize = packet->getBytes().size();
+    if (packetSize > MAX_QUEUED_BYTES)
+    {
+        MW_LOG_WARN("PacketSender: dropping packet larger than queue capacity (%zu bytes)", packetSize);
+        return;
+    }
+
     std::unique_lock<std::mutex> lock(mPktMutex);
+    const PacketQueueState state = packetQueueStates().get(this);
+    if (!state.acceptingPackets)
+    {
+        MW_LOG_WARN("PacketSender: dropping packet because sender is shutting down");
+        return;
+    }
+    if (mPacketQueue.size() >= MAX_QUEUED_PACKETS ||
+        state.queuedBytes > MAX_QUEUED_BYTES - packetSize)
+    {
+        MW_LOG_WARN("PacketSender: dropping packet because the queue is full");
+        return;
+    }
+
     uint32_t type = packet->getType();
     std::string typeString = Packet::getTypeString(type);
     MW_LOG_TRACE("PacketSender:  queue size %zu type %s:%d counter:%d",
         mPacketQueue.size(), typeString.c_str(), type, packet->getCounter());
 
     mPacketQueue.push(std::move(packet));
+    packetQueueStates().addBytes(this, packetSize);
     mCv.notify_all();
 }
 
 void PacketSender::senderTask()
 {
     std::unique_lock<std::mutex> lock(mPktMutex);
-    do {
-        running = true;
-        mCv.wait(lock);
-        while (!mPacketQueue.empty())
+    bool stopping = false;
+    size_t drainRemaining = 0;
+    while (true)
+    {
+        mCv.wait(lock, [this] {
+            return !mPacketQueue.empty() || !running.load();
+        });
+
+        // On shutdown drain only what was pending, so late producers cannot keep Close() waiting
+        if (!running.load() && !stopping)
         {
-            sendPacket(std::move(mPacketQueue.front()));
-            mPacketQueue.pop();
-            MW_LOG_TRACE("PacketSender:  queue size %zu", mPacketQueue.size());
+            stopping = true;
+            drainRemaining = mPacketQueue.size();
         }
-    } while(running);
+        if (mPacketQueue.empty() || (stopping && drainRemaining == 0))
+        {
+            MW_LOG_INFO("PacketSender: sender task stopping");
+            break;
+        }
+        if (stopping)
+        {
+            --drainRemaining;
+        }
+
+        PacketPtr packet = std::move(mPacketQueue.front());
+        const size_t packetSize = packet->getBytes().size();
+        mPacketQueue.pop();
+        packetQueueStates().removeBytes(this, packetSize);
+        mCv.notify_all();
+
+        lock.unlock();
+        sendPacket(std::move(packet));
+        lock.lock();
+    }
 }
 
 bool PacketSender::IsRunning()
@@ -127,6 +241,9 @@ void PacketSender::flushPacketQueue()
     std::unique_lock<std::mutex> lock(mPktMutex);
 
     empty.swap(mPacketQueue);
+    const size_t discardedBytes = packetQueueStates().get(this).queuedBytes;
+    packetQueueStates().removeBytes(this, discardedBytes);
+    mCv.notify_all();
 }
 
 void PacketSender::sendPacket(PacketPtr && pkt)
@@ -151,7 +268,7 @@ void PacketSender::sendPacket(PacketPtr && pkt)
 	    MW_LOG_INFO("new socket buffer size %d", mSockBufSize);
 	}
     }
-    auto written = ::write(mSubtecSocketHandle, &buffer[0], size);
+    auto written = ::send(mSubtecSocketHandle, buffer.data(), size, MSG_DONTWAIT);
     MW_LOG_TRACE("PacketSender: Written %ld bytes with size %zu", static_cast<long>(written), size);
 
     //Socket reconnect in case packet write fails
@@ -185,10 +302,21 @@ void PacketSender::sendPacket(PacketPtr && pkt)
 bool PacketSender::initSenderTask()
 {
     try {
+        {
+            std::lock_guard<std::mutex> lock(mPktMutex);
+            packetQueueStates().setAcceptingPackets(this, true);
+            running = true;
+        }
         mSendThread = std::thread(runWorkerTask, this);
         MW_LOG_INFO("Thread created for runWorkerTask [%zx]", std::hash<std::thread::id>()(mSendThread.get_id()));
     }
     catch (const std::exception& e) {
+        {
+            std::lock_guard<std::mutex> lock(mPktMutex);
+            running = false;
+            packetQueueStates().setAcceptingPackets(this, true);
+        }
+        mCv.notify_all();
         MW_LOG_WARN("PacketSender: Error in initSenderTask: %s", e.what());
         return false;
     }
@@ -198,16 +326,33 @@ bool PacketSender::initSenderTask()
 
 void PacketSender::closeSenderTask()
 {
-    if (running)
     {
-        running = false;
-        mCv.notify_all();
-        if (mSendThread.joinable())
+        std::lock_guard<std::mutex> lock(mPktMutex);
+        if (running)
         {
-            mSendThread.join();        
+            running = false;
+            packetQueueStates().setAcceptingPackets(this, false);
+            MW_LOG_INFO("PacketSender: shutdown requested; %zu queued packets will be drained",
+                mPacketQueue.size());
+        }
+        else if (mSendThread.joinable())
+        {
+            packetQueueStates().setAcceptingPackets(this, false);
         }
     }
+    mCv.notify_all();
 
+    if (mSendThread.joinable())
+    {
+        MW_LOG_TRACE("PacketSender: waiting for sender task to exit");
+        mSendThread.join();
+        MW_LOG_INFO("PacketSender: sender task stopped");
+    }
+    {
+        std::lock_guard<std::mutex> lock(mPktMutex);
+        packetQueueStates().setAcceptingPackets(this, true);
+    }
+    mCv.notify_all();
 }
 
 bool PacketSender::initSocket(const char *socket_path)
@@ -237,6 +382,7 @@ bool PacketSender::initSocket(const char *socket_path)
     if (::connect(mSubtecSocketHandle, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0)
     {
         ::close(mSubtecSocketHandle);
+        mSubtecSocketHandle = -1;
         MW_LOG_WARN("PacketSender: cannot connect to address \'%s\'", socket_path);
         return false;
     }

@@ -23,7 +23,7 @@
  *
  * Covers:
  *   - PacketSender::Instance()     : singleton, never null, identity
- *   - PacketSender::Init()         : returns false in test env (no socket)
+ *   - PacketSender::Init(path)     : connects to a local datagram receiver
  *   - PacketSender::Init(path)     : returns false for non-existent path
  *   - PacketSender::Close()        : safe to call, stops any running thread
  *   - PacketSender::Flush()        : safe to call in any state
@@ -32,19 +32,126 @@
  *   - PacketSender::senderTask()   : tested via thread + Close() to stop
  *   - runWorkerTask()              : tested via thread + Close() to stop
  *
- * NOTE: Init() returns false in this test environment because there is no
- * socket server listening at the configured socket path.  The tested paths
- * are for the graceful-degradation code, which is a valid production scenario.
+ * The default socket path has no test receiver, so Init() is expected to fail
+ * there. Lifecycle tests use a local datagram receiver instead.
  */
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
+#include <cerrno>
+#include <functional>
 #include <memory>
 #include <cstdint>
+#include <atomic>
+#include <cstdio>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <unistd.h>
 #include "PacketSender.hpp"
 #include "SubtecPacket.hpp"
+
+namespace
+{
+bool runInSubprocessWithTimeout(const std::function<bool()> &test, std::chrono::milliseconds timeout)
+{
+    const pid_t child = fork();
+    if (child == 0)
+    {
+        _exit(test() ? EXIT_SUCCESS : EXIT_FAILURE);
+    }
+    if (child < 0)
+    {
+        return false;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    int status = 0;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const pid_t result = waitpid(child, &status, WNOHANG);
+        if (result == child)
+        {
+            return WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS;
+        }
+        if (result < 0 && errno != EINTR)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    kill(child, SIGKILL);
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR)
+    {
+    }
+    return false;
+}
+
+class LocalPacketSender : public PacketSender
+{
+};
+
+class SizedPacket : public Packet
+{
+public:
+    explicit SizedPacket(size_t size)
+    {
+        getBuffer().resize(size);
+    }
+};
+
+class LocalDatagramReceiver
+{
+public:
+    LocalDatagramReceiver()
+        : mSocket(::socket(AF_UNIX, SOCK_DGRAM, 0))
+    {
+        static unsigned int testId = 0;
+        std::snprintf(mPath, sizeof(mPath), "/tmp/packet-sender-test-%d-%u.sock",
+            static_cast<int>(::getpid()), testId++);
+        ::unlink(mPath);
+
+        sockaddr_un address{};
+        address.sun_family = AF_UNIX;
+        std::strncpy(address.sun_path, mPath, sizeof(address.sun_path) - 1);
+        timeval timeout{1, 0};
+        if (mSocket < 0 ||
+            ::bind(mSocket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+            ::setsockopt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
+        {
+            if (mSocket >= 0)
+            {
+                ::close(mSocket);
+                mSocket = -1;
+            }
+        }
+    }
+
+    ~LocalDatagramReceiver()
+    {
+        if (mSocket >= 0)
+        {
+            ::close(mSocket);
+        }
+        ::unlink(mPath);
+    }
+
+    bool IsValid() const { return mSocket >= 0; }
+    const char* Path() const { return mPath; }
+    ssize_t Receive(char* buffer, size_t size) const
+    {
+        return ::recv(mSocket, buffer, size, 0);
+    }
+
+private:
+    int mSocket;
+    char mPath[sizeof(sockaddr_un::sun_path)]{};
+};
+}
 
 // ===========================================================================
 // PacketSenderInstance tests
@@ -502,21 +609,19 @@ TEST(PacketSenderSendPacket, Stress100Packets)
  */
 TEST(PacketSenderSenderTask, StartsAndStopsViaClose)
 {
-    std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - START" << std::endl;
-    PacketSender* sender = PacketSender::Instance();
-    sender->Close();  // Ensure clean initial state
+    EXPECT_TRUE(runInSubprocessWithTimeout([] {
+        LocalPacketSender sender;
+        LocalDatagramReceiver receiver;
+        if (!receiver.IsValid() || !sender.Init(receiver.Path()))
+        {
+            return false;
+        }
 
-    std::thread t([sender]() {
-        sender->senderTask();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    sender->Close();   // Signal worker to exit
-
-    t.join();
-    std::cout << "  senderTask() thread started and stopped cleanly via Close()" << std::endl;
-    EXPECT_FALSE(sender->IsRunning());
-    std::cout << "[PacketSenderSenderTask.StartsAndStopsViaClose] - PASS" << std::endl;
+        const auto start = std::chrono::steady_clock::now();
+        sender.Close();
+        return std::chrono::steady_clock::now() - start < std::chrono::seconds(1) &&
+            !sender.IsRunning();
+    }, std::chrono::seconds(3))) << "Init/Close did not complete before the subprocess timeout";
 }
 
 /**
@@ -528,26 +633,83 @@ TEST(PacketSenderSenderTask, StartsAndStopsViaClose)
  */
 TEST(PacketSenderSenderTask, ProcessesEnqueuedPackets)
 {
-    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - START" << std::endl;
-    PacketSender* sender = PacketSender::Instance();
-    sender->Close();
+    EXPECT_TRUE(runInSubprocessWithTimeout([] {
+        LocalPacketSender sender;
+        LocalDatagramReceiver receiver;
+        if (!receiver.IsValid())
+        {
+            return false;
+        }
+        sender.SendPacket(std::make_unique<PausePacket>(1u, 1u));
+        if (!sender.Init(receiver.Path()))
+        {
+            return false;
+        }
 
-    std::thread t([sender]() {
-        sender->senderTask();
-    });
+        sender.Close();
+        char buffer[128];
+        return !sender.IsRunning() && receiver.Receive(buffer, sizeof(buffer)) > 0;
+    }, std::chrono::seconds(3))) << "queued packet shutdown did not complete before the subprocess timeout";
+}
 
-    // Enqueue some packets while thread is running
-    for (uint32_t i = 0; i < 5u; ++i)
+TEST(PacketSenderSenderTask, CloseCompletesWhenReceiverStopsReading)
+{
+    EXPECT_TRUE(runInSubprocessWithTimeout([] {
+        LocalPacketSender sender;
+        LocalDatagramReceiver receiver;
+        if (!receiver.IsValid())
+        {
+            return false;
+        }
+        for (uint32_t i = 0; i < 100; ++i)
+        {
+            sender.SendPacket(std::make_unique<SizedPacket>(64 * 1024));
+        }
+        if (!sender.Init(receiver.Path()))
+        {
+            return false;
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+        sender.Close();
+        return std::chrono::steady_clock::now() - start < std::chrono::seconds(1) &&
+            !sender.IsRunning();
+    }, std::chrono::seconds(3))) << "Close blocked while the datagram receiver was not draining";
+}
+
+TEST(PacketSenderSendPacket, QueueCapacityIsBounded)
+{
+    LocalPacketSender sender;
+
+    constexpr uint32_t queueCapacity = 1024;
+    uint32_t rejected = 0;
+    for (uint32_t i = 0; i < queueCapacity + 1; ++i)
     {
-        sender->SendPacket(std::make_unique<PausePacket>(1u, i));
+        PacketPtr packet = std::make_unique<PausePacket>(1u, i);
+        sender.SendPacket(std::move(packet));
+        rejected += packet ? 1 : 0;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    sender->Close();
-    t.join();
 
-    std::cout << "  5 packets enqueued while senderTask() running, thread stopped cleanly" << std::endl;
-    EXPECT_FALSE(sender->IsRunning());
-    std::cout << "[PacketSenderSenderTask.ProcessesEnqueuedPackets] - PASS" << std::endl;
+    EXPECT_EQ(rejected, 1u);
+    sender.Flush();
+}
+
+TEST(PacketSenderSendPacket, QueuedBytesAreBounded)
+{
+    LocalPacketSender sender;
+
+    constexpr size_t packetSize = 10000;
+    constexpr uint32_t queueCapacity = (8 * 1024 * 1024) / packetSize;
+    uint32_t rejected = 0;
+    for (uint32_t i = 0; i < queueCapacity + 1; ++i)
+    {
+        PacketPtr packet = std::make_unique<SizedPacket>(packetSize);
+        sender.SendPacket(std::move(packet));
+        rejected += packet ? 1 : 0;
+    }
+
+    EXPECT_EQ(rejected, 1u);
+    sender.Flush();
 }
 
 // ===========================================================================
@@ -675,4 +837,31 @@ TEST(PacketSenderLifecycle, RepeatedInitCloseCycles)
         sender->Close();
     }
     std::cout << "[PacketSenderLifecycle.RepeatedInitCloseCycles] - PASS" << std::endl;
+}
+
+TEST(PacketSenderLifecycle, QueuesPacketsAfterCloseAndFailedInit)
+{
+    EXPECT_TRUE(runInSubprocessWithTimeout([] {
+        LocalPacketSender sender;
+        LocalDatagramReceiver receiver;
+        if (!receiver.IsValid() || !sender.Init(receiver.Path()))
+        {
+            return false;
+        }
+        sender.Close();
+
+        if (sender.Init("/tmp/nonexistent-packet-sender-test.sock"))
+        {
+            return false;
+        }
+        sender.SendPacket(std::make_unique<PausePacket>(1u, 1u));
+        if (!sender.Init(receiver.Path()))
+        {
+            return false;
+        }
+        sender.Close();
+
+        char buffer[128];
+        return receiver.Receive(buffer, sizeof(buffer)) > 0;
+    }, std::chrono::seconds(3))) << "pre-init enqueueing was not restored after shutdown or failed init";
 }
