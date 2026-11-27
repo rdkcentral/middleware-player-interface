@@ -98,6 +98,42 @@ static bool IsElementaryStreamFormat(GstStreamOutputFormat format)
 	return format >= GST_FORMAT_AUDIO_ES_MP3 && format <= GST_FORMAT_VIDEO_ES_MPEG2;
 }
 
+// Takes ownership of source and releases the previous reference outside the setup mutex.
+static void ReplaceSource(InterfacePlayerRDK *player, int mediaType, GstElement *source)
+{
+	gst_media_stream* stream = &player->GetPrivatePlayer()->gstPrivateContext->stream[mediaType];
+	GstElement *previous;
+	{
+		std::lock_guard<std::mutex> lock(player->mSourceSetupMutex);
+		previous = stream->source;
+		stream->source = source;
+		stream->sourceConfigured = false;
+	}
+	player->mSourceSetupCV.notify_all();
+	if (previous)
+	{
+		gst_object_unref(previous);
+	}
+}
+
+static void CompleteSourceSetup(InterfacePlayerRDK *player, int mediaType, GstElement *source)
+{
+	gst_media_stream* stream = &player->GetPrivatePlayer()->gstPrivateContext->stream[mediaType];
+	{
+		std::lock_guard<std::mutex> lock(player->mSourceSetupMutex);
+		if (source && stream->source == source)
+		{
+			stream->sourceConfigured = true;
+		}
+	}
+	player->mSourceSetupCV.notify_all();
+}
+
+static gboolean SendQtDemuxOverrideEventForSource(InterfacePlayerPriv *player, int mediaType,
+	GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr, size_t len, GstElement *source);
+static void SendNewSegmentEventForSource(InterfacePlayerPriv *player, int type,
+	GstClockTime startPts, GstClockTime stopPts, GstElement *source);
+
 /**
  * @brief Apply encrypted content signaling fields to stream caps.
  * @param[in,out] caps Caps to update in-place.
@@ -1599,8 +1635,20 @@ void InterfacePlayerRDK::TearDownStream(int type)
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 
 	pthread_mutex_lock(&stream->sourceLock);
+	GstElement *source = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(mSourceSetupMutex);
+		source = stream->source;
+		if (source)
+		{
+			gst_object_ref(source);
+		}
+		stream->sourceConfigured = false;
+	}
+	mSourceSetupCV.notify_all();
+	std::unique_ptr<GstElement, decltype(&gst_object_unref)> sourceRef(source, gst_object_unref);
 	if ((stream->format != GST_FORMAT_INVALID) ||
-		(mediaType == eGST_MEDIATYPE_SUBTITLE && (interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl || stream->sinkbin || stream->source )))
+		(mediaType == eGST_MEDIATYPE_SUBTITLE && (interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl || stream->sinkbin || source )))
 	{
 		if (interfacePlayerPriv->gstPrivateContext->pipeline)
 		{
@@ -1635,14 +1683,14 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			/* Subtitle appsrc is parented directly in the pipeline (not inside sinkbin). Stop it only after the sinkbin,
 			 * otherwise its task can be blocked in downstream preroll and deadlock the state change.
 			 * Closed caption control appsrc is parented inside sinkbin instead, so exclude that case. */
-			if (mediaType == eGST_MEDIATYPE_SUBTITLE && stream->source &&
+			if (mediaType == eGST_MEDIATYPE_SUBTITLE && source &&
 				!interfacePlayerPriv->gstPrivateContext->usingClosedCaptionsControl)
 			{
-				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
+				if (GST_STATE_CHANGE_FAILURE == SetStateWithWarnings(source, GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE()))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Failed to set NULL state for subtitle source");
 				}
-				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), GST_ELEMENT(stream->source)))
+				if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), source))
 				{
 					MW_LOG_ERR("InterfacePlayerRDK::TearDownStream: Unable to remove subtitle source from pipeline");
 				}
@@ -1673,8 +1721,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			MW_LOG_INFO("Set false for usingClosedCaptionsControl flag");
 		}
 		g_clear_object(&stream->sinkbin);
-		g_clear_object(&stream->source);
-		stream->sourceConfigured = false;
+		ReplaceSource(this, type, nullptr);
 	}
 	pthread_mutex_unlock(&stream->sourceLock);
 	if (mediaType == eGST_MEDIATYPE_VIDEO)
@@ -1723,11 +1770,7 @@ void InterfacePlayerRDK::TearDownStream(int type)
 			}
 			g_clear_object(&stream->sinkbin);
 		}
-		if (stream->source)
-		{
-			MW_LOG_WARN("InterfacePlayerRDK::TearDownStream: CC source still assigned, clearing");
-			g_clear_object(&stream->source);
-		}
+		ReplaceSource(this, type, nullptr);
 		pthread_mutex_unlock(&stream->sourceLock);
 	}
 	tearDownCb(false, mediaType);
@@ -2164,6 +2207,7 @@ static GstMediaType gstGetMediaTypeForSource(const void  *source, const void *_t
 	{
 		InterfacePlayerRDK *pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
 		InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
+		std::lock_guard<std::mutex> lock(pInterfacePlayerRDK->mSourceSetupMutex);
 		for (int i = 0; i < GST_TRACK_COUNT; i++)
 		{
 			/* eMEDIATYPE_VIDEO, eMEDIATYPE_AUDIO, eMEDIATYPE_SUBTITLE */
@@ -2314,7 +2358,6 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		MW_LOG_WARN("Caps could not be established for source[type:%d], enabling typefind", mediaType);
 		g_object_set(source, "typefind", TRUE, NULL);
 	}
-	stream->sourceConfigured = true;
 }
 
 static GstPadProbeReturn InterfacePlayerRDK_DemuxPadProbeCallback(GstPad * pad, GstPadProbeInfo * info, void* _this)
@@ -2432,6 +2475,16 @@ static void element_setup_cb(void *playbin, void *element, void *instance)
 }
 
 /**
+ * @brief Assign a stream element pointer while holding the stream's sourceLock
+ */
+static void SetStreamElement(gst_media_stream *stream, GstElement *gst_media_stream::*member, GstElement *value)
+{
+	pthread_mutex_lock(&stream->sourceLock);
+	stream->*member = value;
+	pthread_mutex_unlock(&stream->sourceLock);
+}
+
+/**
  * @brief Initialize properties/callback of appsrc
  * @param[in] _this pointer to InterfacePlayerRDK instance associated with the playback
  * @param[in] source pointer to appsrc instance to be initialized
@@ -2441,13 +2494,9 @@ static void gstInitializeSource(void *_this, GObject *source, int iMediaType = e
 {
 
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	GstMediaType mediaType = (GstMediaType)iMediaType;
 
-	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
-
 	pInterfacePlayerRDK->InitializeSourceForPlayer(pInterfacePlayerRDK,source, (int)mediaType);
-	stream->sourceConfigured = true;
 }
 /**
  * @brief Callback when source is added by playbin
@@ -2483,17 +2532,24 @@ static void gst_found_source(GObject * object, GObject * orig, GParamSpec * pspe
 	}
 	if( mediaType != eGST_MEDIATYPE_DEFAULT)
 	{
-		gst_media_stream *stream;
-		stream = &privatePlayer->gstPrivateContext->stream[mediaType];
-		g_object_get(orig, pspec->name, &stream->source, NULL);
-		if (!stream->source || !GST_IS_APP_SRC(stream->source))
+		GstElement *src = NULL;
+		g_object_get(orig, pspec->name, &src, NULL);
+		if (!src || !GST_IS_APP_SRC(src))
 		{
-			MW_LOG_ERR("Invalid source element[%p] for track[%d]", stream->source, mediaType);
-			g_clear_object(&stream->source);
+			MW_LOG_ERR("Invalid source element[%p] for track[%d]", src, mediaType);
+			ReplaceSource(pInterfacePlayerRDK, mediaType, nullptr);
+			if (src)
+			{
+				gst_object_unref(src);
+			}
 			return;
 		}
-		gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(stream->source), mediaType);
-		pInterfacePlayerRDK->mSourceSetupCV.notify_all();
+		// Keep initialization alive if a nested notification removes the published source.
+		std::unique_ptr<GstElement, decltype(&gst_object_unref)> sourceRef(src, gst_object_unref);
+		gst_object_ref(src);
+		ReplaceSource(pInterfacePlayerRDK, mediaType, src);
+		gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(src), mediaType);
+		CompleteSourceSetup(pInterfacePlayerRDK, mediaType, src);
 	}
 }
 
@@ -2603,6 +2659,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)this;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gst_media_stream* stream = &privatePlayer->gstPrivateContext->stream[eGST_MEDIATYPE_SUBTITLE];
+	SetSourceConfigured(eGST_MEDIATYPE_SUBTITLE, false);
 
 	// Check elements are not already assigned
 	if (stream->sinkbin)
@@ -2642,11 +2699,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 		MW_LOG_ERR("subtitle_sink already assigned");
 		g_clear_object(&privatePlayer->gstPrivateContext->subtitle_sink);
 	}
-	if (stream->source)
-	{
-		MW_LOG_ERR("source already assigned");
-		g_clear_object(&stream->source);
-	}
+	ReplaceSource(this, eGST_MEDIATYPE_SUBTITLE, nullptr);
 
 	// Create elements
 	// Note: rialtomsesubtitlesink is a custom sink that handles CC command data
@@ -2678,22 +2731,27 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 		else
 		{
 			// Everything succeeded, retain references to the elements
-			stream->source = GST_ELEMENT(gst_object_ref_sink(appsrc));
+			ReplaceSource(this, eGST_MEDIATYPE_SUBTITLE, GST_ELEMENT(gst_object_ref_sink(appsrc)));
 			privatePlayer->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref_sink(textsink));
-			stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(subtitlebin));
+			SetStreamElement(stream, &gst_media_stream::sinkbin, GST_ELEMENT(gst_object_ref_sink(subtitlebin)));
 
 			MW_LOG_INFO("Added subtitle bin with %s %p to pipeline",
 						GST_ELEMENT_NAME(privatePlayer->gstPrivateContext->subtitle_sink),
 						privatePlayer->gstPrivateContext->subtitle_sink);
 
 			privatePlayer->SignalConnect(stream->sinkbin, "deep-notify::source", G_CALLBACK(gst_found_source), this);
-			if (!gst_element_sync_state_with_parent(stream->sinkbin))
+			bool synced = gst_element_sync_state_with_parent(subtitlebin);
+			if (!synced)
 			{
 				MW_LOG_ERR("Failed to sync subtitle bin to parent");
 			}
 
 			// Set initial mute state, will be updated by PlayerCCManager
 			g_object_set(privatePlayer->gstPrivateContext->subtitle_sink, "mute", TRUE, NULL);
+			if (synced)
+			{
+				CompleteSourceSetup(this, eGST_MEDIATYPE_SUBTITLE, appsrc);
+			}
 		}
 	}
 
@@ -2712,6 +2770,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)playerInstance;
 	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	gst_media_stream* stream = &pInterfacePlayerRDK->interfacePlayerPriv->gstPrivateContext->stream[streamId];
+	SetSourceConfigured(streamId, false);
 	if (eGST_MEDIATYPE_SUBTITLE == streamId)
 	{
 		if(m_gstConfigParam->gstreamerSubsEnabled)
@@ -2782,87 +2841,98 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				gst_element_add_pad(subtitlebin, gst_ghost_pad_new("sink", targetPad));
 				gst_object_unref(targetPad);
 
-				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(subtitlebin));
+				SetStreamElement(stream, &gst_media_stream::sinkbin, GST_ELEMENT(gst_object_ref_sink(subtitlebin)));
 
 				GstElement* appsrc = InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE);
 				if (!appsrc)
 				{
 					MW_LOG_ERR("Failed to create subtitle appsrc");
 					g_clear_object(&stream->sinkbin);
-					stream->sourceConfigured = false;
+					SetSourceConfigured(streamId, false);
 					return -1;
 				}
-				stream->source = GST_ELEMENT(gst_object_ref_sink(appsrc));
+				ReplaceSource(this, streamId, GST_ELEMENT(gst_object_ref_sink(appsrc)));
 
-				gst_bin_add(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source);
+				gst_bin_add(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), appsrc);
 				gst_bin_add(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin);
 
-				if (!gst_element_link(stream->source, stream->sinkbin))
+				if (!gst_element_link(appsrc, subtitlebin))
 				{
 					MW_LOG_ERR("Failed to link rialto subtitle elements");
 					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin))
 					{
 						MW_LOG_ERR("Unable to remove subtitle sinkbin from pipeline");
 					}
-					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source))
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), appsrc))
 					{
 						MW_LOG_ERR("Unable to remove subtitle source from pipeline");
 					}
 					g_clear_object(&stream->sinkbin);
-					g_clear_object(&stream->source);
-					stream->sourceConfigured = false;
+					ReplaceSource(this, streamId, nullptr);
 					return -1;
 				}
 
-				if (!gst_element_sync_state_with_parent(stream->source) ||
-					!gst_element_sync_state_with_parent(stream->sinkbin))
+				if (!gst_element_sync_state_with_parent(appsrc) ||
+					!gst_element_sync_state_with_parent(subtitlebin))
 				{
 					MW_LOG_ERR("Failed to sync rialto subtitle elements to parent");
 					SetStateWithWarnings(GST_ELEMENT(stream->sinkbin), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
-					SetStateWithWarnings(GST_ELEMENT(stream->source), GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
+					SetStateWithWarnings(appsrc, GST_STATE_NULL, PI_PLAYER_PROFILE_ACTIVE());
 					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->sinkbin))
 					{
 						MW_LOG_ERR("Unable to remove subtitle sinkbin from pipeline");
 					}
-					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source))
+					if (!gst_bin_remove(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), appsrc))
 					{
 						MW_LOG_ERR("Unable to remove subtitle source from pipeline");
 					}
 					g_clear_object(&stream->sinkbin);
-					g_clear_object(&stream->source);
-					stream->sourceConfigured = false;
+					ReplaceSource(this, streamId, nullptr);
 					return -1;
 				}
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref_sink(textsink));
 				MW_LOG_MIL("using rialtomsesubtitlesink muted=%d sink=%p", interfacePlayerPriv->gstPrivateContext->subtitleMuted, interfacePlayerPriv->gstPrivateContext->subtitle_sink);
 				g_object_set(textsink, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
+				CompleteSourceSetup(this, streamId, appsrc);
 				return 0;
 			}
 			else
 			{
 				MW_LOG_INFO("subs using subtecbin");
-				stream->sinkbin = gst_element_factory_make("subtecbin", NULL);			/* Creates a new element of "subtecbin" type and returns a new GstElement */
-				if (!stream->sinkbin)													/* When a new element can not be created a NULL is returned */
+				GstElement *subtecbin = gst_element_factory_make("subtecbin", NULL);	/* Creates a new element of "subtecbin" type and returns a new GstElement */
+				if (!subtecbin)															/* When a new element can not be created a NULL is returned */
 				{
 					MW_LOG_WARN("Cannot set up subtitle subtecbin");
 					return -1;
 				}
-				stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(stream->sinkbin));	/* Retain a counted reference to sinkbin. */
+				SetStreamElement(stream, &gst_media_stream::sinkbin, GST_ELEMENT(gst_object_ref_sink(subtecbin)));	/* Retain a counted reference to sinkbin. */
 				g_object_set(G_OBJECT(stream->sinkbin), "sync", FALSE, NULL);
 
-				stream->source = GST_ELEMENT(gst_object_ref_sink(InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE)));
-				gst_bin_add_many(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), stream->source, stream->sinkbin, NULL);		/* Add source and sink to the current pipeline */
+				GstElement *appsrc = InterfacePlayerRDK_GetAppSrc(pInterfacePlayerRDK, eGST_MEDIATYPE_SUBTITLE);
+				if (!appsrc)
+				{
+					MW_LOG_ERR("Failed to create subtitle appsrc");
+					g_clear_object(&stream->sinkbin);
+					return -1;
+				}
+				ReplaceSource(this, streamId, GST_ELEMENT(gst_object_ref_sink(appsrc)));
+				gst_bin_add_many(GST_BIN(interfacePlayerPriv->gstPrivateContext->pipeline), appsrc, subtecbin, NULL);		/* Add source and sink to the current pipeline */
 
-				if (!gst_element_link_many(stream->source, stream->sinkbin, NULL))			/* forms a GstElement link chain; linking stream->source to stream->sinkbin */
+				if (!gst_element_link_many(appsrc, subtecbin, NULL))			/* forms a GstElement link chain; linking stream->source to stream->sinkbin */
 				{
 					MW_LOG_ERR("Failed to link subtitle elements");
 					return -1;
 				}
 
-				gst_element_sync_state_with_parent(stream->source);
-				gst_element_sync_state_with_parent(stream->sinkbin);
+				if (!gst_element_sync_state_with_parent(appsrc) ||
+					!gst_element_sync_state_with_parent(subtecbin))
+				{
+					MW_LOG_ERR("Failed to sync subtitle elements to parent");
+					return -1;
+				}
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(stream->sinkbin));
 				interfacePlayerPriv->gstPrivateContext->setSubtitlePending = true;
+				CompleteSourceSetup(this, streamId, appsrc);
 				return 0;
 			}
 		}
@@ -2876,7 +2946,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 			MW_LOG_ERR("Failed to create playbin for track[%d]", streamId);
 			return -1;
 		}
-		stream->sinkbin = GST_ELEMENT(gst_object_ref_sink(playbin));	/* Retain a counted reference to the playbin. */
+		SetStreamElement(stream, &gst_media_stream::sinkbin, GST_ELEMENT(gst_object_ref_sink(playbin)));	/* Retain a counted reference to the playbin. */
 
 		if (m_gstConfigParam->tcpServerSink)
 		{
@@ -3048,11 +3118,13 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
  * @fn SendGstEvents
  * @param[in] mediaType stream type
  */
-void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int enableGstPosQuery, bool enablePTSReStamp, int vodTrickModeFPS)
+static void SendGstEventsForSource(InterfacePlayerPriv *player, int mediaType, GstClockTime pts,
+	int enableGstPosQuery, bool enablePTSReStamp, int vodTrickModeFPS, GstElement *source)
 {
+	auto* gstPrivateContext = player->gstPrivateContext;
 	gst_media_stream* stream = &gstPrivateContext->stream[mediaType];
 	gboolean enableOverride = FALSE;
-	GstPad* sourceEleSrcPad = gst_element_get_static_pad(GST_ELEMENT(stream->source), "src");       /* Retrieves the src pad */
+	GstPad* sourceEleSrcPad = gst_element_get_static_pad(source, "src");       /* Retrieves the src pad */
 
 	if(stream->pendingSeek)
 	{
@@ -3060,9 +3132,9 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
 		{
 			MW_LOG_MIL("gst_element_seek_simple! mediaType:%d pts:%" GST_TIME_FORMAT " seekPosition:%" GST_TIME_FORMAT,
 				mediaType, GST_TIME_ARGS(pts), GST_TIME_ARGS(gstPrivateContext->seekPosition * GST_SECOND));
-			if(!gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, (gstPrivateContext->seekPosition * GST_SECOND)))
+			if(!gst_element_seek_simple(source, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, (gstPrivateContext->seekPosition * GST_SECOND)))
 			{
-				MW_LOG_ERR("gst_element_seek_simple failed: mediaType:%d seekPosition:%f source:%s", mediaType, (double)gstPrivateContext->seekPosition, SafeName(GST_ELEMENT(stream->source)).c_str());
+				MW_LOG_ERR("gst_element_seek_simple failed: mediaType:%d seekPosition:%f source:%s", mediaType, (double)gstPrivateContext->seekPosition, SafeName(source).c_str());
 			}
 
 		}
@@ -3071,7 +3143,7 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
 	// For mp4 demux playback, there is no qtdemux element in the pipeline, so no need to send override event
 	if (!gstPrivateContext->isMp4DemuxPlayback)
 	{
-		enableOverride = SendQtDemuxOverrideEvent(mediaType, pts, enablePTSReStamp, vodTrickModeFPS); //need to change to priv
+		enableOverride = SendQtDemuxOverrideEventForSource(player, mediaType, pts, enablePTSReStamp, vodTrickModeFPS, nullptr, 0, source);
 	}
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 
@@ -3127,6 +3199,12 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
 	stream->resetPosition = false;
 }
 
+void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int enableGstPosQuery, bool enablePTSReStamp, int vodTrickModeFPS)
+{
+	SendGstEventsForSource(this, mediaType, pts, enableGstPosQuery, enablePTSReStamp,
+		vodTrickModeFPS, gstPrivateContext->stream[mediaType].source);
+}
+
 /**
  * @fn SendQtDemuxOverrideEvent
  * @param[in] mediaType stream type
@@ -3135,8 +3213,10 @@ void InterfacePlayerPriv::SendGstEvents(int mediaType, GstClockTime pts, int ena
  * @param[in] len length of buffer
  * @ret TRUE if override is enabled, FALSE otherwise
  */
-gboolean InterfacePlayerPriv::SendQtDemuxOverrideEvent(int mediaType, GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr, size_t len)
+static gboolean SendQtDemuxOverrideEventForSource(InterfacePlayerPriv *player, int mediaType,
+	GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr, size_t len, GstElement *source)
 {
+	auto* gstPrivateContext = player->gstPrivateContext;
 	gst_media_stream* stream = &gstPrivateContext->stream[mediaType];
 	gboolean enableOverride = false;
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
@@ -3145,7 +3225,7 @@ gboolean InterfacePlayerPriv::SendQtDemuxOverrideEvent(int mediaType, GstClockTi
 	{
 		enableOverride = (gstPrivateContext->rate != GST_NORMAL_PLAY_RATE);
 	}
-	GstPad* sourceEleSrcPad = gst_element_get_static_pad(GST_ELEMENT(stream->source), "src");       /* Retrieves the src pad */
+	GstPad* sourceEleSrcPad = gst_element_get_static_pad(source, "src");       /* Retrieves the src pad */
 	if (stream->format == GST_FORMAT_ISO_BMFF && type != eGST_MEDIATYPE_SUBTITLE)
 	{
 		/*      The below statement creates a new eventStruct with the player's name suffixed with '_override' and sets its three variables as follows:-
@@ -3153,9 +3233,9 @@ gboolean InterfacePlayerPriv::SendQtDemuxOverrideEvent(int mediaType, GstClockTi
 		 2) the variable 'rate' has datatype of G_TYPE_FLOAT and is set to (float)playerInstance->gstPrivateContext->rate.
 		 3) the variable playerName suffixed with 'player' has datatype of G_TYPE_BOOLEAN and a value of TRUE.
 		 */
-		std::string overrideName = mPlayerName + "_override";
-		std::string player = mPlayerName + "player";
-		GstStructure * eventStruct = gst_structure_new(overrideName.c_str(), "enable", G_TYPE_BOOLEAN, enableOverride, "rate", G_TYPE_FLOAT, (float)gstPrivateContext->rate, player.c_str(), G_TYPE_BOOLEAN, TRUE, "fps", G_TYPE_UINT, (guint)vodTrickModeFPS, NULL);
+		std::string overrideName = player->mPlayerName + "_override";
+		std::string playerName = player->mPlayerName + "player";
+		GstStructure * eventStruct = gst_structure_new(overrideName.c_str(), "enable", G_TYPE_BOOLEAN, enableOverride, "rate", G_TYPE_FLOAT, (float)gstPrivateContext->rate, playerName.c_str(), G_TYPE_BOOLEAN, TRUE, "fps", G_TYPE_UINT, (guint)vodTrickModeFPS, NULL);
 		if (!gst_pad_push_event(sourceEleSrcPad, gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, eventStruct)))
 		{
 			MW_LOG_ERR("Error on sending qtdemux override event");
@@ -3163,6 +3243,12 @@ gboolean InterfacePlayerPriv::SendQtDemuxOverrideEvent(int mediaType, GstClockTi
 	}
 	gst_object_unref(sourceEleSrcPad);
 	return enableOverride;
+}
+
+gboolean InterfacePlayerPriv::SendQtDemuxOverrideEvent(int mediaType, GstClockTime pts, bool enablePTSReStamp, int vodTrickModeFPS, const void *ptr, size_t len)
+{
+	return SendQtDemuxOverrideEventForSource(this, mediaType, pts, enablePTSReStamp,
+		vodTrickModeFPS, ptr, len, gstPrivateContext->stream[mediaType].source);
 }
 
 /**
@@ -3553,44 +3639,47 @@ bool InterfacePlayerRDK::WaitForSourceSetup(int mediaType)
 	bool ret = false;
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
-	int timeRemaining = DEFAULT_TIMEOUT_FOR_SOURCE_SETUP;
-	int waitInterval = 100;  // Polling interval (ms)
 
 	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-	MW_LOG_WARN("Source element[%p] for track[%d] not configured, waiting for setup!", stream->source, type);
+	MW_LOG_WARN("Source for track[%d] not configured, waiting for setup!", type);
 
-	while (timeRemaining >= 0)
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::milliseconds(DEFAULT_TIMEOUT_FOR_SOURCE_SETUP);
+	while (!mPauseInjector && !stream->sourceConfigured)
 	{
-		// Wait for either a notification or timeout
-		auto timeout = std::chrono::milliseconds(waitInterval);
-		auto status = mSourceSetupCV.wait_for(lock, timeout);
-		(void)status;
-		if (mPauseInjector)
+		if (mSourceSetupCV.wait_until(lock, deadline) == std::cv_status::timeout)
 		{
-			//Playback stopped by application
 			break;
 		}
-		else
-		{
-			if (stream->sourceConfigured)
-			{
-				MW_LOG_MIL("Source element[%p] for track[%d] setup completed!", stream->source, type);
-				ret = true;
-				break;
-			}
-		}
-
-		// Reduce remaining time
-		timeRemaining -= waitInterval;
 	}
 
-	// If not successful, log timeout
-	if (!ret)
+	if (!mPauseInjector && stream->sourceConfigured)
+	{
+		MW_LOG_MIL("Source for track[%d] setup completed!", type);
+		ret = true;
+	}
+	else
 	{
 		MW_LOG_WARN("Wait for source element setup for track[%d] exited/timed out!", mediaType);
 	}
 
 	return ret;
+}
+
+void InterfacePlayerRDK::SetSourceConfigured(int mediaType, bool configured)
+{
+	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[mediaType];
+	{
+		std::lock_guard<std::mutex> lock(mSourceSetupMutex);
+		stream->sourceConfigured = configured;
+	}
+	mSourceSetupCV.notify_all();
+}
+
+bool InterfacePlayerRDK::IsSourceConfigured(int mediaType)
+{
+	std::lock_guard<std::mutex> lock(mSourceSetupMutex);
+	return interfacePlayerPriv->gstPrivateContext->stream[mediaType].sourceConfigured;
 }
 
 bool InterfacePlayerRDK::HandleVideoBufferSent()
@@ -3630,7 +3719,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 				pauseInjectorState,
 				stream->resetPosition,
 				initFragment,
-				stream->sourceConfigured );
+				IsSourceConfigured(mediaType) );
 		//gst_element_seek_simple(GST_ELEMENT(stream->source), GST_FORMAT_TIME, GST_SEEK_FLAG_NONE, pts);
 	}
 
@@ -3639,31 +3728,48 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 	// Make sure source element is present before data is injected
 	// If format is FORMAT_INVALID, we don't know what we are doing here
 	pthread_mutex_lock(&stream->sourceLock);
-
-	if (!stream->sourceConfigured && stream->format != GST_FORMAT_INVALID)
+	bool needsSourceSetup = stream->format != GST_FORMAT_INVALID && !IsSourceConfigured(mediaType);
+	pthread_mutex_unlock(&stream->sourceLock);
+	// Wait without holding sourceLock so the source-setup callback is never blocked behind this thread
+	if (needsSourceSetup)
 	{
 		bool status = WaitForSourceSetup(type);
+		std::unique_lock<std::mutex> lock(mSourceSetupMutex);
+		if (this->mPauseInjector || !status)
 		{
-			std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-			if (this->mPauseInjector || !status)
-			{
-				pthread_mutex_unlock(&stream->sourceLock);
-				return false;
-			}
+			return false;
 		}
+	}
+	pthread_mutex_lock(&stream->sourceLock);
+	// Teardown may have run while waiting; recheck now that sourceLock is held
+	GstElement *source = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(mSourceSetupMutex);
+		if (stream->source && stream->sourceConfigured)
+		{
+			source = stream->source;
+			gst_object_ref(source);
+		}
+	}
+	std::unique_ptr<GstElement, decltype(&gst_object_unref)> sourceRef(source, gst_object_unref);
+	if (!source)
+	{
+		MW_LOG_WARN("Source for track[%d] missing or unconfigured before injection", mediaType);
+		pthread_mutex_unlock(&stream->sourceLock);
+		return false;
 	}
 	if (isFirstBuffer)
 	{
 		//Send Gst Event when first buffer received after new tune, seek or period change
 		int enableGstQuery = m_gstConfigParam->enableGstPosQuery;
-		interfacePlayerPriv->SendGstEvents((int)mediaType, pts, enableGstQuery, m_gstConfigParam->enablePTSReStamp, m_gstConfigParam->vodTrickModeFPS);
+		SendGstEventsForSource(interfacePlayerPriv, (int)mediaType, pts, enableGstQuery, m_gstConfigParam->enablePTSReStamp, m_gstConfigParam->vodTrickModeFPS, source);
 
 		// included to fix av sync / trickmode speed issues
 		// Also add check for trick-play on 1st frame.
 		if( interfacePlayerPriv->gstPrivateContext->video_sink &&
 			sendNewSegmentEvent == true)
 		{
-			interfacePlayerPriv->SendNewSegmentEvent(mediaType, pts, 0);
+			SendNewSegmentEventForSource(interfacePlayerPriv, mediaType, pts, 0, source);
 			segmentEventSent = true;
 		}
 		MW_LOG_DEBUG("mediaType[%d] SendGstEvents - first buffer received !!! initFragment: %d, pts: %" G_GUINT64_FORMAT, mediaType, initFragment, pts);
@@ -3671,9 +3777,17 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 	sendNewSegmentEvent = segmentEventSent;
 	bool bPushBuffer;
+	bool sourceStillConfigured;
 	{
 		std::unique_lock<std::mutex> lock(mSourceSetupMutex);
 		bPushBuffer = !this->mPauseInjector;
+		sourceStillConfigured = stream->sourceConfigured && stream->source == source;
+	}
+	if (!sourceStillConfigured)
+	{
+		MW_LOG_WARN("Source for track[%d] removed or replaced during event delivery", mediaType);
+		pthread_mutex_unlock(&stream->sourceLock);
+		return false;
 	}
 	if(bPushBuffer)
 	{
@@ -3753,7 +3867,7 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 		if (bPushBuffer)
 		{
 
-			GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(stream->source), buffer);
+			GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(source), buffer);
 
 			if (ret != GST_FLOW_OK)
 			{
@@ -3762,11 +3876,11 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 				{ // an unexpected error has occurred
 					if (mediaType == eGST_MEDIATYPE_SUBTITLE)
 					{ // occurs sometimes when injecting subtitle fragments
-						if (!stream->source)
+						if (!source)
 						{
 							MW_LOG_ERR("subtitle appsrc is NULL");
 						}
-						else if (!GST_IS_APP_SRC(stream->source))
+						else if (!GST_IS_APP_SRC(source))
 						{
 							MW_LOG_ERR("subtitle appsrc is invalid");
 						}
@@ -3810,8 +3924,11 @@ bool InterfacePlayerRDK::SendHelper(int type, MediaSample&& sample, bool initFra
 
 void InterfacePlayerRDK::PauseInjector()
 {
-	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
-	mPauseInjector = true;
+	{
+		std::unique_lock<std::mutex> lock(mSourceSetupMutex);
+		mPauseInjector = true;
+	}
+	mSourceSetupCV.notify_all();
 }
 
 void InterfacePlayerRDK::ResumeInjector()
@@ -3824,8 +3941,11 @@ void InterfacePlayerRDK::ResumeInjector()
 /**
  *  @brief Send new segment event to pipeline
  */
-void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,GstClockTime stopPts)
+static void SendNewSegmentEventForSource(InterfacePlayerPriv *player, int type,
+	GstClockTime startPts, GstClockTime stopPts, GstElement *source)
 {
+	auto* gstPrivateContext = player->gstPrivateContext;
+	auto& socInterface = player->socInterface;
 	GstMediaType mediaType = static_cast<GstMediaType>(type);
 	gst_media_stream* stream = &gstPrivateContext->stream[mediaType];
 	// isMp4DemuxPlayback is originally ISO BMFF format, but demuxed
@@ -3866,14 +3986,14 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 
 		if (gstPrivateContext->usingRialtoSink)
 		{
-			GstCaps *currentCaps = gst_app_src_get_caps(GST_APP_SRC(stream->source));
+			GstCaps *currentCaps = gst_app_src_get_caps(GST_APP_SRC(source));
 			if (currentCaps != NULL)
 			{
 				GstSample *sample = gst_sample_new (nullptr, currentCaps, &segment, nullptr);
 				if (sample != NULL)
 				{
 					MW_LOG_INFO("Pushing sample with segment for mediaType[%d]. start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT" rate %f applied_rate %f", mediaType, segment.start, segment.stop, segment.rate, segment.applied_rate);
-					if (GST_FLOW_OK != gst_app_src_push_sample(GST_APP_SRC(stream->source), sample))
+					if (GST_FLOW_OK != gst_app_src_push_sample(GST_APP_SRC(source), sample))
 					{
 						MW_LOG_ERR("Failed to push sample with segment for mediaType[%d], start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT, mediaType, segment.start, segment.stop);
 					}
@@ -3900,7 +4020,7 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 		else
 		{
 			MW_LOG_INFO("Sending segment event for mediaType[%d]. start %" G_GUINT64_FORMAT " stop %" G_GUINT64_FORMAT" rate %f applied_rate %f", mediaType, segment.start, segment.stop, segment.rate, segment.applied_rate);
-			GstPad* sourceEleSrcPad = gst_element_get_static_pad(GST_ELEMENT(stream->source), "src");
+			GstPad* sourceEleSrcPad = gst_element_get_static_pad(source, "src");
 			GstEvent* event = gst_event_new_segment (&segment);
 			if (!gst_pad_push_event(sourceEleSrcPad, event))
 			{
@@ -3910,6 +4030,11 @@ void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts ,G
 
 		}
 	}
+}
+
+void InterfacePlayerPriv::SendNewSegmentEvent(int type, GstClockTime startPts, GstClockTime stopPts)
+{
+	SendNewSegmentEventForSource(this, type, startPts, stopPts, gstPrivateContext->stream[type].source);
 }
 
 /**
@@ -4147,7 +4272,7 @@ bool InterfacePlayerRDK::PipelineConfiguredForMedia(int type)
 	gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
 	if (stream)
 	{
-		pipelineConfigured = stream->sourceConfigured;
+		pipelineConfigured = IsSourceConfigured(type);
 	}
 	return pipelineConfigured;
 }
@@ -4181,7 +4306,7 @@ bool InterfacePlayerRDK::IsStreamReady(int mediaType)
 
 	const gst_media_stream *stream = &interfacePlayerPriv->gstPrivateContext->stream[mediaType];
 
-	StreamReady = stream->sinkbin && stream->sourceConfigured;
+	StreamReady = stream->sinkbin && IsSourceConfigured(mediaType);
 	return StreamReady;
 }
 /**
