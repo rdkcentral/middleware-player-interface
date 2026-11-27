@@ -995,7 +995,8 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Video)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	// Readiness is published by the caller once stream->source is installed.
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
@@ -1122,7 +1123,8 @@ TEST_F(InterfacePlayerTests, InitializeSourceForPlayer_Audio_CapsNull)
 
 	mInterfaceGstPlayer->InitializeSourceForPlayer(playerInstance, source, mediaType);
 
-	EXPECT_TRUE(stream->sourceConfigured);
+	// Readiness is published by the caller once stream->source is installed.
+	EXPECT_FALSE(stream->sourceConfigured);
 
 	delete g_mockGstUtils;
 }
@@ -2181,6 +2183,26 @@ TEST_F(InterfacePlayerTests, PauseInjector_SetsPauseInjectorToTrue)
 	mInterfaceGstPlayer->mPauseInjector = false;
 	mInterfaceGstPlayer->PauseInjector();
 	EXPECT_TRUE(mInterfaceGstPlayer->mPauseInjector);
+}
+
+TEST_F(InterfacePlayerTests, PauseInjector_WakesPendingSourceSetupWait)
+{
+	GstMediaType mediaType = eGST_MEDIATYPE_VIDEO;
+	gst_media_stream* stream = &mPlayerContext->stream[mediaType];
+	stream->sourceConfigured = false;
+
+	std::thread pauseThread([&]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		mInterfaceGstPlayer->PauseInjector();
+	});
+
+	auto start = std::chrono::steady_clock::now();
+	bool result = mInterfaceGstPlayer->WaitForSourceSetup(mediaType);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+
+	pauseThread.join();
+	EXPECT_FALSE(result);
+	EXPECT_LT(elapsed, std::chrono::milliseconds(500));
 }
 
 TEST_F(InterfacePlayerTests, ResumeInjector_SetsPauseInjectorToFalseAndNotifiesAll)

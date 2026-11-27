@@ -46,6 +46,28 @@
 #include <chrono>
 #define LICENSE_RENEWAL_MESSAGE_TYPE "1"
 
+namespace
+{
+void RecoverFromOCDMHWError()
+{
+	std::thread([]()
+	{
+		ProcessHandler processHandler;
+		if (processHandler.KillProcess("WPEFramework"))
+		{
+			MW_LOG_WARN("OCDM HWError reported.. Killed the process WPEFramework for recovery..");
+		}
+		else if (processHandler.KillProcess("WPEcdmi"))
+		{
+			MW_LOG_WARN("OCDM HWError reported.. Killed the process WPEcdmi for recovery..");
+		}
+
+		std::this_thread::sleep_for(std::chrono::seconds(5));
+		processHandler.SelfKill();
+	}).detach();
+}
+}
+
 /**
  * @fn OCDMSessionAdapter
  * @brief OCDMSessionAdapter constructor
@@ -64,6 +86,7 @@ OCDMSessionAdapter::OCDMSessionAdapter(DrmHelperPtr drmHelper, DrmCallbacks *cal
 		m_challengeSize(0),
 		m_keyStatus(InternalError),
 		m_keyStateIndeterminate(false),
+		m_abortWaits(false),
 		m_keyStatusReady(),
 		m_OCDMSessionCallbacks(),
 		m_destUrl(),
@@ -125,6 +148,10 @@ void OCDMSessionAdapter::generateDRMSession(const uint8_t *f_pbInitData,
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
 
 	std::lock_guard<std::mutex> guard(decryptMutex);
+	m_abortWaits = false;
+	m_challengeReady.reset();
+	m_keyStatusReady.reset();
+	m_keyStatusWait.reset();
 	if (m_pOpenCDMSystem == nullptr)
 	{
 		MW_LOG_WARN("OpenCDM system not present, unable to generate DRM session");
@@ -219,6 +246,11 @@ void OCDMSessionAdapter::processOCDMChallenge(const char destUrl[], const uint8_
 
 void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySize) {
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
+	if (m_abortWaits.load())
+	{
+		return;
+	}
+
 	// Validate input parameters
 	if (key != nullptr && keySize > 0)
 	{
@@ -232,7 +264,7 @@ void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySiz
 		}
 		else
 		{
-			m_keyStored.clear();
+			std::lock_guard<std::mutex> lock(m_keyStoredMutex);
 			m_keyStored.assign(key, key + keySize);
 			m_keyStateIndeterminate = true;
 		}
@@ -251,17 +283,22 @@ void OCDMSessionAdapter::keyUpdateOCDM(const uint8_t key[], const uint8_t keySiz
 
 void OCDMSessionAdapter::keysUpdatedOCDM() {
 	MW_LOG_INFO("at %p, with %p, %p", this , m_pOpenCDMSystem, m_pOpenCDMSession);
-	m_keyStatusReady.signal();
+	if (!m_abortWaits.load())
+	{
+		m_keyStatusReady.signal();
+	}
 }
 
 void OCDMSessionAdapter::errorMessageOCDM(const char message[]) {
-	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int) m_keyStatus, (int) m_eKeyState);
+	const KeyStatus keyStatus = m_keyStatus.load();
+	KeyState keyState = m_eKeyState.load();
+	MW_LOG_ERR("OCDM error message: %s, key status %d, key state %d", (message != nullptr) ? message : "(null)", (int)keyStatus, (int)keyState);
 
 	// Key updates have already turned a ready session's status into InternalError (e.g. Rialto server crash);
 	// without this the session manager would keep reusing the dead KEY_READY session.
-	if (m_eKeyState == KEY_READY && m_keyStatus == InternalError)
+	if (keyStatus == InternalError && keyState == KEY_READY)
 	{
-		m_eKeyState = KEY_ERROR;
+		m_eKeyState.compare_exchange_strong(keyState, KEY_ERROR);
 	}
 
 	if (m_drmCallbacks)
@@ -278,7 +315,7 @@ DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_
 
 	m_eKeyState = KEY_ERROR;
 
-	if (m_challengeReady.wait(timeout) == true) {
+	if (m_challengeReady.wait(timeout, &m_abortWaits) == true) {
 		if (m_challenge.empty() != true) {
 			std::string delimiter (":Type:");
 			std::string requestType (m_challenge.substr(0, m_challenge.find(delimiter)));
@@ -294,6 +331,8 @@ DrmData * OCDMSessionAdapter::generateKeyRequest(string& destinationURL, uint32_
 		else {
 			MW_LOG_WARN("Empty keyRequest");
 		}
+	} else if (m_abortWaits) {
+		MW_LOG_WARN("Aborted while waiting for keyRequest");
 	} else {
 		MW_LOG_WARN("Timed out waiting for keyRequest");
 	}
@@ -330,82 +369,71 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 	}
 
 	if (status == OpenCDMError::ERROR_NONE) {
-		if (m_keyStatusReady.wait(timeout) == true) {
+		if (m_keyStatusReady.wait(timeout, &m_abortWaits) == true) {
 			MW_LOG_WARN("Key Status updated");
 		}
-		// The key could be signalled ready before the session is even created, so we need to check we didn't miss it
-		if (m_keyStateIndeterminate) {
-			m_keyStatus = opencdm_session_status(m_pOpenCDMSession, m_keyStored.data(), m_keyStored.size());
-			m_keyStateIndeterminate = false;
-			MW_LOG_WARN("Key arrived early, new state is %d", m_keyStatus);
+		else if (m_abortWaits)
+		{
+			MW_LOG_WARN("Aborted while waiting for key status");
+			m_keyStatusWait.signal();
+			return retValue;
 		}
+		// The key could be signalled ready before the session is even created, so we need to check we didn't miss it
+		std::vector<uint8_t> storedKey;
+		{
+			std::lock_guard<std::mutex> lock(m_keyStoredMutex);
+			if (m_keyStateIndeterminate.exchange(false))
+			{
+				storedKey = m_keyStored;
+			}
+		}
+		if (!storedKey.empty()) {
+			m_keyStatus = opencdm_session_status(m_pOpenCDMSession, storedKey.data(), storedKey.size());
+			MW_LOG_WARN("Key arrived early, new state is %d", (int)m_keyStatus.load());
+		}
+		const KeyStatus keyStatus = m_keyStatus.load();
 #ifdef USE_THUNDER_OCDM_API_0_2
-		if (m_keyStatus == Usable) {
+		if (keyStatus == Usable) {
 #else
-		if (m_keyStatus == KeyStatus::Usable) {
+		if (keyStatus == KeyStatus::Usable) {
 #endif
 			MW_LOG_WARN("processKey: Key Usable!");
 			m_eKeyState = KEY_READY;
 			retValue = 0;
 		}
 #ifdef USE_THUNDER_OCDM_API_0_2
-		else if(m_keyStatus == HWError)
+		else if(keyStatus == HWError)
 #else
-		else if(m_keyStatus == KeyStatus::HWError)
+		else if(keyStatus == KeyStatus::HWError)
 #endif
 		{
-			//  SAGE Hang .. Need to restart the wpecdmi process and then self kill player to recover
 			MW_LOG_WARN("processKey: Update() returned HWError.Restarting process...");
-			ProcessHandler processHandler;
-			// In Release another process handles opencdm which needs to be restarts .In Sprint this process is not available.
-			// So check if process exists before killing it .
-			if (processHandler.KillProcess("WPEFramework")) /** Current OCDM process **/
-			{
-				MW_LOG_WARN("OCDM HWError reported.. Killed the process WPEFramework for recovery..");
-			}
-			else 
-			{
-				if(processHandler.KillProcess("WPEcdmi")) /** Backword compatibility **/
-				{
-					MW_LOG_WARN("OCDM HWError reported.. Killed the process WPEcdmi for recovery..");
-				}
-			} 
-
-			// Defer the self-kill by 5sec on a worker thread so the killed
-			// OCDM process can restart and logs can flush, without blocking
-			// this decrypt/key path which would otherwise stall playback.
 			m_eKeyState = KEY_ERROR;
-			std::thread([]()
-			{
-				std::this_thread::sleep_for(std::chrono::seconds(5));
-				// Now kill self
-				ProcessHandler handler;
-				handler.SelfKill();
-			}).detach();
+			RecoverFromOCDMHWError();
 		}
 		else {
 #ifdef USE_THUNDER_OCDM_API_0_2
-			if(m_keyStatus == OutputRestricted)
+			if(keyStatus == OutputRestricted)
 #else
-			if(m_keyStatus == KeyStatus::OutputRestricted)
+			if(keyStatus == KeyStatus::OutputRestricted)
 #endif
 			{
-				MW_LOG_WARN("processKey: Update() Output restricted keystatus: %d", (int) m_keyStatus);
+				MW_LOG_WARN("processKey: Update() Output restricted keystatus: %d", (int)keyStatus);
 				retValue = HDCP_OUTPUT_PROTECTION_FAILURE;
 			}
 #ifdef USE_THUNDER_OCDM_API_0_2
-			else if(m_keyStatus == OutputRestrictedHDCP22)
+			else if(keyStatus == OutputRestrictedHDCP22)
 #else
-			else if(m_keyStatus == KeyStatus::OutputRestrictedHDCP22)
+			else if(keyStatus == KeyStatus::OutputRestrictedHDCP22)
 #endif
 			{
-				MW_LOG_WARN("processKey: Update() Output Compliance error keystatus: %d\n", (int) m_keyStatus);
+				MW_LOG_WARN("processKey: Update() Output Compliance error keystatus: %d\n", (int)keyStatus);
 				retValue = HDCP_COMPLIANCE_CHECK_FAILURE;
 			}
 			else
 			{
-				MW_LOG_WARN("processKey: Update() returned keystatus: %d\n", (int) m_keyStatus);
-				retValue = (int) m_keyStatus;
+				MW_LOG_WARN("processKey: Update() returned keystatus: %d\n", (int)keyStatus);
+				retValue = (int)keyStatus;
 			}
 			m_eKeyState = KEY_ERROR;
 		}
@@ -417,19 +445,19 @@ int OCDMSessionAdapter::processDRMKey(DrmData* key, uint32_t timeout)
 
 bool OCDMSessionAdapter::waitForState(KeyState state, const uint32_t timeout)
 {
-	if (m_eKeyState == state) {
+	if (m_eKeyState.load() == state) {
 		return true;
 	}
-	if (!m_keyStatusWait.wait(timeout)) {
+	if (!m_keyStatusWait.wait(timeout, &m_abortWaits)) {
 		return false;
 	}
-	return m_eKeyState == state;
+	return m_eKeyState.load() == state;
 }
 
 
 KeyState OCDMSessionAdapter::getState()
 {
-	return m_eKeyState;
+	return m_eKeyState.load();
 }
 
 
@@ -437,7 +465,18 @@ void OCDMSessionAdapter:: clearDecryptContext()
 {
 	MW_LOG_WARN("[HHH] clearDecryptContext.");
 
+	m_abortWaits = true;
+	m_challengeReady.signal();
+	m_keyStatusReady.signal();
+	m_keyStatusWait.signal();
+
 	std::lock_guard<std::mutex> guard(decryptMutex);
+
+	// generateDRMSession() may have cleared the abort state while this call waited for the lock
+	m_abortWaits = true;
+	m_challengeReady.signal();
+	m_keyStatusReady.signal();
+	m_keyStatusWait.signal();
 
 	if (m_pOpenCDMSession) {
 		opencdm_session_close(m_pOpenCDMSession);

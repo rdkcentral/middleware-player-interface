@@ -2242,6 +2242,20 @@ static void gst_enough_data(GstElement *source, void *_this)
 		MW_LOG_ERR( "enough-data: null InterfacePlayerRDK instance, source=%p", (void*)source);
 	}
 }
+
+/**
+ * @brief Marks a stream's source as configured and wakes WaitForSourceSetup().
+ * Call only once stream->source is installed and ready for injection.
+ */
+static void PublishSourceConfigured(InterfacePlayerRDK *pInterfacePlayerRDK, gst_media_stream *stream)
+{
+	{
+		std::lock_guard<std::mutex> lock(pInterfacePlayerRDK->mSourceSetupMutex);
+		stream->sourceConfigured = true;
+	}
+	pInterfacePlayerRDK->mSourceSetupCV.notify_all();
+}
+
 void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * source, int type)
 {
 	InterfacePlayerRDK* _this = (InterfacePlayerRDK*)PlayerInstance;
@@ -2314,7 +2328,6 @@ void InterfacePlayerRDK::InitializeSourceForPlayer(void *PlayerInstance, void * 
 		MW_LOG_WARN("Caps could not be established for source[type:%d], enabling typefind", mediaType);
 		g_object_set(source, "typefind", TRUE, NULL);
 	}
-	stream->sourceConfigured = true;
 }
 
 static GstPadProbeReturn InterfacePlayerRDK_DemuxPadProbeCallback(GstPad * pad, GstPadProbeInfo * info, void* _this)
@@ -2439,15 +2452,10 @@ static void element_setup_cb(void *playbin, void *element, void *instance)
  */
 static void gstInitializeSource(void *_this, GObject *source, int iMediaType = eGST_MEDIATYPE_VIDEO)
 {
-
 	InterfacePlayerRDK* pInterfacePlayerRDK = (InterfacePlayerRDK*)_this;
-	InterfacePlayerPriv* privatePlayer = pInterfacePlayerRDK->GetPrivatePlayer();
 	GstMediaType mediaType = (GstMediaType)iMediaType;
 
-	gst_media_stream *stream = &privatePlayer->gstPrivateContext->stream[mediaType];
-
 	pInterfacePlayerRDK->InitializeSourceForPlayer(pInterfacePlayerRDK,source, (int)mediaType);
-	stream->sourceConfigured = true;
 }
 /**
  * @brief Callback when source is added by playbin
@@ -2493,7 +2501,7 @@ static void gst_found_source(GObject * object, GObject * orig, GParamSpec * pspe
 			return;
 		}
 		gstInitializeSource(pInterfacePlayerRDK, G_OBJECT(stream->source), mediaType);
-		pInterfacePlayerRDK->mSourceSetupCV.notify_all();
+		PublishSourceConfigured(pInterfacePlayerRDK, stream);
 	}
 }
 
@@ -2694,6 +2702,7 @@ void InterfacePlayerRDK::SetupClosedCaptionControlStream()
 
 			// Set initial mute state, will be updated by PlayerCCManager
 			g_object_set(privatePlayer->gstPrivateContext->subtitle_sink, "mute", TRUE, NULL);
+			PublishSourceConfigured(pInterfacePlayerRDK, stream);
 		}
 	}
 
@@ -2836,6 +2845,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref_sink(textsink));
 				MW_LOG_MIL("using rialtomsesubtitlesink muted=%d sink=%p", interfacePlayerPriv->gstPrivateContext->subtitleMuted, interfacePlayerPriv->gstPrivateContext->subtitle_sink);
 				g_object_set(textsink, "mute", interfacePlayerPriv->gstPrivateContext->subtitleMuted ? TRUE : FALSE, NULL);
+				PublishSourceConfigured(pInterfacePlayerRDK, stream);
 				return 0;
 			}
 			else
@@ -2863,6 +2873,7 @@ int InterfacePlayerRDK::SetupStream(int streamId,  void *playerInstance, std::st
 				gst_element_sync_state_with_parent(stream->sinkbin);
 				interfacePlayerPriv->gstPrivateContext->subtitle_sink = GST_ELEMENT(gst_object_ref(stream->sinkbin));
 				interfacePlayerPriv->gstPrivateContext->setSubtitlePending = true;
+				PublishSourceConfigured(pInterfacePlayerRDK, stream);
 				return 0;
 			}
 		}
@@ -3550,42 +3561,21 @@ unsigned long InterfacePlayerRDK::GetCCDecoderHandle()
  */
 bool InterfacePlayerRDK::WaitForSourceSetup(int mediaType)
 {
-	bool ret = false;
 	GstMediaType type = static_cast<GstMediaType>(mediaType);
 	gst_media_stream* stream = &interfacePlayerPriv->gstPrivateContext->stream[type];
-	int timeRemaining = DEFAULT_TIMEOUT_FOR_SOURCE_SETUP;
-	int waitInterval = 100;  // Polling interval (ms)
 
 	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
 	MW_LOG_WARN("Source element[%p] for track[%d] not configured, waiting for setup!", stream->source, type);
 
-	while (timeRemaining >= 0)
+	bool ret = mSourceSetupCV.wait_for(lock, std::chrono::milliseconds(DEFAULT_TIMEOUT_FOR_SOURCE_SETUP),
+		[this, stream]() { return mPauseInjector || stream->sourceConfigured; })
+		&& !mPauseInjector;
+
+	if (ret)
 	{
-		// Wait for either a notification or timeout
-		auto timeout = std::chrono::milliseconds(waitInterval);
-		auto status = mSourceSetupCV.wait_for(lock, timeout);
-		(void)status;
-		if (mPauseInjector)
-		{
-			//Playback stopped by application
-			break;
-		}
-		else
-		{
-			if (stream->sourceConfigured)
-			{
-				MW_LOG_MIL("Source element[%p] for track[%d] setup completed!", stream->source, type);
-				ret = true;
-				break;
-			}
-		}
-
-		// Reduce remaining time
-		timeRemaining -= waitInterval;
+		MW_LOG_MIL("Source element[%p] for track[%d] setup completed!", stream->source, type);
 	}
-
-	// If not successful, log timeout
-	if (!ret)
+	else
 	{
 		MW_LOG_WARN("Wait for source element setup for track[%d] exited/timed out!", mediaType);
 	}
@@ -3812,6 +3802,7 @@ void InterfacePlayerRDK::PauseInjector()
 {
 	std::unique_lock<std::mutex> lock(mSourceSetupMutex);
 	mPauseInjector = true;
+	mSourceSetupCV.notify_all();
 }
 
 void InterfacePlayerRDK::ResumeInjector()

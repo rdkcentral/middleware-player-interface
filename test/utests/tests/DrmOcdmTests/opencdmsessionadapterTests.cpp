@@ -290,6 +290,28 @@ TEST(Event, Wait_ZeroTimeout)
     std::cout << "[Event.Wait_ZeroTimeout] - PASS" << std::endl;
 }
 
+TEST(Event, Wait_AbortInterruptsTimedWait)
+{
+    Event event;
+    std::atomic<bool> abort(false);
+    bool result = true;
+
+    auto start = std::chrono::steady_clock::now();
+    std::thread waiter([&]() {
+        result = event.wait(5000, &abort);
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    abort = true;
+    event.signal();
+    waiter.join();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    EXPECT_FALSE(result);
+    EXPECT_LT(duration, 1000);
+}
+
 /**
  * @brief Verify Event destructor.
  *
@@ -1098,6 +1120,28 @@ TEST(OCDMSessionAdapter, GetState_MultipleCalls)
 
     delete drmCallbacks;
     std::cout << "[OCDMSessionAdapter.GetState_MultipleCalls] - PASS" << std::endl;
+}
+
+TEST(OCDMSessionAdapter, ClearDecryptContextInterruptsStateWait)
+{
+    DrmInfo drmInfo;
+    auto drmHelper = std::make_shared<WidevineDrmHelper>(drmInfo);
+    OCDMSessionAdapter adapter(drmHelper, nullptr);
+    bool result = true;
+
+    auto start = std::chrono::steady_clock::now();
+    std::thread waiter([&]() {
+        result = adapter.waitForState(KEY_READY, 5000);
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    adapter.clearDecryptContext();
+    waiter.join();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    EXPECT_FALSE(result);
+    EXPECT_LT(duration, 1000);
 }
 
 // ========================================
