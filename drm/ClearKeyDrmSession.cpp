@@ -469,32 +469,41 @@ int ClearKeySession::decrypt(GstBuffer* keyIDBuffer, GstBuffer* ivBuffer, GstBuf
 					if (!pbData)
 					{
 						MW_LOG_ERR("ClearKeySession: ERROR : Failed to allocate %zu bytes", (size_t)bufferMap.size);
+						retVal = 1;
 					}
 				}
-				uint8_t *pbCurrTarget = (uint8_t *) pbData;
-				uint32_t iCurrSource = 0;
+				else
+				{
+					retVal = 1;
+				}
+				if (pbData)
+				{
+					uint8_t *pbCurrTarget = (uint8_t *) pbData;
+					uint32_t iCurrSource = 0;
 
-		        for (int i = 0; pbData && i < subSampleCount; i++)
-		        {
-					if (!gst_byte_reader_get_uint16_be(reader, &nBytesClear)
-							|| !gst_byte_reader_get_uint32_be(reader, &nBytesEncrypted))
+					for (int i = 0; i < subSampleCount; i++)
 					{
-						MW_LOG_ERR("ClearKeySession: ERROR : Failed to read from subsamples reader");
-						cbData = 0;
-						break;
+						if (!gst_byte_reader_get_uint16_be(reader, &nBytesClear)
+								|| !gst_byte_reader_get_uint32_be(reader, &nBytesEncrypted))
+						{
+							MW_LOG_ERR("ClearKeySession: ERROR : Failed to read from subsamples reader");
+							cbData = 0;
+							retVal = 1;
+							break;
+						}
+						// Skip the clear byte range from source buffer.
+						iCurrSource += nBytesClear;
+
+						// Copy cipher bytes from f_pbData to target buffer.
+						memcpy(pbCurrTarget, (uint8_t*) bufferMap.data + iCurrSource, nBytesEncrypted);
+
+						// Adjust current pointer of target buffer.
+						pbCurrTarget += nBytesEncrypted;
+
+						// Adjust current offset of source buffer.
+						iCurrSource += nBytesEncrypted;
+						cbData += nBytesEncrypted;
 					}
-					// Skip the clear byte range from source buffer.
-					iCurrSource += nBytesClear;
-
-					// Copy cipher bytes from f_pbData to target buffer.
-					memcpy(pbCurrTarget, (uint8_t*) bufferMap.data + iCurrSource, nBytesEncrypted);
-
-					// Adjust current pointer of target buffer.
-					pbCurrTarget += nBytesEncrypted;
-
-					// Adjust current offset of source buffer.
-					iCurrSource += nBytesEncrypted;
-					cbData += nBytesEncrypted;
 				}
 			}
 	        else
