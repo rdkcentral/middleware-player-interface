@@ -39,6 +39,8 @@
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
 #include <atomic>
+#include <thread>
+#include <chrono>
 
 using ::testing::NiceMock;
 using ::testing::StrictMock;
@@ -1209,6 +1211,33 @@ TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_SucceedsAndAssignsEleme
 	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
 	EXPECT_NE(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin, nullptr);
 	EXPECT_NE(mPlayerContext->subtitle_sink, nullptr);
+	EXPECT_NE(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source, nullptr);
+	EXPECT_TRUE(mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sourceConfigured);
+	// restore to avoid g_clear_object on stack objects
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin = nullptr;
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = nullptr;
+	mPlayerContext->subtitle_sink = nullptr;
+}
+
+TEST_F(InterfacePlayerGapFillTests, SetupCCControlStream_WakesPendingSourceSetupWait)
+{
+	GstElement appsrc{}, textsink{}, subtitlebin{};
+	EXPECT_CALL(*g_mockGStreamer, gst_element_factory_make(_, _)).WillRepeatedly(Return(&appsrc));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_new(_)).WillRepeatedly(Return(&subtitlebin));
+	EXPECT_CALL(*g_mockGStreamer, gst_element_link(_, _)).WillRepeatedly(Return(TRUE));
+	EXPECT_CALL(*g_mockGStreamer, gst_bin_add(_, _)).WillRepeatedly(Return(TRUE));
+	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sourceConfigured = false;
+
+	std::atomic<bool> waitResult{false};
+	std::thread waiter([&]() {
+		waitResult = mInterfaceGstPlayer->WaitForSourceSetup(eGST_MEDIATYPE_SUBTITLE);
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	mInterfaceGstPlayer->SetupClosedCaptionControlStream();
+	waiter.join();
+
+	EXPECT_TRUE(waitResult);
 	// restore to avoid g_clear_object on stack objects
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].sinkbin = nullptr;
 	mPlayerContext->stream[eGST_MEDIATYPE_SUBTITLE].source = nullptr;
