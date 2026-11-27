@@ -163,13 +163,11 @@ endif()
 #secmanager/client macros
 if(CMAKE_USE_SECCLIENT)
 	message("CMAKE_USE_SECCLIENT set")
-	set(LIB_EXT_DEPENDS "${LIB_EXT_DEPENDS}  -lFireboltSDK")
 	set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_SECCLIENT")
     list(APPEND LIB_EXT_DEPENDS -lSecClient )
 endif()
 if(CMAKE_USE_SECMANAGER)
 	message("CMAKE_USE_SECMANAGER set")
-	set(LIB_EXT_DEPENDS "${LIB_EXT_DEPENDS}  -lFireboltSDK")
 	set(LIB_EXT_DEFINES "${LIB_EXT_DEFINES} -DUSE_SECMANAGER")
 endif()
 
@@ -205,8 +203,9 @@ if(ENABLE_RDKPERF AND (CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR CMAKE_USE_
     target_link_libraries(playerfbinterface ${RDKPERF_LIBRARY})
 endif()
 if(CMAKE_USE_SECCLIENT OR CMAKE_USE_SECMANAGER OR CMAKE_USE_FIREBOLT OR CMAKE_IARM_MGR)
-   find_package(FireboltAamp CONFIG REQUIRED)
-   target_link_libraries(playerfbinterface FireboltAamp::FireboltAamp)
+   find_package(FireboltTransport CONFIG REQUIRED)
+   find_package(FireboltEntos CONFIG REQUIRED)
+   target_link_libraries(playerfbinterface FireboltTransport::FireboltTransport FireboltEntos::FireboltEntos)
 endif()
 
 # Configure pkg-config file
