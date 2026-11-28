@@ -31,6 +31,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <mutex>
 #if defined(USE_SECMANAGER)
 #include "SecManagerThunder.h"
 #endif
