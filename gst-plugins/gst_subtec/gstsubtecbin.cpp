@@ -256,6 +256,7 @@ type_found (GstElement * typefind, guint probability,
 
         GstPad *demux_pad = gst_element_get_static_pad(subtecbin->demux, "src");
         GstCaps *demux_caps = gst_pad_get_pad_template_caps(demux_pad);
+        gst_object_unref(demux_pad);
 
         GST_DEBUG_OBJECT(subtecbin, "seek allowed caps %" GST_PTR_FORMAT, demux_caps);
         auto ttml_formatter_factory = gst_element_factory_find("vipertransform");
@@ -263,6 +264,8 @@ type_found (GstElement * typefind, guint probability,
         {
           subtecbin->formatter = gst_element_factory_make("vipertransform", NULL);
         }
+        gst_object_unref(ttml_formatter_factory);
+        gst_caps_unref(demux_caps);
       }
     }
   }
@@ -321,6 +324,18 @@ lock_failed:
 
   if (chain)
   {
+    // The elements were never added to the bin: release both the
+    // chain-held reference and the creation (floating) reference so the
+    // elements are destroyed rather than leaked.
+    for (tmp = chain; tmp; tmp = tmp->next)
+    {
+      GstElement *element = GST_ELEMENT(tmp->data);
+      gst_object_unref(element);
+      gst_object_unref(element);
+      if (element == subtecbin->demux) subtecbin->demux = NULL;
+      else if (element == subtecbin->formatter) subtecbin->formatter = NULL;
+      else if (element == subtecbin->sink) subtecbin->sink = NULL;
+    }
     g_list_free(chain);
   }
 }
@@ -332,7 +347,9 @@ gst_subtecbin_init (GstSubtecBin *subtecbin)
 
   subtecbin->typefind = gst_element_factory_make("typefind", "subs_typefind");
   gst_bin_add(GST_BIN(subtecbin), subtecbin->typefind);
-  gst_element_add_pad (GST_ELEMENT (subtecbin), gst_ghost_pad_new("sink", gst_element_get_static_pad(subtecbin->typefind, "sink")));
+  GstPad *typefind_sinkpad = gst_element_get_static_pad(subtecbin->typefind, "sink");
+  gst_element_add_pad (GST_ELEMENT (subtecbin), gst_ghost_pad_new("sink", typefind_sinkpad));
+  gst_object_unref(typefind_sinkpad);
   gst_element_sync_state_with_parent(GST_ELEMENT(subtecbin));
 
   g_signal_connect(subtecbin->typefind, "have-type", G_CALLBACK(type_found), subtecbin);

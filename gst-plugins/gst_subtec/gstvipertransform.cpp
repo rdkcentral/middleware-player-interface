@@ -529,6 +529,10 @@ gst_vipertransform_transform (GstBaseTransform * trans, GstBuffer * inbuf,
 
 	auto segment_count = 0;
 
+	//Get the src pad once — gst_element_get_static_pad returns a new
+	//reference each call; fetching it per document leaks a pad ref per push.
+	GstPad *srcpad = gst_element_get_static_pad(&trans->element, "src");
+
 	//Split single, concatenated buffer into separate buffers
 	//Add an offset to the buffer object for use by the sink
 	//Then push them as new, separate buffers to the pipeline
@@ -560,9 +564,10 @@ gst_vipertransform_transform (GstBaseTransform * trans, GstBuffer * inbuf,
 	  GST_DEBUG_OBJECT (vipertransform, "pts_ms: %" G_GUINT64_FORMAT " duration_ms %" G_GUINT64_FORMAT " offset ms %" G_GUINT64_FORMAT " segment_count %d", pts_ms, duration_ms, GST_BUFFER_OFFSET(buf), segment_count);
 
 	  //Push fragment as a separate GstBuffer
-	  gst_pad_push(gst_element_get_static_pad(&trans->element, "src"), buf);
+	  gst_pad_push(srcpad, buf);
 	  segment_count++;
 	}
+	gst_object_unref(srcpad);
 
 	return GST_BASE_TRANSFORM_FLOW_DROPPED;
   }
