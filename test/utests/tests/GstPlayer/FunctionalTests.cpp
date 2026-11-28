@@ -129,6 +129,8 @@ public:
 
 		if (isPipelineSetup)
 		{
+			EXPECT_CALL(*g_mockGStreamer, gst_object_unref(_))
+				.Times(testing::AnyNumber());
 			// AAMPGstPlayer::DestroyPipeline()
 			EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&gst_element_pipeline))
 				.Times(1);
@@ -295,13 +297,10 @@ public:
 		}
 		EXPECT_CALL(*g_mockGLib, g_object_set(NotNull(), StrEq("show-video-window"), Matcher<int>(true))).Times(1);
 
-		EXPECT_CALL(*g_mockGStreamer, gst_object_replace(NotNull(),NotNull()))
-			.WillOnce(DoAll(
-				SetArgPointee<0>(GST_OBJECT(p_video_sink)),
-				Return(1)));
-
 		// Call the bus_sync_handler function with video sink READY -> PAUSED
 		bus_sync_func(&bus, &sync_message, mInterfaceGstPlayer);
+		EXPECT_EQ(mInterfaceGstPlayer->GetPrivatePlayer()->gstPrivateContext
+			->RefElement(&GstPlayerPriv::video_sink).get(), p_video_sink);
 
 		sync_message = {.type = GST_MESSAGE_STATE_CHANGED, .src = GST_OBJECT(p_audio_sink) };
 
@@ -319,6 +318,8 @@ public:
 
 		// Call the bus_sync_handler function with audio sink READY -> PAUSED
 		bus_sync_func(&bus, &sync_message, mInterfaceGstPlayer);
+		EXPECT_EQ(mInterfaceGstPlayer->GetPrivatePlayer()->gstPrivateContext
+			->RefElement(&GstPlayerPriv::audio_sink).get(), p_audio_sink);
 
 		GstMessage bus_message = {.type = GST_MESSAGE_STATE_CHANGED, .src = GST_OBJECT(&gst_element_pipeline) };
 

@@ -246,13 +246,10 @@ TEST_F(PauseOnPlaybackTests, bus_messsage_FrameStepPropertyAvailable)
 			SetArgPointee<1>(GST_STATE_READY),
 			SetArgPointee<2>(GST_STATE_PAUSED)));
 
-	EXPECT_CALL(*g_mockGStreamer, gst_object_replace(NotNull(),NotNull()))
-		.WillOnce(DoAll(
-            SetArgPointee<0>(GST_OBJECT(&gst_element_video_sink)),
-            Return(1)));
-
 	// Call the bus_sync_handler function
 	bus_sync_func(&bus, &sync_message, mInterfaceGstPlayer);
+	EXPECT_EQ(mInterfaceGstPlayer->GetPrivatePlayer()->gstPrivateContext
+		->RefElement(&GstPlayerPriv::video_sink).get(), &gst_element_video_sink);
 
 	GstMessage pipeline_message = {.type = GST_MESSAGE_STATE_CHANGED, .src = GST_OBJECT(&gst_element_pipeline) };
 
@@ -346,13 +343,10 @@ TEST_F(PauseOnPlaybackTests, bus_message_FrameStepPropertyNotAvailable)
 			SetArgPointee<1>(GST_STATE_READY),
 			SetArgPointee<2>(GST_STATE_PAUSED)));
 
-	EXPECT_CALL(*g_mockGStreamer, gst_object_replace(NotNull(),NotNull()))
-		.WillOnce(DoAll(
-            SetArgPointee<0>(GST_OBJECT(&gst_element_video_sink)),
-            Return(1)));
-
 	// Call the bus_sync_handler function
 	bus_sync_func(&bus, &sync_message, mInterfaceGstPlayer);
+	EXPECT_EQ(mInterfaceGstPlayer->GetPrivatePlayer()->gstPrivateContext
+		->RefElement(&GstPlayerPriv::video_sink).get(), &gst_element_video_sink);
 
 	GstMessage pipeline_message = {.type = GST_MESSAGE_STATE_CHANGED, .src = GST_OBJECT(&gst_element_pipeline) };
 

@@ -39,6 +39,9 @@
 #include <gst/gstplugin.h>
 #include <gst/gstpluginfeature.h>
 #include <atomic>
+#include <chrono>
+#include <thread>
+#include <vector>
 
 using ::testing::NiceMock;
 using ::testing::StrictMock;
@@ -76,6 +79,8 @@ class GapFillSocInterface : public SocInterface
 public:
 	long long videoPtsToReturn = 0;
 	bool getVideoPtsCalled = false;
+	std::function<void(GstElement *, GstElement *)> onGetVideoPts;
+	std::function<void(GstElement *, GstElement *)> onSetPlaybackRate;
 
 	void SetAudioProperty(const char * &volume, const char * &mute, bool& isSinkBinVolume) override
 	{
@@ -85,6 +90,10 @@ public:
 	}
 	bool SetPlaybackRate(const std::vector<GstElement*>& sources, GstElement *pipeline, double rate, GstElement *video_dec, GstElement *audio_dec) override
 	{
+		if (onSetPlaybackRate)
+		{
+			onSetPlaybackRate(video_dec, audio_dec);
+		}
 		return true;
 	}
 	bool SetRateCorrection() override { return false; }
@@ -99,6 +108,10 @@ public:
 	long long GetVideoPts(GstElement *video_sink, GstElement *video_dec, bool isWesteros) override
 	{
 		getVideoPtsCalled = true;
+		if (onGetVideoPts)
+		{
+			onGetVideoPts(video_sink, video_dec);
+		}
 		return videoPtsToReturn;
 	}
 };
@@ -682,6 +695,43 @@ TEST_F(InterfacePlayerGapFillTests, GetVideoPTS_DirectReturn)
 	EXPECT_TRUE(soc->getVideoPtsCalled);
 }
 
+TEST_F(InterfacePlayerGapFillTests, GetVideoPTS_KeepsElementsAliveDuringConcurrentTeardown)
+{
+	GstElement sink{};
+	GstElement decoder{};
+	std::atomic<int> sinkRefs{0};
+	std::atomic<int> decoderRefs{0};
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&sink)).Times(2)
+		.WillRepeatedly([&](gpointer object) { ++sinkRefs; return object; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&decoder)).Times(2)
+		.WillRepeatedly([&](gpointer object) { ++decoderRefs; return object; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&sink)).Times(2)
+		.WillRepeatedly([&](gpointer) { --sinkRefs; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&decoder)).Times(2)
+		.WillRepeatedly([&](gpointer) { --decoderRefs; });
+
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::video_sink, &sink);
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::video_dec, &decoder);
+	auto soc = std::make_shared<GapFillSocInterface>();
+	soc->videoPtsToReturn = 90000;
+	soc->onGetVideoPts = [&](GstElement *videoSink, GstElement *videoDecoder) {
+		EXPECT_EQ(videoSink, &sink);
+		EXPECT_EQ(videoDecoder, &decoder);
+		EXPECT_EQ(sinkRefs.load(), 2);
+		EXPECT_EQ(decoderRefs.load(), 2);
+		std::thread teardown([&] { mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO); });
+		teardown.join();
+		EXPECT_EQ(sinkRefs.load(), 1);
+		EXPECT_EQ(decoderRefs.load(), 1);
+	};
+	mInterfacePrivatePlayer->socInterface = soc;
+
+	EXPECT_EQ(mInterfaceGstPlayer->GetVideoPTS(), 90000);
+	EXPECT_EQ(sinkRefs.load(), 0);
+	EXPECT_EQ(decoderRefs.load(), 0);
+}
+
 TEST_F(InterfacePlayerGapFillTests, GetVideoPTS_FallbackWhenPropertyUnsupported)
 {
 	// socInterface->GetVideoPts() == -1 triggers gst_element_query_position fallback
@@ -1082,6 +1132,135 @@ TEST_F(InterfacePlayerGapFillTests, SetPlayBackRate_OnlyVideoSource)
 	mInterfacePrivatePlayer->socInterface = soc;
 	EXPECT_TRUE(mInterfaceGstPlayer->SetPlayBackRate(-4.0));
 	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].source = nullptr;
+}
+
+TEST_F(InterfacePlayerGapFillTests, SetPlayBackRate_KeepsDecodersAliveDuringConcurrentReplacement)
+{
+	GstElement videoDecoder{};
+	GstElement audioDecoder{};
+	GstElement replacement{};
+	std::atomic<int> videoRefs{0};
+	std::atomic<int> audioRefs{0};
+	std::atomic<int> replacementRefs{0};
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&videoDecoder)).Times(2)
+		.WillRepeatedly([&](gpointer object) { ++videoRefs; return object; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&audioDecoder)).Times(2)
+		.WillRepeatedly([&](gpointer object) { ++audioRefs; return object; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&replacement))
+		.WillOnce([&](gpointer object) { ++replacementRefs; return object; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&videoDecoder)).Times(2)
+		.WillRepeatedly([&](gpointer) { --videoRefs; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&audioDecoder)).Times(2)
+		.WillRepeatedly([&](gpointer) { --audioRefs; });
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&replacement))
+		.WillOnce([&](gpointer) { --replacementRefs; });
+
+	mPlayerContext->stream[eGST_MEDIATYPE_VIDEO].format = GST_FORMAT_INVALID;
+	mPlayerContext->stream[eGST_MEDIATYPE_AUDIO].format = GST_FORMAT_INVALID;
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::video_dec, &videoDecoder);
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::audio_dec, &audioDecoder);
+	auto soc = std::make_shared<GapFillSocInterface>();
+	soc->onSetPlaybackRate = [&](GstElement *video, GstElement *audio) {
+		EXPECT_EQ(video, &videoDecoder);
+		EXPECT_EQ(audio, &audioDecoder);
+		EXPECT_EQ(videoRefs.load(), 2);
+		EXPECT_EQ(audioRefs.load(), 2);
+		std::thread teardown([&] {
+			mPlayerContext->ReplaceElement(&GstPlayerPriv::video_dec, &replacement);
+			mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_VIDEO);
+			mInterfaceGstPlayer->TearDownStream(eGST_MEDIATYPE_AUDIO);
+		});
+		teardown.join();
+		EXPECT_EQ(videoRefs.load(), 1);
+		EXPECT_EQ(audioRefs.load(), 1);
+		EXPECT_EQ(replacementRefs.load(), 0);
+	};
+	mInterfacePrivatePlayer->socInterface = soc;
+
+	EXPECT_TRUE(mInterfaceGstPlayer->SetPlayBackRate(2.0));
+	EXPECT_EQ(videoRefs.load(), 0);
+	EXPECT_EQ(audioRefs.load(), 0);
+}
+
+TEST_F(InterfacePlayerGapFillTests, RefElement_BlocksConcurrentClearUntilReferenceTaken)
+{
+	GstElement decoder{};
+	std::atomic<int> refs{0};
+	std::atomic<int> unrefsDuringRef{0};
+	std::atomic<int> unrefs{0};
+	std::atomic<bool> inRef{false};
+	std::thread writer;
+
+	EXPECT_CALL(*g_mockGStreamer, gst_object_ref(&decoder)).Times(2)
+		.WillRepeatedly([&](gpointer object) {
+			// First call is the initial install; the second is the reader's reference, taken under the lock.
+			if (++refs == 2)
+			{
+				inRef = true;
+				writer = std::thread([&] { mPlayerContext->ReplaceElement(&GstPlayerPriv::video_dec, nullptr); });
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				unrefsDuringRef = unrefs.load();
+				inRef = false;
+			}
+			return object;
+		});
+	EXPECT_CALL(*g_mockGStreamer, gst_object_unref(&decoder)).Times(2)
+		.WillRepeatedly([&](gpointer) { ++unrefs; });
+
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::video_dec, &decoder);
+	{
+		auto held = mPlayerContext->RefElement(&GstPlayerPriv::video_dec);
+		EXPECT_EQ(held.get(), &decoder);
+		EXPECT_EQ(unrefsDuringRef.load(), 0);
+		EXPECT_FALSE(inRef.load());
+	}
+	writer.join();
+	EXPECT_EQ(refs.load(), unrefs.load());
+}
+
+TEST_F(InterfacePlayerGapFillTests, ReplaceElement_ConcurrentWritersKeepReferencesBalanced)
+{
+	GstElement first{};
+	GstElement second{};
+	std::atomic<int> firstRefs{0};
+	std::atomic<int> secondRefs{0};
+	auto counter = [&](GstElement *element) -> std::atomic<int> & {
+		return element == &first ? firstRefs : secondRefs;
+	};
+	for (GstElement *element : {&first, &second})
+	{
+		EXPECT_CALL(*g_mockGStreamer, gst_object_ref(element)).Times(testing::AnyNumber())
+			.WillRepeatedly([&, element](gpointer object) { ++counter(element); return object; });
+		EXPECT_CALL(*g_mockGStreamer, gst_object_unref(element)).Times(testing::AnyNumber())
+			.WillRepeatedly([&, element](gpointer) { --counter(element); });
+	}
+
+	constexpr int kThreads = 4;
+	constexpr int kIterations = 20000;
+	std::vector<std::thread> writers;
+	for (int t = 0; t < kThreads; t++)
+	{
+		writers.emplace_back([&, t] {
+			for (int i = 0; i < kIterations; i++)
+			{
+				switch ((i + t) % 3)
+				{
+					case 0: mPlayerContext->ReplaceElement(&GstPlayerPriv::video_sink, &first); break;
+					case 1: mPlayerContext->ReplaceElement(&GstPlayerPriv::video_sink, &second); break;
+					default: mPlayerContext->ReplaceElement(&GstPlayerPriv::video_sink, nullptr); break;
+				}
+			}
+		});
+	}
+	for (auto &writer : writers)
+	{
+		writer.join();
+	}
+	mPlayerContext->ReplaceElement(&GstPlayerPriv::video_sink, nullptr);
+
+	// An unlocked swap duplicates or drops an owned pointer, leaving an unbalanced count.
+	EXPECT_EQ(firstRefs.load(), 0);
+	EXPECT_EQ(secondRefs.load(), 0);
 }
 
 /* ------------------------------------------------------------------------- */

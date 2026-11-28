@@ -270,10 +270,16 @@ private:
 public:
 #endif
 	guint bufferingTimeoutTimerId;                    /**< ID of timer handler created for buffering timeout. */
+	// Use RefElement/ReplaceElement for all accesses to these four shared pointers.
+	std::mutex elementMutex;
 	GstElement *video_dec;                                    /**< Video decoder used by pipeline. */
 	GstElement *audio_dec;                                    /**< Audio decoder used by pipeline. */
 	GstElement *video_sink;                                   /**< Video sink used by pipeline. */
 	GstElement *audio_sink;                                   /**< Audio sink used by pipeline. */
+	using ElementRef = std::unique_ptr<GstElement, decltype(&gst_object_unref)>;
+	// The returned reference keeps the element alive after elementMutex is released.
+	ElementRef RefElement(GstElement *GstPlayerPriv::*member);
+	void ReplaceElement(GstElement *GstPlayerPriv::*member, GstElement *element);
 	GstElement *subtitle_sink;                                /**< Subtitle sink used by pipeline. */
 	GstTaskPool *task_pool;                                   /**< Task pool in case RT priority is needed. */
 
