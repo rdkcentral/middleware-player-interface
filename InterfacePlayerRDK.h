@@ -329,7 +329,7 @@ class InterfacePlayerRDK
         	std::function<void(const unsigned char *, int, int, int)> gstCbExportYUVFrame;
         	pthread_mutex_t mProtectionLock;
         	bool mFirstFrameRequired;
-        	bool mPauseInjector;
+		std::atomic<bool> mPauseInjector;
         	bool mResumeInjector;
         	bool PipelineSetToReady;				/**< To indicate the pipeline is set to ready forcefully */
         	std::mutex mSourceSetupMutex;			/**< Protects the source setup state>*/
@@ -482,6 +482,11 @@ class InterfacePlayerRDK
         	 * @return True if the source setup was successful, false otherwise.
         	 */
         	bool WaitForSourceSetup(int mediaType);
+		/**
+		 * @brief Publishes a source-state change and wakes setup waiters.
+		 * Call after releasing sourceLock and mSourceSetupMutex.
+		 */
+		void NotifySourceSetup();
         	/**
         	 * @brief Send media sample to downstream elements.
         	 * @param[in] type The media type.
@@ -825,6 +830,7 @@ class InterfacePlayerRDK
 		void CancelPendingCallbacks();
 		InterfacePlayerPriv *interfacePlayerPriv;
 		GstHandlerControl idleCallbackControl; /**< guards IdleCallbackOnFirstFrame/OnEOS/IdleCallback/FirstVideoFrameDisplayed */
+		std::atomic<uint64_t> mSourceSetupNotificationId{0}; /**< Updates also hold mSourceSetupMutex to synchronize with waiters. */
 };
 struct data
 {

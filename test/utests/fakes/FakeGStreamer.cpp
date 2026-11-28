@@ -131,6 +131,16 @@ GstBuffer *gst_buffer_new_wrapped(gpointer data, gsize size)
 	return NULL;
 }
 
+GstBuffer *gst_buffer_new_wrapped_full(GstMemoryFlags flags, gpointer data,
+	gsize maxsize, gsize offset, gsize size, gpointer user_data, GDestroyNotify notify)
+{
+	if (g_mockGStreamer != nullptr)
+	{
+		return g_mockGStreamer->gst_buffer_new_wrapped_full(flags, data, maxsize, offset, size, user_data, notify);
+	}
+	return nullptr;
+}
+
 gboolean gst_buffer_map(GstBuffer *buffer, GstMapInfo *info, GstMapFlags flags)
 {
 	TRACE_FUNC();
