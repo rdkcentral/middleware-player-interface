@@ -34,10 +34,10 @@
 /**
  *  @brief Impl specific initialization code called before each public interface call
  */
-void PlayerSubtecCCManager::EnsureInitialized()
+bool PlayerSubtecCCManager::EnsureInitialized()
 {
 	EnsureHALInitialized();
-	EnsureRendererCommsInitialized();
+	return EnsureRendererCommsInitialized();
 }
 
 /**
@@ -63,7 +63,7 @@ void PlayerSubtecCCManager::EnsureHALInitialized()
 /**
  *  @brief Impl specific initialization code for Communication with rendered
  */
-void PlayerSubtecCCManager::EnsureRendererCommsInitialized()
+bool PlayerSubtecCCManager::EnsureRendererCommsInitialized()
 {
 	if(not mRendererInitialized)
 	{
@@ -77,6 +77,7 @@ void PlayerSubtecCCManager::EnsureRendererCommsInitialized()
 			MW_LOG_WARN("PlayerSubtecCCManager::calling subtecConnector::initPacketSender() - failure");
 		}
 	}
+	return mRendererInitialized;
 };
 
 /**
